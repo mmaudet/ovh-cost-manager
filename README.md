@@ -31,3 +31,29 @@ _You can store you file anywhere and use the option --credentials=/path/to/your/
 --from=YYYY-MM-DD -> Mandatory, start of billing period date
 --to=YYYY-MM-DD -> Optional, end of billing period date, defaulted to today
 --output=/path/to/bill-files -> Optional, directory where to store bills, defaulted to $HOME/my-ovh-bills
+
+---
+
+## Split bills by Cloud Project
+
+The `split-by-project.js` script analyzes your OVH bills and groups costs by Cloud Project.
+
+**Requirements:**
+Your credentials.json must have access to both `/me/*` and `/cloud/*` APIs. Generate credentials with:
+```bash
+curl -H "Content-type: application/json" \
+  -H "X-Ovh-Application: YOUR_APP_KEY" \
+  -d '{"accessRules": [{"method": "GET", "path": "/me/*"}, {"method": "GET", "path": "/cloud/*"}]}' \
+  https://eu.api.ovh.com/1.0/auth/credential
+```
+
+**Usage:**
+```bash
+node split-by-project.js --from 2025-12-01 --to 2025-12-31
+```
+
+**Output:**
+JSON with:
+- `summary`: Cloud total, non-cloud total, grand total
+- `cloudProjects`: List of projects sorted by cost (descending)
+- `nonCloudServices`: Total for non-cloud services (dedicated servers, domains, etc.)
