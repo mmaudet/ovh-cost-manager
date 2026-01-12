@@ -231,13 +231,13 @@ const analysisOps = {
     const db = getDb();
     return db.prepare(`
       SELECT
-        service_type,
-        SUM(total_price) as total,
-        COUNT(id) as details_count
+        d.service_type,
+        SUM(d.total_price) as total,
+        COUNT(d.id) as details_count
       FROM bill_details d
       JOIN bills b ON d.bill_id = b.id
       WHERE b.date >= ? AND b.date <= ?
-      GROUP BY service_type
+      GROUP BY d.service_type
       ORDER BY total DESC
     `).all(fromDate, toDate);
   },
@@ -292,8 +292,8 @@ const analysisOps = {
     const db = getDb();
     return db.prepare(`
       SELECT
-        SUM(total_price) as total,
-        COUNT(id) as items_count
+        SUM(d.total_price) as total,
+        COUNT(d.id) as items_count
       FROM bill_details d
       JOIN bills b ON d.bill_id = b.id
       WHERE b.date >= ? AND b.date <= ?
