@@ -299,6 +299,29 @@ const analysisOps = {
       WHERE b.date >= ? AND b.date <= ?
         AND d.project_id IS NULL
     `).get(fromDate, toDate);
+  },
+
+  billsByProject: (projectNameOrId, fromDate, toDate) => {
+    const db = getDb();
+    let query = `
+      SELECT
+        b.id as bill_id,
+        b.date,
+        SUM(d.total_price) as amount
+      FROM bills b
+      JOIN bill_details d ON d.bill_id = b.id
+      LEFT JOIN projects p ON d.project_id = p.id
+      WHERE (p.name = ? OR p.id = ? OR d.project_id = ?)
+    `;
+    const params = [projectNameOrId, projectNameOrId, projectNameOrId];
+
+    if (fromDate && toDate) {
+      query += ' AND b.date >= ? AND b.date <= ?';
+      params.push(fromDate, toDate);
+    }
+
+    query += ' GROUP BY b.id ORDER BY b.date DESC';
+    return db.prepare(query).all(...params);
   }
 };
 
