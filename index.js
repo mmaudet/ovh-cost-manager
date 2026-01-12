@@ -44,7 +44,11 @@ function help() {
 function usage(to, quit = 0) {
   console.log(`--from=YYYY-MM-DD -> Mandatory, start of billing period date`);
   console.log(`--to=YYYY-MM-DD -> Optional, end of billing period date, defaulted to today (${today()})`);
-  console.log(`--output=/path/to/bill-files -> Optional, directory where to store bills, defaulted to`);
+  console.log(`--output=/path/to/bill-files -> Optional, directory where to store bills, defaulted to $HOME/my-ovh-bills`);
+  console.log(`--format=pdf|html -> Optional, bill format, defaulted to pdf`);
+  console.log(`--summary -> Generate markdown summary instead of downloading files`);
+  console.log(`--json -> Save bill metadata as JSON files`);
+  console.log(`--verbose -> Show bill metadata in console`);
   if (quit) exit(1);
 }
 
@@ -102,6 +106,50 @@ function getPrice(data){
     price = '[' + data.priceWithoutTax.text.padStart(12, " ") + ']';
   }
   return price;
+}
+
+// Format number as currency (European format)
+function formatCurrency(value) {
+  return value.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+// Generate markdown summary
+function generateMarkdownSummary(billsData, options) {
+  const lines = [];
+  const totalHT = billsData.reduce((sum, b) => sum + (b.priceWithoutTax?.value || 0), 0);
+  const totalTTC = billsData.reduce((sum, b) => sum + (b.priceWithTax?.value || 0), 0);
+
+  lines.push(`# Récapitulatif Factures OVH`);
+  lines.push(``);
+  lines.push(`**Période :** ${options.from} au ${options.to}`);
+  lines.push(`**Nombre de factures :** ${billsData.length}`);
+  lines.push(``);
+  lines.push(`## Résumé`);
+  lines.push(``);
+  lines.push(`| Métrique | Valeur |`);
+  lines.push(`|----------|-------:|`);
+  lines.push(`| Total HT | ${formatCurrency(totalHT)} € |`);
+  lines.push(`| Total TTC | ${formatCurrency(totalTTC)} € |`);
+  lines.push(``);
+  lines.push(`## Liste des factures`);
+  lines.push(``);
+  lines.push(`| Facture | Date | Montant HT (€) | Montant TTC (€) |`);
+  lines.push(`|---------|------|---------------:|----------------:|`);
+
+  for (const bill of billsData) {
+    const date = bill.date ? bill.date.split('T')[0] : '';
+    const ht = bill.priceWithoutTax?.value || 0;
+    const ttc = bill.priceWithTax?.value || 0;
+    lines.push(`| ${bill.billId} | ${date} | ${formatCurrency(ht)} | ${formatCurrency(ttc)} |`);
+  }
+
+  lines.push(``);
+  lines.push(`| **TOTAL** | | **${formatCurrency(totalHT)}** | **${formatCurrency(totalTTC)}** |`);
+  lines.push(``);
+  lines.push(`---`);
+  lines.push(`*Généré le ${new Date().toISOString().split('T')[0]} par ovh-bill*`);
+
+  return lines.join('\n');
 }
 /**
  * 
@@ -228,6 +276,22 @@ fetch(billsUrls).then(async (bills) => {
     console.log(`No bill found for the period ${OPTIONS.from} - ${OPTIONS.to}`);
     exit(0);
   }
+
+  // If --summary flag is used, generate markdown summary only
+  if (argv.summary) {
+    console.error(`Fetching ${bills.length} bills metadata...`);
+    const billsData = [];
+    for (var bill of bills) {
+      let url = `/me/bill/${bill}`;
+      let data = await fetch(url);
+      billsData.push(data);
+    }
+    // Sort by date
+    billsData.sort((a, b) => new Date(a.date) - new Date(b.date));
+    console.log(generateMarkdownSummary(billsData, OPTIONS));
+    exit(0);
+  }
+
   console.log(`Saving bills into ${OUTPUT}`);
 
   for (var bill of bills) {

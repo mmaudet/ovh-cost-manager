@@ -128,12 +128,38 @@ node index.js --from=2024-01-01 --to=2024-06-30 \
 node index.js --from=2024-01-01 --json --verbose
 ```
 
+#### Generate Markdown Summary (without downloading)
+
+```bash
+node index.js --from=2024-12-01 --to=2024-12-31 --summary
+```
+
+Output:
+```markdown
+# Récapitulatif Factures OVH
+
+**Période :** 2024-12-01 au 2024-12-31
+**Nombre de factures :** 42
+
+| Facture | Date | Montant HT (€) | Montant TTC (€) |
+|---------|------|---------------:|----------------:|
+| FR12345678 | 2024-12-01 | 1 234,56 | 1 481,47 |
+...
+```
+
 ### Split by Cloud Project
 
 Analyze your OVH bills and group costs by Public Cloud project:
 
 ```bash
+# JSON output (default)
 node split-by-project.js --from 2024-12-01 --to 2024-12-31
+
+# Markdown output
+node split-by-project.js --from 2024-12-01 --to 2024-12-31 --format md
+
+# Save to file
+node split-by-project.js --from 2024-12-01 --to 2024-12-31 --format md > report.md
 ```
 
 > **Note:** This feature requires `/cloud/*` API access. See [Configuration](#step-2-generate-consumer-key).
@@ -176,6 +202,7 @@ The output includes:
 | `--format=pdf\|html` | Invoice format | `pdf` |
 | `--output=/path` | Output directory | `$HOME/my-ovh-bills` |
 | `--credentials=/path` | Credentials file path | `$HOME/my-ovh-bills/credentials.json` |
+| `--summary` | Generate markdown summary (no download) | `false` |
 | `--json` | Save invoice metadata as JSON | `false` |
 | `--verbose` | Show invoice metadata in console | `false` |
 
@@ -185,6 +212,7 @@ The output includes:
 |--------|-------------|---------|
 | `--from YYYY-MM-DD` | Start date of billing period | **Required** |
 | `--to YYYY-MM-DD` | End date of billing period | **Required** |
+| `--format json\|md` | Output format | `json` |
 
 ## Contributing
 
