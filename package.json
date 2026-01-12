@@ -1,7 +1,8 @@
 {
-  "name": "ovh-buill",
-  "description": "OVH bills downloader",
-  "version": "1.0.0",
+  "name": "ovh-bill",
+  "description": "OVH bills downloader and cost dashboard",
+  "version": "2.0.0",
+  "private": true,
   "homepage": "https://github.com/somanos/ovh-bill",
   "author": "Somanos Sar <somanos@drumee.com>",
   "repository": {
@@ -11,15 +12,26 @@
   "bugs": {
     "url": "https://github.com/somanos/ovh-bill/issues"
   },
-  "main": "./index.js",
-  "keywords": [],
   "license": "MIT",
-  "dependencies": {
-    "jsonfile": "^6.1.0",
-    "minimist": "^1.2.5",
-    "ovh": "^2.0.3"
-  },
+  "workspaces": [
+    "cli",
+    "data",
+    "server",
+    "dashboard"
+  ],
   "scripts": {
-    "mybills": "./index.js"
+    "cli": "node cli/index.js",
+    "split": "node cli/split-by-project.js",
+    "import": "node data/import.js",
+    "import:full": "node data/import.js --full",
+    "import:diff": "node data/import.js --diff",
+    "dev:server": "node server/index.js",
+    "dev:dashboard": "npm run dev --workspace=dashboard",
+    "dev": "concurrently \"npm run dev:server\" \"npm run dev:dashboard\"",
+    "build": "npm run build --workspace=dashboard",
+    "start": "npm run dev:server"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
   }
 }

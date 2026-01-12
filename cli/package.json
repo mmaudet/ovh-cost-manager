@@ -1,0 +1,15 @@
+{
+  "name": "@ovh-bill/cli",
+  "version": "1.0.0",
+  "description": "OVH bills CLI tools",
+  "main": "index.js",
+  "scripts": {
+    "bills": "node index.js",
+    "split": "node split-by-project.js"
+  },
+  "dependencies": {
+    "jsonfile": "^6.1.0",
+    "minimist": "^1.2.5",
+    "ovh": "^2.0.3"
+  }
+}

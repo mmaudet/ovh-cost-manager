@@ -1,15 +1,38 @@
-not-used.node_modules
+# Dependencies
+node_modules/
+not-used.node_modules/
+
+# Build outputs
+dist/
+build/
+
+# Database
+*.db
+data/*.db
+
+# Environment and credentials
+.env
+.env.local
+credentials.json
+
+# OS files
 .DS_Store
 .Trash-1001/
-node_modules
-not-used.node_modules/
-*DEPRECATED*
-tmp/*
-kind/seeds/dynamic.js
-# .vscode/
-.vscode/launch.json
-*_tmp*
 ._*
+
+# IDE
+.vscode/launch.json
+.idea/
+
+# Temporary files
+tmp/*
+*_tmp*
+*DEPRECATED*
 t
-package-lock.json
+
+# Logs
+*.log
+npm-debug.log*
+
+# Dev tools
 .dev-tools.rc/
