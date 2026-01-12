@@ -184,4 +184,6 @@ MIT License - see [LICENSE.txt](LICENSE.txt)
 
 ## Author
 
-**Somanos Sar** - [somanos@drumee.com](mailto:somanos@drumee.com)
+**Michel-Marie MAUDET** - [mmaudet@linagora.com](mailto:mmaudet@linagora.com)
+
+*This project was inspired by the work of [Somanos Sar](https://github.com/somanos/ovh-bill).*

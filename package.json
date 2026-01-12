@@ -4,7 +4,7 @@
   "version": "2.0.0",
   "private": true,
   "homepage": "https://github.com/mmaudet/ovh-cost-manager",
-  "author": "Somanos Sar <somanos@drumee.com>",
+  "author": "Michel-Marie MAUDET <mmaudet@linagora.com>",
   "repository": {
     "type": "git",
     "url": "https://github.com/mmaudet/ovh-cost-manager"
