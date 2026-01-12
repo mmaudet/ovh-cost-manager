@@ -105,7 +105,8 @@ export default function Dashboard() {
     if (!byProjectA.length) return [];
     const merged = byProjectA.map(p => {
       const pB = byProjectB.find(proj => proj.projectName === p.projectName) || { total: 0 };
-      const diff = pB.total ? ((p.total - pB.total) / pB.total * 100) : null;
+      // Variation: how MoisB changed compared to MoisA (reference)
+      const diff = p.total ? ((pB.total - p.total) / p.total * 100) : null;
       return { ...p, totalB: pB.total, diff };
     });
     return merged.sort((a, b) => {
@@ -270,8 +271,8 @@ export default function Dashboard() {
     );
   }
 
-  const totalVariation = compareDataA && compareDataB
-    ? ((compareDataA.total - compareDataB.total) / compareDataB.total * 100).toFixed(1)
+  const totalVariation = compareDataA && compareDataB && compareDataA.total
+    ? ((compareDataB.total - compareDataA.total) / compareDataA.total * 100).toFixed(1)
     : 0;
 
   return (

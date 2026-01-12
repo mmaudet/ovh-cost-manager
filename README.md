@@ -5,6 +5,17 @@
 
 Interactive dashboard for OVHcloud billing analysis with cost tracking, monthly comparisons, service breakdowns, and trend analysis.
 
+## Screenshots
+
+### Overview
+![Overview - Service breakdown and top projects](docs/screenshots/overview.png)
+
+### Month Comparison
+![Compare - Side by side month comparison](docs/screenshots/compare.png)
+
+### Historical Trends
+![Trends - 12-month cost evolution](docs/screenshots/trends.png)
+
 ## Features
 
 - **Interactive Dashboard**: React-based dashboard with charts and visualizations
