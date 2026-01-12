@@ -398,10 +398,10 @@ export default function Dashboard() {
               <h3 className="font-semibold text-gray-900 mb-4">{t('topProjects')}</h3>
               <div className="h-72">
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={byProject.slice(0, 10)} layout="vertical">
+                  <BarChart data={byProject.slice(0, 10)} layout="vertical" margin={{ left: 10 }}>
                     <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} />
                     <XAxis type="number" tickFormatter={(v) => `${v}€`} />
-                    <YAxis dataKey="projectName" type="category" width={120} tick={{ fontSize: 11 }} />
+                    <YAxis dataKey="projectName" type="category" width={150} tick={{ fontSize: 10 }} />
                     <Tooltip formatter={(v) => `${fmt(v)}€`} />
                     <Bar dataKey="total" fill="#3b82f6" radius={[0, 4, 4, 0]} />
                   </BarChart>
