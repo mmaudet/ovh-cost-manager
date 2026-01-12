@@ -55,7 +55,7 @@ export const translations = {
     // Trends
     evolutionOver: 'Évolution sur',
     noDataAvailable: 'Pas de données disponibles pour cette période',
-    monthlyGrowth: 'Croissance mensuelle moyenne',
+    periodGrowth: 'Croissance sur la période',
     overLast: 'Sur les',
     lastMonths: 'derniers mois',
     mostExpensiveMonth: 'Mois le plus coûteux',
@@ -140,7 +140,7 @@ export const translations = {
     // Trends
     evolutionOver: 'Evolution over',
     noDataAvailable: 'No data available for this period',
-    monthlyGrowth: 'Average monthly growth',
+    periodGrowth: 'Growth over period',
     overLast: 'Over the last',
     lastMonths: 'months',
     mostExpensiveMonth: 'Most expensive month',

@@ -610,10 +610,10 @@ export default function Dashboard() {
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className={`bg-white rounded-xl p-5 shadow-sm border border-gray-100 ${monthlyTrend.length === 0 ? 'opacity-50' : ''}`}>
-                <span className="text-gray-500 text-sm">{t('monthlyGrowth')}</span>
-                <div className={`text-3xl font-bold mt-2 ${monthlyTrend.length > 1 ? 'text-orange-600' : 'text-gray-400'}`}>
+                <span className="text-gray-500 text-sm">{t('periodGrowth')}</span>
+                <div className={`text-3xl font-bold mt-2 ${monthlyTrend.length > 1 ? (((monthlyTrend[monthlyTrend.length - 1]?.cost - monthlyTrend[0]?.cost) / monthlyTrend[0]?.cost) > 0 ? 'text-red-600' : 'text-green-600') : 'text-gray-400'}`}>
                   {monthlyTrend.length > 1
-                    ? `${(((monthlyTrend[monthlyTrend.length - 1]?.cost / monthlyTrend[0]?.cost) ** (1 / (monthlyTrend.length - 1)) - 1) * 100).toFixed(1)}%`
+                    ? `${(((monthlyTrend[monthlyTrend.length - 1]?.cost - monthlyTrend[0]?.cost) / monthlyTrend[0]?.cost) * 100) > 0 ? '+' : ''}${(((monthlyTrend[monthlyTrend.length - 1]?.cost - monthlyTrend[0]?.cost) / monthlyTrend[0]?.cost) * 100).toFixed(1)}%`
                     : 'N/A'}
                 </div>
                 <p className="text-sm text-gray-500 mt-1">{t('overLast')} {trendPeriod} {t('lastMonths')}</p>
