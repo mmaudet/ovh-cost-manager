@@ -47,4 +47,9 @@ export const fetchImportStatus = async () => {
   return data;
 };
 
+export const fetchConfig = async () => {
+  const { data } = await api.get('/config');
+  return data;
+};
+
 export default api;

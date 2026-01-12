@@ -1,5 +1,5 @@
 {
-  "name": "@ovh-bill/server",
+  "name": "@ovh-cost-manager/server",
   "version": "1.0.0",
   "description": "OVH bills API server",
   "main": "index.js",

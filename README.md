@@ -1,23 +1,28 @@
-# ovh-bill
+# OVH Cost Manager
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Node.js](https://img.shields.io/badge/Node.js-%3E%3D18.0.0-green.svg)](https://nodejs.org/)
 
-OVH bills downloader, cost analyzer, and interactive dashboard for OVHcloud.
+Interactive dashboard for OVHcloud billing analysis with cost tracking, monthly comparisons, service breakdowns, and trend analysis.
 
 ## Features
 
+- **Interactive Dashboard**: React-based dashboard with charts and visualizations
+- **Multi-language Support**: French and English interface (i18n)
+- **Cost Analysis**: Breakdown by service type (Compute, Storage, Network, Database, AI/ML)
+- **Month Comparison**: Compare costs between two months side by side
+- **Trend Analysis**: Historical trends with configurable period (3-36 months)
+- **Budget Tracking**: Visual budget consumption with configurable targets
+- **Export**: PDF and Markdown report generation
 - **CLI Tools**: Download OVH invoices in PDF or HTML format
-- **Cost Analysis**: Split bills by Cloud Project with JSON/Markdown output
 - **Data Import**: Import billing data from OVH API into local SQLite database
-- **Dashboard**: Interactive React dashboard with charts and comparisons
 
 ## Quick Start
 
 ```bash
 # Clone and install
-git clone https://github.com/mmaudet/ovh-bill.git
-cd ovh-bill
+git clone https://github.com/mmaudet/ovh-cost-manager.git
+cd ovh-cost-manager
 npm install
 
 # Import data from OVH API
@@ -32,7 +37,7 @@ Open http://localhost:5173 to view the dashboard.
 ## Project Structure
 
 ```
-ovh-bill/
+ovh-cost-manager/
 ├── cli/                 # Command-line tools
 │   ├── index.js        # Invoice downloader
 │   └── split-by-project.js  # Cost analyzer
@@ -44,7 +49,12 @@ ovh-bill/
 ├── server/             # Backend API
 │   └── index.js        # Express server
 └── dashboard/          # Frontend
-    └── src/            # React application
+    └── src/
+        ├── components/ # React components (Logo, etc.)
+        ├── hooks/      # Custom hooks (useLanguage)
+        ├── i18n/       # Translations (FR/EN)
+        ├── pages/      # Dashboard page
+        └── services/   # API client
 ```
 
 ## Prerequisites
@@ -71,18 +81,29 @@ curl -X POST \
 
 Visit the `validationUrl` in the response to authorize the application.
 
-### 3. Create Credentials File
+### 3. Create Configuration File
 
-Create `$HOME/my-ovh-bills/credentials.json`:
+Create `config.json` at project root or `$HOME/my-ovh-bills/config.json`:
 
 ```json
 {
-  "appKey": "YOUR_APP_KEY",
-  "appSecret": "YOUR_APP_SECRET",
-  "consumerKey": "YOUR_CONSUMER_KEY",
-  "endpoint": "ovh-eu"
+  "credentials": {
+    "appKey": "YOUR_APP_KEY",
+    "appSecret": "YOUR_APP_SECRET",
+    "consumerKey": "YOUR_CONSUMER_KEY",
+    "endpoint": "ovh-eu"
+  },
+  "dashboard": {
+    "budget": 50000,
+    "currency": "EUR",
+    "language": "fr"
+  }
 }
 ```
+
+> **Language options**: `"fr"` (French) or `"en"` (English). Can also be changed via the UI.
+
+> **Note**: Legacy format (`credentials.json` with flat structure) is still supported.
 
 ## Usage
 
@@ -139,16 +160,19 @@ npm run split -- --from 2025-12-01 --to 2025-12-31 --format md
 | `GET /api/summary?from=&to=` | Summary with totals |
 | `GET /api/months` | Available months for selection |
 | `GET /api/import/status` | Import history and status |
+| `GET /api/config` | Dashboard configuration (budget) |
 
 ## Dashboard Features
 
+- **Multi-language**: French and English interface with language selector
 - **KPI Cards**: Total cost, cloud total, daily average, active projects
-- **Budget Progress**: Visual budget consumption tracker
+- **Budget Progress**: Visual budget consumption tracker (configurable budget)
 - **Service Breakdown**: Pie chart by service type (Compute, Storage, Network, Database, AI/ML)
+- **Project Breakdown**: Table with cost per project and percentages
 - **Project Ranking**: Bar chart of top consuming projects
-- **Daily Trend**: Area chart of daily costs
-- **Month Comparison**: Compare two months side by side
-- **Historical Trends**: 6-month line chart with growth metrics
+- **Month Comparison**: Compare two months side by side with variation indicators
+- **Historical Trends**: Configurable period (3, 6, 12, 24, or 36 months) with growth metrics
+- **Export**: PDF (print) and Markdown report generation
 
 ## Contributing
 

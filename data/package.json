@@ -1,5 +1,5 @@
 {
-  "name": "@ovh-bill/data",
+  "name": "@ovh-cost-manager/data",
   "version": "1.0.0",
   "description": "OVH bills data layer and import scripts",
   "main": "db.js",

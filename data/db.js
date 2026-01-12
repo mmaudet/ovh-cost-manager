@@ -264,7 +264,7 @@ const analysisOps = {
         SUM(d.total_price) as total
       FROM bill_details d
       JOIN bills b ON d.bill_id = b.id
-      WHERE b.date >= date('now', '-' || ? || ' months')
+      WHERE b.date >= date('now', 'start of month', '-' || ? || ' months')
       GROUP BY strftime('%Y-%m', b.date)
       ORDER BY month
     `).all(months);

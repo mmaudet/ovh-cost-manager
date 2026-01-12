@@ -14,6 +14,7 @@ data/*.db
 .env
 .env.local
 credentials.json
+config.json
 
 # OS files
 .DS_Store
@@ -36,3 +37,5 @@ npm-debug.log*
 
 # Dev tools
 .dev-tools.rc/
+*.db-shm
+*.db-wal

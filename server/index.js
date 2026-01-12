@@ -1,9 +1,30 @@
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
+const fs = require('fs');
 
 // Import database module from data workspace
 const db = require('../data/db');
+
+// Load configuration
+const CONFIG_PATHS = [
+  path.resolve(__dirname, '..', 'config.json'),
+  path.resolve(process.env.HOME, 'my-ovh-bills', 'config.json')
+];
+
+let config = { dashboard: { budget: 50000, currency: 'EUR' } };
+
+for (const configPath of CONFIG_PATHS) {
+  try {
+    if (fs.existsSync(configPath)) {
+      const loadedConfig = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+      config = { ...config, ...loadedConfig };
+      break;
+    }
+  } catch (e) {
+    // Continue to next path
+  }
+}
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -297,6 +318,17 @@ app.get('/api/months', (req, res) => {
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
+});
+
+// ========================
+// Config Endpoint
+// ========================
+
+app.get('/api/config', (req, res) => {
+  res.json({
+    budget: config.dashboard?.budget || 50000,
+    currency: config.dashboard?.currency || 'EUR'
+  });
 });
 
 // ========================

@@ -1,5 +1,5 @@
 {
-  "name": "@ovh-bill/cli",
+  "name": "@ovh-cost-manager/cli",
   "version": "1.0.0",
   "description": "OVH bills CLI tools",
   "main": "index.js",

@@ -15,17 +15,37 @@ const path = require('path');
 const Jsonfile = require('jsonfile');
 const db = require('./db');
 
-// Load OVH credentials
+// Load configuration (credentials + settings)
 const APP_DATA = path.resolve(process.env.HOME, 'my-ovh-bills');
-const credPath = path.resolve(APP_DATA, 'credentials.json');
+const CONFIG_PATHS = [
+  path.resolve(__dirname, '..', 'config.json'),      // Project root
+  path.resolve(APP_DATA, 'config.json'),              // ~/my-ovh-bills/config.json
+  path.resolve(APP_DATA, 'credentials.json')          // Legacy: ~/my-ovh-bills/credentials.json
+];
 
 let ovh;
-try {
-  const cred = Jsonfile.readFileSync(credPath);
-  ovh = require('ovh')(cred);
-} catch (e) {
-  console.error(`Error loading credentials from ${credPath}`);
-  console.error('Please ensure credentials.json exists with valid OVH API keys.');
+let config = {};
+let configLoaded = false;
+
+for (const configPath of CONFIG_PATHS) {
+  try {
+    const loadedConfig = Jsonfile.readFileSync(configPath);
+    // Handle both new format (with credentials key) and legacy format
+    const cred = loadedConfig.credentials || loadedConfig;
+    ovh = require('ovh')(cred);
+    config = loadedConfig;
+    configLoaded = true;
+    break;
+  } catch (e) {
+    // Try next path
+  }
+}
+
+if (!configLoaded) {
+  console.error('Error: No valid configuration file found.');
+  console.error('Searched paths:');
+  CONFIG_PATHS.forEach(p => console.error(`  - ${p}`));
+  console.error('\nPlease create config.json with valid OVH API credentials.');
   process.exit(1);
 }
 
