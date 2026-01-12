@@ -62,6 +62,7 @@ export default function Dashboard() {
   const [budget, setBudget] = useState(50000); // Default budget
   const [trendPeriod, setTrendPeriod] = useState(6); // Months for trend
   const [projectSort, setProjectSort] = useState({ column: 'total', direction: 'desc' });
+  const [compareSort, setCompareSort] = useState({ column: 'totalA', direction: 'desc' });
 
   // Helper to format currency with current language
   const fmt = (value) => formatCurrency(value, language);
@@ -90,6 +91,42 @@ export default function Dashboard() {
       column,
       direction: prev.column === column && prev.direction === 'desc' ? 'asc' : 'desc'
     }));
+  };
+
+  const handleCompareSort = (column) => {
+    setCompareSort(prev => ({
+      column,
+      direction: prev.column === column && prev.direction === 'desc' ? 'asc' : 'desc'
+    }));
+  };
+
+  // Merge and sort comparison data
+  const getSortedCompareProjects = () => {
+    if (!byProjectA.length) return [];
+    const merged = byProjectA.map(p => {
+      const pB = byProjectB.find(proj => proj.projectName === p.projectName) || { total: 0 };
+      const diff = pB.total ? ((p.total - pB.total) / pB.total * 100) : null;
+      return { ...p, totalB: pB.total, diff };
+    });
+    return merged.sort((a, b) => {
+      let aVal, bVal;
+      if (compareSort.column === 'name') {
+        aVal = a.projectName?.toLowerCase() || '';
+        bVal = b.projectName?.toLowerCase() || '';
+      } else if (compareSort.column === 'totalA') {
+        aVal = a.total || 0;
+        bVal = b.total || 0;
+      } else if (compareSort.column === 'totalB') {
+        aVal = a.totalB || 0;
+        bVal = b.totalB || 0;
+      } else if (compareSort.column === 'diff') {
+        aVal = a.diff ?? -Infinity;
+        bVal = b.diff ?? -Infinity;
+      }
+      if (aVal < bVal) return compareSort.direction === 'asc' ? -1 : 1;
+      if (aVal > bVal) return compareSort.direction === 'asc' ? 1 : -1;
+      return 0;
+    });
   };
 
   const SortIcon = ({ column, current }) => (
@@ -595,31 +632,47 @@ export default function Dashboard() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b text-left bg-gray-50">
-                    <th className="p-3 font-medium rounded-tl-lg">{t('project')}</th>
-                    <th className="p-3 font-medium text-right">{compareMonthA?.label}</th>
-                    <th className="p-3 font-medium text-right">{compareMonthB?.label}</th>
-                    <th className="p-3 font-medium text-right rounded-tr-lg">{t('variation')}</th>
+                    <th
+                      className="p-3 font-medium rounded-tl-lg cursor-pointer hover:bg-gray-100 select-none"
+                      onClick={() => handleCompareSort('name')}
+                    >
+                      {t('project')}<SortIcon column="name" current={compareSort} />
+                    </th>
+                    <th
+                      className="p-3 font-medium text-right cursor-pointer hover:bg-gray-100 select-none"
+                      onClick={() => handleCompareSort('totalA')}
+                    >
+                      {compareMonthA?.label}<SortIcon column="totalA" current={compareSort} />
+                    </th>
+                    <th
+                      className="p-3 font-medium text-right cursor-pointer hover:bg-gray-100 select-none"
+                      onClick={() => handleCompareSort('totalB')}
+                    >
+                      {compareMonthB?.label}<SortIcon column="totalB" current={compareSort} />
+                    </th>
+                    <th
+                      className="p-3 font-medium text-right rounded-tr-lg cursor-pointer hover:bg-gray-100 select-none"
+                      onClick={() => handleCompareSort('diff')}
+                    >
+                      {t('variation')}<SortIcon column="diff" current={compareSort} />
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
-                  {byProjectA.slice(0, 10).map((p) => {
-                    const pB = byProjectB.find(proj => proj.projectName === p.projectName) || { total: 0 };
-                    const diff = pB.total ? ((p.total - pB.total) / pB.total * 100).toFixed(1) : 'N/A';
-                    return (
-                      <tr key={p.projectId} className="border-b hover:bg-gray-50 transition-colors">
-                        <td className="p-3 font-medium">{p.projectName}</td>
-                        <td className="p-3 text-right font-medium">{fmt(p.total)}€</td>
-                        <td className="p-3 text-right text-gray-500">{fmt(pB.total)}€</td>
-                        <td className="p-3 text-right">
-                          {diff !== 'N/A' && (
-                            <span className={`px-2 py-1 rounded text-xs font-medium ${Number(diff) > 0 ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
-                              {Number(diff) > 0 ? '+' : ''}{diff}%
-                            </span>
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })}
+                  {getSortedCompareProjects().map((p) => (
+                    <tr key={p.projectId} className="border-b hover:bg-gray-50 transition-colors">
+                      <td className="p-3 font-medium">{p.projectName}</td>
+                      <td className="p-3 text-right font-medium">{fmt(p.total)}€</td>
+                      <td className="p-3 text-right text-gray-500">{fmt(p.totalB)}€</td>
+                      <td className="p-3 text-right">
+                        {p.diff !== null && (
+                          <span className={`px-2 py-1 rounded text-xs font-medium ${p.diff > 0 ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
+                            {p.diff > 0 ? '+' : ''}{p.diff.toFixed(1)}%
+                          </span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
             </div>
