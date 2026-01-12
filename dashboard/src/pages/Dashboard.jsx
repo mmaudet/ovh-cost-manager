@@ -94,7 +94,14 @@ export default function Dashboard() {
         setCompareMonthB(months[1]);
       }
     }
-  }, [months, selectedMonth]);
+    // Adjust trend period if it exceeds available data
+    if (months.length > 0 && trendPeriod > months.length) {
+      const validPeriods = [3, 6, 12, 24, 36].filter(p => p <= months.length);
+      if (validPeriods.length > 0) {
+        setTrendPeriod(validPeriods[validPeriods.length - 1]);
+      }
+    }
+  }, [months, selectedMonth, trendPeriod]);
 
   // Fetch data for selected month
   const { data: summary, isLoading: loadingSummary } = useQuery({
@@ -338,11 +345,11 @@ export default function Dashboard() {
                 onChange={(e) => setTrendPeriod(Number(e.target.value))}
                 className="px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm shadow-sm cursor-pointer"
               >
-                <option value={3}>{t('months3')}</option>
-                <option value={6}>{t('months6')}</option>
-                <option value={12}>{t('months12')}</option>
-                <option value={24}>{t('months24')}</option>
-                <option value={36}>{t('months36')}</option>
+                {months.length >= 3 && <option value={3}>{t('months3')}</option>}
+                {months.length >= 6 && <option value={6}>{t('months6')}</option>}
+                {months.length >= 12 && <option value={12}>{t('months12')}</option>}
+                {months.length >= 24 && <option value={24}>{t('months24')}</option>}
+                {months.length >= 36 && <option value={36}>{t('months36')}</option>}
               </select>
             </div>
           )}
