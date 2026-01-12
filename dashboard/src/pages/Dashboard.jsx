@@ -61,10 +61,42 @@ export default function Dashboard() {
   const [activeTab, setActiveTab] = useState('overview');
   const [budget, setBudget] = useState(50000); // Default budget
   const [trendPeriod, setTrendPeriod] = useState(6); // Months for trend
+  const [projectSort, setProjectSort] = useState({ column: 'total', direction: 'desc' });
 
   // Helper to format currency with current language
   const fmt = (value) => formatCurrency(value, language);
   const locale = language === 'en' ? 'en-US' : 'fr-FR';
+
+  // Sort projects helper
+  const sortProjects = (projects, sortConfig) => {
+    if (!projects) return [];
+    return [...projects].sort((a, b) => {
+      let aVal, bVal;
+      if (sortConfig.column === 'name') {
+        aVal = a.projectName?.toLowerCase() || '';
+        bVal = b.projectName?.toLowerCase() || '';
+      } else {
+        aVal = a.total || 0;
+        bVal = b.total || 0;
+      }
+      if (aVal < bVal) return sortConfig.direction === 'asc' ? -1 : 1;
+      if (aVal > bVal) return sortConfig.direction === 'asc' ? 1 : -1;
+      return 0;
+    });
+  };
+
+  const handleProjectSort = (column) => {
+    setProjectSort(prev => ({
+      column,
+      direction: prev.column === column && prev.direction === 'desc' ? 'asc' : 'desc'
+    }));
+  };
+
+  const SortIcon = ({ column, current }) => (
+    <span className="ml-1 text-gray-400">
+      {current.column === column ? (current.direction === 'desc' ? '▼' : '▲') : '○'}
+    </span>
+  );
 
   // Fetch config (budget)
   const { data: configData } = useQuery({
@@ -416,13 +448,23 @@ export default function Dashboard() {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b bg-gray-50">
-                      <th className="p-3 text-left font-medium">{t('project')}</th>
-                      <th className="p-3 text-right font-medium">{t('amount')}</th>
+                      <th
+                        className="p-3 text-left font-medium cursor-pointer hover:bg-gray-100 select-none"
+                        onClick={() => handleProjectSort('name')}
+                      >
+                        {t('project')}<SortIcon column="name" current={projectSort} />
+                      </th>
+                      <th
+                        className="p-3 text-right font-medium cursor-pointer hover:bg-gray-100 select-none"
+                        onClick={() => handleProjectSort('total')}
+                      >
+                        {t('amount')}<SortIcon column="total" current={projectSort} />
+                      </th>
                       <th className="p-3 text-right font-medium">%</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {byProject.map((p, i) => {
+                    {sortProjects(byProject, projectSort).map((p, i) => {
                       const pct = summary?.cloudTotal ? ((p.total / summary.cloudTotal) * 100).toFixed(1) : 0;
                       return (
                         <tr key={p.projectId || i} className="border-b hover:bg-gray-50">
