@@ -25,6 +25,10 @@ git clone https://github.com/mmaudet/ovh-cost-manager.git
 cd ovh-cost-manager
 npm install
 
+# Configure OVH API credentials (see Configuration section below)
+cp config.example.json config.json
+# Edit config.json with your OVH API credentials
+
 # Import data from OVH API
 npm run import:full
 
@@ -33,6 +37,8 @@ npm run dev
 ```
 
 Open http://localhost:5173 to view the dashboard.
+
+> **Note**: The import requires valid OVH API credentials. See [Configuration](#configuration) for setup instructions.
 
 ## Project Structure
 
