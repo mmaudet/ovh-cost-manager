@@ -166,11 +166,13 @@ npm run split -- --from 2025-12-01 --to 2025-12-31
 # Split by project via OVH API (Markdown)
 npm run split -- --from 2025-12-01 --to 2025-12-31 --format md
 
-# Extract bills for a project from local DB
+# Extract bills from local DB
 npm run bills -- --list                              # List all projects
 npm run bills -- --project "AI"                      # All bills for project
 npm run bills -- --project "AI" --from 2025-01-01 --to 2025-12-31
 npm run bills -- --project "AI" --format md          # Markdown output
+npm run bills -- --month 2025-12                     # All bills for a month
+npm run bills -- --month 2025-12 --format md         # Markdown output
 ```
 
 ## API Endpoints
