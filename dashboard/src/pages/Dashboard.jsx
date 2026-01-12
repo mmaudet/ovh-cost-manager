@@ -63,6 +63,7 @@ export default function Dashboard() {
   const [trendPeriod, setTrendPeriod] = useState(6); // Months for trend
   const [projectSort, setProjectSort] = useState({ column: 'total', direction: 'desc' });
   const [compareSort, setCompareSort] = useState({ column: 'totalA', direction: 'desc' });
+  const [syncWarningDismissed, setSyncWarningDismissed] = useState(false);
 
   // Helper to format currency with current language
   const fmt = (value) => formatCurrency(value, language);
@@ -275,9 +276,34 @@ export default function Dashboard() {
     ? ((compareDataB.total - compareDataA.total) / compareDataA.total * 100).toFixed(1)
     : 0;
 
+  // Calculate days since last import
+  const daysSinceLastImport = importStatus?.latest?.completed_at
+    ? Math.floor((new Date() - new Date(importStatus.latest.completed_at)) / (1000 * 60 * 60 * 24))
+    : null;
+  const showSyncWarning = daysSinceLastImport !== null && daysSinceLastImport > 30 && !syncWarningDismissed;
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 p-4 md:p-6">
       <div className="max-w-6xl mx-auto space-y-6">
+
+        {/* Sync Warning Banner */}
+        {showSyncWarning && (
+          <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <span className="text-amber-600 text-xl">⚠️</span>
+              <p className="text-amber-800 text-sm">
+                {t('syncWarning')} <strong>{daysSinceLastImport}</strong> {t('syncWarningDays')}.{' '}
+                {t('syncWarningAction')} <code className="bg-amber-100 px-1 rounded">npm run import:diff</code> {t('syncWarningToUpdate')}
+              </p>
+            </div>
+            <button
+              onClick={() => setSyncWarningDismissed(true)}
+              className="text-amber-600 hover:text-amber-800 text-sm font-medium px-3 py-1 hover:bg-amber-100 rounded"
+            >
+              {t('dismiss')}
+            </button>
+          </div>
+        )}
 
         {/* Header */}
         <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">

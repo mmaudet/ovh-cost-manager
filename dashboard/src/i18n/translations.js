@@ -70,6 +70,13 @@ export const translations = {
     // Loading
     loading: 'Chargement des données...',
 
+    // Sync warning
+    syncWarning: 'Dernière synchronisation il y a',
+    syncWarningDays: 'jours',
+    syncWarningAction: 'Exécutez',
+    syncWarningToUpdate: 'pour mettre à jour.',
+    dismiss: 'Fermer',
+
     // Months
     january: 'Janvier',
     february: 'Février',
@@ -154,6 +161,13 @@ export const translations = {
 
     // Loading
     loading: 'Loading data...',
+
+    // Sync warning
+    syncWarning: 'Last synchronization was',
+    syncWarningDays: 'days ago',
+    syncWarningAction: 'Run',
+    syncWarningToUpdate: 'to update.',
+    dismiss: 'Dismiss',
 
     // Months
     january: 'January',

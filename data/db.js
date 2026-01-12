@@ -322,6 +322,19 @@ const analysisOps = {
 
     query += ' GROUP BY b.id ORDER BY b.date DESC';
     return db.prepare(query).all(...params);
+  },
+
+  billsByMonth: (yearMonth) => {
+    const db = getDb();
+    return db.prepare(`
+      SELECT
+        b.id as bill_id,
+        b.date,
+        b.price_without_tax as amount
+      FROM bills b
+      WHERE strftime('%Y-%m', b.date) = ?
+      ORDER BY b.date DESC
+    `).all(yearMonth);
   }
 };
 
