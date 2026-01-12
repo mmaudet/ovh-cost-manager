@@ -24,8 +24,9 @@ Interactive dashboard for OVHcloud billing analysis with cost tracking, monthly 
 - **Month Comparison**: Compare costs between two months side by side
 - **Trend Analysis**: Historical trends with configurable period (3-36 months)
 - **Budget Tracking**: Visual budget consumption with configurable targets
+- **Sortable Tables**: Click column headers to sort by name, amount, or variation
 - **Export**: PDF and Markdown report generation
-- **CLI Tools**: Download OVH invoices in PDF or HTML format
+- **CLI Tools**: Download invoices, split by project, extract bills per project
 - **Data Import**: Import billing data from OVH API into local SQLite database
 
 ## Quick Start
@@ -55,23 +56,25 @@ Open http://localhost:5173 to view the dashboard.
 
 ```
 ovh-cost-manager/
-├── cli/                 # Command-line tools
-│   ├── index.js        # Invoice downloader
-│   └── split-by-project.js  # Cost analyzer
-├── data/               # Data layer
-│   ├── import.js       # OVH API → SQLite import script
-│   ├── db.js           # Database connection and queries
-│   ├── schema.sql      # SQLite schema
-│   └── ovh-bills.db    # Local database (gitignored)
-├── server/             # Backend API
-│   └── index.js        # Express server
-└── dashboard/          # Frontend
-    └── src/
-        ├── components/ # React components (Logo, etc.)
-        ├── hooks/      # Custom hooks (useLanguage)
-        ├── i18n/       # Translations (FR/EN)
-        ├── pages/      # Dashboard page
-        └── services/   # API client
+├── cli/                      # Command-line tools
+│   ├── index.js              # Invoice downloader
+│   ├── split-by-project.js   # Cost analyzer (via OVH API)
+│   └── bills-by-project.js   # Bills extractor (via local DB)
+├── data/                     # Data layer
+│   ├── import.js             # OVH API → SQLite import script
+│   ├── db.js                 # Database connection and queries
+│   ├── schema.sql            # SQLite schema
+│   └── ovh-bills.db          # Local database (gitignored)
+├── server/                   # Backend API
+│   └── index.js              # Express server (port 3001)
+├── dashboard/                # Frontend (Vite + React)
+│   └── src/
+│       ├── components/       # React components (Logo)
+│       ├── hooks/            # Custom hooks (useLanguage)
+│       ├── i18n/             # Translations (FR/EN)
+│       ├── pages/            # Dashboard page
+│       └── services/         # API client
+└── config.example.json       # Configuration template
 ```
 
 ## Prerequisites
@@ -157,11 +160,17 @@ npm run cli -- --from=2025-01-01 --to=2025-12-31
 # Generate markdown summary
 npm run cli -- --from=2025-01-01 --summary
 
-# Split by project (JSON)
+# Split by project via OVH API (JSON)
 npm run split -- --from 2025-12-01 --to 2025-12-31
 
-# Split by project (Markdown)
+# Split by project via OVH API (Markdown)
 npm run split -- --from 2025-12-01 --to 2025-12-31 --format md
+
+# Extract bills for a project from local DB
+npm run bills -- --list                              # List all projects
+npm run bills -- --project "AI"                      # All bills for project
+npm run bills -- --project "AI" --from 2025-01-01 --to 2025-12-31
+npm run bills -- --project "AI" --format md          # Markdown output
 ```
 
 ## API Endpoints
@@ -185,9 +194,9 @@ npm run split -- --from 2025-12-01 --to 2025-12-31 --format md
 - **KPI Cards**: Total cost, cloud total, daily average, active projects
 - **Budget Progress**: Visual budget consumption tracker (configurable budget)
 - **Service Breakdown**: Pie chart by service type (Compute, Storage, Network, Database, AI/ML)
-- **Project Breakdown**: Table with cost per project and percentages
+- **Project Breakdown**: Sortable table with cost per project and percentages
 - **Project Ranking**: Bar chart of top consuming projects
-- **Month Comparison**: Compare two months side by side with variation indicators
+- **Month Comparison**: Compare two months side by side with sortable variation table
 - **Historical Trends**: Configurable period (3, 6, 12, 24, or 36 months) with growth metrics
 - **Export**: PDF (print) and Markdown report generation
 
