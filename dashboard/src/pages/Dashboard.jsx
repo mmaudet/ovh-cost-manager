@@ -314,7 +314,7 @@ export default function Dashboard() {
         {/* Header */}
         <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <Logo className="w-10 h-10" />
+            <Logo className="h-40" />
             <div>
               <div className="flex items-center gap-3">
                 <h1 className="text-2xl font-bold text-gray-900">{t('appTitle')}</h1>
