@@ -62,18 +62,20 @@ function setup(config) {
       const tokens = await oidcClient.handleCallback(currentUrl, state, pending.nonce);
       console.log('OIDC tokens received');
 
-      // Extract sub from id_token claims
+      // Extract sub and sid from id_token claims
       const claims = tokens.claims();
       const sub = claims.sub;
+      const oidcSid = claims.sid; // OIDC session ID for back-channel logout
 
       // Get user info
       const userInfo = await oidcClient.getUserInfo(tokens.access_token, sub);
 
-      // Create session
+      // Create session with OIDC sid for back-channel logout support
       const sid = sessionStore.create(
         userInfo.sub,
         userInfo,
         { id_token: tokens.id_token },
+        oidcSid,
         authConfig.session.maxAge
       );
 
@@ -132,8 +134,8 @@ async function backChannelLogout(req, res, config) {
       return res.status(400).send('logout_token required');
     }
 
-    // TODO: Validate logout token (requires JWT verification)
-    // For now, decode without verification
+    // Decode logout token (JWT)
+    // TODO: Add proper JWT signature verification
     const parts = logout_token.split('.');
     if (parts.length !== 3) {
       return res.status(400).send('Invalid logout token format');
@@ -141,15 +143,26 @@ async function backChannelLogout(req, res, config) {
 
     const claims = JSON.parse(Buffer.from(parts[1], 'base64url').toString());
 
-    // Delete sessions by subject
-    let deleted = 0;
-    if (claims.sub) {
-      deleted = sessionStore.deleteByUserId(claims.sub);
+    // Back-channel logout spec: must have either sub or sid (or both)
+    if (!claims.sub && !claims.sid) {
+      return res.status(400).send('logout_token must contain sub or sid');
     }
 
-    console.log(`Back-channel logout: deleted ${deleted} session(s) for sub=${claims.sub}`);
+    let deleted = 0;
 
-    // Return 200 OK per spec
+    // Prefer sid-based logout (more specific - single session)
+    if (claims.sid) {
+      deleted = sessionStore.deleteByOidcSid(claims.sid);
+      console.log(`Back-channel logout: deleted ${deleted} session(s) for sid=${claims.sid}`);
+    }
+
+    // If no sessions found by sid, or no sid provided, try sub (all user sessions)
+    if (deleted === 0 && claims.sub) {
+      deleted = sessionStore.deleteByUserId(claims.sub);
+      console.log(`Back-channel logout: deleted ${deleted} session(s) for sub=${claims.sub}`);
+    }
+
+    // Return 200 OK per spec (even if no sessions deleted)
     res.status(200).send('OK');
   } catch (err) {
     console.error('Back-channel logout error:', err.message);

@@ -14,26 +14,40 @@ function init(database) {
     CREATE TABLE IF NOT EXISTS sessions (
       sid TEXT PRIMARY KEY,
       user_id TEXT NOT NULL,
+      oidc_sid TEXT,
       id_token TEXT,
       user_info TEXT NOT NULL,
       expires_at DATETIME NOT NULL,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
+  `);
+
+  // Migration: add oidc_sid column if missing (for existing databases)
+  try {
+    db.exec('ALTER TABLE sessions ADD COLUMN oidc_sid TEXT');
+  } catch (e) {
+    // Column already exists
+  }
+
+  // Create indexes (after migration to ensure column exists)
+  db.exec(`
     CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id);
+    CREATE INDEX IF NOT EXISTS idx_sessions_oidc_sid ON sessions(oidc_sid);
     CREATE INDEX IF NOT EXISTS idx_sessions_expires ON sessions(expires_at);
   `);
 }
 
-function create(userId, userInfo, tokens, maxAge) {
+function create(userId, userInfo, tokens, oidcSid, maxAge) {
   const sid = uuidv4();
   const expiresAt = new Date(Date.now() + maxAge).toISOString();
 
   db.prepare(`
-    INSERT INTO sessions (sid, user_id, id_token, user_info, expires_at)
-    VALUES (?, ?, ?, ?, ?)
+    INSERT INTO sessions (sid, user_id, oidc_sid, id_token, user_info, expires_at)
+    VALUES (?, ?, ?, ?, ?, ?)
   `).run(
     sid,
     userId,
+    oidcSid || null,
     tokens.id_token || null,
     JSON.stringify(userInfo),
     expiresAt
@@ -65,6 +79,11 @@ function deleteByUserId(userId) {
   return result.changes;
 }
 
+function deleteByOidcSid(oidcSid) {
+  const result = db.prepare('DELETE FROM sessions WHERE oidc_sid = ?').run(oidcSid);
+  return result.changes;
+}
+
 function cleanup() {
   return db.prepare("DELETE FROM sessions WHERE expires_at <= datetime('now')").run();
 }
@@ -75,5 +94,6 @@ module.exports = {
   get,
   remove,
   deleteByUserId,
+  deleteByOidcSid,
   cleanup
 };
