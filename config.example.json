@@ -9,5 +9,21 @@
     "budget": 50000,
     "currency": "EUR",
     "language": "fr"
+  },
+  "auth": {
+    "enabled": false,
+    "provider": {
+      "issuer": "https://auth.example.com",
+      "clientId": "YOUR_CLIENT_ID",
+      "clientSecret": "YOUR_CLIENT_SECRET",
+      "scopes": ["openid", "profile", "email"]
+    },
+    "session": {
+      "secret": "CHANGE_THIS_TO_A_RANDOM_SECRET",
+      "maxAge": 86400000,
+      "name": "ocm.sid"
+    },
+    "baseUrl": "https://ocm.example.com",
+    "backChannelLogout": true
   }
 }

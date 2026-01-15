@@ -60,3 +60,16 @@ CREATE INDEX IF NOT EXISTS idx_details_bill ON bill_details(bill_id);
 CREATE INDEX IF NOT EXISTS idx_details_project ON bill_details(project_id);
 CREATE INDEX IF NOT EXISTS idx_details_service ON bill_details(service_type);
 CREATE INDEX IF NOT EXISTS idx_import_log_date ON import_log(started_at);
+
+-- OIDC Sessions for back-channel logout support
+CREATE TABLE IF NOT EXISTS sessions (
+  sid TEXT PRIMARY KEY,              -- Session ID (cookie value)
+  user_id TEXT NOT NULL,             -- OIDC subject (sub claim)
+  id_token TEXT,                     -- ID token for RP-initiated logout
+  user_info TEXT NOT NULL,           -- JSON: user claims (name, email, etc)
+  expires_at DATETIME NOT NULL,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id);
+CREATE INDEX IF NOT EXISTS idx_sessions_expires ON sessions(expires_at);

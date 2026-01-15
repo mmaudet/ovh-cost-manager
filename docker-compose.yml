@@ -1,11 +1,25 @@
-version: '3.8'
-
 # Base configuration - OCM without SSO
-# For SSO deployment, use: docker-compose -f docker-compose.yml -f docker-compose.sso.yml up -d
+#
+# BUILD OPTIONS:
+#   1. Build locally:
+#      docker-compose build
+#      docker-compose up -d
+#
+#   2. Use pre-built image from Docker Hub:
+#      Comment out "build:" section and uncomment "image:" line below
+#      docker-compose up -d
+#
+# For SSO deployment, use:
+#   docker-compose -f docker-compose.yml -f docker-compose.sso.yml up -d
 
 services:
   ocm:
-    build: .
+    # Option 1: Build from local Dockerfile (default)
+    build:
+      context: .
+      dockerfile: Dockerfile
+    # Option 2: Use pre-built image (comment build section above, uncomment below)
+    # image: mmaudet/ovh-cost-manager:latest
     container_name: ovh-cost-manager
     restart: unless-stopped
     environment:
