@@ -6,7 +6,7 @@ import {
 } from 'recharts';
 import {
   fetchMonths, fetchSummary, fetchByProject, fetchByService,
-  fetchMonthlyTrend, fetchImportStatus, fetchConfig
+  fetchMonthlyTrend, fetchImportStatus, fetchConfig, fetchUser
 } from '../services/api';
 import { useLanguage } from '../hooks/useLanguage.jsx';
 import Logo from '../components/Logo';
@@ -141,6 +141,12 @@ export default function Dashboard() {
   const { data: configData } = useQuery({
     queryKey: ['config'],
     queryFn: fetchConfig
+  });
+
+  // Fetch current user
+  const { data: userData } = useQuery({
+    queryKey: ['user'],
+    queryFn: fetchUser
   });
 
   // Update budget when config loads
@@ -325,6 +331,21 @@ export default function Dashboard() {
             </div>
           </div>
           <div className="flex items-center gap-3">
+            {/* User info */}
+            {userData?.id && (
+              <div className="flex items-center gap-2 px-3 py-1.5 bg-gray-100 rounded-lg">
+                <span className="text-sm text-gray-700">{userData.name}</span>
+                {userData.authEnabled && (
+                  <a
+                    href="/auth/logout"
+                    className="text-xs text-gray-500 hover:text-red-600 ml-1"
+                    title={t('logout') || 'Logout'}
+                  >
+                    ✕
+                  </a>
+                )}
+              </div>
+            )}
             {activeTab === 'overview' && (
               <>
                 <select

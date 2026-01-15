@@ -1,10 +1,14 @@
 const express = require('express');
 const cors = require('cors');
+const cookieParser = require('cookie-parser');
 const path = require('path');
 const fs = require('fs');
 
 // Import database module from data workspace
 const db = require('../data/db');
+
+// Import auth module
+const auth = require('./auth');
 
 // Load configuration
 const CONFIG_PATHS = [
@@ -28,48 +32,110 @@ for (const configPath of CONFIG_PATHS) {
 
 const app = express();
 const PORT = process.env.PORT || 3001;
-const AUTH_REQUIRED = process.env.AUTH_REQUIRED === 'true';
 
 // Middleware
 app.use(cors());
 app.use(express.json());
+app.use(cookieParser());
 
-// Trust proxy headers (for LemonLDAP/Traefik)
+// Trust proxy headers (for reverse proxy)
 if (process.env.TRUST_PROXY === 'true') {
   app.set('trust proxy', 1);
 }
 
-// Authentication middleware (SSO headers from LemonLDAP)
-app.use((req, res, next) => {
-  // Extract auth headers from LemonLDAP
-  const authUser = req.headers['auth-user'];
-  const authMail = req.headers['auth-mail'];
-  const authCn = req.headers['auth-cn'];
+// Auth configuration placeholder (set during async init)
+let authConfig = { auth: { enabled: false } };
 
-  // Set user info on request
-  req.user = authUser ? {
-    id: authUser,
-    email: authMail || null,
-    name: authCn || authUser
-  } : null;
+// ========================
+// Async initialization
+// ========================
 
-  // Check if authentication is required (skip for health check)
-  if (AUTH_REQUIRED && !authUser && req.path !== '/api/health') {
-    // For API routes, return 401
-    if (req.path.startsWith('/api/')) {
-      return res.status(401).json({ error: 'Authentication required' });
-    }
+async function initializeServer() {
+  // Initialize OIDC authentication
+  const authResult = await auth.initialize(app, db.getDb(), config);
+  authConfig = authResult.config;
+
+  if (authResult.initialized) {
+    // Mount auth routes
+    app.use('/auth', auth.setupRoutes(authConfig));
+
+    // Back-channel logout endpoint
+    app.post('/logout/backchannel', express.urlencoded({ extended: false }), (req, res) => {
+      auth.backChannelLogout(req, res, authConfig);
+    });
+
+    // OIDC authentication middleware
+    app.use(auth.createAuthMiddleware(authConfig));
+  } else {
+    // Fallback: header-based SSO (LemonLDAP headers via reverse proxy)
+    const AUTH_REQUIRED = process.env.AUTH_REQUIRED === 'true';
+    app.use((req, res, next) => {
+      const authUser = req.headers['auth-user'];
+      const authMail = req.headers['auth-mail'];
+      const authCn = req.headers['auth-cn'];
+
+      req.user = authUser ? {
+        id: authUser,
+        email: authMail || null,
+        name: authCn || authUser
+      } : null;
+
+      if (AUTH_REQUIRED && !authUser && req.path !== '/api/health') {
+        if (req.path.startsWith('/api/')) {
+          return res.status(401).json({ error: 'Authentication required' });
+        }
+      }
+
+      next();
+    });
   }
 
-  next();
-});
+  // Logging middleware (inside async to run after auth middleware)
+  app.use((req, res, next) => {
+    const user = req.user?.id || 'anonymous';
+    console.log(`${new Date().toISOString()} [${user}] ${req.method} ${req.path}`);
+    next();
+  });
 
-// Logging middleware
-app.use((req, res, next) => {
-  const user = req.user?.id || 'anonymous';
-  console.log(`${new Date().toISOString()} [${user}] ${req.method} ${req.path}`);
-  next();
-});
+  // Register all API routes
+  registerRoutes();
+
+  // Static files (production)
+  const distPath = path.join(__dirname, '../dashboard/dist');
+  if (fs.existsSync(distPath)) {
+    app.use(express.static(distPath));
+    app.get('*', (req, res) => {
+      res.sendFile(path.join(distPath, 'index.html'));
+    });
+  }
+
+  // Start listening
+  app.listen(PORT, () => {
+    console.log(`\n🚀 OVH Bill API Server running on http://localhost:${PORT}`);
+    if (authConfig.auth?.enabled) {
+      console.log(`   OIDC authentication enabled`);
+      console.log(`   Login: /auth/login`);
+      console.log(`   Logout: /auth/logout`);
+    }
+    console.log(`\nEndpoints:`);
+    console.log(`  GET /api/projects`);
+    console.log(`  GET /api/bills?from=YYYY-MM-DD&to=YYYY-MM-DD`);
+    console.log(`  GET /api/analysis/by-project?from=YYYY-MM-DD&to=YYYY-MM-DD`);
+    console.log(`  GET /api/analysis/by-service?from=YYYY-MM-DD&to=YYYY-MM-DD`);
+    console.log(`  GET /api/analysis/daily-trend?from=YYYY-MM-DD&to=YYYY-MM-DD`);
+    console.log(`  GET /api/analysis/monthly-trend?months=6`);
+    console.log(`  GET /api/summary?from=YYYY-MM-DD&to=YYYY-MM-DD`);
+    console.log(`  GET /api/months`);
+    console.log(`  GET /api/import/status`);
+    console.log(`\n`);
+  });
+}
+
+// ========================
+// Route registration function
+// ========================
+
+function registerRoutes() {
 
 // ========================
 // Projects Endpoints
@@ -368,7 +434,13 @@ app.get('/api/config', (req, res) => {
 // ========================
 
 app.get('/api/user', (req, res) => {
-  res.json(req.user || { id: null, name: 'Anonymous', email: null });
+  const response = req.user || { id: null, name: 'Anonymous', email: null };
+  // Add auth info for frontend
+  response.authEnabled = authConfig.auth?.enabled || false;
+  if (authConfig.auth?.enabled && !req.user) {
+    response.loginUrl = '/auth/login';
+  }
+  res.json(response);
 });
 
 // ========================
@@ -379,36 +451,13 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-// ========================
-// Static files (production)
-// ========================
-
-const distPath = path.join(__dirname, '../dashboard/dist');
-if (fs.existsSync(distPath)) {
-  // Serve static frontend assets
-  app.use(express.static(distPath));
-
-  // SPA fallback - serve index.html for all non-API routes
-  app.get('*', (req, res) => {
-    res.sendFile(path.join(distPath, 'index.html'));
-  });
-}
+} // End of registerRoutes()
 
 // ========================
 // Start server
 // ========================
 
-app.listen(PORT, () => {
-  console.log(`\n🚀 OVH Bill API Server running on http://localhost:${PORT}`);
-  console.log(`\nEndpoints:`);
-  console.log(`  GET /api/projects`);
-  console.log(`  GET /api/bills?from=YYYY-MM-DD&to=YYYY-MM-DD`);
-  console.log(`  GET /api/analysis/by-project?from=YYYY-MM-DD&to=YYYY-MM-DD`);
-  console.log(`  GET /api/analysis/by-service?from=YYYY-MM-DD&to=YYYY-MM-DD`);
-  console.log(`  GET /api/analysis/daily-trend?from=YYYY-MM-DD&to=YYYY-MM-DD`);
-  console.log(`  GET /api/analysis/monthly-trend?months=6`);
-  console.log(`  GET /api/summary?from=YYYY-MM-DD&to=YYYY-MM-DD`);
-  console.log(`  GET /api/months`);
-  console.log(`  GET /api/import/status`);
-  console.log(`\n`);
+initializeServer().catch(err => {
+  console.error('Failed to start server:', err);
+  process.exit(1);
 });

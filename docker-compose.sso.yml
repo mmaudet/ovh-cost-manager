@@ -1,12 +1,31 @@
-# SSO deployment - OCM with LemonLDAP-NG and Traefik
+# SSO deployment - OCM with LemonLDAP-NG OIDC Authentication
+#
+# This deployment uses LemonLDAP-NG as an OIDC Provider with built-in
+# reverse proxy (RELAY) to serve OCM. No external proxy (Traefik) needed.
 #
 # BUILD & RUN:
 #   docker compose -f docker-compose.sso.yml build
 #   docker compose -f docker-compose.sso.yml up -d
 #
 # REQUIRED ENVIRONMENT VARIABLES (create .env file or export):
-#   OCM_DOMAIN=ocm.example.com     # Domain for OCM dashboard
 #   SSO_DOMAIN=example.com         # Base domain for SSO (auth.example.com, manager.example.com)
+#   OIDC_CLIENT_SECRET=xxx         # OIDC client secret (generate with: openssl rand -hex 32)
+#   SESSION_SECRET=xxx             # Session encryption secret (generate with: openssl rand -hex 32)
+#
+# After first run, configure LemonLDAP via http://manager.${SSO_DOMAIN}:
+#   1. Add OIDC Relying Party: ocm-app
+#      - Client ID: ocm-dashboard
+#      - Client Secret: (same as OIDC_CLIENT_SECRET)
+#      - Redirect URIs: http://ocm.${SSO_DOMAIN}/auth/callback
+#      - Allowed scopes: openid profile email
+#      - Logout URIs: http://ocm.${SSO_DOMAIN} (post_logout_redirect_uri)
+#   2. Configure back-channel logout (optional):
+#      - Back-channel logout URI: http://ocm:3001/logout/backchannel
+#
+# ACCESS:
+#   Dashboard: http://ocm.${SSO_DOMAIN}/
+#   SSO Portal: http://auth.${SSO_DOMAIN}/
+#   Manager: http://manager.${SSO_DOMAIN}/
 
 services:
   ocm:
@@ -29,71 +48,46 @@ services:
       retries: 3
     environment:
       - NODE_ENV=production
-      - AUTH_REQUIRED=true
-      - TRUST_PROXY=true
       - PORT=3001
+      - TRUST_PROXY=true
+      # OIDC Configuration
+      - OIDC_ENABLED=true
+      - OIDC_ISSUER=http://auth.${SSO_DOMAIN:-localhost}
+      - OIDC_CLIENT_ID=ocm-dashboard
+      - OIDC_CLIENT_SECRET=${OIDC_CLIENT_SECRET:-change-me}
+      - OIDC_BASE_URL=http://ocm.${SSO_DOMAIN:-localhost}
+      - OIDC_SCOPES=openid,profile,email
+      - SESSION_SECRET=${SESSION_SECRET:-change-me-in-production}
     networks:
       - ocm-network
     depends_on:
       - lemonldap
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.ocm.rule=Host(`${OCM_DOMAIN:-ocm.localhost}`)"
-      - "traefik.http.routers.ocm.entrypoints=web"
-      - "traefik.http.services.ocm.loadbalancer.server.port=3001"
-      # Auth middleware - requests must pass through LemonLDAP handler
-      - "traefik.http.routers.ocm.middlewares=llng-auth@docker"
 
-  # LemonLDAP-NG - SSO Portal & Handler
+  # LemonLDAP-NG - SSO Portal & OIDC Provider
+  # Using RELAY feature to serve OCM behind the portal
   lemonldap:
     image: yadd/lemonldap-ng-portal:latest
     container_name: lemonldap
     restart: unless-stopped
     environment:
-      - SSODOMAIN=${SSO_DOMAIN:-localhost}
+      - SSODOMAIN=${SSO_DOMAIN:-auth.localhost}
       - PORTAL=http://auth.${SSO_DOMAIN:-localhost}
       - LOGLEVEL=notice
+      # RELAY: Built-in nginx reverse proxy
+      - RELAY=ocm.${SSO_DOMAIN:-localhost}=http://ocm:3001/
+      
     volumes:
       - lemonldap-conf:/var/lib/lemonldap-ng/conf
       - lemonldap-sessions:/var/lib/lemonldap-ng/sessions
-    networks:
-      - ocm-network
-    labels:
-      - "traefik.enable=true"
-      # Portal (login page)
-      - "traefik.http.routers.llng-portal.rule=Host(`auth.${SSO_DOMAIN:-localhost}`)"
-      - "traefik.http.routers.llng-portal.entrypoints=web"
-      - "traefik.http.services.llng-portal.loadbalancer.server.port=80"
-      # Manager (configuration)
-      - "traefik.http.routers.llng-manager.rule=Host(`manager.${SSO_DOMAIN:-localhost}`)"
-      - "traefik.http.routers.llng-manager.entrypoints=web"
-      # Handler (auth service for protected apps)
-      - "traefik.http.routers.llng-handler.rule=Host(`handler.${SSO_DOMAIN:-localhost}`)"
-      - "traefik.http.routers.llng-handler.entrypoints=web"
-      # ForwardAuth middleware
-      - "traefik.http.middlewares.llng-auth.forwardauth.address=http://lemonldap/llng-handler"
-      - "traefik.http.middlewares.llng-auth.forwardauth.authResponseHeaders=Auth-User,Auth-Mail,Auth-CN"
-      - "traefik.http.middlewares.llng-auth.forwardauth.trustForwardHeader=true"
-
-  # Traefik - Reverse Proxy
-  traefik:
-    image: traefik:v2.10
-    container_name: traefik
-    restart: unless-stopped
-    command:
-      - "--api.dashboard=true"
-      - "--api.insecure=true"
-      - "--providers.docker=true"
-      - "--providers.docker.exposedbydefault=false"
-      - "--entrypoints.web.address=:80"
-      - "--log.level=INFO"
+      - ./demo/sso:/over
     ports:
       - "80:80"
-      - "8080:8080"  # Traefik dashboard
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
     networks:
-      - ocm-network
+      ocm-network:
+        aliases:
+          - auth.${SSO_DOMAIN:-localhost}
+          - manager.${SSO_DOMAIN:-localhost}
+          - ocm.${SSO_DOMAIN:-localhost}
 
 volumes:
   ocm-data:
