@@ -1,5 +1,3 @@
-version: '3.8'
-
 # Base configuration - OCM without SSO
 #
 # BUILD OPTIONS:

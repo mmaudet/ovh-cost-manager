@@ -1,24 +1,32 @@
-version: '3.8'
-
-# SSO extension - adds LemonLDAP-NG and Traefik
+# SSO deployment - OCM with LemonLDAP-NG and Traefik
 #
 # BUILD & RUN:
-#   1. Build locally and start with SSO:
-#      docker-compose -f docker-compose.yml -f docker-compose.sso.yml build
-#      docker-compose -f docker-compose.yml -f docker-compose.sso.yml up -d
-#
-#   2. Use pre-built image with SSO:
-#      Edit docker-compose.yml to use "image:" instead of "build:"
-#      docker-compose -f docker-compose.yml -f docker-compose.sso.yml up -d
+#   docker compose -f docker-compose.sso.yml build
+#   docker compose -f docker-compose.sso.yml up -d
 #
 # REQUIRED ENVIRONMENT VARIABLES (create .env file or export):
 #   OCM_DOMAIN=ocm.example.com     # Domain for OCM dashboard
 #   SSO_DOMAIN=example.com         # Base domain for SSO (auth.example.com, manager.example.com)
 
 services:
-  # Override OCM service for SSO integration
   ocm:
-    ports: []  # Remove direct port exposure (Traefik handles routing)
+    # Option 1: Build from local Dockerfile (default)
+    build:
+      context: .
+      dockerfile: Dockerfile
+    # Option 2: Use pre-built image (comment build section above, uncomment below)
+    # image: mmaudet/ovh-cost-manager:latest
+    container_name: ovh-cost-manager
+    restart: unless-stopped
+    volumes:
+      - ocm-data:/app/data
+      - ./config.json:/app/config.json:ro
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3001/api/health"]
+      interval: 30s
+      timeout: 10s
+      start_period: 5s
+      retries: 3
     environment:
       - NODE_ENV=production
       - AUTH_REQUIRED=true
@@ -88,6 +96,8 @@ services:
       - ocm-network
 
 volumes:
+  ocm-data:
+    name: ocm-data
   lemonldap-conf:
     name: lemonldap-conf
   lemonldap-sessions:
