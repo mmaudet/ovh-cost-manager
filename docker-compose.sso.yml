@@ -1,0 +1,87 @@
+version: '3.8'
+
+# SSO extension - adds LemonLDAP-NG and Traefik
+# Usage: docker-compose -f docker-compose.yml -f docker-compose.sso.yml up -d
+
+services:
+  # Override OCM service for SSO integration
+  ocm:
+    ports: []  # Remove direct port exposure
+    environment:
+      - NODE_ENV=production
+      - AUTH_REQUIRED=true
+      - TRUST_PROXY=true
+      - PORT=3001
+    networks:
+      - ocm-network
+    depends_on:
+      - lemonldap
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.ocm.rule=Host(`${OCM_DOMAIN:-ocm.localhost}`)"
+      - "traefik.http.routers.ocm.entrypoints=web"
+      - "traefik.http.services.ocm.loadbalancer.server.port=3001"
+      # Auth middleware - requests must pass through LemonLDAP handler
+      - "traefik.http.routers.ocm.middlewares=llng-auth@docker"
+
+  # LemonLDAP-NG - SSO Portal & Handler
+  lemonldap:
+    image: yadd/lemonldap-ng-portal:latest
+    container_name: lemonldap
+    restart: unless-stopped
+    environment:
+      - SSODOMAIN=${SSO_DOMAIN:-localhost}
+      - PORTAL=http://auth.${SSO_DOMAIN:-localhost}
+      - LOGLEVEL=notice
+    volumes:
+      - lemonldap-conf:/var/lib/lemonldap-ng/conf
+      - lemonldap-sessions:/var/lib/lemonldap-ng/sessions
+    networks:
+      - ocm-network
+    labels:
+      - "traefik.enable=true"
+      # Portal (login page)
+      - "traefik.http.routers.llng-portal.rule=Host(`auth.${SSO_DOMAIN:-localhost}`)"
+      - "traefik.http.routers.llng-portal.entrypoints=web"
+      - "traefik.http.services.llng-portal.loadbalancer.server.port=80"
+      # Manager (configuration)
+      - "traefik.http.routers.llng-manager.rule=Host(`manager.${SSO_DOMAIN:-localhost}`)"
+      - "traefik.http.routers.llng-manager.entrypoints=web"
+      # Handler (auth service for protected apps)
+      - "traefik.http.routers.llng-handler.rule=Host(`handler.${SSO_DOMAIN:-localhost}`)"
+      - "traefik.http.routers.llng-handler.entrypoints=web"
+      # ForwardAuth middleware
+      - "traefik.http.middlewares.llng-auth.forwardauth.address=http://lemonldap/llng-handler"
+      - "traefik.http.middlewares.llng-auth.forwardauth.authResponseHeaders=Auth-User,Auth-Mail,Auth-CN"
+      - "traefik.http.middlewares.llng-auth.forwardauth.trustForwardHeader=true"
+
+  # Traefik - Reverse Proxy
+  traefik:
+    image: traefik:v2.10
+    container_name: traefik
+    restart: unless-stopped
+    command:
+      - "--api.dashboard=true"
+      - "--api.insecure=true"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:80"
+      - "--log.level=INFO"
+    ports:
+      - "80:80"
+      - "8080:8080"  # Traefik dashboard
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - ocm-network
+
+volumes:
+  lemonldap-conf:
+    name: lemonldap-conf
+  lemonldap-sessions:
+    name: lemonldap-sessions
+
+networks:
+  ocm-network:
+    name: ocm-network
+    driver: bridge

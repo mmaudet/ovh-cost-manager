@@ -28,14 +28,46 @@ for (const configPath of CONFIG_PATHS) {
 
 const app = express();
 const PORT = process.env.PORT || 3001;
+const AUTH_REQUIRED = process.env.AUTH_REQUIRED === 'true';
 
 // Middleware
 app.use(cors());
 app.use(express.json());
 
+// Trust proxy headers (for LemonLDAP/Traefik)
+if (process.env.TRUST_PROXY === 'true') {
+  app.set('trust proxy', 1);
+}
+
+// Authentication middleware (SSO headers from LemonLDAP)
+app.use((req, res, next) => {
+  // Extract auth headers from LemonLDAP
+  const authUser = req.headers['auth-user'];
+  const authMail = req.headers['auth-mail'];
+  const authCn = req.headers['auth-cn'];
+
+  // Set user info on request
+  req.user = authUser ? {
+    id: authUser,
+    email: authMail || null,
+    name: authCn || authUser
+  } : null;
+
+  // Check if authentication is required (skip for health check)
+  if (AUTH_REQUIRED && !authUser && req.path !== '/api/health') {
+    // For API routes, return 401
+    if (req.path.startsWith('/api/')) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+  }
+
+  next();
+});
+
 // Logging middleware
 app.use((req, res, next) => {
-  console.log(`${new Date().toISOString()} ${req.method} ${req.path}`);
+  const user = req.user?.id || 'anonymous';
+  console.log(`${new Date().toISOString()} [${user}] ${req.method} ${req.path}`);
   next();
 });
 
@@ -332,12 +364,35 @@ app.get('/api/config', (req, res) => {
 });
 
 // ========================
+// User info (for frontend)
+// ========================
+
+app.get('/api/user', (req, res) => {
+  res.json(req.user || { id: null, name: 'Anonymous', email: null });
+});
+
+// ========================
 // Health check
 // ========================
 
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
+
+// ========================
+// Static files (production)
+// ========================
+
+const distPath = path.join(__dirname, '../dashboard/dist');
+if (fs.existsSync(distPath)) {
+  // Serve static frontend assets
+  app.use(express.static(distPath));
+
+  // SPA fallback - serve index.html for all non-API routes
+  app.get('*', (req, res) => {
+    res.sendFile(path.join(distPath, 'index.html'));
+  });
+}
 
 // ========================
 // Start server

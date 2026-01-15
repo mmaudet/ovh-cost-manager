@@ -74,12 +74,20 @@ ovh-cost-manager/
 │       ├── i18n/             # Translations (FR/EN)
 │       ├── pages/            # Dashboard page
 │       └── services/         # API client
+├── docs/                     # Documentation
+│   ├── deployment.md         # Docker & SSO deployment guide
+│   └── screenshots/          # Dashboard screenshots
+├── Dockerfile                # Docker image definition
+├── docker-compose.yml        # Base deployment (without SSO)
+├── docker-compose.sso.yml    # SSO extension (LemonLDAP + Traefik)
+├── .dockerignore             # Docker build exclusions
 └── config.example.json       # Configuration template
 ```
 
 ## Prerequisites
 
-- [Node.js](https://nodejs.org/) >= 18.0.0
+- [Node.js](https://nodejs.org/) >= 18.0.0 (for local development)
+- [Docker](https://www.docker.com/) and Docker Compose (for containerized deployment)
 - OVH API credentials (see [Configuration](#configuration))
 
 ## Configuration
@@ -175,6 +183,104 @@ npm run bills -- --month 2025-12                     # All bills for a month
 npm run bills -- --month 2025-12 --format md         # Markdown output
 ```
 
+## Docker Deployment
+
+Two deployment modes are available:
+- **Simple**: OCM only, direct access on port 3001
+- **SSO**: Full stack with Traefik reverse proxy and LemonLDAP-NG authentication
+
+> **Detailed documentation**: See [docs/deployment.md](docs/deployment.md) for complete deployment guide, including SAML and OIDC configuration with LemonLDAP-NG.
+
+### Option 1: Simple Deployment (without SSO)
+
+```bash
+# Build and start
+docker-compose up -d --build
+
+# Import data (first time)
+docker-compose exec ocm npm run import:full
+
+# View logs
+docker-compose logs -f ocm
+```
+
+Access the dashboard at http://localhost:3001
+
+#### Environment Variables (Simple)
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `OCM_PORT` | Exposed port | 3001 |
+| `AUTH_REQUIRED` | Require auth headers | false |
+
+### Option 2: SSO Deployment (with LemonLDAP-NG)
+
+```bash
+# Build and start full stack
+docker-compose -f docker-compose.yml -f docker-compose.sso.yml up -d --build
+
+# Import data (first time)
+docker-compose exec ocm npm run import:full
+
+# View logs
+docker-compose -f docker-compose.yml -f docker-compose.sso.yml logs -f
+```
+
+Access the dashboard at http://ocm.localhost (or your configured domain).
+
+#### Architecture (SSO)
+
+```
+┌─────────────┐    ┌─────────────┐    ┌─────────────┐
+│   Traefik   │───▶│  LemonLDAP  │───▶│     OCM     │
+│   (:80)     │    │  (handler)  │    │   (:3001)   │
+└─────────────┘    └─────────────┘    └─────────────┘
+```
+
+#### Environment Variables (SSO)
+
+Create a `.env` file:
+
+```bash
+# Domain configuration
+OCM_DOMAIN=ocm.example.com
+SSO_DOMAIN=example.com
+```
+
+#### Docker Compose Services (SSO)
+
+| Service | Description | Port |
+|---------|-------------|------|
+| `ocm` | OVH Cost Manager | internal |
+| `traefik` | Reverse proxy | 80, 8080 (dashboard) |
+| `lemonldap` | SSO Portal | internal |
+
+#### SSO Configuration (LemonLDAP-NG)
+
+1. Access the LemonLDAP Manager at http://manager.localhost
+2. Create a virtual host for your OCM domain
+3. Configure exported headers:
+   - `Auth-User` → `$uid`
+   - `Auth-Mail` → `$mail`
+   - `Auth-CN` → `$cn`
+
+### Volume Mounts
+
+| Volume | Purpose | Mode |
+|--------|---------|------|
+| `ocm-data` | SQLite database | Both |
+| `lemonldap-conf` | LemonLDAP configuration | SSO only |
+| `lemonldap-sessions` | SSO session storage | SSO only |
+
+### Production Deployment
+
+For production with SSO:
+
+1. Configure proper domain names in `.env`
+2. Add HTTPS with Let's Encrypt (Traefik supports it)
+3. Connect LemonLDAP to your LDAP/AD directory
+4. Use external volume or backup strategy for data
+
 ## API Endpoints
 
 | Endpoint | Description |
@@ -189,6 +295,8 @@ npm run bills -- --month 2025-12 --format md         # Markdown output
 | `GET /api/months` | Available months for selection |
 | `GET /api/import/status` | Import history and status |
 | `GET /api/config` | Dashboard configuration (budget) |
+| `GET /api/user` | Current authenticated user info |
+| `GET /api/health` | Health check endpoint |
 
 ## Dashboard Features
 

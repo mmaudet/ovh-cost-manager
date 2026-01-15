@@ -1,0 +1,29 @@
+version: '3.8'
+
+# Base configuration - OCM without SSO
+# For SSO deployment, use: docker-compose -f docker-compose.yml -f docker-compose.sso.yml up -d
+
+services:
+  ocm:
+    build: .
+    container_name: ovh-cost-manager
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+      - AUTH_REQUIRED=${AUTH_REQUIRED:-false}
+      - PORT=3001
+    ports:
+      - "${OCM_PORT:-3001}:3001"
+    volumes:
+      - ocm-data:/app/data
+      - ./config.json:/app/config.json:ro
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3001/api/health"]
+      interval: 30s
+      timeout: 10s
+      start_period: 5s
+      retries: 3
+
+volumes:
+  ocm-data:
+    name: ocm-data

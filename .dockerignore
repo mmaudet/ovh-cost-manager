@@ -1,0 +1,44 @@
+# Dependencies
+node_modules
+*/node_modules
+
+# Build output (will be rebuilt in container)
+dashboard/dist
+
+# Database (mounted as volume)
+data/*.db
+*.db
+
+# Config files with secrets
+config.json
+credentials.json
+
+# Git
+.git
+.gitignore
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+
+# Documentation
+*.md
+!README.md
+docs/
+
+# Docker files (no need to copy into image)
+docker-compose*.yml
+.dockerignore
+
+# Claude/dev files
+.claude/
