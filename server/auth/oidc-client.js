@@ -7,7 +7,8 @@ const {
   authorizationCodeGrant,
   fetchUserInfo,
   buildEndSessionUrl,
-  allowInsecureRequests
+  allowInsecureRequests,
+  validateJwtLogoutToken
 } = require('openid-client');
 
 let config = null;
@@ -79,6 +80,28 @@ function getServerMetadata() {
   return config?.serverMetadata();
 }
 
+/**
+ * Verify and decode a back-channel logout token
+ * @param {string} logoutToken - The JWT logout token from the OP
+ * @returns {Promise<object>} - The verified token claims
+ * @throws {Error} - If token validation fails
+ */
+async function verifyLogoutToken(logoutToken) {
+  if (!config) {
+    throw new Error('OIDC not initialized');
+  }
+
+  // validateJwtLogoutToken verifies:
+  // - JWT signature against OIDC provider's JWKS
+  // - Token expiration (exp claim)
+  // - Issuer (iss claim) matches the OIDC provider
+  // - Audience (aud claim) contains our client_id
+  // - Required claims (sub or sid) are present
+  const claims = await validateJwtLogoutToken(config, logoutToken);
+
+  return claims;
+}
+
 module.exports = {
   initialize,
   buildAuthUrl,
@@ -86,5 +109,6 @@ module.exports = {
   getUserInfo,
   getEndSessionUrl,
   getConfig,
-  getServerMetadata
+  getServerMetadata,
+  verifyLogoutToken
 };

@@ -22,12 +22,11 @@ if (!Fs.existsSync(OUTPUT)) {
 }
 
 /**
- * 
- * @returns 
+ * Returns today's date in ISO format (YYYY-MM-DD)
+ * @returns {string} Today's date in YYYY-MM-DD format
  */
 function today() {
-  let d = new Date();
-  return `${d.getUTCFullYear()}-${d.getUTCMonth()}-${d.getUTCDate()}`;
+  return new Date().toISOString().split('T')[0];
 }
 
 
@@ -78,8 +77,7 @@ if (argv.help) {
 
 /** */
 function getBillsUrl() {
-  let d = new Date();
-  let to = `${d.getUTCFullYear()}-${d.getUTCMonth()}-${d.getUTCDate()}`;
+  let to = today(); // Use consistent ISO date format
   let opt = {
     to: argv.to || to,
     from: argv.from

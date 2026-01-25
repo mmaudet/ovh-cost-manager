@@ -33,8 +33,35 @@ for (const configPath of CONFIG_PATHS) {
 const app = express();
 const PORT = process.env.PORT || 3001;
 
+// CORS configuration - restrict to allowed origins
+const corsOptions = {
+  origin: function (origin, callback) {
+    // Allow requests with no origin (same-origin, curl, mobile apps)
+    if (!origin) {
+      return callback(null, true);
+    }
+
+    // Check allowed origins from config or environment
+    const allowedOrigins = process.env.ALLOWED_ORIGINS
+      ? process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim())
+      : config.allowedOrigins || [];
+
+    // In development, allow localhost origins
+    const isDev = process.env.NODE_ENV !== 'production';
+    const isLocalhost = origin.includes('localhost') || origin.includes('127.0.0.1');
+
+    if (allowedOrigins.includes(origin) || (isDev && isLocalhost)) {
+      callback(null, true);
+    } else {
+      console.warn(`CORS: Blocked request from origin: ${origin}`);
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true // Allow cookies for authentication
+};
+
 // Middleware
-app.use(cors());
+app.use(cors(corsOptions));
 app.use(express.json());
 app.use(cookieParser());
 

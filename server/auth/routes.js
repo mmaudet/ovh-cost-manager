@@ -134,19 +134,14 @@ async function backChannelLogout(req, res, config) {
       return res.status(400).send('logout_token required');
     }
 
-    // Decode logout token (JWT)
-    // TODO: Add proper JWT signature verification
-    const parts = logout_token.split('.');
-    if (parts.length !== 3) {
-      return res.status(400).send('Invalid logout token format');
-    }
-
-    const claims = JSON.parse(Buffer.from(parts[1], 'base64url').toString());
-
-    // Back-channel logout spec: must have either sub or sid (or both)
-    if (!claims.sub && !claims.sid) {
-      return res.status(400).send('logout_token must contain sub or sid');
-    }
+    // Verify JWT signature, expiration, issuer, and audience using openid-client
+    // This validates:
+    // - Signature against OIDC provider's JWKS
+    // - Token expiration (exp claim)
+    // - Issuer matches configured OIDC provider
+    // - Audience contains our client_id
+    // - Required claims (sub or sid) are present per RFC 7523
+    const claims = await oidcClient.verifyLogoutToken(logout_token);
 
     let deleted = 0;
 
