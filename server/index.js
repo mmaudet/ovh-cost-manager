@@ -1,6 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const cookieParser = require('cookie-parser');
+const rateLimit = require('express-rate-limit');
 const path = require('path');
 const fs = require('fs');
 
@@ -60,10 +61,33 @@ const corsOptions = {
   credentials: true // Allow cookies for authentication
 };
 
+// Rate limiting - protect against DoS and brute-force attacks
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // Limit each IP to 100 requests per windowMs
+  message: { error: 'Too many requests, please try again later' },
+  standardHeaders: true, // Return rate limit info in `RateLimit-*` headers
+  legacyHeaders: false, // Disable `X-RateLimit-*` headers
+  skip: (req) => {
+    // Skip rate limiting for health checks
+    return req.path === '/api/health';
+  }
+});
+
+// Stricter rate limit for auth endpoints (prevent brute-force)
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 20, // Limit each IP to 20 auth requests per windowMs
+  message: { error: 'Too many authentication attempts, please try again later' },
+  standardHeaders: true,
+  legacyHeaders: false
+});
+
 // Middleware
 app.use(cors(corsOptions));
 app.use(express.json());
 app.use(cookieParser());
+app.use('/api/', apiLimiter); // Apply to all API routes
 
 // Trust proxy headers (for reverse proxy)
 if (process.env.TRUST_PROXY === 'true') {
@@ -83,8 +107,8 @@ async function initializeServer() {
   authConfig = authResult.config;
 
   if (authResult.initialized) {
-    // Mount auth routes
-    app.use('/auth', auth.setupRoutes(authConfig));
+    // Mount auth routes with stricter rate limiting
+    app.use('/auth', authLimiter, auth.setupRoutes(authConfig));
 
     // Back-channel logout endpoint
     app.post('/logout/backchannel', express.urlencoded({ extended: false }), (req, res) => {

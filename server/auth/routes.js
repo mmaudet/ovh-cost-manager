@@ -9,7 +9,9 @@ const sessionStore = require('./session-store');
 const router = express.Router();
 
 // Temporary state storage (in-memory, cleaned up after 10 min)
+// Max 1000 pending auth requests to prevent memory exhaustion
 const pendingAuth = new Map();
+const PENDING_AUTH_MAX_SIZE = 1000;
 
 function setup(config) {
   const authConfig = config.auth;
@@ -21,13 +23,20 @@ function setup(config) {
       return res.status(503).json({ error: 'OIDC not configured' });
     }
 
+    // Reject if too many pending auth requests (DoS protection)
+    if (pendingAuth.size >= PENDING_AUTH_MAX_SIZE) {
+      console.warn(`pendingAuth limit reached (${PENDING_AUTH_MAX_SIZE}), rejecting new auth request`);
+      return res.status(503).json({ error: 'Too many pending authentication requests. Please try again later.' });
+    }
+
     const state = randomState();
     const nonce = randomNonce();
 
     // Store state for callback validation
     pendingAuth.set(state, {
       nonce,
-      returnTo: req.query.returnTo || '/'
+      returnTo: req.query.returnTo || '/',
+      createdAt: Date.now()
     });
 
     // Cleanup after 10 minutes

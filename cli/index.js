@@ -11,6 +11,9 @@ const https = require('https');
 const Jsonfile = require('jsonfile');
 const { exit } = require('process');
 const argv = require('minimist')(process.argv.slice(2)) || {};
+
+// Concurrency limit for parallel downloads (respects OVH API rate limits)
+const CONCURRENT_DOWNLOADS = 5;
 const APP_DATA = Path.resolve(process.env.HOME, "my-ovh-bills");
 const HIST_FILE = Path.resolve(APP_DATA, ".history.json");
 const YEAR = new Date().getUTCFullYear().toString();
@@ -235,7 +238,33 @@ function saveHistory(){
     h = HISTORY.push(OPTIONS);
   }
   Jsonfile.writeFileSync(HIST_FILE, h);
+}
 
+/**
+ * Execute async functions with concurrency limit
+ * @param {Array} items - Items to process
+ * @param {Function} asyncFn - Async function to apply to each item
+ * @param {number} concurrency - Max concurrent executions
+ * @returns {Promise<Array>} - Results array
+ */
+async function parallelWithLimit(items, asyncFn, concurrency) {
+  const results = [];
+  const executing = new Set();
+
+  for (const [index, item] of items.entries()) {
+    const promise = Promise.resolve().then(() => asyncFn(item, index));
+    results.push(promise);
+    executing.add(promise);
+
+    const cleanup = () => executing.delete(promise);
+    promise.then(cleanup, cleanup);
+
+    if (executing.size >= concurrency) {
+      await Promise.race(executing);
+    }
+  }
+
+  return Promise.all(results);
 }
 
 let cred = null;
@@ -290,10 +319,20 @@ fetch(billsUrls).then(async (bills) => {
     exit(0);
   }
 
-  console.log(`Saving bills into ${OUTPUT}`);
+  console.log(`Saving ${bills.length} bills into ${OUTPUT} (${CONCURRENT_DOWNLOADS} concurrent downloads)`);
 
-  for (var bill of bills) {
+  // Download bills in parallel with concurrency limit
+  let completed = 0;
+  const startTime = Date.now();
+
+  await parallelWithLimit(bills, async (bill) => {
     await getBill(bill);
-  }
+    completed++;
+    // Progress indicator
+    process.stdout.write(`\rProgress: ${completed}/${bills.length} bills downloaded`);
+  }, CONCURRENT_DOWNLOADS);
+
+  const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+  console.log(`\nCompleted in ${elapsed}s`);
 })
 
