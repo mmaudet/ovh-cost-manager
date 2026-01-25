@@ -346,10 +346,21 @@ function clearAll() {
   db.exec('DELETE FROM projects');
 }
 
+/**
+ * Execute a function within a database transaction
+ * @param {Function} fn - Function to execute (receives db as parameter)
+ * @returns {*} Result of the function
+ */
+function transaction(fn) {
+  const database = getDb();
+  return database.transaction(fn)(database);
+}
+
 module.exports = {
   getDb,
   closeDb,
   clearAll,
+  transaction,
   projects: projectOps,
   bills: billOps,
   details: detailOps,

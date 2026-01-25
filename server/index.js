@@ -93,6 +93,29 @@ async function initializeServer() {
 
     // OIDC authentication middleware
     app.use(auth.createAuthMiddleware(authConfig));
+
+    // Schedule periodic session cleanup (every hour)
+    const SESSION_CLEANUP_INTERVAL = 60 * 60 * 1000; // 1 hour
+    setInterval(() => {
+      try {
+        const result = auth.sessionStore.cleanup();
+        if (result.changes > 0) {
+          console.log(`Session cleanup: removed ${result.changes} expired session(s)`);
+        }
+      } catch (err) {
+        console.error('Session cleanup error:', err.message);
+      }
+    }, SESSION_CLEANUP_INTERVAL);
+
+    // Run initial cleanup on startup
+    try {
+      const result = auth.sessionStore.cleanup();
+      if (result.changes > 0) {
+        console.log(`Initial session cleanup: removed ${result.changes} expired session(s)`);
+      }
+    } catch (err) {
+      // Ignore - sessions table might not exist yet
+    }
   } else {
     // Fallback: header-based SSO (LemonLDAP headers via reverse proxy)
     const AUTH_REQUIRED = process.env.AUTH_REQUIRED === 'true';
@@ -159,6 +182,51 @@ async function initializeServer() {
 }
 
 // ========================
+// Date Validation Utility
+// ========================
+
+const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
+ * Validate date range parameters
+ * @param {string} from - Start date (YYYY-MM-DD)
+ * @param {string} to - End date (YYYY-MM-DD)
+ * @returns {{ valid: boolean, error?: string }} Validation result
+ */
+function validateDateRange(from, to) {
+  // Check required
+  if (!from || !to) {
+    return { valid: false, error: 'from and to parameters are required' };
+  }
+
+  // Check format
+  if (!DATE_REGEX.test(from)) {
+    return { valid: false, error: `Invalid 'from' date format: ${from}. Expected YYYY-MM-DD` };
+  }
+  if (!DATE_REGEX.test(to)) {
+    return { valid: false, error: `Invalid 'to' date format: ${to}. Expected YYYY-MM-DD` };
+  }
+
+  // Parse and validate dates
+  const fromDate = new Date(from);
+  const toDate = new Date(to);
+
+  if (isNaN(fromDate.getTime())) {
+    return { valid: false, error: `Invalid 'from' date: ${from}` };
+  }
+  if (isNaN(toDate.getTime())) {
+    return { valid: false, error: `Invalid 'to' date: ${to}` };
+  }
+
+  // Check logical order
+  if (fromDate > toDate) {
+    return { valid: false, error: `'from' date (${from}) must be before or equal to 'to' date (${to})` };
+  }
+
+  return { valid: true };
+}
+
+// ========================
 // Route registration function
 // ========================
 
@@ -192,8 +260,9 @@ app.get('/api/projects/:id', (req, res) => {
 app.get('/api/projects/:id/costs', (req, res) => {
   try {
     const { from, to } = req.query;
-    if (!from || !to) {
-      return res.status(400).json({ error: 'from and to parameters required' });
+    const validation = validateDateRange(from, to);
+    if (!validation.valid) {
+      return res.status(400).json({ error: validation.error });
     }
 
     const database = db.getDb();
@@ -258,8 +327,9 @@ app.get('/api/bills/:id/details', (req, res) => {
 app.get('/api/analysis/by-project', (req, res) => {
   try {
     const { from, to } = req.query;
-    if (!from || !to) {
-      return res.status(400).json({ error: 'from and to parameters required' });
+    const validation = validateDateRange(from, to);
+    if (!validation.valid) {
+      return res.status(400).json({ error: validation.error });
     }
 
     const data = db.analysis.byProject(from, to);
@@ -281,8 +351,9 @@ app.get('/api/analysis/by-project', (req, res) => {
 app.get('/api/analysis/by-service', (req, res) => {
   try {
     const { from, to } = req.query;
-    if (!from || !to) {
-      return res.status(400).json({ error: 'from and to parameters required' });
+    const validation = validateDateRange(from, to);
+    if (!validation.valid) {
+      return res.status(400).json({ error: validation.error });
     }
 
     const data = db.analysis.byService(from, to);
@@ -313,8 +384,9 @@ app.get('/api/analysis/by-service', (req, res) => {
 app.get('/api/analysis/daily-trend', (req, res) => {
   try {
     const { from, to } = req.query;
-    if (!from || !to) {
-      return res.status(400).json({ error: 'from and to parameters required' });
+    const validation = validateDateRange(from, to);
+    if (!validation.valid) {
+      return res.status(400).json({ error: validation.error });
     }
 
     const data = db.analysis.dailyTrend(from, to);
@@ -361,8 +433,9 @@ app.get('/api/analysis/monthly-trend', (req, res) => {
 app.get('/api/summary', (req, res) => {
   try {
     const { from, to } = req.query;
-    if (!from || !to) {
-      return res.status(400).json({ error: 'from and to parameters required' });
+    const validation = validateDateRange(from, to);
+    if (!validation.valid) {
+      return res.status(400).json({ error: validation.error });
     }
 
     const summary = db.analysis.summary(from, to);

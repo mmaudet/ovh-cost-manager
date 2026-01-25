@@ -209,7 +209,10 @@ async function runImport(params) {
     toDate = null;
     console.log('\n=== FULL IMPORT ===');
     console.log('This will clear all existing data and reimport everything.\n');
-    db.clearAll();
+    // Clear all data in a transaction for atomicity
+    db.transaction(() => {
+      db.clearAll();
+    });
   } else if (params.diff) {
     importType = 'differential';
     if (params.since) {
@@ -269,22 +272,33 @@ async function runImport(params) {
       try {
         const { bill, details } = await fetchBillDetails(billId);
 
-        // Store bill
-        db.bills.upsert(bill);
+        // Process and store bill + details in a transaction
+        // This ensures atomic write: either all data is written or none
+        db.transaction(() => {
+          // Store bill
+          db.bills.upsert(bill);
+
+          // Delete existing details (for updates)
+          db.details.deleteByBillId(billId);
+
+          // Process and store details with project mapping
+          // Note: d.domain from OVH API contains the project ID for cloud resources
+          // For non-cloud resources (domains, web hosting), d.domain is a domain name
+          const processedDetails = details.map(d => {
+            // Check if domain is a known project ID
+            const isCloudProject = projectMap.hasOwnProperty(d.domain);
+            return {
+              ...d,
+              project_id: isCloudProject ? d.domain : null,
+              service_type: classifyService(d.description)
+            };
+          });
+
+          db.details.insertMany(processedDetails);
+        });
+
         stats.bills++;
-
-        // Delete existing details (for updates)
-        db.details.deleteByBillId(billId);
-
-        // Process and store details
-        const processedDetails = details.map(d => ({
-          ...d,
-          project_id: projectMap[d.domain] ? d.domain : null,
-          service_type: classifyService(d.description)
-        }));
-
-        db.details.insertMany(processedDetails);
-        stats.details += processedDetails.length;
+        stats.details += details.length;
 
         console.log(` ${details.length} details`);
       } catch (err) {
