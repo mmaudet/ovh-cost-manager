@@ -77,6 +77,60 @@ export const translations = {
     syncWarningToUpdate: 'pour mettre à jour.',
     dismiss: 'Fermer',
 
+    // Consumption (Phase 1)
+    currentConsumption: 'Consommation en cours',
+    forecastEndOfMonth: 'Prévision fin de mois',
+    consumptionProgress: 'Progression',
+    consumptionHistory: 'Historique de consommation',
+
+    // Account (Phase 2)
+    accountBalance: 'Solde du compte',
+    debtBalance: 'Dette',
+    creditBalance: 'Crédits',
+    deposits: 'Dépôts',
+    netBalance: 'Solde net',
+    paymentStatus: 'Statut paiement',
+    paid: 'Payé',
+    pending: 'En attente',
+
+    // Inventory (Phase 3)
+    inventory: 'Public Cloud',
+    infrastructure: 'Infrastructure',
+    dedicatedServers: 'Serveurs dédiés',
+    vpsInstances: 'VPS',
+    storageServices: 'Stockage',
+    cloudProjects: 'Projets Cloud',
+    totalResources: 'Total ressources',
+    datacenter: 'Datacenter',
+    specs: 'Spécifications',
+    expirationDate: 'Date d\'expiration',
+    renewal: 'Renouvellement',
+    state: 'État',
+    resourceTypeBreakdown: 'Répartition par type de ressource',
+    expiringSoon: 'Expirations proches',
+    expiringIn: 'Expire dans',
+    days: 'jours',
+    noExpirations: 'Aucune expiration proche',
+
+    // Cloud details (Phase 4)
+    instances: 'Instances',
+    quotas: 'Quotas',
+    flavor: 'Flavor',
+    region: 'Région',
+    monthlyBilling: 'Facturation mensuelle',
+    usedOf: 'utilisé sur',
+    cores: 'Cores',
+    ram: 'RAM',
+
+    // GPU
+    gpuCosts: 'Coûts GPU',
+    gpuTotal: 'Total GPU',
+    gpuByModel: 'Par modèle GPU',
+    gpuByProject: 'Par projet',
+    gpuInstances: 'Instances GPU',
+    gpuFlavors: 'Types GPU',
+    noGpuData: 'Aucune donnée GPU',
+
     // Months
     january: 'Janvier',
     february: 'Février',
@@ -168,6 +222,60 @@ export const translations = {
     syncWarningAction: 'Run',
     syncWarningToUpdate: 'to update.',
     dismiss: 'Dismiss',
+
+    // Consumption (Phase 1)
+    currentConsumption: 'Current consumption',
+    forecastEndOfMonth: 'End of month forecast',
+    consumptionProgress: 'Progress',
+    consumptionHistory: 'Consumption history',
+
+    // Account (Phase 2)
+    accountBalance: 'Account balance',
+    debtBalance: 'Debt',
+    creditBalance: 'Credits',
+    deposits: 'Deposits',
+    netBalance: 'Net balance',
+    paymentStatus: 'Payment status',
+    paid: 'Paid',
+    pending: 'Pending',
+
+    // Inventory (Phase 3)
+    inventory: 'Public Cloud',
+    infrastructure: 'Infrastructure',
+    dedicatedServers: 'Dedicated Servers',
+    vpsInstances: 'VPS',
+    storageServices: 'Storage',
+    cloudProjects: 'Cloud Projects',
+    totalResources: 'Total resources',
+    datacenter: 'Datacenter',
+    specs: 'Specifications',
+    expirationDate: 'Expiration date',
+    renewal: 'Renewal',
+    state: 'State',
+    resourceTypeBreakdown: 'Breakdown by resource type',
+    expiringSoon: 'Expiring soon',
+    expiringIn: 'Expires in',
+    days: 'days',
+    noExpirations: 'No upcoming expirations',
+
+    // Cloud details (Phase 4)
+    instances: 'Instances',
+    quotas: 'Quotas',
+    flavor: 'Flavor',
+    region: 'Region',
+    monthlyBilling: 'Monthly billing',
+    usedOf: 'used of',
+    cores: 'Cores',
+    ram: 'RAM',
+
+    // GPU
+    gpuCosts: 'GPU Costs',
+    gpuTotal: 'GPU Total',
+    gpuByModel: 'By GPU model',
+    gpuByProject: 'By project',
+    gpuInstances: 'GPU Instances',
+    gpuFlavors: 'GPU types',
+    noGpuData: 'No GPU data',
 
     // Months
     january: 'January',

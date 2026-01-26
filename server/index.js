@@ -269,6 +269,35 @@ app.get('/api/projects', (req, res) => {
   }
 });
 
+app.get('/api/projects/enriched', (req, res) => {
+  try {
+    const database = db.getDb();
+    const projects = database.prepare(`
+      SELECT
+        p.id, p.name, p.description, p.status,
+        COALESCE(ci.instance_count, 0) as instance_count,
+        COALESCE(pc.consumption_total, 0) as consumption_total,
+        pc.period_start, pc.period_end
+      FROM projects p
+      LEFT JOIN (
+        SELECT project_id, COUNT(*) as instance_count
+        FROM cloud_instances
+        GROUP BY project_id
+      ) ci ON ci.project_id = p.id
+      LEFT JOIN (
+        SELECT project_id, SUM(total_price) as consumption_total,
+               MIN(period_start) as period_start, MAX(period_end) as period_end
+        FROM project_consumption
+        GROUP BY project_id
+      ) pc ON pc.project_id = p.id
+      ORDER BY consumption_total DESC
+    `).all();
+    res.json(projects);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.get('/api/projects/:id', (req, res) => {
   try {
     const project = db.projects.getById(req.params.id);
@@ -637,10 +666,12 @@ app.get('/api/export/details', (req, res) => {
         b.date,
         p.name as project_name,
         d.service_type,
+        d.resource_type,
         d.description,
         d.quantity,
         d.unit_price,
-        d.total_price
+        d.total_price,
+        b.payment_status
       FROM bill_details d
       JOIN bills b ON d.bill_id = b.id
       LEFT JOIN projects p ON d.project_id = p.id
@@ -653,10 +684,12 @@ app.get('/api/export/details', (req, res) => {
       { key: 'date', label: 'Date' },
       { key: 'project_name', label: 'Projet' },
       { key: 'service_type', label: 'Type Service' },
+      { key: 'resource_type', label: 'Type Ressource' },
       { key: 'description', label: 'Description' },
       { key: 'quantity', label: 'Quantite' },
       { key: 'unit_price', label: 'Prix Unitaire' },
-      { key: 'total_price', label: 'Prix Total' }
+      { key: 'total_price', label: 'Prix Total' },
+      { key: 'payment_status', label: 'Statut Paiement' }
     ];
 
     const csv = toCSV(details, columns);
@@ -690,6 +723,465 @@ app.get('/api/export/by-project', (req, res) => {
 
     const csv = toCSV(data, columns);
     const filename = `couts_par_projet_${from}_${to}.csv`;
+
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send('\ufeff' + csv);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ========================
+// Consumption Endpoints (Phase 1)
+// ========================
+
+app.get('/api/consumption/current', (req, res) => {
+  try {
+    const snapshot = db.consumption.getLatestSnapshot();
+    // If /me/consumption data is 0, use actual cloud project consumption instead
+    const snapshotTotal = snapshot?.current_total || 0;
+    if (snapshotTotal === 0) {
+      const cloudSummary = db.cloudDetails.getConsumptionSummary();
+      if (cloudSummary && cloudSummary.total > 0) {
+        return res.json({
+          snapshot_date: snapshot?.snapshot_date || new Date().toISOString(),
+          period_start: cloudSummary.period_start,
+          period_end: cloudSummary.period_end,
+          current_total: Math.round(cloudSummary.total * 100) / 100,
+          source: 'cloud_projects',
+          project_count: cloudSummary.project_count,
+          currency: 'EUR'
+        });
+      }
+    }
+    if (!snapshot) {
+      return res.json({ current_total: 0, currency: 'EUR' });
+    }
+    const details = snapshot.raw_data ? JSON.parse(snapshot.raw_data) : null;
+    res.json({
+      snapshot_date: snapshot.snapshot_date,
+      period_start: snapshot.period_start,
+      period_end: snapshot.period_end,
+      current_total: Math.round(snapshotTotal * 100) / 100,
+      currency: snapshot.currency,
+      source: 'me_consumption',
+      details
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/consumption/forecast', (req, res) => {
+  try {
+    const snapshot = db.consumption.getLatestSnapshot();
+    const snapshotForecast = snapshot?.forecast_total || 0;
+    const snapshotCurrent = snapshot?.current_total || 0;
+
+    // If /me/consumption forecast is 0, compute forecast from cloud project consumption
+    if (snapshotForecast === 0 && snapshotCurrent === 0) {
+      const cloudSummary = db.cloudDetails.getConsumptionSummary();
+      if (cloudSummary && cloudSummary.total > 0) {
+        const periodStart = new Date(cloudSummary.period_start);
+        const periodEnd = new Date(cloudSummary.period_end);
+        const daysElapsed = Math.max(1, Math.ceil((periodEnd - periodStart) / (1000 * 60 * 60 * 24)));
+        // Forecast to end of month
+        const lastDayOfMonth = new Date(periodStart.getFullYear(), periodStart.getMonth() + 1, 0).getDate();
+        const dailyAvg = cloudSummary.total / daysElapsed;
+        const forecastTotal = Math.round(dailyAvg * lastDayOfMonth * 100) / 100;
+        const currentTotal = Math.round(cloudSummary.total * 100) / 100;
+        const progress = Math.round((currentTotal / forecastTotal) * 100);
+
+        return res.json({
+          snapshot_date: new Date().toISOString(),
+          period_start: cloudSummary.period_start,
+          period_end: cloudSummary.period_end,
+          forecast_total: forecastTotal,
+          current_total: currentTotal,
+          currency: 'EUR',
+          progress,
+          source: 'cloud_projects',
+          days_elapsed: daysElapsed,
+          days_in_month: lastDayOfMonth
+        });
+      }
+    }
+    if (!snapshot) {
+      return res.json({ forecast_total: 0, currency: 'EUR' });
+    }
+    res.json({
+      snapshot_date: snapshot.snapshot_date,
+      period_start: snapshot.period_start,
+      period_end: snapshot.period_end,
+      forecast_total: Math.round(snapshotForecast * 100) / 100,
+      current_total: Math.round(snapshotCurrent * 100) / 100,
+      currency: snapshot.currency,
+      progress: snapshotCurrent && snapshotForecast
+        ? Math.round((snapshotCurrent / snapshotForecast) * 100)
+        : 0
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/consumption/usage-history', (req, res) => {
+  try {
+    const { from, to } = req.query;
+    const history = db.consumption.getHistory(from, to);
+    const result = history.map(h => ({
+      period_start: h.period_start,
+      period_end: h.period_end,
+      total: Math.round((h.total || 0) * 100) / 100,
+      currency: h.currency,
+      service_type: h.service_type
+    }));
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ========================
+// Account Endpoints (Phase 2)
+// ========================
+
+app.get('/api/account/balance', (req, res) => {
+  try {
+    const balance = db.account.getLatestBalance();
+    if (!balance) {
+      return res.json({ debt_balance: 0, credit_balance: 0, deposit_total: 0, currency: 'EUR' });
+    }
+    res.json({
+      snapshot_date: balance.snapshot_date,
+      debt_balance: Math.round((balance.debt_balance || 0) * 100) / 100,
+      credit_balance: Math.round((balance.credit_balance || 0) * 100) / 100,
+      deposit_total: Math.round((balance.deposit_total || 0) * 100) / 100,
+      net_balance: Math.round(((balance.credit_balance || 0) - (balance.debt_balance || 0)) * 100) / 100,
+      currency: balance.currency
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/account/credits', (req, res) => {
+  try {
+    const movements = db.account.getCreditMovements();
+    res.json(movements);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/account/debts', (req, res) => {
+  try {
+    const balance = db.account.getLatestBalance();
+    res.json({
+      debt_balance: Math.round((balance?.debt_balance || 0) * 100) / 100,
+      currency: balance?.currency || 'EUR'
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/bills/:id/payment', (req, res) => {
+  try {
+    const bill = db.bills.getById(req.params.id);
+    if (!bill) {
+      return res.status(404).json({ error: 'Bill not found' });
+    }
+    res.json({
+      bill_id: bill.id,
+      payment_type: bill.payment_type || null,
+      payment_date: bill.payment_date || null,
+      payment_status: bill.payment_status || null
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ========================
+// Inventory Endpoints (Phase 3)
+// ========================
+
+app.get('/api/inventory/servers', (req, res) => {
+  try {
+    const servers = db.inventory.getAllServers();
+    const result = servers.map(s => ({
+      ...s,
+      disk_info: s.disk_info ? JSON.parse(s.disk_info) : []
+    }));
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/inventory/vps', (req, res) => {
+  try {
+    const vps = db.inventory.getAllVps();
+    const result = vps.map(v => ({
+      ...v,
+      ip_addresses: v.ip_addresses ? JSON.parse(v.ip_addresses) : []
+    }));
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/inventory/storage', (req, res) => {
+  try {
+    const storage = db.inventory.getAllStorage();
+    res.json(storage);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/inventory/summary', (req, res) => {
+  try {
+    const summary = db.inventory.getSummary();
+    const expiring = db.inventory.getExpiringServices(30);
+    res.json({
+      ...summary,
+      total: summary.servers + summary.vps + summary.storage + summary.cloud_projects,
+      expiring_soon: expiring.length
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/inventory/expiring', (req, res) => {
+  try {
+    const days = parseInt(req.query.days) || 30;
+    const expiring = db.inventory.getExpiringServices(days);
+    res.json(expiring);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/analysis/by-resource-type', (req, res) => {
+  try {
+    const { from, to } = req.query;
+    const validation = validateDateRange(from, to);
+    if (!validation.valid) {
+      return res.status(400).json({ error: validation.error });
+    }
+
+    const data = db.inventory.byResourceType(from, to);
+
+    const colors = {
+      'cloud_project': '#3b82f6',
+      'dedicated_server': '#ef4444',
+      'vps': '#f59e0b',
+      'storage': '#10b981',
+      'load_balancer': '#06b6d4',
+      'domain': '#8b5cf6',
+      'ip_service': '#ec4899',
+      'telephony': '#f97316',
+      'other': '#6b7280'
+    };
+
+    const labels = {
+      'cloud_project': 'Public Cloud',
+      'dedicated_server': 'Dedicated Servers',
+      'vps': 'VPS',
+      'storage': 'Storage',
+      'load_balancer': 'Load Balancers',
+      'domain': 'Domains',
+      'ip_service': 'IP',
+      'telephony': 'Telephony',
+      'other': 'Other'
+    };
+
+    const result = data.map(row => ({
+      name: labels[row.resource_type] || row.resource_type || 'Other',
+      resource_type: row.resource_type || 'other',
+      value: Math.round(row.total * 100) / 100,
+      color: colors[row.resource_type] || colors['other'],
+      detailsCount: row.details_count
+    }));
+
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/analysis/resource-type-details', (req, res) => {
+  try {
+    const { type, from, to } = req.query;
+    if (!type) return res.status(400).json({ error: 'type parameter is required' });
+    const validation = validateDateRange(from, to);
+    if (!validation.valid) return res.status(400).json({ error: validation.error });
+    const data = db.inventory.byResourceTypeDetails(type, from, to);
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ========================
+// Cloud Project Detail Endpoints (Phase 4)
+// ========================
+
+app.get('/api/projects/:id/consumption', (req, res) => {
+  try {
+    const { from, to } = req.query;
+    const data = db.cloudDetails.getConsumptionByProject(req.params.id, from, to);
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/projects/:id/consumption/by-resource', (req, res) => {
+  try {
+    const data = db.cloudDetails.getConsumptionByResourceType(req.params.id);
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/projects/:id/instances', (req, res) => {
+  try {
+    const instances = db.cloudDetails.getInstancesByProject(req.params.id);
+    res.json(instances);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/projects/:id/quotas', (req, res) => {
+  try {
+    const quotas = db.cloudDetails.getQuotasByProject(req.params.id);
+    res.json(quotas);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ========================
+// GPU Cost Endpoints
+// ========================
+
+app.get('/api/gpu/summary', (req, res) => {
+  try {
+    const { from, to } = req.query;
+    const gpuData = db.cloudDetails.getGpuSummary(from || null, to || null);
+    const gpuInstances = db.cloudDetails.getGpuInstances();
+
+    const modelColors = {
+      'NVIDIA L4': '#22c55e',
+      'NVIDIA L40S': '#3b82f6',
+      'NVIDIA A100': '#ef4444',
+      'NVIDIA H100': '#8b5cf6',
+      'NVIDIA V100': '#f59e0b',
+      'NVIDIA T4': '#06b6d4'
+    };
+
+    res.json({
+      total: Math.round((gpuData.total || 0) * 100) / 100,
+      project_count: gpuData.project_count || 0,
+      byModel: gpuData.byModel.map(m => ({
+        gpu_model: m.gpu_model,
+        total: Math.round(m.total * 100) / 100,
+        count: m.count,
+        color: modelColors[m.gpu_model] || '#6b7280'
+      })),
+      byProject: gpuData.byProject.map(p => ({
+        project_name: p.project_name,
+        project_id: p.project_id,
+        total: Math.round(p.total * 100) / 100,
+        gpu_flavors: p.gpu_flavors
+      })),
+      monthlyTrend: gpuData.monthlyTrend.map(m => ({
+        month: m.month,
+        total: Math.round(m.total * 100) / 100
+      })),
+      instances: gpuInstances.map(i => ({
+        id: i.id,
+        name: i.name,
+        project_name: i.project_name,
+        project_id: i.project_id,
+        plan_code: i.plan_code,
+        flavor: i.flavor,
+        region: i.region,
+        status: i.status,
+        monthly_billing: i.monthly_billing
+      }))
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ========================
+// Enhanced CSV Export Endpoints (Phase 5)
+// ========================
+
+// Export inventory as CSV
+app.get('/api/export/inventory', (req, res) => {
+  try {
+    const servers = db.inventory.getAllServers();
+    const vps = db.inventory.getAllVps();
+    const storage = db.inventory.getAllStorage();
+
+    // Combine into a single export
+    const data = [
+      ...servers.map(s => ({
+        type: 'Dedicated Server',
+        id: s.id,
+        name: s.display_name,
+        location: s.datacenter,
+        specs: `${s.cpu} / ${s.ram_size}MB RAM`,
+        state: s.state,
+        expiration: s.expiration_date || '',
+        renewal: s.renewal_type || ''
+      })),
+      ...vps.map(v => ({
+        type: 'VPS',
+        id: v.id,
+        name: v.display_name,
+        location: v.zone,
+        specs: `${v.vcpus} vCPU / ${v.ram_mb}MB RAM / ${v.disk_gb}GB`,
+        state: v.state,
+        expiration: v.expiration_date || '',
+        renewal: v.renewal_type || ''
+      })),
+      ...storage.map(s => ({
+        type: 'Storage',
+        id: s.id,
+        name: s.display_name,
+        location: s.region,
+        specs: `${s.total_size_gb}GB`,
+        state: '',
+        expiration: s.expiration_date || '',
+        renewal: ''
+      }))
+    ];
+
+    const columns = [
+      { key: 'type', label: 'Type' },
+      { key: 'id', label: 'ID' },
+      { key: 'name', label: 'Nom' },
+      { key: 'location', label: 'Localisation' },
+      { key: 'specs', label: 'Specifications' },
+      { key: 'state', label: 'Etat' },
+      { key: 'expiration', label: 'Expiration' },
+      { key: 'renewal', label: 'Renouvellement' }
+    ];
+
+    const csv = toCSV(data, columns);
+    const filename = `inventaire_${new Date().toISOString().split('T')[0]}.csv`;
 
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
