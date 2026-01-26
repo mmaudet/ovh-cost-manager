@@ -27,16 +27,36 @@
 
 ## Features
 
-- **Interactive Dashboard**: React-based dashboard with charts and visualizations
+### Dashboard
+- **Interactive Dashboard**: React-based SPA with Recharts visualizations
 - **Multi-language Support**: French and English interface (i18n)
-- **Cost Analysis**: Breakdown by service type (Compute, Storage, Network, Database, AI/ML)
-- **Month Comparison**: Compare costs between two months side by side
-- **Trend Analysis**: Historical trends with configurable period (3-36 months)
+- **5 navigation tabs**: Overview, Comparison, Trends, Public Cloud, Infrastructure
+
+### Cost Analysis
+- **Service Breakdown**: Costs by service type (Compute, Storage, Network, Database, AI/ML)
+- **Resource Type Classification**: Automatic categorization (Public Cloud, Dedicated Servers, VPS, Storage, Load Balancers, IP, Domains, Telephony)
+- **Resource Type Detail**: Expandable cost breakdown per individual service within each category
+- **GPU Cost Consolidation**: Dedicated view for GPU costs by model (NVIDIA L4, L40S, A100, H100) and by project
+- **Month Comparison**: Side-by-side comparison between two months with variation tracking
+- **Trend Analysis**: Historical trends with configurable period (3-36 months) and GPU evolution chart
 - **Budget Tracking**: Visual budget consumption with configurable targets
-- **Sortable Tables**: Click column headers to sort by name, amount, or variation
-- **Export**: PDF and Markdown report generation
+
+### Real-time Monitoring
+- **Current Consumption**: Live consumption data from OVH API with today's date
+- **End-of-month Forecast**: Projected monthly total with progress indicator
+- **Account Balance**: Debt, credits, and deposit tracking
+
+### Infrastructure Inventory
+- **Public Cloud**: Projects, instances (with GPU highlighting), quotas by region
+- **Dedicated Servers**: Full specs (CPU, RAM, datacenter, expiration, renewal)
+- **VPS**: Model, zone, specs, state
+- **Storage**: NAS-HA services with size and shares
+- **Expiring Services**: Alert for services expiring within 30 days
+
+### Tools & Export
+- **Export**: PDF and Markdown report generation, CSV exports (bills, details, inventory)
 - **CLI Tools**: Download invoices, split by project, extract bills per project
-- **Data Import**: Import billing data from OVH API into local SQLite database
+- **Data Import**: Full, differential, or targeted import from OVH API into local SQLite database
 
 ## Quick Start
 
@@ -112,9 +132,18 @@ ovh-cost-manager/
 curl -X POST \
   -H "Content-type: application/json" \
   -H "X-Ovh-Application: YOUR_APP_KEY" \
-  -d '{"accessRules": [{"method": "GET", "path": "/me/*"}, {"method": "GET", "path": "/cloud/*"}]}' \
+  -d '{"accessRules": [
+    {"method": "GET", "path": "/me/*"},
+    {"method": "GET", "path": "/cloud/*"},
+    {"method": "GET", "path": "/dedicated/server/*"},
+    {"method": "GET", "path": "/vps/*"},
+    {"method": "GET", "path": "/storage/*"},
+    {"method": "GET", "path": "/ip/*"}
+  ]}' \
   https://eu.api.ovh.com/1.0/auth/credential
 ```
+
+> **Minimum permissions**: `/me/*` and `/cloud/*` are required. The additional paths (`/dedicated/server/*`, `/vps/*`, `/storage/*`, `/ip/*`) enable the full infrastructure inventory. The dashboard works without them but inventory data will be limited.
 
 Visit the `validationUrl` in the response to authorize the application.
 
@@ -155,6 +184,18 @@ npm run import -- --from 2025-01-01 --to 2025-12-31
 
 # Differential import (new data since last import)
 npm run import:diff
+
+# Include consumption data (real-time + forecast)
+npm run import -- --from 2025-01-01 --include-consumption
+
+# Include infrastructure inventory (servers, VPS, storage)
+npm run import -- --from 2025-01-01 --include-inventory
+
+# Include cloud project details (instances, quotas)
+npm run import -- --from 2025-01-01 --include-cloud-details
+
+# Import everything
+npm run import -- --from 2025-01-01 --all
 ```
 
 ### Start Dashboard
@@ -292,32 +333,56 @@ For production with SSO:
 
 ## API Endpoints
 
+### Billing & Analysis
+
 | Endpoint | Description |
 |----------|-------------|
-| `GET /api/projects` | List all Cloud projects |
+| `GET /api/months` | Available months for selection |
+| `GET /api/summary?from=&to=` | Summary with totals |
 | `GET /api/bills?from=&to=` | List bills in date range |
 | `GET /api/analysis/by-project?from=&to=` | Costs grouped by project |
 | `GET /api/analysis/by-service?from=&to=` | Costs grouped by service type |
+| `GET /api/analysis/by-resource-type?from=&to=` | Costs grouped by resource type |
+| `GET /api/analysis/resource-type-details?type=&from=&to=` | Detail for a specific resource type |
 | `GET /api/analysis/daily-trend?from=&to=` | Daily cost trend |
 | `GET /api/analysis/monthly-trend?months=6` | Monthly cost trend |
-| `GET /api/summary?from=&to=` | Summary with totals |
-| `GET /api/months` | Available months for selection |
+
+### Consumption & Account
+
+| Endpoint | Description |
+|----------|-------------|
+| `GET /api/consumption/current` | Current consumption (real-time) |
+| `GET /api/consumption/forecast` | End-of-month forecast |
+| `GET /api/consumption/usage-history?from=&to=` | Consumption history |
+| `GET /api/account/balance` | Debt, credits, deposits |
+| `GET /api/account/credits` | Credit movements |
+
+### Inventory
+
+| Endpoint | Description |
+|----------|-------------|
+| `GET /api/projects` | List all Cloud projects |
+| `GET /api/projects/enriched` | Projects with instance count and consumption |
+| `GET /api/projects/:id/consumption?from=&to=` | Project consumption by resource |
+| `GET /api/projects/:id/instances` | Project instances |
+| `GET /api/projects/:id/quotas` | Project quotas by region |
+| `GET /api/inventory/servers` | Dedicated servers list |
+| `GET /api/inventory/vps` | VPS instances list |
+| `GET /api/inventory/storage` | Storage services list |
+| `GET /api/inventory/summary` | Resource count summary |
+| `GET /api/inventory/expiring?days=30` | Services expiring soon |
+
+### GPU & System
+
+| Endpoint | Description |
+|----------|-------------|
+| `GET /api/gpu/summary?from=&to=` | GPU costs by model, project, trend |
 | `GET /api/import/status` | Import history and status |
-| `GET /api/config` | Dashboard configuration (budget) |
+| `GET /api/config` | Dashboard configuration |
 | `GET /api/user` | Current authenticated user info |
 | `GET /api/health` | Health check endpoint |
-
-## Dashboard Features
-
-- **Multi-language**: French and English interface with language selector
-- **KPI Cards**: Total cost, cloud total, daily average, active projects
-- **Budget Progress**: Visual budget consumption tracker (configurable budget)
-- **Service Breakdown**: Pie chart by service type (Compute, Storage, Network, Database, AI/ML)
-- **Project Breakdown**: Sortable table with cost per project and percentages
-- **Project Ranking**: Bar chart of top consuming projects
-- **Month Comparison**: Compare two months side by side with sortable variation table
-- **Historical Trends**: Configurable period (3, 6, 12, 24, or 36 months) with growth metrics
-- **Export**: PDF (print) and Markdown report generation
+| `GET /api/export/bills?from=&to=` | CSV export of bills |
+| `GET /api/export/details?from=&to=` | CSV export of bill details |
 
 ## Contributing
 
