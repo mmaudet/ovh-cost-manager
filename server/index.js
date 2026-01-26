@@ -568,6 +568,138 @@ app.get('/api/user', (req, res) => {
 });
 
 // ========================
+// CSV Export Endpoints
+// ========================
+
+/**
+ * Convert array of objects to CSV string
+ * @param {Array} data - Array of objects
+ * @param {Array} columns - Column definitions [{key, label}]
+ * @returns {string} CSV content
+ */
+function toCSV(data, columns) {
+  const header = columns.map(c => `"${c.label}"`).join(';');
+  const rows = data.map(row => {
+    return columns.map(c => {
+      const value = row[c.key];
+      if (value === null || value === undefined) return '';
+      if (typeof value === 'number') return value.toString().replace('.', ',');
+      return `"${String(value).replace(/"/g, '""')}"`;
+    }).join(';');
+  });
+  return [header, ...rows].join('\n');
+}
+
+// Export bills as CSV
+app.get('/api/export/bills', (req, res) => {
+  try {
+    const { from, to } = req.query;
+    const validation = validateDateRange(from, to);
+    if (!validation.valid) {
+      return res.status(400).json({ error: validation.error });
+    }
+
+    const bills = db.bills.getAll(from, to);
+
+    const columns = [
+      { key: 'id', label: 'Facture' },
+      { key: 'date', label: 'Date' },
+      { key: 'price_without_tax', label: 'Montant HT' },
+      { key: 'price_with_tax', label: 'Montant TTC' },
+      { key: 'tax', label: 'TVA' },
+      { key: 'currency', label: 'Devise' }
+    ];
+
+    const csv = toCSV(bills, columns);
+    const filename = `factures_${from}_${to}.csv`;
+
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send('\ufeff' + csv); // BOM for Excel UTF-8 compatibility
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Export bill details as CSV
+app.get('/api/export/details', (req, res) => {
+  try {
+    const { from, to } = req.query;
+    const validation = validateDateRange(from, to);
+    if (!validation.valid) {
+      return res.status(400).json({ error: validation.error });
+    }
+
+    const database = db.getDb();
+    const details = database.prepare(`
+      SELECT
+        d.bill_id,
+        b.date,
+        p.name as project_name,
+        d.service_type,
+        d.description,
+        d.quantity,
+        d.unit_price,
+        d.total_price
+      FROM bill_details d
+      JOIN bills b ON d.bill_id = b.id
+      LEFT JOIN projects p ON d.project_id = p.id
+      WHERE b.date >= ? AND b.date <= ?
+      ORDER BY b.date, d.bill_id
+    `).all(from, to);
+
+    const columns = [
+      { key: 'bill_id', label: 'Facture' },
+      { key: 'date', label: 'Date' },
+      { key: 'project_name', label: 'Projet' },
+      { key: 'service_type', label: 'Type Service' },
+      { key: 'description', label: 'Description' },
+      { key: 'quantity', label: 'Quantite' },
+      { key: 'unit_price', label: 'Prix Unitaire' },
+      { key: 'total_price', label: 'Prix Total' }
+    ];
+
+    const csv = toCSV(details, columns);
+    const filename = `details_${from}_${to}.csv`;
+
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send('\ufeff' + csv);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Export costs by project as CSV
+app.get('/api/export/by-project', (req, res) => {
+  try {
+    const { from, to } = req.query;
+    const validation = validateDateRange(from, to);
+    if (!validation.valid) {
+      return res.status(400).json({ error: validation.error });
+    }
+
+    const data = db.analysis.byProject(from, to);
+
+    const columns = [
+      { key: 'project_name', label: 'Projet' },
+      { key: 'project_id', label: 'ID Projet' },
+      { key: 'total', label: 'Total HT' },
+      { key: 'details_count', label: 'Nb Lignes' }
+    ];
+
+    const csv = toCSV(data, columns);
+    const filename = `couts_par_projet_${from}_${to}.csv`;
+
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send('\ufeff' + csv);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ========================
 // Health check
 // ========================
 
