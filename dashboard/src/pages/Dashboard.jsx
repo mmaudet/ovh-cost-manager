@@ -8,7 +8,7 @@ import {
   fetchMonths, fetchSummary, fetchByProject, fetchByService,
   fetchMonthlyTrend, fetchImportStatus, fetchConfig, fetchUser,
   fetchConsumptionCurrent, fetchConsumptionForecast,
-  fetchInventorySummary, fetchInventoryServers,
+  fetchInventoryServers,
   fetchInventoryVps, fetchInventoryStorage, fetchExpiringServices,
   fetchByResourceType, fetchResourceTypeDetails, fetchProjectsEnriched, fetchProjectConsumption,
   fetchProjectInstances, fetchProjectQuotas, fetchGpuSummary
@@ -266,11 +266,6 @@ export default function Dashboard() {
 
 
   // Phase 3: Inventory
-  const { data: inventorySummary } = useQuery({
-    queryKey: ['inventorySummary'],
-    queryFn: fetchInventorySummary
-  });
-
   const { data: inventoryServers = [] } = useQuery({
     queryKey: ['inventoryServers'],
     queryFn: fetchInventoryServers,
@@ -543,7 +538,7 @@ export default function Dashboard() {
         </div>
 
         {/* Phase 1: Consumption KPI Cards */}
-        {(consumptionCurrent || inventorySummary) && (
+        {(consumptionCurrent || byResourceType.length > 0) && (
           <div className="grid grid-cols-3 gap-4">
             {consumptionCurrent && (
               <div className="bg-white rounded-xl p-5 shadow-sm border-2 border-emerald-500">
@@ -591,17 +586,23 @@ export default function Dashboard() {
                 </div>
               </div>
             )}
-            {inventorySummary && (
-              <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
-                <div className="flex justify-between items-start mb-3">
-                  <span className="text-gray-500 text-sm font-medium">{t('totalResources')}</span>
+            {byResourceType.length > 0 && (() => {
+              const srvCount = byResourceType.find(r => r.resource_type === 'dedicated_server')?.serviceCount || 0;
+              const vpsCount = byResourceType.find(r => r.resource_type === 'vps')?.serviceCount || 0;
+              const cloudCount = byResourceType.find(r => r.resource_type === 'cloud_project')?.serviceCount || 0;
+              const totalCount = byResourceType.reduce((sum, r) => sum + (r.serviceCount || 0), 0);
+              return (
+                <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
+                  <div className="flex justify-between items-start mb-3">
+                    <span className="text-gray-500 text-sm font-medium">{t('totalResources')}</span>
+                  </div>
+                  <div className="text-2xl font-bold text-gray-900">{totalCount}</div>
+                  <div className="text-sm text-gray-500 mt-2">
+                    {srvCount} {t('dedicatedServers')} · {vpsCount} {t('vpsInstances')} · {cloudCount} {t('cloudProjects')}
+                  </div>
                 </div>
-                <div className="text-2xl font-bold text-gray-900">{inventorySummary.total || 0}</div>
-                <div className="text-sm text-gray-500 mt-2">
-                  {inventorySummary.servers || 0} {t('dedicatedServers')} · {inventorySummary.vps || 0} {t('vpsInstances')} · {inventorySummary.cloud_projects || 0} {t('cloudProjects')}
-                </div>
-              </div>
-            )}
+              );
+            })()}
           </div>
         )}
 
@@ -1206,7 +1207,7 @@ export default function Dashboard() {
             <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
               <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
                 <span className="text-gray-500 text-sm">{t('cloudProjects')}</span>
-                <div className="text-3xl font-bold text-blue-600 mt-2">{inventorySummary?.cloud_projects || 0}</div>
+                <div className="text-3xl font-bold text-blue-600 mt-2">{byResourceType.find(r => r.resource_type === 'cloud_project')?.serviceCount || 0}</div>
               </div>
               <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
                 <span className="text-gray-500 text-sm">{t('instances')}</span>
@@ -1412,25 +1413,29 @@ export default function Dashboard() {
         {activeTab === 'infrastructure' && (
           <div className="space-y-6">
             {/* Infrastructure Summary Cards */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-              <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
-                <span className="text-gray-500 text-sm">{t('dedicatedServers')}</span>
-                <div className="text-3xl font-bold text-red-600 mt-2">{inventorySummary?.servers || 0}</div>
-              </div>
-              <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
-                <span className="text-gray-500 text-sm">{t('vpsInstances')}</span>
-                <div className="text-3xl font-bold text-amber-600 mt-2">{inventorySummary?.vps || 0}</div>
-              </div>
-              <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
-                <span className="text-gray-500 text-sm">{t('storageServices')}</span>
-                <div className="text-3xl font-bold text-green-600 mt-2">{inventoryStorage.length}</div>
-              </div>
-              <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
-                <span className="text-gray-500 text-sm">{language === 'en' ? 'Load Balancers' : 'Load Balancers'}</span>
-                <div className="text-3xl font-bold text-cyan-600 mt-2">
-                  {byResourceType.find(r => r.resource_type === 'load_balancer')?.detailsCount || 0}
-                </div>
-              </div>
+            <div className="grid grid-cols-2 lg:grid-cols-6 gap-4">
+              {[
+                { type: 'dedicated_server', label: t('dedicatedServers'), color: 'text-red-600', ring: 'ring-red-300' },
+                { type: 'vps', label: t('vpsInstances'), color: 'text-amber-600', ring: 'ring-amber-300' },
+                { type: 'storage', label: t('storageServices'), color: 'text-green-600', ring: 'ring-green-300' },
+                { type: 'load_balancer', label: 'Load Balancers', color: 'text-cyan-600', ring: 'ring-cyan-300' },
+                { type: 'ip_service', label: language === 'en' ? 'IP Addresses' : 'Adresses IP', color: 'text-pink-600', ring: 'ring-pink-300' },
+                { type: 'domain', label: language === 'en' ? 'Domains' : 'Noms de domaine', color: 'text-purple-600', ring: 'ring-purple-300' },
+              ].map(card => {
+                const isActive = selectedResourceType === card.type;
+                const entry = byResourceType.find(r => r.resource_type === card.type);
+                return (
+                  <div
+                    key={card.type}
+                    className={`bg-white rounded-xl p-5 shadow-sm border cursor-pointer transition-all hover:shadow-md ${isActive ? `ring-2 ${card.ring} border-transparent` : 'border-gray-100'}`}
+                    onClick={() => setSelectedResourceType(isActive ? null : card.type)}
+                  >
+                    <span className="text-gray-500 text-sm">{card.label}</span>
+                    <div className={`text-3xl font-bold ${card.color} mt-2`}>{entry?.serviceCount || 0}</div>
+                    <div className="text-xs text-gray-400 mt-1">{fmt(entry?.value || 0)}€</div>
+                  </div>
+                );
+              })}
             </div>
 
             {/* Cost breakdown by resource type (non-cloud) */}

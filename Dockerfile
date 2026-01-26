@@ -28,6 +28,9 @@ RUN npm prune --production
 # Create data directory
 RUN mkdir -p /app/data
 
+# Make scripts executable
+RUN chmod +x /app/scripts/*.sh
+
 # Expose port
 EXPOSE 3001
 
@@ -35,5 +38,5 @@ EXPOSE 3001
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
   CMD wget --no-verbose --tries=1 --spider http://localhost:3001/api/months || exit 1
 
-# Start server
-CMD ["npm", "run", "start"]
+# Start server with periodic import
+ENTRYPOINT ["/app/scripts/entrypoint.sh"]

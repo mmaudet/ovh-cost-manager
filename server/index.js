@@ -1006,7 +1006,8 @@ app.get('/api/analysis/by-resource-type', (req, res) => {
       resource_type: row.resource_type || 'other',
       value: Math.round(row.total * 100) / 100,
       color: colors[row.resource_type] || colors['other'],
-      detailsCount: row.details_count
+      detailsCount: row.details_count,
+      serviceCount: row.service_count
     }));
 
     res.json(result);

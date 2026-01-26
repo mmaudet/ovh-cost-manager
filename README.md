@@ -94,6 +94,9 @@ ovh-cost-manager/
 │   ├── db.js                 # Database connection and queries
 │   ├── schema.sql            # SQLite schema
 │   └── ovh-bills.db          # Local database (gitignored)
+├── scripts/                  # Docker & automation scripts
+│   ├── entrypoint.sh         # Docker entrypoint (server + cron)
+│   └── cron-import.sh        # Periodic differential import (24h)
 ├── server/                   # Backend API
 │   └── index.js              # Express server (port 3001)
 ├── dashboard/                # Frontend (Vite + React)
@@ -247,14 +250,13 @@ Two deployment modes are available:
 # Build and start
 docker-compose up -d --build
 
-# Import data (first time)
-docker-compose exec ocm npm run import:full
-
 # View logs
 docker-compose logs -f ocm
 ```
 
 Access the dashboard at http://localhost:3001
+
+> **Automatic import**: On first start, a full import runs automatically if the database is empty. Then a differential import runs every 24 hours. Configure with `IMPORT_INTERVAL`, `IMPORT_FLAGS`, or disable with `IMPORT_ENABLED=false`.
 
 #### Environment Variables (Simple)
 
@@ -262,15 +264,15 @@ Access the dashboard at http://localhost:3001
 |----------|-------------|---------|
 | `OCM_PORT` | Exposed port | 3001 |
 | `AUTH_REQUIRED` | Require auth headers | false |
+| `IMPORT_ENABLED` | Enable automatic periodic import | true |
+| `IMPORT_INTERVAL` | Seconds between imports | 86400 (24h) |
+| `IMPORT_FLAGS` | Extra flags for import script | --all |
 
 ### Option 2: SSO Deployment (with LemonLDAP-NG)
 
 ```bash
 # Build and start full stack
 docker-compose -f docker-compose.yml -f docker-compose.sso.yml up -d --build
-
-# Import data (first time)
-docker-compose exec ocm npm run import:full
 
 # View logs
 docker-compose -f docker-compose.yml -f docker-compose.sso.yml logs -f

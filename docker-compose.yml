@@ -26,6 +26,9 @@ services:
       - NODE_ENV=production
       - AUTH_REQUIRED=${AUTH_REQUIRED:-false}
       - PORT=3001
+      - IMPORT_ENABLED=${IMPORT_ENABLED:-true}
+      - IMPORT_INTERVAL=${IMPORT_INTERVAL:-86400}
+      - IMPORT_FLAGS=${IMPORT_FLAGS:---all}
     ports:
       - "${OCM_PORT:-3001}:3001"
     volumes:

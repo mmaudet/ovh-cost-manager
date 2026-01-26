@@ -601,7 +601,8 @@ const inventoryOps = {
       SELECT
         COALESCE(d.resource_type, 'other') as resource_type,
         SUM(d.total_price) as total,
-        COUNT(d.id) as details_count
+        COUNT(d.id) as details_count,
+        COUNT(DISTINCT d.domain) as service_count
       FROM bill_details d
       JOIN bills b ON d.bill_id = b.id
       WHERE b.date >= ? AND b.date <= ?
