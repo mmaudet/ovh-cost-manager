@@ -1,58 +1,4 @@
 #!/usr/bin/env node
-
-// Classification resource_type basée sur le domain (formats réels)
-function classifyResourceTypeFromDomain(domain) {
-                // Private Cloud Management Fee: pcc-.../managementfee
-                if (/^pcc-[^/]+\/managementfee$/.test(domain)) return 'private_cloud';
-                // Télécom/SMS: sms-...
-                if (/^sms-/.test(domain)) return 'telecom';
-                // Web Cloud: domaine ou sous-domaine .ovh (hors patterns déjà traités)
-                if (/\.ovh$/.test(domain) || /\.[a-z0-9-]+\.ovh$/.test(domain)) return 'web_cloud';
-              // IP block: ip-X.X.X.X/XX
-              if (/^ip-\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\/\d{1,2}$/.test(domain)) return 'ip_service';
-            // Logs Data Platform: ldp-...
-            if (/^ldp-/.test(domain)) return 'storage';
-          // Premium support: premium.support....
-          if (/^premium\.support\./.test(domain)) return 'support';
-        // Dedicated server: nsXXXX.ip-....eu
-        if (/^ns\d+\.ip-[\d-]+\.eu$/.test(domain)) return 'dedicated_server';
-      // Domain name: *.fr, *.com, *.net, etc.
-      if (/\.(fr|com|org|net|io|eu|cloud|tech|dev|info|pro)$/.test(domain)) return 'domain';
-    // Private Cloud Host: pcc-.../host/...
-    if (/^pcc-[^/]+\/host\/\d+$/.test(domain)) return 'private_cloud_host';
-    // Private Cloud Datastore: pcc-.../zpool/...
-    if (/^pcc-[^/]+\/zpool\/\d+$/.test(domain)) return 'private_cloud_datastore';
-  if (!domain) return 'other';
-  // Private Cloud: domain commence par * ou contient @pcc.pcc-
-  if (/^\*\d{3,}/.test(domain) || /@pcc\.pcc-/.test(domain)) return 'private_cloud';
-  // Private Cloud Host: pcc-.../IP
-  if (/^pcc-[^/]+\/\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(domain)) return 'private_cloud_host';
-  // Private Cloud Datastore: pcc-.../ssd-...
-  if (/^pcc-[^/]+\/ssd-\d+$/.test(domain)) return 'private_cloud_datastore';
-  // Private Cloud Datastore (autre): pcc-.../pcc-...
-  if (/^pcc-[^/]+\/pcc-\d+$/.test(domain)) return 'private_cloud_datastore';
-  // Windows License: UUID (8-4-4-4-12) utilisé pour les licences
-  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(domain)) return 'license';
-  // Datastore: UUID (32 hex)
-  if (/^[0-9a-f]{32}$/i.test(domain)) return 'private_cloud_datastore';
-  // Backup VM: vm-xxxxxx
-  if (/^vm-\d+$/.test(domain)) return 'backup';
-  // IP Service: IPv4 ou IPv6
-  if (/^(\d{1,3}\.){3}\d{1,3}$/.test(domain) || /^[0-9a-f:]+$/i.test(domain)) return 'ip_service';
-  // Load Balancer: lb-xxxxxx
-  if (/^lb-/.test(domain)) return 'load_balancer';
-  // VPS: vps-xxxx ou vps\d+
-  if (/^vps(-|\d)/.test(domain)) return 'vps';
-  // Serveur dédié: ns\d+|ks\d+|rt\d+|sd\d+|hg\d+|eg\d+|mg\d+
-  if (/^(ns|ks|rt|sd|hg|eg|mg)\d+/.test(domain)) return 'dedicated_server';
-  // Cloud project: projectId (32 hex)
-  if (/^[0-9a-f]{32}$/i.test(domain)) return 'cloud_project';
-  // Storage: storage-xxxx
-  if (/^storage-/.test(domain)) return 'storage';
-  // Fallback
-  return 'other';
-}
-
 /**
  * OVH Bills Data Import Script
  *
@@ -69,6 +15,7 @@ const path = require('path');
 const os = require('os');
 const Jsonfile = require('jsonfile');
 const db = require('./db');
+const { classifyService, classifyResourceTypeFromDomain } = require('./classify');
 
 // Load configuration (credentials + settings)
 const APP_DATA = path.resolve(os.homedir(), 'my-ovh-bills');
@@ -104,8 +51,10 @@ if (!configLoaded) {
   process.exit(1);
 }
 
-// Parallel batch size for API calls
-const BATCH_SIZE = 80;
+// Parallel batch size for API calls (keep reasonable to avoid OVH rate-limiting)
+const BATCH_SIZE = 20;
+const MAX_RETRIES = 3;
+const INITIAL_BACKOFF_MS = 1000;
 
 // Helper to chunk array into batches
 function chunkArray(array, size) {
@@ -116,12 +65,37 @@ function chunkArray(array, size) {
   return chunks;
 }
 
-// Helper to run promises in parallel batches
+// Retry a single async operation with exponential backoff
+async function withRetry(fn, retries = MAX_RETRIES, backoff = INITIAL_BACKOFF_MS) {
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      const isRateLimited = err.statusCode === 429 || err.error === 429;
+      const isRetryable = isRateLimited || err.statusCode >= 500;
+      if (attempt < retries && isRetryable) {
+        const delay = isRateLimited ? backoff * 2 : backoff;
+        console.warn(`  [retry ${attempt + 1}/${retries}] ${err.message || err} — waiting ${delay}ms`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+        backoff *= 2;
+      } else {
+        throw err;
+      }
+    }
+  }
+}
+
+// Helper to run promises in parallel batches with retry and error logging
 async function runInBatches(items, asyncFn, batchSize = BATCH_SIZE) {
   const results = [];
   const chunks = chunkArray(items, batchSize);
   for (const chunk of chunks) {
-    const batchResults = await Promise.all(chunk.map(item => asyncFn(item).catch(err => ({ error: err }))));
+    const batchResults = await Promise.all(chunk.map(item =>
+      withRetry(() => asyncFn(item)).catch(err => {
+        console.error(`  [batch] Error processing item ${JSON.stringify(item).substring(0, 80)}: ${err.message || err}`);
+        return { error: err };
+      })
+    ));
     results.push(...batchResults);
   }
   return results;
@@ -172,92 +146,6 @@ function parseArgs() {
   }
 
   return params;
-}
-
-// Classify service type from description
-function classifyService(description) {
-  const desc = (description || '').toLowerCase();
-
-  // AI/ML - check first as GPU instances should be AI/ML not Compute
-  if (desc.includes('gpu') || desc.includes('l40s') || desc.includes('l4-') ||
-      desc.includes('a100') || desc.includes('v100') || desc.includes('t4') ||
-      desc.includes('h100') || desc.includes('ai ') || desc.includes(' ml') ||
-      desc.includes('machine learning') || desc.includes('notebook') || desc.includes('training') ||
-      desc.includes('ai deploy') || desc.includes('ai training') || desc.includes('ai notebook')) {
-    return 'AI/ML';
-  }
-
-  // Licenses - check early because "Windows Server" contains "server"
-  if (desc.includes('license') || desc.includes('licence')) {
-    return 'Licenses';
-  }
-
-  // Backup - Veeam and backup services
-  if (desc.includes('veeam') || desc.includes('backup')) {
-    return 'Backup';
-  }
-
-  // Support & Services - check early because "management fee" might conflict
-  if (desc.includes('support') || desc.includes('management fee') ||
-      desc.includes('professional service')) {
-    return 'Support';
-  }
-
-  // Database - check before Storage because "Logs - Streams" contains "storage"
-  if (desc.includes('database') || desc.includes('postgresql') || desc.includes('mysql') ||
-      desc.includes('mongodb') || desc.includes('redis') || desc.includes('kafka') ||
-      desc.includes('opensearch') || desc.includes('cassandra') || desc.includes('mariadb') ||
-      desc.includes('m3db') || desc.includes('grafana') || desc.includes('logs data platform') ||
-      desc.includes('elasticsearch') || desc.includes('timeseries') ||
-      desc.includes('logs -') || desc.includes('streams -')) {
-    return 'Database';
-  }
-
-  // Storage - S3, Object Storage, Swift, volumes, snapshots, datastores, backup
-  // Check before Compute because "swift container" should be Storage not Compute
-  if (desc.includes('storage') || desc.includes('stockage') || desc.includes('bucket') ||
-      desc.includes('swift') || desc.includes('object') || desc.includes('archive') ||
-      desc.includes('snapshot') || desc.includes('disque') ||
-      desc.includes('volume') || desc.includes('disk') || desc.includes('s3') ||
-      desc.includes('cold archive') || desc.includes('high perf') || desc.includes('classic') ||
-      desc.includes('block storage') || desc.includes('additional disk') ||
-      desc.includes('datastore') || desc.includes('zpool')) {
-    return 'Storage';
-  }
-
-  // Compute - instances, VMs, Kubernetes, containers, hosts, bare metal
-  if (desc.includes('instance') || desc.includes('compute') || desc.includes('vm') ||
-      desc.includes('forfait mensuel') || desc.includes('consommation à l\'heure') ||
-      desc.includes('kubernetes') || desc.includes('kube') || desc.includes('k8s') ||
-      desc.includes('managed kubernetes') || desc.includes('container') ||
-      desc.includes('registry') || desc.includes('worker node') || desc.includes('control plane') ||
-      desc.includes('serveur') || desc.includes('server') || desc.includes('vcpu') ||
-      desc.includes('ram ') || desc.includes('mémoire') ||
-      // Private Cloud / vSphere hosts
-      desc.includes('host ') || desc.includes('host rental') || desc.includes('esxi') ||
-      desc.includes('vsphere') || desc.includes('vmware') || desc.includes('premier 384') ||
-      desc.includes('premier 768') || desc.includes('premier rental') ||
-      // Bare metal Scale servers
-      desc.includes('scale-') || desc.includes('advance-') || desc.includes('infra-') ||
-      desc.includes('hg-') || desc.includes('eg-') || desc.includes('mg-') ||
-      // General dedicated
-      desc.includes('rental for 1 month') && (desc.includes('scale') || desc.includes('advance'))) {
-    return 'Compute';
-  }
-
-  // Network - load balancers, IPs, bandwidth, egress
-  if (desc.includes('network') || desc.includes('loadbalancer') || desc.includes('load balancer') ||
-      desc.includes('floating ip') || desc.includes('gateway') || desc.includes('bandwidth') ||
-      desc.includes('octavia') || desc.includes('private network') || desc.includes('vrack') ||
-      desc.includes('egress') || desc.includes('ingress') || desc.includes('traffic') ||
-      desc.includes('trafic') || desc.includes('ip failover') || desc.includes('additional ip') ||
-      desc.includes('public ip') || desc.includes('réseau') || desc.includes('outgoing') ||
-      desc.includes('ip v4 block') || desc.includes('ip block') || desc.includes('/27') ||
-      desc.includes('/28') || desc.includes('/29') || desc.includes('/30')) {
-    return 'Network';
-  }
-
-  return 'Other';
 }
 
 // Fetch all cloud projects
