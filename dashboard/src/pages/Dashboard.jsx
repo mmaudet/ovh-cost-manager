@@ -558,7 +558,9 @@ export default function Dashboard() {
                 <div className="text-sm text-gray-500 mt-1">
                   {consumptionCurrent.source === 'cloud_projects'
                     ? `Public Cloud · ${consumptionCurrent.project_count || ''} ${t('cloudProjects').toLowerCase()}`
-                    : `${consumptionCurrent.period_start} → ${consumptionCurrent.period_end}`}
+                    : consumptionCurrent.period_start && consumptionCurrent.period_end
+                      ? `${consumptionCurrent.period_start} → ${consumptionCurrent.period_end}`
+                      : t('forecastEndOfMonth')}
                 </div>
               </div>
             )}

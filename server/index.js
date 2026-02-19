@@ -418,6 +418,9 @@ app.get('/api/analysis/by-service', (req, res) => {
       'Network': '#f59e0b',
       'Database': '#8b5cf6',
       'AI/ML': '#ec4899',
+      'Licenses': '#06b6d4',
+      'Support': '#f97316',
+      'Backup': '#059669',
       'Other': '#6b7280'
     };
 
@@ -986,6 +989,9 @@ app.get('/api/analysis/by-resource-type', (req, res) => {
       'domain': '#8b5cf6',
       'ip_service': '#ec4899',
       'telephony': '#f97316',
+      'private_cloud': '#7c3aed',
+      'license': '#0891b2',
+      'backup': '#059669',
       'other': '#6b7280'
     };
 
@@ -998,6 +1004,9 @@ app.get('/api/analysis/by-resource-type', (req, res) => {
       'domain': 'Domains',
       'ip_service': 'IP',
       'telephony': 'Telephony',
+      'private_cloud': 'Private Cloud',
+      'license': 'Licenses',
+      'backup': 'Backup',
       'other': 'Other'
     };
 

@@ -52,10 +52,47 @@ function classifyResourceTypes(database) {
   ).get();
   if (unclassified.cnt === 0) return;
 
-  // Match domains to known project IDs
+  // Match domains to known project IDs (Public Cloud)
   database.exec(`
     UPDATE bill_details SET resource_type = 'cloud_project'
     WHERE resource_type IS NULL AND domain IN (SELECT id FROM projects)
+  `);
+
+  // Private Cloud (vSphere) - pcc-* patterns
+  // Hosts: pcc-*/host/*
+  database.exec(`
+    UPDATE bill_details SET resource_type = 'private_cloud'
+    WHERE resource_type IS NULL AND domain LIKE 'pcc-%/host/%'
+  `);
+
+  // Private Cloud datastores: pcc-*/zpool/*
+  database.exec(`
+    UPDATE bill_details SET resource_type = 'private_cloud'
+    WHERE resource_type IS NULL AND domain LIKE 'pcc-%/zpool/%'
+  `);
+
+  // Private Cloud management fees: pcc-*/managementfee
+  database.exec(`
+    UPDATE bill_details SET resource_type = 'private_cloud'
+    WHERE resource_type IS NULL AND domain LIKE 'pcc-%/managementfee'
+  `);
+
+  // Private Cloud general: pcc-*
+  database.exec(`
+    UPDATE bill_details SET resource_type = 'private_cloud'
+    WHERE resource_type IS NULL AND domain LIKE 'pcc-%'
+  `);
+
+  // Veeam Backup VMs: vm-*
+  database.exec(`
+    UPDATE bill_details SET resource_type = 'backup'
+    WHERE resource_type IS NULL AND domain LIKE 'vm-%'
+  `);
+
+  // Logs Data Platform: ldp-*
+  database.exec(`
+    UPDATE bill_details SET resource_type = 'storage'
+    WHERE resource_type IS NULL AND domain LIKE 'ldp-%'
   `);
 
   // Dedicated servers: ns*.ip-*.eu or ns*.ovh.net patterns
@@ -70,7 +107,7 @@ function classifyResourceTypes(database) {
     WHERE resource_type IS NULL AND domain LIKE 'loadbalancer-%'
   `);
 
-  // Storage (zpool)
+  // Storage (zpool standalone)
   database.exec(`
     UPDATE bill_details SET resource_type = 'storage'
     WHERE resource_type IS NULL AND domain LIKE 'zpool-%'
@@ -80,6 +117,20 @@ function classifyResourceTypes(database) {
   database.exec(`
     UPDATE bill_details SET resource_type = 'ip_service'
     WHERE resource_type IS NULL AND (domain LIKE 'ip-%' OR domain LIKE '%.ip-%')
+  `);
+
+  // Licenses (UUID pattern for Windows/VMware licenses)
+  database.exec(`
+    UPDATE bill_details SET resource_type = 'license'
+    WHERE resource_type IS NULL 
+    AND domain GLOB '[a-f0-9][a-f0-9][a-f0-9][a-f0-9][a-f0-9][a-f0-9][a-f0-9][a-f0-9]-*'
+    AND LENGTH(domain) = 36
+  `);
+
+  // Premium support
+  database.exec(`
+    UPDATE bill_details SET resource_type = 'other'
+    WHERE resource_type IS NULL AND domain LIKE 'premium.support.%'
   `);
 
   // Domain names
