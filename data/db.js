@@ -37,8 +37,8 @@ function getDb() {
     addColumnIfNotExists(db, 'bills', 'payment_status', 'TEXT');
     addColumnIfNotExists(db, 'cloud_instances', 'plan_code', 'TEXT');
 
-    // Classify resource_type for bill_details that haven't been classified yet
-    classifyResourceTypes(db);
+    // Désactivé : ne pas reclassifier automatiquement les resource_type (fait par import.js)
+    // classifyResourceTypes(db);
   }
   return db;
 }
