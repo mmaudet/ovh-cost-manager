@@ -11,10 +11,13 @@ import {
   fetchInventoryServers,
   fetchInventoryVps, fetchInventoryStorage, fetchExpiringServices,
   fetchByResourceType, fetchResourceTypeDetails, fetchProjectsEnriched, fetchProjectConsumption,
-  fetchProjectInstances, fetchProjectQuotas, fetchGpuSummary
+  fetchProjectInstances, fetchProjectQuotas, fetchGpuSummary, fetchPublicCloudStats, fetchBackupStats,
+  fetchProjectBuckets, fetchProjectInstanceTotal
 } from '../services/api';
 import { useLanguage } from '../hooks/useLanguage.jsx';
 import Logo from '../components/Logo';
+import Accordion from '../components/Accordion.jsx';
+import ProjectProductComparison from './ProjectProductComparison.jsx';
 
 // Format currency based on language
 const formatCurrency = (value, language = 'fr') => {
@@ -173,9 +176,14 @@ export default function Dashboard() {
   useEffect(() => {
     if (months.length > 0 && !selectedMonth) {
       setSelectedMonth(months[0]);
-      setCompareMonthA(months[0]);
+      // Pour la comparaison :
+      // A = mois précédent, B = mois courant
       if (months.length > 1) {
-        setCompareMonthB(months[1]);
+        setCompareMonthA(months[1]);
+        setCompareMonthB(months[0]);
+      } else {
+        setCompareMonthA(months[0]);
+        setCompareMonthB(months[0]);
       }
     }
     // Adjust trend period if it exceeds available data
@@ -327,6 +335,20 @@ export default function Dashboard() {
     enabled: !!selectedProject
   });
 
+  // Project buckets (filtered by selected month)
+  const { data: projectBuckets = [] } = useQuery({
+    queryKey: ['projectBuckets', selectedProject?.id, selectedMonth?.from, selectedMonth?.to],
+    queryFn: () => fetchProjectBuckets(selectedProject.id, selectedMonth.from, selectedMonth.to),
+    enabled: !!selectedProject && !!selectedMonth
+  });
+
+  // Project instance total cost (filtered by selected month)
+  const { data: projectInstanceTotal } = useQuery({
+    queryKey: ['projectInstanceTotal', selectedProject?.id, selectedMonth?.from, selectedMonth?.to],
+    queryFn: () => fetchProjectInstanceTotal(selectedProject.id, selectedMonth.from, selectedMonth.to),
+    enabled: !!selectedProject && !!selectedMonth
+  });
+
   // GPU cost summary — filtered by selected month (for overview)
   const { data: gpuSummary } = useQuery({
     queryKey: ['gpuSummary', selectedMonth?.from, selectedMonth?.to],
@@ -339,6 +361,20 @@ export default function Dashboard() {
     queryKey: ['gpuTrend'],
     queryFn: () => fetchGpuSummary(),
     enabled: activeTab === 'trends'
+  });
+
+  // Public Cloud stats (Kubernetes, S3, Registry, etc.)
+  const { data: publicCloudStats } = useQuery({
+    queryKey: ['publicCloudStats', selectedMonth?.from, selectedMonth?.to],
+    queryFn: () => fetchPublicCloudStats(selectedMonth.from, selectedMonth.to),
+    enabled: !!selectedMonth && activeTab === 'inventory'
+  });
+
+  // Backup stats (Veeam VMs, licenses)
+  const { data: backupStats } = useQuery({
+    queryKey: ['backupStats', selectedMonth?.from, selectedMonth?.to],
+    queryFn: () => fetchBackupStats(selectedMonth.from, selectedMonth.to),
+    enabled: !!selectedMonth && activeTab === 'backup'
   });
 
   // Check if previous month exists
@@ -450,7 +486,7 @@ export default function Dashboard() {
                 )}
               </div>
             )}
-            {activeTab === 'overview' && (
+            {activeTab !== 'compare' && (
               <>
                 <select
                   value={selectedMonth?.value || ''}
@@ -617,6 +653,7 @@ export default function Dashboard() {
               { id: 'trends', labelKey: 'trends' },
               { id: 'inventory', labelKey: 'inventory' },
               { id: 'infrastructure', labelKey: 'infrastructure' },
+              { id: 'backup', labelKey: 'backup' },
             ].map(tab => (
               <button
                 key={tab.id}
@@ -1058,8 +1095,7 @@ export default function Dashboard() {
               </div>
             </div>
 
-            <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100 overflow-x-auto">
-              <h3 className="font-semibold text-gray-900 mb-4">{t('projectComparison')}</h3>
+            <Accordion title={t('projectComparison')} defaultOpen>
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b text-left bg-gray-50">
@@ -1106,7 +1142,169 @@ export default function Dashboard() {
                   ))}
                 </tbody>
               </table>
-            </div>
+            </Accordion>
+
+            {/* Accordéon pour l'infrastructure (serveurs dédiés, VPS, stockage, etc.) */}
+            <Accordion title={language === 'en' ? 'Infrastructure Comparison' : 'Comparaison Infrastructure'}>
+              {/* Tableau comparatif infrastructure */}
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b text-left bg-gray-50">
+                    <th className="p-3 font-medium rounded-tl-lg">{language === 'en' ? 'Type' : 'Type'}</th>
+                    <th className="p-3 font-medium text-right">{compareMonthA?.label}</th>
+                    <th className="p-3 font-medium text-right">{compareMonthB?.label}</th>
+                    <th className="p-3 font-medium text-right rounded-tr-lg">{t('variation')}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {[
+                    { key: 'dedicated_server', label: language === 'en'
+                      ? `List of Dedicated Servers present on ${new Date().toLocaleDateString('en-GB')}`
+                      : `Liste des Serveurs dédiés présents au ${new Date().toLocaleDateString('fr-FR')}`,
+                      renderNames: () => (
+                        <ul className="text-xs text-gray-500 mt-1">
+                          {inventoryServers.map(srv => (
+                            <li key={srv.id}>{srv.display_name || srv.id}</li>
+                          ))}
+                        </ul>
+                      )
+                    },
+                    { key: 'vps', label: 'VPS' },
+                    { key: 'storage', label: language === 'en' ? 'Storage' : 'Stockage' },
+                    { key: 'load_balancer', label: language === 'en' ? 'Load Balancer' : 'Load Balancer' },
+                    { key: 'ip_service', label: language === 'en' ? 'IP Addresses' : 'Adresses IP' },
+                    { key: 'domain', label: language === 'en' ? 'Domains' : 'Noms de domaine' },
+                    { key: 'private_cloud_host', label: language === 'en' ? 'Private Cloud Hosts' : 'Hôtes Private Cloud' },
+                    { key: 'private_cloud_datastore', label: language === 'en' ? 'Private Cloud Datastores' : 'Datastores Private Cloud' },
+                  ].map(row => {
+                    const a = byServiceA.find(s => s.key === row.key) || {};
+                    const b = byServiceB.find(s => s.key === row.key) || {};
+                    const valA = a.value || 0;
+                    const valB = b.value || 0;
+                    const diff = valA ? ((valB - valA) / valA * 100) : null;
+                    return (
+                      <tr key={row.key} className="border-b hover:bg-gray-50 transition-colors">
+                        <td className="p-3 font-medium">
+                          {row.label}
+                          {row.key === 'dedicated_server' && row.renderNames && inventoryServers.length > 0 && row.renderNames()}
+                        </td>
+                        <td className="p-3 text-right font-medium">{fmt(valA)}€</td>
+                        <td className="p-3 text-right text-gray-500">{fmt(valB)}€</td>
+                        <td className="p-3 text-right">
+                          {diff !== null && (
+                            <span className={`px-2 py-1 rounded text-xs font-medium ${diff > 0 ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
+                              {diff > 0 ? '+' : ''}{diff.toFixed(1)}%
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </Accordion>
+
+            {/* Accordéon pour le backup */}
+            <Accordion title={language === 'en' ? 'Backup Comparison' : 'Comparaison Backup'}>
+              {/* Tableau comparatif backup */}
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b text-left bg-gray-50">
+                    <th className="p-3 font-medium rounded-tl-lg">{language === 'en' ? 'Category' : 'Catégorie'}</th>
+                    <th className="p-3 font-medium text-right">{compareMonthA?.label}</th>
+                    <th className="p-3 font-medium text-right">{compareMonthB?.label}</th>
+                    <th className="p-3 font-medium text-right rounded-tr-lg">{t('variation')}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {[
+                    {
+                      key: 'backup_vms',
+                      label: language === 'en' ? 'Veeam Backup VMs' : 'VMs Veeam Backup',
+                      getA: () => (byServiceA.find(s => s.key === 'backup')?.count || 0),
+                      getB: () => (byServiceB.find(s => s.key === 'backup')?.count || 0),
+                      getValA: () => (byServiceA.find(s => s.key === 'backup')?.value || 0),
+                      getValB: () => (byServiceB.find(s => s.key === 'backup')?.value || 0),
+                    },
+                    {
+                      key: 'backup_enterprise',
+                      label: language === 'en' ? 'Veeam Enterprise License' : 'Licence Veeam Enterprise',
+                      getA: () => (byServiceA.find(s => s.key === 'backup_enterprise')?.count || 0),
+                      getB: () => (byServiceB.find(s => s.key === 'backup_enterprise')?.count || 0),
+                      getValA: () => (byServiceA.find(s => s.key === 'backup_enterprise')?.value || 0),
+                      getValB: () => (byServiceB.find(s => s.key === 'backup_enterprise')?.value || 0),
+                    },
+                  ].map(row => {
+                    const countA = row.getA();
+                    const countB = row.getB();
+                    const valA = row.getValA();
+                    const valB = row.getValB();
+                    const diff = valA ? ((valB - valA) / valA * 100) : null;
+                    return (
+                      <tr key={row.key} className="border-b hover:bg-gray-50 transition-colors">
+                        <td className="p-3 font-medium">{row.label}</td>
+                        <td className="p-3 text-right font-medium">{countA} / {fmt(valA)}€</td>
+                        <td className="p-3 text-right text-gray-500">{countB} / {fmt(valB)}€</td>
+                        <td className="p-3 text-right">
+                          {diff !== null && (
+                            <span className={`px-2 py-1 rounded text-xs font-medium ${diff > 0 ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
+                              {diff > 0 ? '+' : ''}{diff.toFixed(1)}%
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </Accordion>
+
+            {/* Accordéon pour le Private Cloud */}
+            <Accordion title={language === 'en' ? 'Private Cloud Comparison' : 'Comparaison Private Cloud'}>
+              {/* Tableau comparatif Private Cloud */}
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b text-left bg-gray-50">
+                    <th className="p-3 font-medium rounded-tl-lg">{language === 'en' ? 'Type' : 'Type'}</th>
+                    <th className="p-3 font-medium text-right">{compareMonthA?.label}</th>
+                    <th className="p-3 font-medium text-right">{compareMonthB?.label}</th>
+                    <th className="p-3 font-medium text-right rounded-tr-lg">{t('variation')}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {[
+                    { key: 'private_cloud_host', label: language === 'en' ? 'Private Cloud Hosts' : 'Hôtes Private Cloud' },
+                    { key: 'private_cloud_datastore', label: language === 'en' ? 'Private Cloud Datastores' : 'Datastores Private Cloud' },
+                  ].map(row => {
+                    const a = byServiceA.find(s => s.key === row.key) || {};
+                    const b = byServiceB.find(s => s.key === row.key) || {};
+                    const valA = a.value || 0;
+                    const valB = b.value || 0;
+                    const diff = valA ? ((valB - valA) / valA * 100) : null;
+                    return (
+                      <tr key={row.key} className="border-b hover:bg-gray-50 transition-colors">
+                        <td className="p-3 font-medium">{row.label}</td>
+                        <td className="p-3 text-right font-medium">{fmt(valA)}€</td>
+                        <td className="p-3 text-right text-gray-500">{fmt(valB)}€</td>
+                        <td className="p-3 text-right">
+                          {diff !== null && (
+                            <span className={`px-2 py-1 rounded text-xs font-medium ${diff > 0 ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
+                              {diff > 0 ? '+' : ''}{diff.toFixed(1)}%
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </Accordion>
+            {/* Accordéons par projet public cloud : comparaison détaillée produits/services */}
+            {getSortedCompareProjects().map((proj) => (
+              <Accordion key={proj.projectId} title={`${proj.projectName} (${t('project')})`}>
+                <ProjectProductComparison projectId={proj.projectId} monthA={compareMonthA} monthB={compareMonthB} fmt={fmt} language={language} />
+              </Accordion>
+            ))}
           </div>
         )}
 
@@ -1206,7 +1404,7 @@ export default function Dashboard() {
         {activeTab === 'inventory' && (
           <div className="space-y-6">
             {/* Cloud Summary Cards */}
-            <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
               <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
                 <span className="text-gray-500 text-sm">{t('cloudProjects')}</span>
                 <div className="text-3xl font-bold text-blue-600 mt-2">{byResourceType.find(r => r.resource_type === 'cloud_project')?.serviceCount || 0}</div>
@@ -1220,6 +1418,27 @@ export default function Dashboard() {
               <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
                 <span className="text-gray-500 text-sm">{language === 'en' ? 'GPU Instances' : 'Instances GPU'}</span>
                 <div className="text-3xl font-bold text-purple-600 mt-2">{gpuSummary?.instances?.length || 0}</div>
+              </div>
+              <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
+                <span className="text-gray-500 text-sm">Kubernetes</span>
+                <div className="text-3xl font-bold text-cyan-600 mt-2">{publicCloudStats?.kubernetes?.count || 0}</div>
+                {publicCloudStats?.kubernetes?.total > 0 && (
+                  <p className="text-xs text-gray-400">{fmt(publicCloudStats.kubernetes.total)}€</p>
+                )}
+              </div>
+              <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
+                <span className="text-gray-500 text-sm">{language === 'en' ? 'Object Storage' : 'Stockage Objet'}</span>
+                <div className="text-3xl font-bold text-green-600 mt-2">{publicCloudStats?.objectStorage?.count || 0}</div>
+                {publicCloudStats?.objectStorage?.total > 0 && (
+                  <p className="text-xs text-gray-400">{fmt(publicCloudStats.objectStorage.total)}€</p>
+                )}
+              </div>
+              <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
+                <span className="text-gray-500 text-sm">{language === 'en' ? 'Container Registry' : 'Registre'}</span>
+                <div className="text-3xl font-bold text-orange-600 mt-2">{publicCloudStats?.registry?.count || 0}</div>
+                {publicCloudStats?.registry?.total > 0 && (
+                  <p className="text-xs text-gray-400">{fmt(publicCloudStats.registry.total)}€</p>
+                )}
               </div>
             </div>
 
@@ -1317,6 +1536,9 @@ export default function Dashboard() {
                                     <div>
                                       <h4 className="font-medium text-gray-700 mb-3">
                                         {t('instances')} ({projectInstances.length})
+                                        {projectInstanceTotal?.total > 0 && (
+                                          <span className="ml-2 text-sm font-normal text-indigo-600">{fmt(projectInstanceTotal.total)}€</span>
+                                        )}
                                       </h4>
                                       {projectInstances.length > 0 ? (
                                         <div className="overflow-y-auto max-h-52 bg-white rounded-lg">
@@ -1361,6 +1583,48 @@ export default function Dashboard() {
                                         </div>
                                       )}
                                     </div>
+
+                                    {/* Buckets list */}
+                                    {projectBuckets.length > 0 && (
+                                      <div className="lg:col-span-2">
+                                        <h4 className="font-medium text-gray-700 mb-3">
+                                          Buckets ({projectBuckets.length})
+                                          <span className="ml-2 text-sm font-normal text-green-600">
+                                            {fmt(projectBuckets.reduce((sum, b) => sum + (b.total || 0), 0))}€
+                                          </span>
+                                        </h4>
+                                        <div className="overflow-y-auto max-h-52 bg-white rounded-lg">
+                                          <table className="w-full text-sm">
+                                            <thead>
+                                              <tr className="border-b bg-gray-50">
+                                                <th className="p-2 text-left font-medium">{language === 'en' ? 'Name' : 'Nom'}</th>
+                                                <th className="p-2 text-left font-medium">Type</th>
+                                                <th className="p-2 text-left font-medium">{t('region')}</th>
+                                                <th className="p-2 text-right font-medium">{language === 'en' ? 'Cost' : 'Coût'}</th>
+                                              </tr>
+                                            </thead>
+                                            <tbody>
+                                              {[...projectBuckets].sort((a, b) => (a.name || '').localeCompare(b.name || '', 'fr', { sensitivity: 'base' })).map((bucket, i) => (
+                                                <tr key={i} className="border-b hover:bg-gray-50">
+                                                  <td className="p-2 font-medium text-xs truncate max-w-[150px]" title={bucket.name}>{bucket.name}</td>
+                                                  <td className="p-2 text-xs">
+                                                    <span className={`px-1.5 py-0.5 rounded text-xs ${
+                                                      bucket.type === 'High Performance' ? 'bg-orange-100 text-orange-700' :
+                                                      bucket.type === 'Infrequent Access' ? 'bg-blue-100 text-blue-700' :
+                                                      'bg-gray-100 text-gray-700'
+                                                    }`}>
+                                                      {bucket.type}
+                                                    </span>
+                                                  </td>
+                                                  <td className="p-2 text-xs">{bucket.region}</td>
+                                                  <td className="p-2 text-right font-medium text-xs">{fmt(bucket.total)}€</td>
+                                                </tr>
+                                              ))}
+                                            </tbody>
+                                          </table>
+                                        </div>
+                                      </div>
+                                    )}
                                   </div>
 
                                   {/* Quotas — only regions with capacity */}
@@ -1415,7 +1679,7 @@ export default function Dashboard() {
         {activeTab === 'infrastructure' && (
           <div className="space-y-6">
             {/* Infrastructure Summary Cards */}
-            <div className="grid grid-cols-2 lg:grid-cols-6 gap-4">
+            <div className="grid grid-cols-2 lg:grid-cols-4 xl:grid-cols-8 gap-4">
               {[
                 { type: 'dedicated_server', label: t('dedicatedServers'), color: 'text-red-600', ring: 'ring-red-300' },
                 { type: 'vps', label: t('vpsInstances'), color: 'text-amber-600', ring: 'ring-amber-300' },
@@ -1423,6 +1687,8 @@ export default function Dashboard() {
                 { type: 'load_balancer', label: 'Load Balancers', color: 'text-cyan-600', ring: 'ring-cyan-300' },
                 { type: 'ip_service', label: language === 'en' ? 'IP Addresses' : 'Adresses IP', color: 'text-pink-600', ring: 'ring-pink-300' },
                 { type: 'domain', label: language === 'en' ? 'Domains' : 'Noms de domaine', color: 'text-purple-600', ring: 'ring-purple-300' },
+                { type: 'private_cloud_host', label: language === 'en' ? 'Private Cloud Hosts' : 'Hôtes Private Cloud', color: 'text-violet-600', ring: 'ring-violet-300' },
+                { type: 'private_cloud_datastore', label: language === 'en' ? 'Private Cloud Datastores' : 'Datastores Private Cloud', color: 'text-fuchsia-600', ring: 'ring-fuchsia-300' },
               ].map(card => {
                 const isActive = selectedResourceType === card.type;
                 const entry = byResourceType.find(r => r.resource_type === card.type);
@@ -1600,6 +1866,93 @@ export default function Dashboard() {
                 </div>
               </div>
             )}
+          </div>
+        )}
+
+        {/* Tab Content - Backup */}
+        {activeTab === 'backup' && (
+          <div className="space-y-6">
+            {/* Backup Summary Cards */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
+                <span className="text-gray-500 text-sm">{language === 'en' ? 'Total Backup Cost' : 'Coût total backup'}</span>
+                <div className="text-3xl font-bold text-emerald-600 mt-2">
+                  {fmt((backupStats?.vms?.total || 0) + (backupStats?.enterprise?.total || 0))}€
+                </div>
+              </div>
+              <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
+                <span className="text-gray-500 text-sm">{language === 'en' ? 'Veeam VMs' : 'VMs Veeam'}</span>
+                <div className="text-3xl font-bold text-green-600 mt-2">{backupStats?.vms?.count || 0}</div>
+                {backupStats?.vms?.total > 0 && (
+                  <p className="text-xs text-gray-400">{fmt(backupStats.vms.total)}€</p>
+                )}
+              </div>
+              <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
+                <span className="text-gray-500 text-sm">{language === 'en' ? 'Veeam Enterprise Licenses' : 'Licences Veeam Enterprise'}</span>
+                <div className="text-3xl font-bold text-teal-600 mt-2">{backupStats?.enterprise?.count || 0}</div>
+                {backupStats?.enterprise?.total > 0 && (
+                  <p className="text-xs text-gray-400">{fmt(backupStats.enterprise.total)}€</p>
+                )}
+              </div>
+              <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
+                <span className="text-gray-500 text-sm">{language === 'en' ? '% of Total Cost' : '% du coût total'}</span>
+                <div className="text-3xl font-bold text-gray-600 mt-2">
+                  {(summary?.total || 0) > 0 
+                    ? `${(((backupStats?.vms?.total || 0) + (backupStats?.enterprise?.total || 0)) / summary.total * 100).toFixed(1)}%`
+                    : '0%'}
+                </div>
+              </div>
+            </div>
+
+            {/* Backup Details */}
+            <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
+              <h3 className="font-semibold text-gray-900 mb-4">
+                {language === 'en' ? 'Backup Resources' : 'Ressources Backup'}
+                {selectedMonth && <span className="text-sm font-normal text-gray-400 ml-2">({selectedMonth.label})</span>}
+              </h3>
+              {(byResourceType.find(r => r.resource_type === 'backup') || backupStats?.vms?.count > 0) ? (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b bg-gray-50">
+                        <th className="p-3 text-left font-medium">{language === 'en' ? 'Category' : 'Catégorie'}</th>
+                        <th className="p-3 text-right font-medium">{language === 'en' ? 'Count' : 'Nombre'}</th>
+                        <th className="p-3 text-right font-medium">{language === 'en' ? 'Cost' : 'Coût'}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr className="border-b hover:bg-gray-50">
+                        <td className="p-3 font-medium">{language === 'en' ? 'Veeam Backup VMs' : 'VMs Veeam Backup'}</td>
+                        <td className="p-3 text-right">{backupStats?.vms?.count || byResourceType.find(r => r.resource_type === 'backup')?.serviceCount || 0}</td>
+                        <td className="p-3 text-right font-medium">{fmt(backupStats?.vms?.total || byResourceType.find(r => r.resource_type === 'backup')?.value || 0)}€</td>
+                      </tr>
+                      {backupStats?.enterprise?.count > 0 && (
+                        <tr className="border-b hover:bg-gray-50">
+                          <td className="p-3 font-medium">{language === 'en' ? 'Veeam Enterprise License' : 'Licence Veeam Enterprise'}</td>
+                          <td className="p-3 text-right">{backupStats.enterprise.count}</td>
+                          <td className="p-3 text-right font-medium">{fmt(backupStats.enterprise.total)}€</td>
+                        </tr>
+                      )}
+                    </tbody>
+                    <tfoot>
+                      <tr className="bg-gray-50 font-semibold">
+                        <td className="p-3">Total</td>
+                        <td className="p-3 text-right">
+                          {(backupStats?.vms?.count || 0) + (backupStats?.enterprise?.count || 0)}
+                        </td>
+                        <td className="p-3 text-right">
+                          {fmt((backupStats?.vms?.total || 0) + (backupStats?.enterprise?.total || 0))}€
+                        </td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              ) : (
+                <div className="text-center text-gray-400 py-8">
+                  {language === 'en' ? 'No backup services found for this period' : 'Aucun service de backup trouvé pour cette période'}
+                </div>
+              )}
+            </div>
           </div>
         )}
 

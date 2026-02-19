@@ -1,4 +1,58 @@
 #!/usr/bin/env node
+
+// Classification resource_type basée sur le domain (formats réels)
+function classifyResourceTypeFromDomain(domain) {
+                // Private Cloud Management Fee: pcc-.../managementfee
+                if (/^pcc-[^/]+\/managementfee$/.test(domain)) return 'private_cloud';
+                // Télécom/SMS: sms-...
+                if (/^sms-/.test(domain)) return 'telecom';
+                // Web Cloud: domaine ou sous-domaine .ovh (hors patterns déjà traités)
+                if (/\.ovh$/.test(domain) || /\.[a-z0-9-]+\.ovh$/.test(domain)) return 'web_cloud';
+              // IP block: ip-X.X.X.X/XX
+              if (/^ip-\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\/\d{1,2}$/.test(domain)) return 'ip_service';
+            // Logs Data Platform: ldp-...
+            if (/^ldp-/.test(domain)) return 'storage';
+          // Premium support: premium.support....
+          if (/^premium\.support\./.test(domain)) return 'support';
+        // Dedicated server: nsXXXX.ip-....eu
+        if (/^ns\d+\.ip-[\d-]+\.eu$/.test(domain)) return 'dedicated_server';
+      // Domain name: *.fr, *.com, *.net, etc.
+      if (/\.(fr|com|org|net|io|eu|cloud|tech|dev|info|pro)$/.test(domain)) return 'domain';
+    // Private Cloud Host: pcc-.../host/...
+    if (/^pcc-[^/]+\/host\/\d+$/.test(domain)) return 'private_cloud_host';
+    // Private Cloud Datastore: pcc-.../zpool/...
+    if (/^pcc-[^/]+\/zpool\/\d+$/.test(domain)) return 'private_cloud_datastore';
+  if (!domain) return 'other';
+  // Private Cloud: domain commence par * ou contient @pcc.pcc-
+  if (/^\*\d{3,}/.test(domain) || /@pcc\.pcc-/.test(domain)) return 'private_cloud';
+  // Private Cloud Host: pcc-.../IP
+  if (/^pcc-[^/]+\/\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(domain)) return 'private_cloud_host';
+  // Private Cloud Datastore: pcc-.../ssd-...
+  if (/^pcc-[^/]+\/ssd-\d+$/.test(domain)) return 'private_cloud_datastore';
+  // Private Cloud Datastore (autre): pcc-.../pcc-...
+  if (/^pcc-[^/]+\/pcc-\d+$/.test(domain)) return 'private_cloud_datastore';
+  // Windows License: UUID (8-4-4-4-12) utilisé pour les licences
+  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(domain)) return 'license';
+  // Datastore: UUID (32 hex)
+  if (/^[0-9a-f]{32}$/i.test(domain)) return 'private_cloud_datastore';
+  // Backup VM: vm-xxxxxx
+  if (/^vm-\d+$/.test(domain)) return 'backup';
+  // IP Service: IPv4 ou IPv6
+  if (/^(\d{1,3}\.){3}\d{1,3}$/.test(domain) || /^[0-9a-f:]+$/i.test(domain)) return 'ip_service';
+  // Load Balancer: lb-xxxxxx
+  if (/^lb-/.test(domain)) return 'load_balancer';
+  // VPS: vps-xxxx ou vps\d+
+  if (/^vps(-|\d)/.test(domain)) return 'vps';
+  // Serveur dédié: ns\d+|ks\d+|rt\d+|sd\d+|hg\d+|eg\d+|mg\d+
+  if (/^(ns|ks|rt|sd|hg|eg|mg)\d+/.test(domain)) return 'dedicated_server';
+  // Cloud project: projectId (32 hex)
+  if (/^[0-9a-f]{32}$/i.test(domain)) return 'cloud_project';
+  // Storage: storage-xxxx
+  if (/^storage-/.test(domain)) return 'storage';
+  // Fallback
+  return 'other';
+}
+
 /**
  * OVH Bills Data Import Script
  *
@@ -12,11 +66,12 @@
  */
 
 const path = require('path');
+const os = require('os');
 const Jsonfile = require('jsonfile');
 const db = require('./db');
 
 // Load configuration (credentials + settings)
-const APP_DATA = path.resolve(process.env.HOME, 'my-ovh-bills');
+const APP_DATA = path.resolve(os.homedir(), 'my-ovh-bills');
 const CONFIG_PATHS = [
   path.resolve(__dirname, '..', 'config.json'),      // Project root
   path.resolve(APP_DATA, 'config.json'),              // ~/my-ovh-bills/config.json
@@ -47,6 +102,29 @@ if (!configLoaded) {
   CONFIG_PATHS.forEach(p => console.error(`  - ${p}`));
   console.error('\nPlease create config.json with valid OVH API credentials.');
   process.exit(1);
+}
+
+// Parallel batch size for API calls
+const BATCH_SIZE = 80;
+
+// Helper to chunk array into batches
+function chunkArray(array, size) {
+  const chunks = [];
+  for (let i = 0; i < array.length; i += size) {
+    chunks.push(array.slice(i, i + size));
+  }
+  return chunks;
+}
+
+// Helper to run promises in parallel batches
+async function runInBatches(items, asyncFn, batchSize = BATCH_SIZE) {
+  const results = [];
+  const chunks = chunkArray(items, batchSize);
+  for (const chunk of chunks) {
+    const batchResults = await Promise.all(chunk.map(item => asyncFn(item).catch(err => ({ error: err }))));
+    results.push(...batchResults);
+  }
+  return results;
 }
 
 // Parse command line arguments
@@ -186,23 +264,19 @@ function classifyService(description) {
 async function fetchProjects() {
   console.log('Fetching cloud projects...');
   const projectIds = await ovh.requestPromised('GET', '/cloud/project');
-  const projects = [];
+  
+  const results = await runInBatches(projectIds, async (id) => {
+    const info = await ovh.requestPromised('GET', `/cloud/project/${id}`);
+    return {
+      id,
+      name: info.description || id,
+      description: info.description,
+      status: info.status,
+      created_at: info.creationDate
+    };
+  });
 
-  for (const id of projectIds) {
-    try {
-      const info = await ovh.requestPromised('GET', `/cloud/project/${id}`);
-      projects.push({
-        id,
-        name: info.description || id,
-        description: info.description,
-        status: info.status,
-        created_at: info.creationDate
-      });
-    } catch (err) {
-      console.error(`  Error fetching project ${id}: ${err.message}`);
-    }
-  }
-
+  const projects = results.filter(r => !r.error);
   console.log(`  Found ${projects.length} projects`);
   return projects;
 }
@@ -226,23 +300,21 @@ async function fetchBillDetails(billId) {
   const bill = await ovh.requestPromised('GET', `/me/bill/${billId}`);
   const detailIds = await ovh.requestPromised('GET', `/me/bill/${billId}/details`);
 
-  const details = [];
-  for (const detailId of detailIds) {
-    try {
-      const detail = await ovh.requestPromised('GET', `/me/bill/${billId}/details/${detailId}`);
-      details.push({
-        id: `${billId}_${detailId}`,
-        bill_id: billId,
-        domain: detail.domain,
-        description: detail.description,
-        quantity: detail.quantity,
-        unit_price: detail.unitPrice?.value || 0,
-        total_price: detail.totalPrice?.value || 0
-      });
-    } catch (err) {
-      console.error(`    Error fetching detail ${detailId}: ${err.message}`);
-    }
-  }
+  // Fetch details in parallel batches
+  const detailResults = await runInBatches(detailIds, async (detailId) => {
+    const detail = await ovh.requestPromised('GET', `/me/bill/${billId}/details/${detailId}`);
+    return {
+      id: `${billId}_${detailId}`,
+      bill_id: billId,
+      domain: detail.domain,
+      description: detail.description,
+      quantity: detail.quantity,
+      unit_price: detail.unitPrice?.value || 0,
+      total_price: detail.totalPrice?.value || 0
+    };
+  });
+
+  const details = detailResults.filter(r => !r.error);
 
   return {
     bill: {
@@ -451,119 +523,213 @@ async function fetchBillPayment(billId) {
 // --- Phase 3: Inventory ---
 
 async function importInventory(projectMap) {
+    // Private Cloud Hosts
+    if (ovh.requestPromised && db.inventory.upsertPrivateCloudHost) {
+      try {
+        console.log('Fetching Private Cloud hosts...');
+        const pccServices = await ovh.requestPromised('GET', '/dedicatedCloud');
+        for (const pccId of pccServices) {
+          const hosts = await ovh.requestPromised('GET', `/dedicatedCloud/${pccId}/dedicatedHost`);
+          for (const hostId of hosts) {
+            const host = await ovh.requestPromised('GET', `/dedicatedCloud/${pccId}/dedicatedHost/${hostId}`);
+            db.inventory.upsertPrivateCloudHost({
+              id: hostId,
+              pcc_id: pccId,
+              name: host.name || hostId,
+              state: host.state || '',
+              cpu: host.cpuDescription || '',
+              ram_gb: host.ram || 0,
+              billing_type: host.billingType || '',
+              datacenter: host.datacenterId || '',
+              expiration_date: host.expiration || null
+            });
+          }
+        }
+        console.log('  Private Cloud hosts import done.');
+      } catch (err) {
+        console.error('  Error fetching Private Cloud hosts:', err.message);
+      }
+    }
+
+    // Private Cloud Datastores
+    if (ovh.requestPromised && db.inventory.upsertPrivateCloudDatastore) {
+      try {
+        console.log('Fetching Private Cloud datastores...');
+        const pccServices = await ovh.requestPromised('GET', '/dedicatedCloud');
+        for (const pccId of pccServices) {
+          const datastores = await ovh.requestPromised('GET', `/dedicatedCloud/${pccId}/datastore`);
+          for (const dsId of datastores) {
+            const ds = await ovh.requestPromised('GET', `/dedicatedCloud/${pccId}/datastore/${dsId}`);
+            db.inventory.upsertPrivateCloudDatastore({
+              id: dsId,
+              pcc_id: pccId,
+              name: ds.name || dsId,
+              size_gb: ds.size || 0,
+              state: ds.state || '',
+              datacenter: ds.datacenterId || '',
+              expiration_date: ds.expiration || null
+            });
+          }
+        }
+        console.log('  Private Cloud datastores import done.');
+      } catch (err) {
+        console.error('  Error fetching Private Cloud datastores:', err.message);
+      }
+    }
+
+    // IP Services
+    if (ovh.requestPromised && db.inventory.upsertIpService) {
+      try {
+        console.log('Fetching IP services...');
+        const ipBlocks = await ovh.requestPromised('GET', '/ip');
+        for (const ip of ipBlocks) {
+          const ipInfo = await ovh.requestPromised('GET', `/ip/${encodeURIComponent(ip)}`);
+          db.inventory.upsertIpService({
+            id: ip,
+            routedTo: ipInfo.routedTo?.serviceName || '',
+            type: ipInfo.type || '',
+            country: ipInfo.country || '',
+            description: ipInfo.description || ''
+          });
+        }
+        console.log('  IP services import done.');
+      } catch (err) {
+        console.error('  Error fetching IP services:', err.message);
+      }
+    }
+
+    // Load Balancers
+    if (ovh.requestPromised && db.inventory.upsertLoadBalancer) {
+      try {
+        console.log('Fetching Load Balancers...');
+        const lbs = await ovh.requestPromised('GET', '/ipLoadbalancing');
+        for (const lbId of lbs) {
+          const lb = await ovh.requestPromised('GET', `/ipLoadbalancing/${lbId}`);
+          db.inventory.upsertLoadBalancer({
+            id: lbId,
+            name: lb.displayName || lbId,
+            state: lb.status || '',
+            zone: lb.zone || '',
+            offer: lb.offerType || '',
+            expiration_date: lb.expiration || null
+          });
+        }
+        console.log('  Load Balancers import done.');
+      } catch (err) {
+        console.error('  Error fetching Load Balancers:', err.message);
+      }
+    }
   console.log('\n--- Importing service inventory ---');
 
-  // Dedicated servers
+  // Dedicated servers - parallel fetch
   try {
     console.log('Fetching dedicated servers...');
     const serverNames = await ovh.requestPromised('GET', '/dedicated/server');
-    for (const name of serverNames) {
+    
+    await runInBatches(serverNames, async (name) => {
+      const info = await ovh.requestPromised('GET', `/dedicated/server/${name}`);
+      let hwSpecs = {};
       try {
-        const info = await ovh.requestPromised('GET', `/dedicated/server/${name}`);
-        let hwSpecs = {};
-        try {
-          hwSpecs = await ovh.requestPromised('GET', `/dedicated/server/${name}/specifications/hardware`);
-        } catch (e) { /* optional */ }
+        hwSpecs = await ovh.requestPromised('GET', `/dedicated/server/${name}/specifications/hardware`);
+      } catch (e) { /* optional */ }
 
-        let serviceInfos = {};
-        try {
-          serviceInfos = await ovh.requestPromised('GET', `/dedicated/server/${name}/serviceInfos`);
-        } catch (e) { /* optional */ }
+      let serviceInfos = {};
+      try {
+        serviceInfos = await ovh.requestPromised('GET', `/dedicated/server/${name}/serviceInfos`);
+      } catch (e) { /* optional */ }
 
-        db.inventory.upsertServer({
-          id: name,
-          display_name: info.displayName || info.reverse || name,
-          reverse: info.reverse || '',
-          datacenter: info.datacenter || '',
-          os: info.os || '',
-          state: info.state || '',
-          cpu: hwSpecs.cpu?.model || '',
-          ram_size: hwSpecs.memory?.size || 0,
-          disk_info: JSON.stringify(hwSpecs.disk || []),
-          bandwidth: hwSpecs.bandwidth?.InternetToOvh?.value || 0,
-          expiration_date: serviceInfos.expiration || null,
-          renewal_type: serviceInfos.renew?.automatic ? 'automatic' : (serviceInfos.renew?.manualPayment ? 'manual' : '')
-        });
-      } catch (err) {
-        console.error(`  Error fetching server ${name}: ${err.message}`);
+      // Adaptation pour nouvelle structure OVH (bare metal)
+      let cpuModel = hwSpecs.cpu?.model || hwSpecs.processorName || hwSpecs.description || '';
+      let ramSize = hwSpecs.memory?.size || hwSpecs.memorySize?.value || 0;
+      // Log si vide pour debug
+      if (!cpuModel || !ramSize) {
+        console.warn(`[import] CPU/RAM manquant pour ${name} :`, JSON.stringify(hwSpecs));
       }
-    }
+      db.inventory.upsertServer({
+        id: name,
+        display_name: info.displayName || info.reverse || name,
+        reverse: info.reverse || '',
+        datacenter: info.datacenter || '',
+        os: info.os || '',
+        state: info.state || '',
+        cpu: cpuModel,
+        ram_size: ramSize,
+        disk_info: JSON.stringify(hwSpecs.disk || hwSpecs.diskGroups || []),
+        bandwidth: hwSpecs.bandwidth?.InternetToOvh?.value || 0,
+        expiration_date: serviceInfos.expiration || null,
+        renewal_type: serviceInfos.renew?.automatic ? 'automatic' : (serviceInfos.renew?.manualPayment ? 'manual' : '')
+      });
+    });
     console.log(`  Found ${serverNames.length} dedicated servers`);
   } catch (err) {
     console.error(`  Error fetching server list: ${err.message}`);
   }
 
-  // VPS
+  // VPS - parallel fetch
   try {
     console.log('Fetching VPS instances...');
     const vpsNames = await ovh.requestPromised('GET', '/vps');
-    for (const name of vpsNames) {
+    
+    await runInBatches(vpsNames, async (name) => {
+      const info = await ovh.requestPromised('GET', `/vps/${name}`);
+      let serviceInfos = {};
       try {
-        const info = await ovh.requestPromised('GET', `/vps/${name}`);
-        let serviceInfos = {};
-        try {
-          serviceInfos = await ovh.requestPromised('GET', `/vps/${name}/serviceInfos`);
-        } catch (e) { /* optional */ }
+        serviceInfos = await ovh.requestPromised('GET', `/vps/${name}/serviceInfos`);
+      } catch (e) { /* optional */ }
 
-        let ips = [];
-        try {
-          ips = await ovh.requestPromised('GET', `/vps/${name}/ips`);
-        } catch (e) { /* optional */ }
+      let ips = [];
+      try {
+        ips = await ovh.requestPromised('GET', `/vps/${name}/ips`);
+      } catch (e) { /* optional */ }
 
-        db.inventory.upsertVps({
-          id: name,
-          display_name: info.displayName || info.name || name,
-          model: info.model?.name || '',
-          zone: info.zone || '',
-          state: info.state || '',
-          os: info.model?.disk || '',
-          vcpus: info.model?.vcore || 0,
-          ram_mb: info.model?.memory || 0,
-          disk_gb: info.model?.disk || 0,
-          expiration_date: serviceInfos.expiration || null,
-          renewal_type: serviceInfos.renew?.automatic ? 'automatic' : (serviceInfos.renew?.manualPayment ? 'manual' : ''),
-          ip_addresses: JSON.stringify(ips)
-        });
-      } catch (err) {
-        console.error(`  Error fetching VPS ${name}: ${err.message}`);
-      }
-    }
+      db.inventory.upsertVps({
+        id: name,
+        display_name: info.displayName || info.name || name,
+        model: info.model?.name || '',
+        zone: info.zone || '',
+        state: info.state || '',
+        os: info.model?.disk || '',
+        vcpus: info.model?.vcore || 0,
+        ram_mb: info.model?.memory || 0,
+        disk_gb: info.model?.disk || 0,
+        expiration_date: serviceInfos.expiration || null,
+        renewal_type: serviceInfos.renew?.automatic ? 'automatic' : (serviceInfos.renew?.manualPayment ? 'manual' : ''),
+        ip_addresses: JSON.stringify(ips)
+      });
+    });
     console.log(`  Found ${vpsNames.length} VPS instances`);
   } catch (err) {
     console.error(`  Error fetching VPS list: ${err.message}`);
   }
 
-  // NetApp Storage
+  // NetApp Storage - parallel fetch
   try {
     console.log('Fetching storage services...');
     const storageIds = await ovh.requestPromised('GET', '/storage/netapp');
-    for (const sid of storageIds) {
+    
+    await runInBatches(storageIds, async (sid) => {
+      const info = await ovh.requestPromised('GET', `/storage/netapp/${sid}`);
+      let serviceInfos = {};
       try {
-        const info = await ovh.requestPromised('GET', `/storage/netapp/${sid}`);
-        let serviceInfos = {};
-        try {
-          serviceInfos = await ovh.requestPromised('GET', `/storage/netapp/${sid}/serviceInfos`);
-        } catch (e) { /* optional */ }
+        serviceInfos = await ovh.requestPromised('GET', `/storage/netapp/${sid}/serviceInfos`);
+      } catch (e) { /* optional */ }
 
-        let shares = [];
-        try {
-          shares = await ovh.requestPromised('GET', `/storage/netapp/${sid}/share`);
-        } catch (e) { /* optional */ }
+      let shares = [];
+      try {
+        shares = await ovh.requestPromised('GET', `/storage/netapp/${sid}/share`);
+      } catch (e) { /* optional */ }
 
-        db.inventory.upsertStorage({
-          id: sid,
-          service_type: 'netapp',
-          display_name: info.name || sid,
-          region: info.region || '',
-          total_size_gb: info.size || 0,
-          used_size_gb: 0,
-          share_count: Array.isArray(shares) ? shares.length : 0,
-          expiration_date: serviceInfos.expiration || null
-        });
-      } catch (err) {
-        console.error(`  Error fetching storage ${sid}: ${err.message}`);
-      }
-    }
+      db.inventory.upsertStorage({
+        id: sid,
+        service_type: 'netapp',
+        display_name: info.name || sid,
+        region: info.region || '',
+        total_size_gb: info.size || 0,
+        used_size_gb: 0,
+        share_count: Array.isArray(shares) ? shares.length : 0,
+        expiration_date: serviceInfos.expiration || null
+      });
+    });
     console.log(`  Found ${storageIds.length} storage services`);
   } catch (err) {
     console.error(`  Error fetching storage list: ${err.message}`);
@@ -598,6 +764,38 @@ function buildResourceTypeMap(projectMap) {
   const storages = db.inventory.getAllStorage();
   for (const st of storages) {
     map[st.id] = 'storage';
+  }
+
+  // Private Cloud Hosts
+  if (db.inventory.getAllPrivateCloudHosts) {
+    const pccHosts = db.inventory.getAllPrivateCloudHosts();
+    for (const h of pccHosts) {
+      map[h.id] = 'private_cloud_host';
+    }
+  }
+
+  // Private Cloud Datastores
+  if (db.inventory.getAllPrivateCloudDatastores) {
+    const pccDatastores = db.inventory.getAllPrivateCloudDatastores();
+    for (const d of pccDatastores) {
+      map[d.id] = 'private_cloud_datastore';
+    }
+  }
+
+  // IP Services
+  if (db.inventory.getAllIpServices) {
+    const ipServices = db.inventory.getAllIpServices();
+    for (const ip of ipServices) {
+      map[ip.id] = 'ip_service';
+    }
+  }
+
+  // Load Balancers
+  if (db.inventory.getAllLoadBalancers) {
+    const lbs = db.inventory.getAllLoadBalancers();
+    for (const lb of lbs) {
+      map[lb.id] = 'load_balancer';
+    }
   }
 
   return map;
@@ -840,17 +1038,16 @@ async function runImport(params) {
           // Note: d.domain from OVH API contains the project ID for cloud resources
           // For non-cloud resources (domains, web hosting), d.domain is a domain name
           const processedDetails = details.map(d => {
-            // Check if domain is a known project ID
-            const isCloudProject = projectMap.hasOwnProperty(d.domain);
-
-            // Determine resource_type from inventory mapping (Phase 3)
+            // Déterminer le type de ressource dès l'import
             let resource_type = 'other';
-            if (isCloudProject) {
-              resource_type = 'cloud_project';
-            } else if (resourceTypeMap && resourceTypeMap[d.domain]) {
+            // Priorité : mapping inventaire, puis classification domain
+            if (resourceTypeMap && resourceTypeMap[d.domain]) {
               resource_type = resourceTypeMap[d.domain];
+            } else {
+              resource_type = classifyResourceTypeFromDomain(d.domain);
             }
-
+            // Projet cloud
+            const isCloudProject = projectMap.hasOwnProperty(d.domain);
             return {
               ...d,
               project_id: isCloudProject ? d.domain : null,
@@ -870,6 +1067,7 @@ async function runImport(params) {
         console.log(` ERROR: ${err.message}`);
       }
     }
+
 
     // Phase 1: Import consumption data
     if (params.includeConsumption) {
