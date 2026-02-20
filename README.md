@@ -30,14 +30,14 @@
 ### Dashboard
 - **Interactive Dashboard**: React-based SPA with Recharts visualizations
 - **Multi-language Support**: French and English interface (i18n)
-- **5 navigation tabs**: Overview, Comparison, Trends, Public Cloud, Infrastructure
+- **6 navigation tabs**: Overview, Comparison, Trends, Public Cloud, Infrastructure, Backup
 
 ### Cost Analysis
-- **Service Breakdown**: Costs by service type (Compute, Storage, Network, Database, AI/ML)
-- **Resource Type Classification**: Automatic categorization (Public Cloud, Dedicated Servers, VPS, Storage, Load Balancers, IP, Domains, Telephony)
+- **Service Breakdown**: Costs by service type (Compute, Storage, Network, Database, AI/ML, Licenses, Backup, Support)
+- **Resource Type Classification**: Automatic categorization (Public Cloud, Dedicated Servers, VPS, Storage, Load Balancers, IP, Domains, Private Cloud Hosts, Private Cloud Datastores, Licenses, Backup, Telephony)
 - **Resource Type Detail**: Expandable cost breakdown per individual service within each category
 - **GPU Cost Consolidation**: Dedicated view for GPU costs by model (NVIDIA L4, L40S, A100, H100) and by project
-- **Month Comparison**: Side-by-side comparison between two months with variation tracking
+- **Month Comparison**: Side-by-side comparison between two months with variation tracking, including infrastructure, backup, Private Cloud, and per-project product breakdowns
 - **Trend Analysis**: Historical trends with configurable period (3-36 months) and GPU evolution chart
 - **Budget Tracking**: Visual budget consumption with configurable targets
 
@@ -47,10 +47,12 @@
 - **Account Balance**: Debt, credits, and deposit tracking
 
 ### Infrastructure Inventory
-- **Public Cloud**: Projects, instances (with GPU highlighting), quotas by region
-- **Dedicated Servers**: Full specs (CPU, RAM, datacenter, expiration, renewal)
+- **Public Cloud**: Projects, instances (with GPU highlighting), quotas by region, Kubernetes clusters, Object Storage (S3) buckets with cost, Container Registry
+- **Private Cloud / vSphere**: Hosts (ESXi), datastores (SSD), management fees
+- **Dedicated Servers**: Full specs (CPU, RAM, datacenter, expiration, renewal) — Scale, Advance, Infra series
 - **VPS**: Model, zone, specs, state
 - **Storage**: NAS-HA services with size and shares
+- **Backup**: Veeam Backup VMs and Enterprise licenses with cost breakdown
 - **Expiring Services**: Alert for services expiring within 30 days
 
 ### Tools & Export
@@ -92,6 +94,7 @@ ovh-cost-manager/
 ├── data/                     # Data layer
 │   ├── import.js             # OVH API → SQLite import script
 │   ├── db.js                 # Database connection and queries
+│   ├── classify.js           # Shared classification functions
 │   ├── schema.sql            # SQLite schema
 │   └── ovh-bills.db          # Local database (gitignored)
 ├── scripts/                  # Docker & automation scripts
@@ -101,7 +104,7 @@ ovh-cost-manager/
 │   └── index.js              # Express server (port 3001)
 ├── dashboard/                # Frontend (Vite + React)
 │   └── src/
-│       ├── components/       # React components (Logo)
+│       ├── components/       # React components (Logo, Accordion)
 │       ├── hooks/            # Custom hooks (useLanguage)
 │       ├── i18n/             # Translations (FR/EN)
 │       ├── pages/            # Dashboard page
@@ -139,14 +142,16 @@ curl -X POST \
     {"method": "GET", "path": "/me/*"},
     {"method": "GET", "path": "/cloud/*"},
     {"method": "GET", "path": "/dedicated/server/*"},
+    {"method": "GET", "path": "/dedicatedCloud/*"},
     {"method": "GET", "path": "/vps/*"},
     {"method": "GET", "path": "/storage/*"},
-    {"method": "GET", "path": "/ip/*"}
+    {"method": "GET", "path": "/ip/*"},
+    {"method": "GET", "path": "/ipLoadbalancing/*"}
   ]}' \
   https://eu.api.ovh.com/1.0/auth/credential
 ```
 
-> **Minimum permissions**: `/me/*` and `/cloud/*` are required. The additional paths (`/dedicated/server/*`, `/vps/*`, `/storage/*`, `/ip/*`) enable the full infrastructure inventory. The dashboard works without them but inventory data will be limited.
+> **Minimum permissions**: `/me/*` and `/cloud/*` are required. The additional paths (`/dedicated/server/*`, `/dedicatedCloud/*`, `/vps/*`, `/storage/*`, `/ip/*`, `/ipLoadbalancing/*`) enable the full infrastructure inventory. The dashboard works without them but inventory data will be limited.
 
 Visit the `validationUrl` in the response to authorize the application.
 
@@ -346,6 +351,8 @@ For production with SSO:
 | `GET /api/analysis/by-service?from=&to=` | Costs grouped by service type |
 | `GET /api/analysis/by-resource-type?from=&to=` | Costs grouped by resource type |
 | `GET /api/analysis/resource-type-details?type=&from=&to=` | Detail for a specific resource type |
+| `GET /api/analysis/public-cloud-stats?from=&to=` | Public Cloud stats (K8s, S3, Registry) |
+| `GET /api/analysis/backup-stats?from=&to=` | Backup stats (Veeam VMs, Enterprise licenses) |
 | `GET /api/analysis/daily-trend?from=&to=` | Daily cost trend |
 | `GET /api/analysis/monthly-trend?months=6` | Monthly cost trend |
 
@@ -368,6 +375,8 @@ For production with SSO:
 | `GET /api/projects/:id/consumption?from=&to=` | Project consumption by resource |
 | `GET /api/projects/:id/instances` | Project instances |
 | `GET /api/projects/:id/quotas` | Project quotas by region |
+| `GET /api/projects/:id/buckets?from=&to=` | Project S3 buckets with cost |
+| `GET /api/projects/:id/instance-total?from=&to=` | Project instance total cost |
 | `GET /api/inventory/servers` | Dedicated servers list |
 | `GET /api/inventory/vps` | VPS instances list |
 | `GET /api/inventory/storage` | Storage services list |
@@ -397,5 +406,9 @@ MIT License - see [LICENSE.txt](LICENSE.txt)
 ## Author
 
 **Michel-Marie MAUDET** - [mmaudet@linagora.com](mailto:mmaudet@linagora.com)
+
+### Contributors
+
+- **[Olivier Pernes](https://github.com/opernes)** — Improved service classification, Private Cloud/Backup support, parallel API imports
 
 *This project was inspired by the work of [Somanos Sar](https://github.com/somanos/ovh-bill).*
