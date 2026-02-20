@@ -157,9 +157,31 @@ export const fetchProjectQuotas = async (projectId) => {
   return data;
 };
 
+export const fetchProjectBuckets = async (projectId, from, to) => {
+  const { data } = await api.get(`/projects/${projectId}/buckets`, { params: { from, to } });
+  return data;
+};
+
+export const fetchProjectInstanceTotal = async (projectId, from, to) => {
+  const { data } = await api.get(`/projects/${projectId}/instance-total`, { params: { from, to } });
+  return data;
+};
+
 // GPU costs
 export const fetchGpuSummary = async (from, to) => {
   const { data } = await api.get('/gpu/summary', { params: { from, to } });
+  return data;
+};
+
+// Public Cloud stats (Kubernetes, S3, Registry, etc.)
+export const fetchPublicCloudStats = async (from, to) => {
+  const { data } = await api.get('/analysis/public-cloud-stats', { params: { from, to } });
+  return data;
+};
+
+// Backup stats (Veeam)
+export const fetchBackupStats = async (from, to) => {
+  const { data } = await api.get('/analysis/backup-stats', { params: { from, to } });
   return data;
 };
 

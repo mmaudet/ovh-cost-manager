@@ -4,6 +4,7 @@ const cookieParser = require('cookie-parser');
 const rateLimit = require('express-rate-limit');
 const path = require('path');
 const fs = require('fs');
+const os = require('os');
 
 // Import database module from data workspace
 const db = require('../data/db');
@@ -14,7 +15,7 @@ const auth = require('./auth');
 // Load configuration
 const CONFIG_PATHS = [
   path.resolve(__dirname, '..', 'config.json'),
-  path.resolve(process.env.HOME, 'my-ovh-bills', 'config.json')
+  path.resolve(os.homedir(), 'my-ovh-bills', 'config.json')
 ];
 
 let config = { dashboard: { budget: 50000, currency: 'EUR' } };
@@ -418,6 +419,9 @@ app.get('/api/analysis/by-service', (req, res) => {
       'Network': '#f59e0b',
       'Database': '#8b5cf6',
       'AI/ML': '#ec4899',
+      'Licenses': '#06b6d4',
+      'Support': '#f97316',
+      'Backup': '#059669',
       'Other': '#6b7280'
     };
 
@@ -986,6 +990,11 @@ app.get('/api/analysis/by-resource-type', (req, res) => {
       'domain': '#8b5cf6',
       'ip_service': '#ec4899',
       'telephony': '#f97316',
+      'private_cloud': '#7c3aed',
+      'private_cloud_host': '#9333ea',
+      'private_cloud_datastore': '#a855f7',
+      'license': '#0891b2',
+      'backup': '#059669',
       'other': '#6b7280'
     };
 
@@ -998,6 +1007,11 @@ app.get('/api/analysis/by-resource-type', (req, res) => {
       'domain': 'Domains',
       'ip_service': 'IP',
       'telephony': 'Telephony',
+      'private_cloud': 'Private Cloud',
+      'private_cloud_host': 'Private Cloud Hosts',
+      'private_cloud_datastore': 'Private Cloud Datastores',
+      'license': 'Licenses',
+      'backup': 'Backup',
       'other': 'Other'
     };
 
@@ -1023,6 +1037,30 @@ app.get('/api/analysis/resource-type-details', (req, res) => {
     const validation = validateDateRange(from, to);
     if (!validation.valid) return res.status(400).json({ error: validation.error });
     const data = db.inventory.byResourceTypeDetails(type, from, to);
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/analysis/public-cloud-stats', (req, res) => {
+  try {
+    const { from, to } = req.query;
+    const validation = validateDateRange(from, to);
+    if (!validation.valid) return res.status(400).json({ error: validation.error });
+    const data = db.inventory.getPublicCloudStats(from, to);
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/analysis/backup-stats', (req, res) => {
+  try {
+    const { from, to } = req.query;
+    const validation = validateDateRange(from, to);
+    if (!validation.valid) return res.status(400).json({ error: validation.error });
+    const data = db.inventory.getBackupStats(from, to);
     res.json(data);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -1065,6 +1103,36 @@ app.get('/api/projects/:id/quotas', (req, res) => {
   try {
     const quotas = db.cloudDetails.getQuotasByProject(req.params.id);
     res.json(quotas);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/projects/:id/buckets', (req, res) => {
+  try {
+    const { from, to } = req.query;
+    const validation = validateDateRange(from, to);
+    if (!validation.valid) return res.status(400).json({ error: validation.error });
+    const buckets = db.cloudDetails.getBucketsByProject(req.params.id, from, to);
+    // La requête SQL fournit déjà bucket (nom), class (type), total
+    const result = buckets.map(b => ({
+      name: b.bucket,
+      type: b.class || 'Standard',
+      total: b.total
+    }));
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/projects/:id/instance-total', (req, res) => {
+  try {
+    const { from, to } = req.query;
+    const validation = validateDateRange(from, to);
+    if (!validation.valid) return res.status(400).json({ error: validation.error });
+    const result = db.cloudDetails.getInstanceTotalByProject(req.params.id, from, to);
+    res.json({ total: result?.total || 0 });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

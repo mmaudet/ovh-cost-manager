@@ -12,11 +12,13 @@
  */
 
 const path = require('path');
+const os = require('os');
 const Jsonfile = require('jsonfile');
 const db = require('./db');
+const { classifyService, classifyResourceTypeFromDomain } = require('./classify');
 
 // Load configuration (credentials + settings)
-const APP_DATA = path.resolve(process.env.HOME, 'my-ovh-bills');
+const APP_DATA = path.resolve(os.homedir(), 'my-ovh-bills');
 const CONFIG_PATHS = [
   path.resolve(__dirname, '..', 'config.json'),      // Project root
   path.resolve(APP_DATA, 'config.json'),              // ~/my-ovh-bills/config.json
@@ -47,6 +49,56 @@ if (!configLoaded) {
   CONFIG_PATHS.forEach(p => console.error(`  - ${p}`));
   console.error('\nPlease create config.json with valid OVH API credentials.');
   process.exit(1);
+}
+
+// Parallel batch size for API calls (keep reasonable to avoid OVH rate-limiting)
+const BATCH_SIZE = 20;
+const MAX_RETRIES = 3;
+const INITIAL_BACKOFF_MS = 1000;
+
+// Helper to chunk array into batches
+function chunkArray(array, size) {
+  const chunks = [];
+  for (let i = 0; i < array.length; i += size) {
+    chunks.push(array.slice(i, i + size));
+  }
+  return chunks;
+}
+
+// Retry a single async operation with exponential backoff
+async function withRetry(fn, retries = MAX_RETRIES, backoff = INITIAL_BACKOFF_MS) {
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      const isRateLimited = err.statusCode === 429 || err.error === 429;
+      const isRetryable = isRateLimited || err.statusCode >= 500;
+      if (attempt < retries && isRetryable) {
+        const delay = isRateLimited ? backoff * 2 : backoff;
+        console.warn(`  [retry ${attempt + 1}/${retries}] ${err.message || err} — waiting ${delay}ms`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+        backoff *= 2;
+      } else {
+        throw err;
+      }
+    }
+  }
+}
+
+// Helper to run promises in parallel batches with retry and error logging
+async function runInBatches(items, asyncFn, batchSize = BATCH_SIZE) {
+  const results = [];
+  const chunks = chunkArray(items, batchSize);
+  for (const chunk of chunks) {
+    const batchResults = await Promise.all(chunk.map(item =>
+      withRetry(() => asyncFn(item)).catch(err => {
+        console.error(`  [batch] Error processing item ${JSON.stringify(item).substring(0, 80)}: ${err.message || err}`);
+        return { error: err };
+      })
+    ));
+    results.push(...batchResults);
+  }
+  return results;
 }
 
 // Parse command line arguments
@@ -96,67 +148,23 @@ function parseArgs() {
   return params;
 }
 
-// Classify service type from description
-function classifyService(description) {
-  const desc = (description || '').toLowerCase();
-
-  if (desc.includes('instance') || desc.includes('compute') || desc.includes('vm') ||
-      desc.includes('forfait mensuel') || desc.includes('consommation à l\'heure')) {
-    // Check if it's AI/ML (GPU instances)
-    if (desc.includes('gpu') || desc.includes('l40s') || desc.includes('l4-') ||
-        desc.includes('a100') || desc.includes('v100') || desc.includes('t4')) {
-      return 'AI/ML';
-    }
-    return 'Compute';
-  }
-
-  if (desc.includes('storage') || desc.includes('stockage') || desc.includes('bucket') ||
-      desc.includes('swift') || desc.includes('object') || desc.includes('archive') ||
-      desc.includes('snapshot') || desc.includes('backup') || desc.includes('disque')) {
-    return 'Storage';
-  }
-
-  if (desc.includes('network') || desc.includes('loadbalancer') || desc.includes('floating ip') ||
-      desc.includes('gateway') || desc.includes('bandwidth') || desc.includes('octavia') ||
-      desc.includes('private network') || desc.includes('vrack')) {
-    return 'Network';
-  }
-
-  if (desc.includes('database') || desc.includes('postgresql') || desc.includes('mysql') ||
-      desc.includes('mongodb') || desc.includes('redis') || desc.includes('kafka') ||
-      desc.includes('opensearch') || desc.includes('cassandra')) {
-    return 'Database';
-  }
-
-  if (desc.includes('ai ') || desc.includes(' ml') || desc.includes('machine learning') ||
-      desc.includes('notebook') || desc.includes('training')) {
-    return 'AI/ML';
-  }
-
-  return 'Other';
-}
-
 // Fetch all cloud projects
 async function fetchProjects() {
   console.log('Fetching cloud projects...');
   const projectIds = await ovh.requestPromised('GET', '/cloud/project');
-  const projects = [];
+  
+  const results = await runInBatches(projectIds, async (id) => {
+    const info = await ovh.requestPromised('GET', `/cloud/project/${id}`);
+    return {
+      id,
+      name: info.description || id,
+      description: info.description,
+      status: info.status,
+      created_at: info.creationDate
+    };
+  });
 
-  for (const id of projectIds) {
-    try {
-      const info = await ovh.requestPromised('GET', `/cloud/project/${id}`);
-      projects.push({
-        id,
-        name: info.description || id,
-        description: info.description,
-        status: info.status,
-        created_at: info.creationDate
-      });
-    } catch (err) {
-      console.error(`  Error fetching project ${id}: ${err.message}`);
-    }
-  }
-
+  const projects = results.filter(r => !r.error);
   console.log(`  Found ${projects.length} projects`);
   return projects;
 }
@@ -180,23 +188,21 @@ async function fetchBillDetails(billId) {
   const bill = await ovh.requestPromised('GET', `/me/bill/${billId}`);
   const detailIds = await ovh.requestPromised('GET', `/me/bill/${billId}/details`);
 
-  const details = [];
-  for (const detailId of detailIds) {
-    try {
-      const detail = await ovh.requestPromised('GET', `/me/bill/${billId}/details/${detailId}`);
-      details.push({
-        id: `${billId}_${detailId}`,
-        bill_id: billId,
-        domain: detail.domain,
-        description: detail.description,
-        quantity: detail.quantity,
-        unit_price: detail.unitPrice?.value || 0,
-        total_price: detail.totalPrice?.value || 0
-      });
-    } catch (err) {
-      console.error(`    Error fetching detail ${detailId}: ${err.message}`);
-    }
-  }
+  // Fetch details in parallel batches
+  const detailResults = await runInBatches(detailIds, async (detailId) => {
+    const detail = await ovh.requestPromised('GET', `/me/bill/${billId}/details/${detailId}`);
+    return {
+      id: `${billId}_${detailId}`,
+      bill_id: billId,
+      domain: detail.domain,
+      description: detail.description,
+      quantity: detail.quantity,
+      unit_price: detail.unitPrice?.value || 0,
+      total_price: detail.totalPrice?.value || 0
+    };
+  });
+
+  const details = detailResults.filter(r => !r.error);
 
   return {
     bill: {
@@ -405,119 +411,213 @@ async function fetchBillPayment(billId) {
 // --- Phase 3: Inventory ---
 
 async function importInventory(projectMap) {
+    // Private Cloud Hosts
+    if (ovh.requestPromised && db.inventory.upsertPrivateCloudHost) {
+      try {
+        console.log('Fetching Private Cloud hosts...');
+        const pccServices = await ovh.requestPromised('GET', '/dedicatedCloud');
+        for (const pccId of pccServices) {
+          const hosts = await ovh.requestPromised('GET', `/dedicatedCloud/${pccId}/dedicatedHost`);
+          for (const hostId of hosts) {
+            const host = await ovh.requestPromised('GET', `/dedicatedCloud/${pccId}/dedicatedHost/${hostId}`);
+            db.inventory.upsertPrivateCloudHost({
+              id: hostId,
+              pcc_id: pccId,
+              name: host.name || hostId,
+              state: host.state || '',
+              cpu: host.cpuDescription || '',
+              ram_gb: host.ram || 0,
+              billing_type: host.billingType || '',
+              datacenter: host.datacenterId || '',
+              expiration_date: host.expiration || null
+            });
+          }
+        }
+        console.log('  Private Cloud hosts import done.');
+      } catch (err) {
+        console.error('  Error fetching Private Cloud hosts:', err.message);
+      }
+    }
+
+    // Private Cloud Datastores
+    if (ovh.requestPromised && db.inventory.upsertPrivateCloudDatastore) {
+      try {
+        console.log('Fetching Private Cloud datastores...');
+        const pccServices = await ovh.requestPromised('GET', '/dedicatedCloud');
+        for (const pccId of pccServices) {
+          const datastores = await ovh.requestPromised('GET', `/dedicatedCloud/${pccId}/datastore`);
+          for (const dsId of datastores) {
+            const ds = await ovh.requestPromised('GET', `/dedicatedCloud/${pccId}/datastore/${dsId}`);
+            db.inventory.upsertPrivateCloudDatastore({
+              id: dsId,
+              pcc_id: pccId,
+              name: ds.name || dsId,
+              size_gb: ds.size || 0,
+              state: ds.state || '',
+              datacenter: ds.datacenterId || '',
+              expiration_date: ds.expiration || null
+            });
+          }
+        }
+        console.log('  Private Cloud datastores import done.');
+      } catch (err) {
+        console.error('  Error fetching Private Cloud datastores:', err.message);
+      }
+    }
+
+    // IP Services
+    if (ovh.requestPromised && db.inventory.upsertIpService) {
+      try {
+        console.log('Fetching IP services...');
+        const ipBlocks = await ovh.requestPromised('GET', '/ip');
+        for (const ip of ipBlocks) {
+          const ipInfo = await ovh.requestPromised('GET', `/ip/${encodeURIComponent(ip)}`);
+          db.inventory.upsertIpService({
+            id: ip,
+            routedTo: ipInfo.routedTo?.serviceName || '',
+            type: ipInfo.type || '',
+            country: ipInfo.country || '',
+            description: ipInfo.description || ''
+          });
+        }
+        console.log('  IP services import done.');
+      } catch (err) {
+        console.error('  Error fetching IP services:', err.message);
+      }
+    }
+
+    // Load Balancers
+    if (ovh.requestPromised && db.inventory.upsertLoadBalancer) {
+      try {
+        console.log('Fetching Load Balancers...');
+        const lbs = await ovh.requestPromised('GET', '/ipLoadbalancing');
+        for (const lbId of lbs) {
+          const lb = await ovh.requestPromised('GET', `/ipLoadbalancing/${lbId}`);
+          db.inventory.upsertLoadBalancer({
+            id: lbId,
+            name: lb.displayName || lbId,
+            state: lb.status || '',
+            zone: lb.zone || '',
+            offer: lb.offerType || '',
+            expiration_date: lb.expiration || null
+          });
+        }
+        console.log('  Load Balancers import done.');
+      } catch (err) {
+        console.error('  Error fetching Load Balancers:', err.message);
+      }
+    }
   console.log('\n--- Importing service inventory ---');
 
-  // Dedicated servers
+  // Dedicated servers - parallel fetch
   try {
     console.log('Fetching dedicated servers...');
     const serverNames = await ovh.requestPromised('GET', '/dedicated/server');
-    for (const name of serverNames) {
+    
+    await runInBatches(serverNames, async (name) => {
+      const info = await ovh.requestPromised('GET', `/dedicated/server/${name}`);
+      let hwSpecs = {};
       try {
-        const info = await ovh.requestPromised('GET', `/dedicated/server/${name}`);
-        let hwSpecs = {};
-        try {
-          hwSpecs = await ovh.requestPromised('GET', `/dedicated/server/${name}/specifications/hardware`);
-        } catch (e) { /* optional */ }
+        hwSpecs = await ovh.requestPromised('GET', `/dedicated/server/${name}/specifications/hardware`);
+      } catch (e) { /* optional */ }
 
-        let serviceInfos = {};
-        try {
-          serviceInfos = await ovh.requestPromised('GET', `/dedicated/server/${name}/serviceInfos`);
-        } catch (e) { /* optional */ }
+      let serviceInfos = {};
+      try {
+        serviceInfos = await ovh.requestPromised('GET', `/dedicated/server/${name}/serviceInfos`);
+      } catch (e) { /* optional */ }
 
-        db.inventory.upsertServer({
-          id: name,
-          display_name: info.displayName || info.reverse || name,
-          reverse: info.reverse || '',
-          datacenter: info.datacenter || '',
-          os: info.os || '',
-          state: info.state || '',
-          cpu: hwSpecs.cpu?.model || '',
-          ram_size: hwSpecs.memory?.size || 0,
-          disk_info: JSON.stringify(hwSpecs.disk || []),
-          bandwidth: hwSpecs.bandwidth?.InternetToOvh?.value || 0,
-          expiration_date: serviceInfos.expiration || null,
-          renewal_type: serviceInfos.renew?.automatic ? 'automatic' : (serviceInfos.renew?.manualPayment ? 'manual' : '')
-        });
-      } catch (err) {
-        console.error(`  Error fetching server ${name}: ${err.message}`);
+      // Adaptation pour nouvelle structure OVH (bare metal)
+      let cpuModel = hwSpecs.cpu?.model || hwSpecs.processorName || hwSpecs.description || '';
+      let ramSize = hwSpecs.memory?.size || hwSpecs.memorySize?.value || 0;
+      // Log si vide pour debug
+      if (!cpuModel || !ramSize) {
+        console.warn(`[import] CPU/RAM manquant pour ${name} :`, JSON.stringify(hwSpecs));
       }
-    }
+      db.inventory.upsertServer({
+        id: name,
+        display_name: info.displayName || info.reverse || name,
+        reverse: info.reverse || '',
+        datacenter: info.datacenter || '',
+        os: info.os || '',
+        state: info.state || '',
+        cpu: cpuModel,
+        ram_size: ramSize,
+        disk_info: JSON.stringify(hwSpecs.disk || hwSpecs.diskGroups || []),
+        bandwidth: hwSpecs.bandwidth?.InternetToOvh?.value || 0,
+        expiration_date: serviceInfos.expiration || null,
+        renewal_type: serviceInfos.renew?.automatic ? 'automatic' : (serviceInfos.renew?.manualPayment ? 'manual' : '')
+      });
+    });
     console.log(`  Found ${serverNames.length} dedicated servers`);
   } catch (err) {
     console.error(`  Error fetching server list: ${err.message}`);
   }
 
-  // VPS
+  // VPS - parallel fetch
   try {
     console.log('Fetching VPS instances...');
     const vpsNames = await ovh.requestPromised('GET', '/vps');
-    for (const name of vpsNames) {
+    
+    await runInBatches(vpsNames, async (name) => {
+      const info = await ovh.requestPromised('GET', `/vps/${name}`);
+      let serviceInfos = {};
       try {
-        const info = await ovh.requestPromised('GET', `/vps/${name}`);
-        let serviceInfos = {};
-        try {
-          serviceInfos = await ovh.requestPromised('GET', `/vps/${name}/serviceInfos`);
-        } catch (e) { /* optional */ }
+        serviceInfos = await ovh.requestPromised('GET', `/vps/${name}/serviceInfos`);
+      } catch (e) { /* optional */ }
 
-        let ips = [];
-        try {
-          ips = await ovh.requestPromised('GET', `/vps/${name}/ips`);
-        } catch (e) { /* optional */ }
+      let ips = [];
+      try {
+        ips = await ovh.requestPromised('GET', `/vps/${name}/ips`);
+      } catch (e) { /* optional */ }
 
-        db.inventory.upsertVps({
-          id: name,
-          display_name: info.displayName || info.name || name,
-          model: info.model?.name || '',
-          zone: info.zone || '',
-          state: info.state || '',
-          os: info.model?.disk || '',
-          vcpus: info.model?.vcore || 0,
-          ram_mb: info.model?.memory || 0,
-          disk_gb: info.model?.disk || 0,
-          expiration_date: serviceInfos.expiration || null,
-          renewal_type: serviceInfos.renew?.automatic ? 'automatic' : (serviceInfos.renew?.manualPayment ? 'manual' : ''),
-          ip_addresses: JSON.stringify(ips)
-        });
-      } catch (err) {
-        console.error(`  Error fetching VPS ${name}: ${err.message}`);
-      }
-    }
+      db.inventory.upsertVps({
+        id: name,
+        display_name: info.displayName || info.name || name,
+        model: info.model?.name || '',
+        zone: info.zone || '',
+        state: info.state || '',
+        os: info.model?.disk || '',
+        vcpus: info.model?.vcore || 0,
+        ram_mb: info.model?.memory || 0,
+        disk_gb: info.model?.disk || 0,
+        expiration_date: serviceInfos.expiration || null,
+        renewal_type: serviceInfos.renew?.automatic ? 'automatic' : (serviceInfos.renew?.manualPayment ? 'manual' : ''),
+        ip_addresses: JSON.stringify(ips)
+      });
+    });
     console.log(`  Found ${vpsNames.length} VPS instances`);
   } catch (err) {
     console.error(`  Error fetching VPS list: ${err.message}`);
   }
 
-  // NetApp Storage
+  // NetApp Storage - parallel fetch
   try {
     console.log('Fetching storage services...');
     const storageIds = await ovh.requestPromised('GET', '/storage/netapp');
-    for (const sid of storageIds) {
+    
+    await runInBatches(storageIds, async (sid) => {
+      const info = await ovh.requestPromised('GET', `/storage/netapp/${sid}`);
+      let serviceInfos = {};
       try {
-        const info = await ovh.requestPromised('GET', `/storage/netapp/${sid}`);
-        let serviceInfos = {};
-        try {
-          serviceInfos = await ovh.requestPromised('GET', `/storage/netapp/${sid}/serviceInfos`);
-        } catch (e) { /* optional */ }
+        serviceInfos = await ovh.requestPromised('GET', `/storage/netapp/${sid}/serviceInfos`);
+      } catch (e) { /* optional */ }
 
-        let shares = [];
-        try {
-          shares = await ovh.requestPromised('GET', `/storage/netapp/${sid}/share`);
-        } catch (e) { /* optional */ }
+      let shares = [];
+      try {
+        shares = await ovh.requestPromised('GET', `/storage/netapp/${sid}/share`);
+      } catch (e) { /* optional */ }
 
-        db.inventory.upsertStorage({
-          id: sid,
-          service_type: 'netapp',
-          display_name: info.name || sid,
-          region: info.region || '',
-          total_size_gb: info.size || 0,
-          used_size_gb: 0,
-          share_count: Array.isArray(shares) ? shares.length : 0,
-          expiration_date: serviceInfos.expiration || null
-        });
-      } catch (err) {
-        console.error(`  Error fetching storage ${sid}: ${err.message}`);
-      }
-    }
+      db.inventory.upsertStorage({
+        id: sid,
+        service_type: 'netapp',
+        display_name: info.name || sid,
+        region: info.region || '',
+        total_size_gb: info.size || 0,
+        used_size_gb: 0,
+        share_count: Array.isArray(shares) ? shares.length : 0,
+        expiration_date: serviceInfos.expiration || null
+      });
+    });
     console.log(`  Found ${storageIds.length} storage services`);
   } catch (err) {
     console.error(`  Error fetching storage list: ${err.message}`);
@@ -552,6 +652,38 @@ function buildResourceTypeMap(projectMap) {
   const storages = db.inventory.getAllStorage();
   for (const st of storages) {
     map[st.id] = 'storage';
+  }
+
+  // Private Cloud Hosts
+  if (db.inventory.getAllPrivateCloudHosts) {
+    const pccHosts = db.inventory.getAllPrivateCloudHosts();
+    for (const h of pccHosts) {
+      map[h.id] = 'private_cloud_host';
+    }
+  }
+
+  // Private Cloud Datastores
+  if (db.inventory.getAllPrivateCloudDatastores) {
+    const pccDatastores = db.inventory.getAllPrivateCloudDatastores();
+    for (const d of pccDatastores) {
+      map[d.id] = 'private_cloud_datastore';
+    }
+  }
+
+  // IP Services
+  if (db.inventory.getAllIpServices) {
+    const ipServices = db.inventory.getAllIpServices();
+    for (const ip of ipServices) {
+      map[ip.id] = 'ip_service';
+    }
+  }
+
+  // Load Balancers
+  if (db.inventory.getAllLoadBalancers) {
+    const lbs = db.inventory.getAllLoadBalancers();
+    for (const lb of lbs) {
+      map[lb.id] = 'load_balancer';
+    }
   }
 
   return map;
@@ -794,17 +926,16 @@ async function runImport(params) {
           // Note: d.domain from OVH API contains the project ID for cloud resources
           // For non-cloud resources (domains, web hosting), d.domain is a domain name
           const processedDetails = details.map(d => {
-            // Check if domain is a known project ID
-            const isCloudProject = projectMap.hasOwnProperty(d.domain);
-
-            // Determine resource_type from inventory mapping (Phase 3)
+            // Déterminer le type de ressource dès l'import
             let resource_type = 'other';
-            if (isCloudProject) {
-              resource_type = 'cloud_project';
-            } else if (resourceTypeMap && resourceTypeMap[d.domain]) {
+            // Priorité : mapping inventaire, puis classification domain
+            if (resourceTypeMap && resourceTypeMap[d.domain]) {
               resource_type = resourceTypeMap[d.domain];
+            } else {
+              resource_type = classifyResourceTypeFromDomain(d.domain);
             }
-
+            // Projet cloud
+            const isCloudProject = projectMap.hasOwnProperty(d.domain);
             return {
               ...d,
               project_id: isCloudProject ? d.domain : null,
@@ -824,6 +955,7 @@ async function runImport(params) {
         console.log(` ERROR: ${err.message}`);
       }
     }
+
 
     // Phase 1: Import consumption data
     if (params.includeConsumption) {

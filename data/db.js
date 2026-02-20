@@ -37,8 +37,8 @@ function getDb() {
     addColumnIfNotExists(db, 'bills', 'payment_status', 'TEXT');
     addColumnIfNotExists(db, 'cloud_instances', 'plan_code', 'TEXT');
 
-    // Classify resource_type for bill_details that haven't been classified yet
-    classifyResourceTypes(db);
+    // Désactivé : ne pas reclassifier automatiquement les resource_type (fait par import.js)
+    // classifyResourceTypes(db);
   }
   return db;
 }
@@ -47,61 +47,120 @@ function getDb() {
  * Classify resource_type on bill_details based on domain patterns
  */
 function classifyResourceTypes(database) {
-  const unclassified = database.prepare(
-    'SELECT COUNT(*) as cnt FROM bill_details WHERE resource_type IS NULL'
-  ).get();
-  if (unclassified.cnt === 0) return;
+  // Reclasse toutes les lignes, pas seulement celles à NULL
 
-  // Match domains to known project IDs
+  // Match domains to known project IDs (Public Cloud)
   database.exec(`
     UPDATE bill_details SET resource_type = 'cloud_project'
-    WHERE resource_type IS NULL AND domain IN (SELECT id FROM projects)
+    WHERE domain IN (SELECT id FROM projects)
   `);
 
-  // Dedicated servers: ns*.ip-*.eu or ns*.ovh.net patterns
+  // Private Cloud (vSphere) - Real OVH formats:
+  // Datastores/SSD: pcc-*_datacenter*/ssd-*
+  database.exec(`
+    UPDATE bill_details SET resource_type = 'private_cloud_datastore'
+    WHERE domain LIKE 'pcc-%/ssd-%'
+  `);
+
+  // Private Cloud hosts (IP-based): pcc-*_datacenter*/172.* or similar IP patterns
+  database.exec(`
+    UPDATE bill_details SET resource_type = 'private_cloud_host'
+    WHERE domain GLOB 'pcc-*/*[0-9][0-9][0-9].[0-9]*.[0-9]*.[0-9]*'
+      OR domain LIKE 'pcc-%/pcc-%'
+  `);
+
+  // Private Cloud management fees: pcc-*/managementfee
+  database.exec(`
+    UPDATE bill_details SET resource_type = 'private_cloud'
+    WHERE domain LIKE 'pcc-%/managementfee'
+  `);
+
+  // Private Cloud general: pcc-* (catch-all for remaining pcc entries)
+  database.exec(`
+    UPDATE bill_details SET resource_type = 'private_cloud'
+    WHERE domain LIKE 'pcc-%'
+  `);
+
+  // Veeam Backup VMs: vm-*
+  database.exec(`
+    UPDATE bill_details SET resource_type = 'backup'
+    WHERE domain LIKE 'vm-%'
+  `);
+
+  // Logs Data Platform: ldp-*
+  database.exec(`
+    UPDATE bill_details SET resource_type = 'storage'
+    WHERE domain LIKE 'ldp-%'
+  `);
+
+  // Dedicated servers: ns*.ip-*.eu (with optional suffix like -disk1)
   database.exec(`
     UPDATE bill_details SET resource_type = 'dedicated_server'
-    WHERE resource_type IS NULL AND (domain LIKE 'ns%ip-%.eu' OR domain LIKE 'ns%.ovh.net')
+    WHERE domain LIKE 'ns%.ip-%.eu%' OR domain LIKE 'ns%.ovh.net%'
   `);
 
   // Load balancers
   database.exec(`
     UPDATE bill_details SET resource_type = 'load_balancer'
-    WHERE resource_type IS NULL AND domain LIKE 'loadbalancer-%'
+    WHERE domain LIKE 'loadbalancer-%'
   `);
 
-  // Storage (zpool)
+  // Storage (zpool standalone)
   database.exec(`
     UPDATE bill_details SET resource_type = 'storage'
-    WHERE resource_type IS NULL AND domain LIKE 'zpool-%'
+    WHERE domain LIKE 'zpool-%'
   `);
 
-  // IP blocks
+  // IP blocks: ip-X.X.X.X/Y format
   database.exec(`
     UPDATE bill_details SET resource_type = 'ip_service'
-    WHERE resource_type IS NULL AND (domain LIKE 'ip-%' OR domain LIKE '%.ip-%')
+    WHERE domain LIKE 'ip-%'
+  `);
+
+  // Also classify by service_type if domain pattern fails but service_type is IP/Network
+  database.exec(`
+    UPDATE bill_details SET resource_type = 'ip_service'
+    WHERE service_type = 'IP' OR service_type = 'Network'
+  `);
+
+  // Windows/VMware licenses: windows-* pattern
+  database.exec(`
+    UPDATE bill_details SET resource_type = 'license'
+    WHERE domain LIKE 'windows-%'
+  `);
+
+  // Licenses (UUID pattern for licenses)
+  database.exec(`
+    UPDATE bill_details SET resource_type = 'license'
+    WHERE domain GLOB '[a-f0-9][a-f0-9][a-f0-9][a-f0-9][a-f0-9][a-f0-9][a-f0-9][a-f0-9]-*'
+      AND LENGTH(domain) = 36
+  `);
+
+  // Premium support
+  database.exec(`
+    UPDATE bill_details SET resource_type = 'other'
+    WHERE domain LIKE 'premium.support.%'
   `);
 
   // Domain names
   database.exec(`
     UPDATE bill_details SET resource_type = 'domain'
-    WHERE resource_type IS NULL AND (domain LIKE '%.com' OR domain LIKE '%.fr' OR domain LIKE '%.org'
+    WHERE (domain LIKE '%.com' OR domain LIKE '%.fr' OR domain LIKE '%.org'
       OR domain LIKE '%.net' OR domain LIKE '%.io' OR domain LIKE '%.eu'
       OR domain LIKE '%.cloud' OR domain LIKE '%.tech' OR domain LIKE '%.dev'
       OR domain LIKE '%.info' OR domain LIKE '%.pro')
-    AND domain NOT LIKE 'ns%'
+      AND domain NOT LIKE 'ns%'
   `);
 
   // Telephony (phone numbers)
   database.exec(`
     UPDATE bill_details SET resource_type = 'telephony'
-    WHERE resource_type IS NULL AND domain GLOB '[0-9]*' AND LENGTH(domain) >= 10
+    WHERE domain GLOB '[0-9]*' AND LENGTH(domain) >= 10
   `);
 
   // Everything remaining
   database.exec(`
     UPDATE bill_details SET resource_type = 'other'
-    WHERE resource_type IS NULL
   `);
 }
 
@@ -635,6 +694,117 @@ const inventoryOps = {
     `).all(resourceType, fromDate, toDate, resourceType, fromDate, toDate);
   },
 
+  // Public Cloud detailed stats (Kubernetes clusters, S3 buckets, etc)
+  getPublicCloudStats: (fromDate, toDate) => {
+    const db = getDb();
+    
+    // Count unique Kubernetes services from descriptions
+    const k8s = db.prepare(`
+      SELECT COUNT(DISTINCT domain) as count, ROUND(SUM(total_price), 2) as total
+      FROM bill_details d
+      JOIN bills b ON d.bill_id = b.id
+      WHERE b.date >= ? AND b.date <= ?
+        AND (LOWER(description) LIKE '%kubernetes%' OR LOWER(description) LIKE '%kube%' OR LOWER(description) LIKE '%k8s%')
+    `).get(fromDate, toDate);
+
+    // Count S3/Object Storage buckets - count unique bucket storage entries (not bandwidth)
+    // Patterns: "Stockage Standard - Bucket xxx", "Stockage High Performance - Bucket xxx"
+    const s3 = db.prepare(`
+      SELECT COUNT(*) as count, ROUND(SUM(total_price), 2) as total
+      FROM (
+        SELECT description, SUM(total_price) as total_price
+        FROM bill_details d
+        JOIN bills b ON d.bill_id = b.id
+        WHERE b.date >= ? AND b.date <= ?
+          AND (
+            (LOWER(description) LIKE 'stockage standard - bucket%' 
+             OR LOWER(description) LIKE 'stockage high performance - bucket%'
+             OR LOWER(description) LIKE 'stockage standard infrequent%bucket%')
+            AND LOWER(description) NOT LIKE '%bande passante%'
+          )
+        GROUP BY description
+      )
+    `).get(fromDate, toDate);
+    
+    // Total cost for all object storage (including bandwidth, archives)
+    const s3Total = db.prepare(`
+      SELECT ROUND(SUM(total_price), 2) as total
+      FROM bill_details d
+      JOIN bills b ON d.bill_id = b.id
+      WHERE b.date >= ? AND b.date <= ?
+        AND (
+          LOWER(description) LIKE '%stockage standard%bucket%'
+          OR LOWER(description) LIKE '%stockage high performance%bucket%'
+          OR LOWER(description) LIKE '%stockage standard infrequent%bucket%'
+          OR LOWER(description) LIKE '%stockage d''objects%'
+          OR LOWER(description) LIKE '%public cloud archive%'
+        )
+    `).get(fromDate, toDate);
+
+    // Count Container Registry services
+    const registry = db.prepare(`
+      SELECT COUNT(DISTINCT domain) as count, ROUND(SUM(total_price), 2) as total
+      FROM bill_details d
+      JOIN bills b ON d.bill_id = b.id
+      WHERE b.date >= ? AND b.date <= ?
+        AND (LOWER(description) LIKE '%registry%' OR LOWER(description) LIKE '%container registry%' OR LOWER(description) LIKE '%harbor%')
+    `).get(fromDate, toDate);
+
+    // Count AI/ML services
+    const aiml = db.prepare(`
+      SELECT COUNT(DISTINCT domain) as count, ROUND(SUM(total_price), 2) as total
+      FROM bill_details d
+      JOIN bills b ON d.bill_id = b.id
+      WHERE b.date >= ? AND b.date <= ?
+        AND (LOWER(description) LIKE '%ai training%' OR LOWER(description) LIKE '%ai deploy%' OR LOWER(description) LIKE '%notebook%' OR LOWER(description) LIKE '%ml%')
+    `).get(fromDate, toDate);
+
+    // Count Load Balancers
+    const lbs = db.prepare(`
+      SELECT COUNT(DISTINCT domain) as count, ROUND(SUM(total_price), 2) as total
+      FROM bill_details d
+      JOIN bills b ON d.bill_id = b.id
+      WHERE b.date >= ? AND b.date <= ?
+        AND (LOWER(description) LIKE '%load balancer%' OR LOWER(description) LIKE '%loadbalancer%' OR LOWER(description) LIKE '%octavia%')
+    `).get(fromDate, toDate);
+
+    return {
+      kubernetes: { count: k8s?.count || 0, total: k8s?.total || 0 },
+      objectStorage: { count: s3?.count || 0, total: s3Total?.total || 0 },
+      registry: { count: registry?.count || 0, total: registry?.total || 0 },
+      aiml: { count: aiml?.count || 0, total: aiml?.total || 0 },
+      loadBalancers: { count: lbs?.count || 0, total: lbs?.total || 0 }
+    };
+  },
+
+  // Backup stats (Veeam etc)
+  getBackupStats: (fromDate, toDate) => {
+    const db = getDb();
+    
+    // Count Veeam backup VMs
+    const vms = db.prepare(`
+      SELECT COUNT(DISTINCT domain) as count, ROUND(SUM(total_price), 2) as total
+      FROM bill_details d
+      JOIN bills b ON d.bill_id = b.id
+      WHERE b.date >= ? AND b.date <= ?
+        AND resource_type = 'backup'
+    `).get(fromDate, toDate);
+
+    // Veeam Enterprise licenses (from descriptions)
+    const enterprise = db.prepare(`
+      SELECT COUNT(DISTINCT domain) as count, ROUND(SUM(total_price), 2) as total
+      FROM bill_details d
+      JOIN bills b ON d.bill_id = b.id
+      WHERE b.date >= ? AND b.date <= ?
+        AND (LOWER(description) LIKE '%veeam%' AND LOWER(description) LIKE '%enterprise%')
+    `).get(fromDate, toDate);
+
+    return {
+      vms: { count: vms?.count || 0, total: vms?.total || 0 },
+      enterprise: { count: enterprise?.count || 0, total: enterprise?.total || 0 }
+    };
+  },
+
   clearAll: () => {
     const db = getDb();
     db.exec('DELETE FROM dedicated_servers');
@@ -710,6 +880,62 @@ const cloudDetailOps = {
       AND snapshot_date = (SELECT MAX(snapshot_date) FROM project_quotas WHERE project_id = ?)
       ORDER BY region
     `).all(projectId, projectId);
+  },
+
+  // Get bucket details for a project
+  getBucketsByProject: (projectId, fromDate, toDate) => {
+    const db = getDb();
+    // Extraction du nom du bucket et de la classe de stockage depuis la description
+    // Exemples de description :
+    //   "Stockage Standard - Bucket mybucket"
+    //   "Stockage Archive - Bucket mybucket"
+    //   "Stockage Standard Infrequent - Bucket mybucket"
+    // On extrait la classe (avant "- Bucket") et le nom du bucket (après "Bucket ")
+    return db.prepare(`
+      SELECT 
+        TRIM(
+          SUBSTR(description, 
+            INSTR(description, 'Bucket') + 7
+          )
+        ) as bucket,
+        TRIM(
+          REPLACE(
+            SUBSTR(description, 1, INSTR(description, '- Bucket')-1),
+            'Stockage', ''
+          )
+        ) as class,
+        ROUND(SUM(total_price), 2) as total
+      FROM bill_details d
+      JOIN bills b ON d.bill_id = b.id
+      WHERE d.project_id = ?
+        AND b.date >= ? AND b.date <= ?
+        AND (
+          LOWER(description) LIKE 'stockage standard - bucket%'
+          OR LOWER(description) LIKE 'stockage high performance - bucket%'
+          OR LOWER(description) LIKE 'stockage standard infrequent%bucket%'
+          OR LOWER(description) LIKE 'stockage archive - bucket%'
+        )
+        AND LOWER(description) NOT LIKE '%bande passante%'
+      GROUP BY bucket, class
+      ORDER BY total DESC
+    `).all(projectId, fromDate, toDate);
+  },
+
+  // Get instance consumption total for a project
+  getInstanceTotalByProject: (projectId, fromDate, toDate) => {
+    const db = getDb();
+    return db.prepare(`
+      SELECT ROUND(SUM(total_price), 2) as total
+      FROM bill_details d
+      JOIN bills b ON d.bill_id = b.id
+      WHERE d.project_id = ?
+        AND b.date >= ? AND b.date <= ?
+        AND (
+          LOWER(description) LIKE '%instance%'
+          OR LOWER(description) LIKE '%forfait mensuel%'
+          OR LOWER(description) LIKE '%prorata%'
+        )
+    `).get(projectId, fromDate, toDate);
   },
 
   clearByProject: (projectId) => {
@@ -865,9 +1091,22 @@ const cloudDetailOps = {
 // Clear all data (for full import)
 function clearAll() {
   const db = getDb();
+  // Supprimer d'abord toutes les tables qui référencent projects ou bills
   db.exec('DELETE FROM bill_details');
+  db.exec('DELETE FROM project_consumption');
+  db.exec('DELETE FROM cloud_instances');
+  db.exec('DELETE FROM project_quotas');
   db.exec('DELETE FROM bills');
   db.exec('DELETE FROM projects');
+  // Optionnel : vider aussi les autres tables annexes si besoin
+  db.exec('DELETE FROM import_log');
+  db.exec('DELETE FROM consumption_snapshots');
+  db.exec('DELETE FROM consumption_history');
+  db.exec('DELETE FROM account_balance');
+  db.exec('DELETE FROM credit_movements');
+  db.exec('DELETE FROM dedicated_servers');
+  db.exec('DELETE FROM vps_instances');
+  db.exec('DELETE FROM storage_services');
 }
 
 /**

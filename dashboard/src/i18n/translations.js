@@ -96,6 +96,7 @@ export const translations = {
     // Inventory (Phase 3)
     inventory: 'Public Cloud',
     infrastructure: 'Infrastructure',
+    backup: 'Backup',
     dedicatedServers: 'Serveurs dédiés',
     vpsInstances: 'VPS',
     storageServices: 'Stockage',
@@ -242,6 +243,7 @@ export const translations = {
     // Inventory (Phase 3)
     inventory: 'Public Cloud',
     infrastructure: 'Infrastructure',
+    backup: 'Backup',
     dedicatedServers: 'Dedicated Servers',
     vpsInstances: 'VPS',
     storageServices: 'Storage',
