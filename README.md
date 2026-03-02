@@ -190,6 +190,123 @@ Create `config.json` at project root or `$HOME/my-ovh-bills/config.json`:
 
 > **Note**: Legacy format (`credentials.json` with flat structure) is still supported.
 
+## Rate Limiting
+
+Le serveur API intègre un système de rate limiting pour protéger contre les attaques DoS et les tentatives de brute-force. Cette protection est **activée par défaut** mais entièrement configurable.
+
+### Limites par défaut
+
+| Endpoint  | Limite       | Fenêtre    | Par        |
+| --------- | ------------ | ---------- | ---------- |
+| `/api/*`  | 100 requêtes | 15 minutes | Adresse IP |
+| `/auth/*` | 20 requêtes  | 15 minutes | Adresse IP |
+
+### Configuration via config.json
+
+Ajoutez une section `rateLimit` dans votre [config.json](config.json) :
+
+```json
+{
+  "credentials": { ... },
+  "dashboard": { ... },
+  "rateLimit": {
+    "enabled": true,
+    "trustProxy": false,
+    "api": {
+      "windowMs": 900000,
+      "max": 100
+    },
+    "auth": {
+      "windowMs": 900000,
+      "max": 20
+    }
+  }
+}
+```
+
+**Paramètres** :
+- `enabled` : Activer/désactiver globalement (default: `true`)
+- `trustProxy` : Faire confiance aux headers `X-Forwarded-For` (default: `false`)
+- `api.windowMs` : Durée de la fenêtre en millisecondes (default: `900000` = 15 min)
+- `api.max` : Nombre maximum de requêtes API par IP sur la fenêtre (default: `100`)
+- `auth.windowMs` : Durée de la fenêtre pour les endpoints d'authentification (default: `900000`)
+- `auth.max` : Nombre maximum de requêtes d'authentification par IP (default: `20`)
+
+### Configuration via variables d'environnement
+
+Les variables d'environnement ont **priorité** sur [config.json](config.json) :
+
+```bash
+# Activer/désactiver
+RATE_LIMIT_ENABLED=true|false
+
+# Trust proxy (CRITIQUE pour Kubernetes/reverse proxy)
+TRUST_PROXY=true|false
+
+# Limites API
+RATE_LIMIT_API_WINDOW_MS=900000    # 15 minutes
+RATE_LIMIT_API_MAX=100             # 100 requêtes
+
+# Limites authentification
+RATE_LIMIT_AUTH_WINDOW_MS=900000   # 15 minutes
+RATE_LIMIT_AUTH_MAX=20             # 20 requêtes
+```
+
+**Exemple Docker/Kubernetes** :
+```yaml
+environment:
+  - TRUST_PROXY=true
+  - RATE_LIMIT_API_MAX=500
+  - RATE_LIMIT_AUTH_MAX=100
+```
+
+### Désactiver le rate limiting
+
+Pour les applications internes sécurisées par un SSO en amont :
+
+```bash
+# Via variable d'environnement
+RATE_LIMIT_ENABLED=false
+
+# Ou dans config.json
+{
+  "rateLimit": {
+    "enabled": false
+  }
+}
+```
+
+### ⚠️ IMPORTANT : Déploiements Kubernetes / Reverse Proxy
+
+**Problème** : Par défaut, le serveur identifie les clients par leur adresse IP. Derrière un reverse proxy (Ingress Kubernetes, Traefik, nginx), **toutes les requêtes** semblent provenir de la même IP (celle du proxy/ingress). Résultat : tous les utilisateurs partagent la même limite globale.
+
+**Symptômes** :
+- Erreurs 429 "Too many requests" après seulement quelques dizaines de requêtes
+- Plusieurs utilisateurs sont bloqués simultanément
+- Le problème est amplifié si les utilisateurs passent par un VPN d'entreprise (IP unique)
+
+**Solution obligatoire** :
+
+Activez **impérativement** `trustProxy` pour que le serveur utilise le header `X-Forwarded-For` :
+
+```bash
+# Via variable d'environnement (recommandé)
+TRUST_PROXY=true
+
+# Ou dans config.json
+{
+  "rateLimit": {
+    "trustProxy": true
+  }
+}
+```
+
+Une fois activé, chaque utilisateur est identifié par sa vraie adresse IP et dispose de sa propre limite.
+
+**Alternative** : Si votre application est 100% interne et protégée par un SSO, vous pouvez désactiver complètement le rate limiting (`RATE_LIMIT_ENABLED=false`).
+
+> **Note** : Les headers `RateLimit-*` standard sont inclus dans les réponses pour indiquer les limites restantes. Consultez les headers `RateLimit-Limit`, `RateLimit-Remaining`, et `RateLimit-Reset`.
+
 ## Usage
 
 ### Import Data
@@ -276,14 +393,20 @@ Access the dashboard at http://localhost:3001
 
 #### Environment Variables (Simple)
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `OCM_PORT` | Exposed port | 3001 |
-| `AUTH_REQUIRED` | Require auth headers | false |
-| `DATA_DIR` | Directory for database storage | /app/data |
-| `IMPORT_ENABLED` | Enable automatic periodic import | true |
-| `IMPORT_INTERVAL` | Seconds between imports | 86400 (24h) |
-| `IMPORT_FLAGS` | Extra flags for import script | --all |
+| Variable                    | Description                                                      | Default         |
+| --------------------------- | ---------------------------------------------------------------- | --------------- |
+| `OCM_PORT`                  | Exposed port                                                     | 3001            |
+| `AUTH_REQUIRED`             | Require auth headers                                             | false           |
+| `DATA_DIR`                  | Directory for database storage                                   | /app/data       |
+| `IMPORT_ENABLED`            | Enable automatic periodic import                                 | true            |
+| `IMPORT_INTERVAL`           | Seconds between imports                                          | 86400 (24h)     |
+| `IMPORT_FLAGS`              | Extra flags for import script                                    | --all           |
+| `TRUST_PROXY`               | Trust X-Forwarded-For headers (⚠️ required for K8s/reverse proxy) | false           |
+| `RATE_LIMIT_ENABLED`        | Enable rate limiting                                             | true            |
+| `RATE_LIMIT_API_MAX`        | Max API requests per IP per window                               | 100             |
+| `RATE_LIMIT_API_WINDOW_MS`  | API rate limit window in milliseconds                            | 900000 (15 min) |
+| `RATE_LIMIT_AUTH_MAX`       | Max auth requests per IP per window                              | 20              |
+| `RATE_LIMIT_AUTH_WINDOW_MS` | Auth rate limit window in milliseconds                           | 900000 (15 min) |
 
 ### Option 2: SSO Deployment (with LemonLDAP-NG)
 
@@ -318,11 +441,11 @@ SSO_DOMAIN=example.com
 
 #### Docker Compose Services (SSO)
 
-| Service | Description | Port |
-|---------|-------------|------|
-| `ocm` | OVH Cost Manager | internal |
-| `traefik` | Reverse proxy | 80, 8080 (dashboard) |
-| `lemonldap` | SSO Portal | internal |
+| Service     | Description      | Port                 |
+| ----------- | ---------------- | -------------------- |
+| `ocm`       | OVH Cost Manager | internal             |
+| `traefik`   | Reverse proxy    | 80, 8080 (dashboard) |
+| `lemonldap` | SSO Portal       | internal             |
 
 #### SSO Configuration (LemonLDAP-NG)
 
@@ -335,11 +458,11 @@ SSO_DOMAIN=example.com
 
 ### Volume Mounts
 
-| Volume | Purpose | Mode |
-|--------|---------|------|
-| `ocm-data` | SQLite database | Both |
-| `lemonldap-conf` | LemonLDAP configuration | SSO only |
-| `lemonldap-sessions` | SSO session storage | SSO only |
+| Volume               | Purpose                 | Mode     |
+| -------------------- | ----------------------- | -------- |
+| `ocm-data`           | SQLite database         | Both     |
+| `lemonldap-conf`     | LemonLDAP configuration | SSO only |
+| `lemonldap-sessions` | SSO session storage     | SSO only |
 
 ### Production Deployment
 
@@ -354,58 +477,58 @@ For production with SSO:
 
 ### Billing & Analysis
 
-| Endpoint | Description |
-|----------|-------------|
-| `GET /api/months` | Available months for selection |
-| `GET /api/summary?from=&to=` | Summary with totals |
-| `GET /api/bills?from=&to=` | List bills in date range |
-| `GET /api/analysis/by-project?from=&to=` | Costs grouped by project |
-| `GET /api/analysis/by-service?from=&to=` | Costs grouped by service type |
-| `GET /api/analysis/by-resource-type?from=&to=` | Costs grouped by resource type |
-| `GET /api/analysis/resource-type-details?type=&from=&to=` | Detail for a specific resource type |
-| `GET /api/analysis/public-cloud-stats?from=&to=` | Public Cloud stats (K8s, S3, Registry) |
-| `GET /api/analysis/backup-stats?from=&to=` | Backup stats (Veeam VMs, Enterprise licenses) |
-| `GET /api/analysis/daily-trend?from=&to=` | Daily cost trend |
-| `GET /api/analysis/monthly-trend?months=6` | Monthly cost trend |
+| Endpoint                                                  | Description                                   |
+| --------------------------------------------------------- | --------------------------------------------- |
+| `GET /api/months`                                         | Available months for selection                |
+| `GET /api/summary?from=&to=`                              | Summary with totals                           |
+| `GET /api/bills?from=&to=`                                | List bills in date range                      |
+| `GET /api/analysis/by-project?from=&to=`                  | Costs grouped by project                      |
+| `GET /api/analysis/by-service?from=&to=`                  | Costs grouped by service type                 |
+| `GET /api/analysis/by-resource-type?from=&to=`            | Costs grouped by resource type                |
+| `GET /api/analysis/resource-type-details?type=&from=&to=` | Detail for a specific resource type           |
+| `GET /api/analysis/public-cloud-stats?from=&to=`          | Public Cloud stats (K8s, S3, Registry)        |
+| `GET /api/analysis/backup-stats?from=&to=`                | Backup stats (Veeam VMs, Enterprise licenses) |
+| `GET /api/analysis/daily-trend?from=&to=`                 | Daily cost trend                              |
+| `GET /api/analysis/monthly-trend?months=6`                | Monthly cost trend                            |
 
 ### Consumption & Account
 
-| Endpoint | Description |
-|----------|-------------|
-| `GET /api/consumption/current` | Current consumption (real-time) |
-| `GET /api/consumption/forecast` | End-of-month forecast |
-| `GET /api/consumption/usage-history?from=&to=` | Consumption history |
-| `GET /api/account/balance` | Debt, credits, deposits |
-| `GET /api/account/credits` | Credit movements |
+| Endpoint                                       | Description                     |
+| ---------------------------------------------- | ------------------------------- |
+| `GET /api/consumption/current`                 | Current consumption (real-time) |
+| `GET /api/consumption/forecast`                | End-of-month forecast           |
+| `GET /api/consumption/usage-history?from=&to=` | Consumption history             |
+| `GET /api/account/balance`                     | Debt, credits, deposits         |
+| `GET /api/account/credits`                     | Credit movements                |
 
 ### Inventory
 
-| Endpoint | Description |
-|----------|-------------|
-| `GET /api/projects` | List all Cloud projects |
-| `GET /api/projects/enriched` | Projects with instance count and consumption |
-| `GET /api/projects/:id/consumption?from=&to=` | Project consumption by resource |
-| `GET /api/projects/:id/instances` | Project instances |
-| `GET /api/projects/:id/quotas` | Project quotas by region |
-| `GET /api/projects/:id/buckets?from=&to=` | Project S3 buckets with cost |
-| `GET /api/projects/:id/instance-total?from=&to=` | Project instance total cost |
-| `GET /api/inventory/servers` | Dedicated servers list |
-| `GET /api/inventory/vps` | VPS instances list |
-| `GET /api/inventory/storage` | Storage services list |
-| `GET /api/inventory/summary` | Resource count summary |
-| `GET /api/inventory/expiring?days=30` | Services expiring soon |
+| Endpoint                                         | Description                                  |
+| ------------------------------------------------ | -------------------------------------------- |
+| `GET /api/projects`                              | List all Cloud projects                      |
+| `GET /api/projects/enriched`                     | Projects with instance count and consumption |
+| `GET /api/projects/:id/consumption?from=&to=`    | Project consumption by resource              |
+| `GET /api/projects/:id/instances`                | Project instances                            |
+| `GET /api/projects/:id/quotas`                   | Project quotas by region                     |
+| `GET /api/projects/:id/buckets?from=&to=`        | Project S3 buckets with cost                 |
+| `GET /api/projects/:id/instance-total?from=&to=` | Project instance total cost                  |
+| `GET /api/inventory/servers`                     | Dedicated servers list                       |
+| `GET /api/inventory/vps`                         | VPS instances list                           |
+| `GET /api/inventory/storage`                     | Storage services list                        |
+| `GET /api/inventory/summary`                     | Resource count summary                       |
+| `GET /api/inventory/expiring?days=30`            | Services expiring soon                       |
 
 ### GPU & System
 
-| Endpoint | Description |
-|----------|-------------|
-| `GET /api/gpu/summary?from=&to=` | GPU costs by model, project, trend |
-| `GET /api/import/status` | Import history and status |
-| `GET /api/config` | Dashboard configuration |
-| `GET /api/user` | Current authenticated user info |
-| `GET /api/health` | Health check endpoint |
-| `GET /api/export/bills?from=&to=` | CSV export of bills |
-| `GET /api/export/details?from=&to=` | CSV export of bill details |
+| Endpoint                            | Description                        |
+| ----------------------------------- | ---------------------------------- |
+| `GET /api/gpu/summary?from=&to=`    | GPU costs by model, project, trend |
+| `GET /api/import/status`            | Import history and status          |
+| `GET /api/config`                   | Dashboard configuration            |
+| `GET /api/user`                     | Current authenticated user info    |
+| `GET /api/health`                   | Health check endpoint              |
+| `GET /api/export/bills?from=&to=`   | CSV export of bills                |
+| `GET /api/export/details?from=&to=` | CSV export of bill details         |
 
 ## Contributing
 

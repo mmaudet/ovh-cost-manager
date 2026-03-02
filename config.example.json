@@ -1,8 +1,8 @@
 {
   "credentials": {
-    "appKey": "YOUR_APP_KEY",
-    "appSecret": "YOUR_APP_SECRET",
-    "consumerKey": "YOUR_CONSUMER_KEY",
+    "appKey": "",
+    "appSecret": "",
+    "consumerKey": "",
     "endpoint": "ovh-eu"
   },
   "dataDir": "/app/data",
@@ -11,13 +11,29 @@
     "currency": "EUR",
     "language": "fr"
   },
+  "rateLimit": {
+    "enabled": true,
+    "trustProxy": false,
+    "api": {
+      "windowMs": 900000,
+      "max": 100
+    },
+    "auth": {
+      "windowMs": 900000,
+      "max": 20
+    }
+  },
   "auth": {
     "enabled": false,
     "provider": {
       "issuer": "https://auth.example.com",
       "clientId": "YOUR_CLIENT_ID",
       "clientSecret": "YOUR_CLIENT_SECRET",
-      "scopes": ["openid", "profile", "email"]
+      "scopes": [
+        "openid",
+        "profile",
+        "email"
+      ]
     },
     "session": {
       "secret": "CHANGE_THIS_TO_A_RANDOM_SECRET",

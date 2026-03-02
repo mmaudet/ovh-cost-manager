@@ -63,12 +63,20 @@ Open http://localhost:3001
 
 ### Environment Variables
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `OCM_PORT` | Host port mapping | `3001` |
-| `AUTH_REQUIRED` | Require authentication headers | `false` |
-| `NODE_ENV` | Node environment | `production` |
-
+| Variable                    | Description                          | Default           |
+| --------------------------- | ------------------------------------ | ----------------- |
+| `OCM_PORT`                  | Host port mapping                    | `3001`            |
+| `AUTH_REQUIRED`             | Require authentication headers       | `false`           |
+| `NODE_ENV`                  | Node environment                     | `production`      |  | `TRUST_PROXY` | Trust X-Forwarded-For headers (required for K8s/reverse proxy) | `false` |
+| `RATE_LIMIT_ENABLED`        | Enable rate limiting                 | `true`            |
+| `RATE_LIMIT_API_MAX`        | Max API requests per IP per window   | `100`             |
+| `RATE_LIMIT_API_WINDOW_MS`  | API rate limit window in ms          | `900000` (15 min) |
+| `RATE_LIMIT_AUTH_MAX`       | Max auth requests per IP per window  | `20`              |
+| `RATE_LIMIT_AUTH_WINDOW_MS` | Auth rate limit window in ms         | `900000` (15 min) |
+| `IMPORT_ENABLED`            | Enable automatic periodic import     | `true`            |
+| `IMPORT_INTERVAL`           | Seconds between imports              | `86400` (24h)     |
+| `IMPORT_FLAGS`              | Extra flags for import script        | `--all`           |
+| `ALLOWED_ORIGINS`           | Comma-separated CORS allowed origins | (empty)           |
 ### Customization
 
 Create a `.env` file to override defaults:
@@ -129,28 +137,28 @@ docker exec ovh-cost-manager node data/import.js --from 2025-01-01 --to 2025-12-
 
 ### 4. Access the services
 
-| Service | URL | Description |
-|---------|-----|-------------|
-| OCM Dashboard | http://ocm.example.com | Main application (requires auth) |
-| LemonLDAP Portal | http://auth.example.com | Login page |
-| LemonLDAP Manager | http://manager.example.com | Configuration interface |
-| Traefik Dashboard | http://localhost:8080 | Reverse proxy status |
+| Service           | URL                        | Description                      |
+| ----------------- | -------------------------- | -------------------------------- |
+| OCM Dashboard     | http://ocm.example.com     | Main application (requires auth) |
+| LemonLDAP Portal  | http://auth.example.com    | Login page                       |
+| LemonLDAP Manager | http://manager.example.com | Configuration interface          |
+| Traefik Dashboard | http://localhost:8080      | Reverse proxy status             |
 
 ### Services Overview
 
-| Container | Image | Purpose |
-|-----------|-------|---------|
-| `ovh-cost-manager` | Custom (Dockerfile) | Application server |
-| `lemonldap` | yadd/lemonldap-ng-portal | SSO Portal & Handler |
-| `traefik` | traefik:v2.10 | Reverse proxy |
+| Container          | Image                    | Purpose              |
+| ------------------ | ------------------------ | -------------------- |
+| `ovh-cost-manager` | Custom (Dockerfile)      | Application server   |
+| `lemonldap`        | yadd/lemonldap-ng-portal | SSO Portal & Handler |
+| `traefik`          | traefik:v2.10            | Reverse proxy        |
 
 ### Volumes
 
-| Volume | Purpose |
-|--------|---------|
-| `ocm-data` | SQLite database persistence |
-| `lemonldap-conf` | LemonLDAP configuration |
-| `lemonldap-sessions` | SSO session storage |
+| Volume               | Purpose                     |
+| -------------------- | --------------------------- |
+| `ocm-data`           | SQLite database persistence |
+| `lemonldap-conf`     | LemonLDAP configuration     |
+| `lemonldap-sessions` | SSO session storage         |
 
 ---
 
@@ -169,11 +177,11 @@ LemonLDAP-NG can act as a Service Provider (SP) for external Identity Providers 
 2. Enter your OCM domain: `ocm.example.com`
 3. Configure exported headers:
 
-| Header | Value | Description |
-|--------|-------|-------------|
-| `Auth-User` | `$uid` | User identifier |
-| `Auth-Mail` | `$mail` | User email |
-| `Auth-CN` | `$cn` | User display name |
+| Header      | Value   | Description       |
+| ----------- | ------- | ----------------- |
+| `Auth-User` | `$uid`  | User identifier   |
+| `Auth-Mail` | `$mail` | User email        |
+| `Auth-CN`   | `$cn`   | User display name |
 
 4. Set access rules:
    - Default rule: `accept` (authenticated users)
@@ -216,13 +224,13 @@ openssl req -new -x509 -days 3650 -nodes \
 
 3. Configure attribute mapping:
 
-| IdP Attribute | LemonLDAP Variable | Description |
-|---------------|-------------------|-------------|
-| `http://schemas.xmlsoap.org/ws/2005/05/identity/claims/upn` | `$_auth` | User Principal Name |
-| `http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress` | `$mail` | Email address |
-| `http://schemas.xmlsoap.org/ws/2005/05/identity/claims/givenname` | `$givenName` | First name |
-| `http://schemas.xmlsoap.org/ws/2005/05/identity/claims/surname` | `$sn` | Last name |
-| `http://schemas.microsoft.com/ws/2008/06/identity/claims/groups` | `$groups` | Group memberships |
+| IdP Attribute                                                        | LemonLDAP Variable | Description         |
+| -------------------------------------------------------------------- | ------------------ | ------------------- |
+| `http://schemas.xmlsoap.org/ws/2005/05/identity/claims/upn`          | `$_auth`           | User Principal Name |
+| `http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress` | `$mail`            | Email address       |
+| `http://schemas.xmlsoap.org/ws/2005/05/identity/claims/givenname`    | `$givenName`       | First name          |
+| `http://schemas.xmlsoap.org/ws/2005/05/identity/claims/surname`      | `$sn`              | Last name           |
+| `http://schemas.microsoft.com/ws/2008/06/identity/claims/groups`     | `$groups`          | Group memberships   |
 
 #### Step 4: Configure Authentication Flow
 
@@ -261,12 +269,12 @@ Configure LemonLDAP-NG as an OIDC Relying Party (RP) to authenticate users again
 
 Register LemonLDAP-NG as a client application with your OIDC Provider:
 
-| Parameter | Value |
-|-----------|-------|
-| Application Type | Web Application |
-| Redirect URI | `https://auth.example.com/oauth2callback` |
-| Post-logout Redirect URI | `https://auth.example.com` |
-| Scopes | `openid`, `profile`, `email` |
+| Parameter                | Value                                     |
+| ------------------------ | ----------------------------------------- |
+| Application Type         | Web Application                           |
+| Redirect URI             | `https://auth.example.com/oauth2callback` |
+| Post-logout Redirect URI | `https://auth.example.com`                |
+| Scopes                   | `openid`, `profile`, `email`              |
 
 Note the **Client ID** and **Client Secret** provided.
 
@@ -287,12 +295,12 @@ Discovery URL: https://idp.example.com/.well-known/openid-configuration
 
 **Or manual configuration:**
 
-| Parameter | Description |
-|-----------|-------------|
-| Authorization endpoint | `https://idp.example.com/authorize` |
-| Token endpoint | `https://idp.example.com/token` |
-| Userinfo endpoint | `https://idp.example.com/userinfo` |
-| JWKS URI | `https://idp.example.com/.well-known/jwks.json` |
+| Parameter              | Description                                     |
+| ---------------------- | ----------------------------------------------- |
+| Authorization endpoint | `https://idp.example.com/authorize`             |
+| Token endpoint         | `https://idp.example.com/token`                 |
+| Userinfo endpoint      | `https://idp.example.com/userinfo`              |
+| JWKS URI               | `https://idp.example.com/.well-known/jwks.json` |
 
 3. Configure client credentials:
    - Client ID: (from Step 1)
@@ -301,13 +309,13 @@ Discovery URL: https://idp.example.com/.well-known/openid-configuration
 
 4. Configure attribute mapping:
 
-| OIDC Claim | LemonLDAP Variable | Description |
-|------------|-------------------|-------------|
-| `sub` | `$_auth` | Subject (user identifier) |
-| `email` | `$mail` | Email address |
-| `name` | `$cn` | Display name |
-| `preferred_username` | `$uid` | Username |
-| `groups` | `$groups` | Group memberships |
+| OIDC Claim           | LemonLDAP Variable | Description               |
+| -------------------- | ------------------ | ------------------------- |
+| `sub`                | `$_auth`           | Subject (user identifier) |
+| `email`              | `$mail`            | Email address             |
+| `name`               | `$cn`              | Display name              |
+| `preferred_username` | `$uid`             | Username                  |
+| `groups`             | `$groups`          | Group memberships         |
 
 #### Step 4: Configure Authentication Flow
 
@@ -375,8 +383,48 @@ Discovery URL: https://idp.example.com/.well-known/openid-configuration
 - [ ] Change default LemonLDAP demo users
 - [ ] Configure strong session parameters
 - [ ] Use secrets management for credentials
+- [ ] **Configure `TRUST_PROXY=true` for reverse proxy/Kubernetes deployments**
+- [ ] Adjust rate limiting based on your usage patterns (or disable for internal apps behind SSO)
 - [ ] Enable rate limiting on Traefik
 - [ ] Configure firewall rules
+
+### Rate Limiting for Kubernetes/Reverse Proxy
+
+**Critical**: When deploying behind a load balancer, Ingress, or reverse proxy, the application sees all requests coming from the proxy's IP address. Without proper configuration, **all users will share the same rate limit**.
+
+**Required configuration**:
+
+```bash
+# In docker-compose.yml or Kubernetes deployment
+environment:
+  - TRUST_PROXY=true
+```
+
+Or in [config.json](../config.json):
+
+```json
+{
+  "rateLimit": {
+    "trustProxy": true
+  }
+}
+```
+
+**For internal applications**: If your application is only accessible internally and protected by SSO (LemonLDAP, Keycloak, etc.), you may disable rate limiting entirely:
+
+```bash
+environment:
+  - RATE_LIMIT_ENABLED=false
+```
+
+**Increasing limits**: For high-traffic internal deployments:
+
+```bash
+environment:
+  - TRUST_PROXY=true
+  - RATE_LIMIT_API_MAX=500          # Increase from 100 to 500
+  - RATE_LIMIT_AUTH_MAX=100         # Increase from 20 to 100
+```
 
 ### Traefik HTTPS Configuration
 
@@ -407,7 +455,8 @@ labels:
 ### High Availability
 
 - [ ] Use external database for LemonLDAP sessions (Redis, PostgreSQL)
-- [ ] Configure sticky sessions if multiple OCM instances
+- [ ] Configure sticky sessions if multiple OCM instances (required for OIDC)
+- [ ] For shared rate limiting across multiple instances, consider Redis store for express-rate-limit
 - [ ] Set up regular backups for volumes
 - [ ] Monitor container health
 
