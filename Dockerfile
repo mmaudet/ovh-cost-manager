@@ -25,9 +25,6 @@ RUN npm run build
 # Remove dev dependencies after build
 RUN npm prune --production
 
-# Create data directory
-RUN mkdir -p /app/data
-
 # Make scripts executable
 RUN chmod +x /app/scripts/*.sh
 

@@ -37,8 +37,18 @@ npm-debug.log*
 docs/
 
 # Docker files (no need to copy into image)
+Dockerfile
 docker-compose*.yml
 .dockerignore
 
 # Claude/dev files
 .claude/
+
+# Not needed in production
+.github
+.planning
+demo
+tests
+CLAUDE.md
+CONTRIBUTING.md
+credentials.json

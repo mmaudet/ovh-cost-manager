@@ -1,8 +1,30 @@
 const Database = require('better-sqlite3');
 const fs = require('fs');
 const path = require('path');
+const os = require('os');
 
-const DB_PATH = path.resolve(__dirname, 'ovh-bills.db');
+// Load dataDir from config.json (credentials + settings)
+function loadDataDirFromConfig() {
+  const configPaths = [
+    path.resolve(__dirname, '..', 'config.json'),
+    path.resolve(os.homedir(), 'my-ovh-bills', 'config.json')
+  ];
+  for (const configPath of configPaths) {
+    try {
+      if (fs.existsSync(configPath)) {
+        const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+        if (config.dataDir) return config.dataDir;
+      }
+    } catch (e) {
+      // Try next path
+    }
+  }
+  return null;
+}
+
+// Priority: DATA_DIR env var > config.json dataDir > default (__dirname)
+const DATA_DIR = process.env.DATA_DIR || loadDataDirFromConfig() || __dirname;
+const DB_PATH = path.resolve(DATA_DIR, 'ovh-bills.db');
 const SCHEMA_PATH = path.resolve(__dirname, 'schema.sql');
 
 let db = null;
@@ -22,6 +44,11 @@ function addColumnIfNotExists(database, table, column, type) {
  */
 function getDb() {
   if (!db) {
+    // Ensure DATA_DIR exists
+    if (!fs.existsSync(DATA_DIR)) {
+      fs.mkdirSync(DATA_DIR, { recursive: true });
+    }
+
     db = new Database(DB_PATH);
     db.pragma('journal_mode = WAL');
     db.pragma('foreign_keys = ON');
