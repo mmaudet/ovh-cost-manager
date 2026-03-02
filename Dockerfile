@@ -13,8 +13,12 @@ COPY data/package*.json ./data/
 COPY server/package*.json ./server/
 COPY dashboard/package*.json ./dashboard/
 
-# Install dependencies
-RUN npm install --production=false
+# Install dependencies without running install scripts (avoids native compilation under QEMU)
+RUN npm install --ignore-scripts --production=false
+
+# Download prebuilt native binary for better-sqlite3 (supports amd64 + arm64 on Alpine musl)
+RUN cd /app/node_modules/better-sqlite3 && npx prebuild-install || \
+    { echo "ERROR: No prebuilt binary found for better-sqlite3 on this platform"; exit 1; }
 
 # Copy source code
 COPY . .
