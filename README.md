@@ -139,14 +139,22 @@ curl -X POST \
   -H "Content-type: application/json" \
   -H "X-Ovh-Application: YOUR_APP_KEY" \
   -d '{"accessRules": [
+    {"method": "GET", "path": "/me"},
     {"method": "GET", "path": "/me/*"},
+    {"method": "GET", "path": "/cloud"},
     {"method": "GET", "path": "/cloud/*"},
+    {"method": "GET", "path": "/dedicated/server"},
     {"method": "GET", "path": "/dedicated/server/*"},
+    {"method": "GET", "path": "/dedicatedCloud"},
     {"method": "GET", "path": "/dedicatedCloud/*"},
-    {"method": "GET", "path": "/vps/*"},
-    {"method": "GET", "path": "/storage/*"},
+    {"method": "GET", "path": "/ip"},
     {"method": "GET", "path": "/ip/*"},
-    {"method": "GET", "path": "/ipLoadbalancing/*"}
+    {"method": "GET", "path": "/ipLoadbalancing"},
+    {"method": "GET", "path": "/ipLoadbalancing/*"},
+    {"method": "GET", "path": "/vps"},
+    {"method": "GET", "path": "/vps/*"},
+    {"method": "GET", "path": "/storage"},
+    {"method": "GET", "path": "/storage/*"}
   ]}' \
   https://eu.api.ovh.com/1.0/auth/credential
 ```
