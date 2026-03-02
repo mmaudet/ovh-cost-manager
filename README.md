@@ -167,6 +167,7 @@ Create `config.json` at project root or `$HOME/my-ovh-bills/config.json`:
     "consumerKey": "YOUR_CONSUMER_KEY",
     "endpoint": "ovh-eu"
   },
+  "dataDir": "/app/data",
   "dashboard": {
     "budget": 50000,
     "currency": "EUR",
@@ -176,6 +177,8 @@ Create `config.json` at project root or `$HOME/my-ovh-bills/config.json`:
 ```
 
 > **Language options**: `"fr"` (French) or `"en"` (English). Can also be changed via the UI.
+
+> **`dataDir`**: Optional. Directory where the SQLite database is stored. Defaults to `data/` within the project. Can also be set via the `DATA_DIR` environment variable (which takes precedence).
 
 > **Note**: Legacy format (`credentials.json` with flat structure) is still supported.
 
@@ -269,6 +272,7 @@ Access the dashboard at http://localhost:3001
 |----------|-------------|---------|
 | `OCM_PORT` | Exposed port | 3001 |
 | `AUTH_REQUIRED` | Require auth headers | false |
+| `DATA_DIR` | Directory for database storage | /app/data |
 | `IMPORT_ENABLED` | Enable automatic periodic import | true |
 | `IMPORT_INTERVAL` | Seconds between imports | 86400 (24h) |
 | `IMPORT_FLAGS` | Extra flags for import script | --all |
