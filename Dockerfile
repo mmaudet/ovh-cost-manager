@@ -1,9 +1,6 @@
 # OVH Cost Manager - Docker Image
 FROM node:20-alpine
 
-# Install build dependencies for better-sqlite3
-RUN apk add --no-cache python3 make g++
-
 WORKDIR /app
 
 # Copy package files for dependency installation
@@ -13,8 +10,10 @@ COPY data/package*.json ./data/
 COPY server/package*.json ./server/
 COPY dashboard/package*.json ./dashboard/
 
-# Install dependencies
-RUN npm install --production=false
+# Install dependencies for better-sqlite3
+RUN apk add --no-cache --virtual .build-deps python3 make g++ \
+    && npm install --production=false \
+    && apk del .build-deps
 
 # Copy source code
 COPY . .
