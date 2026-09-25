@@ -1,0 +1,29 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          # Same major version as the Docker image
+          node-version: 20
+
+      - run: npm ci
+
+      # Undefined identifiers: Vite builds them fine, they only fail at runtime
+      - run: npm run lint
+
+      - run: npm test
+
+      - run: npm run build

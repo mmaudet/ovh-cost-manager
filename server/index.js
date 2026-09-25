@@ -12,6 +12,7 @@ const db = require('../data/db');
 
 // Import auth module
 const auth = require('./auth');
+const { monthBounds } = require('./months');
 
 // Load configuration
 const CONFIG_PATHS = [
@@ -779,8 +780,7 @@ function registerRoutes() {
         return {
           value: row.month,
           label: `${monthNames[parseInt(month) - 1]} ${year}`,
-          from: `${row.month}-01`,
-          to: new Date(year, month, 0).toISOString().split('T')[0] // Last day of month
+          ...monthBounds(row.month)
         };
       });
 

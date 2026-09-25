@@ -78,8 +78,10 @@ async function withRetry(fn, retries = MAX_RETRIES, backoff = INITIAL_BACKOFF_MS
     try {
       return await fn();
     } catch (err) {
-      const isRateLimited = err.statusCode === 429 || err.error === 429;
-      const isRetryable = isRateLimited || err.statusCode >= 500;
+      // The ovh client puts the HTTP status in `error`, other clients in `statusCode`
+      const status = err.statusCode ?? err.error;
+      const isRateLimited = status === 429;
+      const isRetryable = isRateLimited || status >= 500;
       if (attempt < retries && isRetryable) {
         const delay = isRateLimited ? backoff * 2 : backoff;
         console.warn(`  [retry ${attempt + 1}/${retries}] ${err.message || err} — waiting ${delay}ms`);

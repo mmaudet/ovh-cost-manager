@@ -90,7 +90,11 @@ npm test
 npm test -- tests/classification.test.js          # single file
 npm test -- -t "classifies instance types"        # single test by name
 npm run test:coverage
+npm run lint                                      # ESLint, no-undef only (eslint.config.mjs)
 ```
+
+CI (`.github/workflows/ci.yml`) runs lint, tests and the dashboard build on every pull
+request and push to main.
 
 ## Docker
 
