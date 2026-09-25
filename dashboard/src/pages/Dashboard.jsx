@@ -13,7 +13,8 @@ import {
   fetchByResourceType, fetchResourceTypeDetails, fetchProjectsEnriched, fetchProjectConsumption,
   fetchProjectInstances, fetchProjectQuotas, fetchGpuSummary, fetchPublicCloudStats, fetchBackupStats,
   fetchProjectBuckets, fetchProjectInstanceTotal, triggerImport, fetchMonthlyTrendByCategory,
-  fetchProjectVolumes, fetchProjectSnapshots, fetchProjectSavingsPlans
+  fetchProjectVolumes, fetchProjectSnapshots, fetchProjectSavingsPlans,
+  fetchWebCloudSummary, fetchWebCloudItems
 } from '../services/api';
 import { useLanguage } from '../hooks/useLanguage.jsx';
 import Logo from '../components/Logo';
@@ -115,6 +116,75 @@ const generateMarkdownReport = (summary, byService, byProject, selectedMonth, la
   md += `\n---\n*${language === 'en' ? 'Generated on' : 'Généré le'} ${new Date().toLocaleString(locale)}*\n`;
   return md;
 };
+
+// Resource types the Infrastructure tab leaves out: Public Cloud has its own
+// tab, and domains moved to Web Cloud, .ovh ones included (web_cloud type).
+// Note that part of the 'other' type also shows up in Web Cloud (hosting
+// options, mail), it is kept here because the type is a catch-all and would
+// hide non Web Cloud lines.
+const INFRA_EXCLUDED_TYPES = ['cloud_project', 'domain', 'web_cloud'];
+
+// Web Cloud is billed on yearly renewals, so a single month only ever shows an
+// arbitrary slice of it: the tab reads the 12 months ending on the selected one.
+const WEB_CLOUD_MONTHS = 12;
+
+const shiftMonths = (isoDate, months) => {
+  if (!isoDate) return isoDate;
+  const [year, month] = isoDate.split('-').map(Number);
+  const shifted = new Date(Date.UTC(year, month - 1 + months, 1));
+  return `${shifted.getUTCFullYear()}-${String(shifted.getUTCMonth() + 1).padStart(2, '0')}-01`;
+};
+
+const formatMonthLabel = (yearMonth, language = 'fr') => {
+  if (!yearMonth) return '';
+  const [year, month] = yearMonth.split('-').map(Number);
+  if (!year || !month) return yearMonth;
+  const locale = language === 'en' ? 'en-US' : 'fr-FR';
+  return new Date(year, month - 1, 1).toLocaleDateString(locale, { month: 'short', year: 'numeric' });
+};
+
+// Web Cloud families, in display order. Each one gets a card and a table.
+const WEB_CLOUD_CATEGORIES = [
+  { key: 'domain', labelKey: 'domains', color: 'text-violet-600' },
+  { key: 'dns_zone', labelKey: 'dnsZones', color: 'text-sky-600' },
+  { key: 'hosting', labelKey: 'webHosting', color: 'text-blue-600' },
+  { key: 'email', labelKey: 'emails', color: 'text-pink-600' },
+  { key: 'option', labelKey: 'hostingOptions', color: 'text-gray-600' }
+];
+
+// One Web Cloud family: service name, latest bill wording, last billed month.
+const WebCloudTable = ({ items, language, fmt }) => (
+  <table className="w-full text-sm">
+    <thead>
+      <tr className="border-b bg-gray-50">
+        <th className="p-2 text-left font-medium">{language === 'en' ? 'Service' : 'Service'}</th>
+        <th className="p-2 text-left font-medium">{language === 'en' ? 'Bill wording' : 'Libellé de facture'}</th>
+        <th className="p-2 text-left font-medium">{language === 'en' ? 'Last billed' : 'Dernière facture'}</th>
+        <th className="p-2 text-right font-medium">{language === 'en' ? 'Cost' : 'Coût'}</th>
+      </tr>
+    </thead>
+    <tbody>
+      {items.map((item, i) => (
+        <tr key={`${item.category}-${item.name}-${i}`} className="border-b hover:bg-gray-50">
+          <td className="p-2 font-medium text-xs truncate max-w-[220px]" title={item.name}>{item.name}</td>
+          <td className="p-2 text-xs text-gray-500 truncate max-w-[320px]" title={item.description}>{item.description}</td>
+          <td className="p-2 text-xs text-gray-500">{item.lastDate || '-'}</td>
+          <td className="p-2 text-right font-medium text-xs">{fmt(item.total)}€</td>
+        </tr>
+      ))}
+    </tbody>
+  </table>
+);
+
+const webCloudCsvColumns = (language) => [
+  { key: 'name', label: language === 'en' ? 'Service' : 'Service' },
+  { key: 'category', label: language === 'en' ? 'Family' : 'Famille' },
+  { key: 'description', label: language === 'en' ? 'Bill wording' : 'Libellé de facture' },
+  { key: 'lineCount', label: language === 'en' ? 'Bill lines' : 'Lignes de facture' },
+  { key: 'firstDate', label: language === 'en' ? 'First billed' : 'Première facture' },
+  { key: 'lastDate', label: language === 'en' ? 'Last billed' : 'Dernière facture' },
+  { key: 'total', label: language === 'en' ? 'Cost (EUR)' : 'Coût (EUR)' }
+];
 
 // Bucket table, shared by the inline panel and the "show all" modal.
 // Sorted by name so the list stays stable across period changes.
@@ -507,6 +577,7 @@ export default function Dashboard() {
   const [syncWarningDismissed, setSyncWarningDismissed] = useState(false);
   const [selectedProject, setSelectedProject] = useState(null);
   const [selectedResourceType, setSelectedResourceType] = useState(null);
+  const [showAllWebCloud, setShowAllWebCloud] = useState(null); // category key, null when closed
   const [showAllBuckets, setShowAllBuckets] = useState(false);
   const [showAllInstances, setShowAllInstances] = useState(false);
   const [showAllServers, setShowAllServers] = useState(false);
@@ -805,6 +876,25 @@ export default function Dashboard() {
   const { data: expiringServices = [] } = useQuery({
     queryKey: ['expiringServices'],
     queryFn: () => fetchExpiringServices(30)
+  });
+
+  // Domains, hosting and mail renew yearly, so the Web Cloud tab reads the 12
+  // months ending on the selected one rather than that single month.
+  const webCloudPeriod = selectedMonth ? {
+    from: shiftMonths(selectedMonth.from, -(WEB_CLOUD_MONTHS - 1)),
+    to: selectedMonth.to
+  } : null;
+
+  const { data: webCloudSummary } = useQuery({
+    queryKey: ['webCloudSummary', webCloudPeriod?.from, webCloudPeriod?.to],
+    queryFn: () => fetchWebCloudSummary(webCloudPeriod.from, webCloudPeriod.to),
+    enabled: !!webCloudPeriod && activeTab === 'webcloud'
+  });
+
+  const { data: webCloudItems = [] } = useQuery({
+    queryKey: ['webCloudItems', webCloudPeriod?.from, webCloudPeriod?.to],
+    queryFn: () => fetchWebCloudItems(webCloudPeriod.from, webCloudPeriod.to),
+    enabled: !!webCloudPeriod && activeTab === 'webcloud'
   });
 
   const { data: byResourceType = [] } = useQuery({
@@ -1196,6 +1286,7 @@ export default function Dashboard() {
               { id: 'compare', labelKey: 'compare' },
               { id: 'trends', labelKey: 'trends' },
               { id: 'inventory', labelKey: 'inventory' },
+              { id: 'webcloud', labelKey: 'webCloud' },
               { id: 'infrastructure', labelKey: 'infrastructure' },
               { id: 'backup', labelKey: 'backup' },
             ].map(tab => (
@@ -1333,6 +1424,14 @@ export default function Dashboard() {
                     >
                       {language === 'en' ? 'View infrastructure detail →' : 'Voir le détail infrastructure →'}
                     </button>
+                    {byResourceType.some(r => ['domain', 'web_cloud'].includes(r.resource_type)) && (
+                      <button
+                        onClick={() => { setActiveTab('webcloud'); setSelectedResourceType(null); }}
+                        className="text-xs text-blue-600 hover:underline text-left"
+                      >
+                        {language === 'en' ? 'View Web Cloud detail (domains) →' : 'Voir le détail Web Cloud (domaines) →'}
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
@@ -2003,6 +2102,79 @@ export default function Dashboard() {
           </div>
         )}
 
+        {/* Tab Content - Web Cloud */}
+        {activeTab === 'webcloud' && (
+          <div className="space-y-6">
+            <div className="text-sm text-gray-500">
+              {language === 'en' ? 'Rolling 12 months' : '12 mois glissants'}
+              {webCloudPeriod && (
+                <span className="ml-1 text-gray-400">
+                  ({formatMonthLabel(webCloudPeriod.from.slice(0, 7), language)} → {formatMonthLabel(webCloudPeriod.to.slice(0, 7), language)})
+                </span>
+              )}
+              <span className="ml-2 text-gray-400">
+                {language === 'en'
+                  ? '· domains and hosting renew yearly, a single month would only show a slice'
+                  : '· domaines et hébergements se renouvellent à l\'année, un seul mois n\'en montrerait qu\'une partie'}
+              </span>
+            </div>
+
+            {/* Web Cloud summary cards */}
+            <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+              {WEB_CLOUD_CATEGORIES.map(cat => (
+                <div key={cat.key} className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
+                  <span className="text-gray-500 text-sm">{t(cat.labelKey)}</span>
+                  <div className={`text-3xl font-bold ${cat.color} mt-2`}>{webCloudSummary?.[cat.key]?.count || 0}</div>
+                  {webCloudSummary?.[cat.key]?.total > 0 && (
+                    <p className="text-xs text-gray-400">{fmt(webCloudSummary[cat.key].total)}€</p>
+                  )}
+                </div>
+              ))}
+              <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
+                <span className="text-gray-500 text-sm">Total</span>
+                <div className="text-3xl font-bold text-gray-900 mt-2">{fmt(webCloudSummary?.total || 0)}€</div>
+              </div>
+            </div>
+
+            {/* Web Cloud is read from the bills: the domain, hosting and email
+                API routes are not granted to the credentials this project asks for. */}
+            {webCloudItems.length === 0 ? (
+              <div className="bg-white rounded-xl p-8 shadow-sm border border-gray-100 text-center text-gray-400">
+                {language === 'en' ? 'No Web Cloud service billed over this period' : 'Aucun service Web Cloud facturé sur cette période'}
+              </div>
+            ) : (
+              WEB_CLOUD_CATEGORIES.map(cat => {
+                const items = webCloudItems.filter(i => i.category === cat.key);
+                if (!items.length) return null;
+                const total = items.reduce((sum, i) => sum + (i.total || 0), 0);
+                return (
+                  <div key={cat.key} className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
+                    <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                      <span>
+                        {t(cat.labelKey)} ({items.length})
+                        <span className={`ml-2 text-sm font-normal ${cat.color}`}>{fmt(total)}€</span>
+                      </span>
+                      <TableActions
+                        language={language}
+                        onShowAll={() => setShowAllWebCloud(cat.key)}
+                        onExport={() => downloadCSV(
+                          items,
+                          webCloudCsvColumns(language),
+                          `ovh-${cat.key}-${webCloudPeriod ? webCloudPeriod.from.slice(0, 7) + '-to-' + webCloudPeriod.to.slice(0, 7) : 'export'}`
+                        )}
+                      />
+                    </h3>
+                    {/* ~11 rows before scrolling, the full list is one click away */}
+                    <div className="overflow-auto max-h-[430px]">
+                      <WebCloudTable items={items} language={language} fmt={fmt} />
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        )}
+
         {/* Tab Content - Public Cloud */}
         {activeTab === 'inventory' && (
           <div className="space-y-6">
@@ -2356,7 +2528,6 @@ export default function Dashboard() {
                 { type: 'storage', label: t('storageServices'), color: 'text-green-600', ring: 'ring-green-300' },
                 { type: 'load_balancer', label: 'Load Balancers', color: 'text-cyan-600', ring: 'ring-cyan-300' },
                 { type: 'ip_service', label: language === 'en' ? 'IP Addresses' : 'Adresses IP', color: 'text-pink-600', ring: 'ring-pink-300' },
-                { type: 'domain', label: language === 'en' ? 'Domains' : 'Noms de domaine', color: 'text-purple-600', ring: 'ring-purple-300' },
                 { type: 'private_cloud_host', label: language === 'en' ? 'Private Cloud Hosts' : 'Hôtes Private Cloud', color: 'text-violet-600', ring: 'ring-violet-300' },
                 { type: 'private_cloud_datastore', label: language === 'en' ? 'Private Cloud Datastores' : 'Datastores Private Cloud', color: 'text-fuchsia-600', ring: 'ring-fuchsia-300' },
               ].map(card => {
@@ -2377,14 +2548,14 @@ export default function Dashboard() {
             </div>
 
             {/* Cost breakdown by resource type (non-cloud) */}
-            {byResourceType.filter(r => r.resource_type !== 'cloud_project').length > 0 && (
+            {byResourceType.filter(r => !INFRA_EXCLUDED_TYPES.includes(r.resource_type)).length > 0 && (
               <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
                 <h3 className="font-semibold text-gray-900 mb-4">
                   {language === 'en' ? 'Costs by resource type' : 'Coûts par type de ressource'}
                   {selectedMonth && <span className="text-sm font-normal text-gray-400 ml-2">({selectedMonth.label})</span>}
                 </h3>
                 <div className="space-y-2">
-                  {byResourceType.filter(r => r.resource_type !== 'cloud_project').map(s => {
+                  {byResourceType.filter(r => !INFRA_EXCLUDED_TYPES.includes(r.resource_type)).map(s => {
                     const isSelected = selectedResourceType === s.resource_type;
                     return (
                       <div key={s.resource_type}>
@@ -2666,6 +2837,37 @@ export default function Dashboard() {
           </details>
         </div>
       </div>
+      {(() => {
+        const cat = WEB_CLOUD_CATEGORIES.find(c => c.key === showAllWebCloud);
+        const items = cat ? webCloudItems.filter(i => i.category === cat.key) : [];
+        return (
+          <Modal
+            open={!!cat}
+            onClose={() => setShowAllWebCloud(null)}
+            maxWidth="max-w-5xl"
+            title={cat ? (
+              <>
+                {t(cat.labelKey)} ({items.length})
+                <span className={`ml-2 text-sm font-normal ${cat.color}`}>
+                  {fmt(items.reduce((sum, i) => sum + (i.total || 0), 0))}€
+                </span>
+              </>
+            ) : ''}
+            actions={cat && (
+              <TableActions
+                language={language}
+                onExport={() => downloadCSV(
+                  items,
+                  webCloudCsvColumns(language),
+                  `ovh-${cat.key}-${webCloudPeriod ? webCloudPeriod.from.slice(0, 7) + '-to-' + webCloudPeriod.to.slice(0, 7) : 'export'}`
+                )}
+              />
+            )}
+          >
+            <WebCloudTable items={items} language={language} fmt={fmt} />
+          </Modal>
+        );
+      })()}
 
       <Modal
         open={showAllBuckets}

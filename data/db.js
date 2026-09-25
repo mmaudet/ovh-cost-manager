@@ -1,4 +1,5 @@
 const Database = require('better-sqlite3');
+const { classifyWebCloud, WEB_CLOUD_FAMILIES } = require('./classify');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
@@ -1651,6 +1652,87 @@ function transaction(fn) {
   return database.transaction(fn)(database);
 }
 
+/**
+ * Web Cloud operations (domains, DNS zones, hosting, email, options).
+ *
+ * Read entirely from the bills: the /domain, /hosting/web and /email/* routes
+ * are usually not granted to the consumer key this project asks for, so there
+ * is no inventory to join against. Candidates are the lines that already fall
+ * outside Public Cloud, dedicated servers and private cloud, then
+ * classifyWebCloud() sorts them by family from the wording.
+ */
+const webCloudOps = {
+  /**
+   * One row per service (bill `domain` field) with its family and cost.
+   */
+  getItems: (fromDate, toDate) => {
+    const db = getDb();
+    const rows = db.prepare(`
+      SELECT d.domain as domain,
+             d.description as description,
+             d.total_price as price,
+             b.date as date,
+             COALESCE(d.resource_type, 'other') as resource_type
+      FROM bill_details d
+      JOIN bills b ON d.bill_id = b.id
+      WHERE b.date >= ? AND b.date <= ?
+        AND COALESCE(d.resource_type, 'other') IN ('domain', 'other', 'web_cloud')
+        AND d.project_id IS NULL
+    `).all(fromDate, toDate);
+
+    // The Infrastructure tab leaves the 'domain' and 'web_cloud' types out, so
+    // a line of those types the wording does not place still lands here. An
+    // unrecognised 'other' line stays in the Infrastructure tab only.
+    const fallback = { domain: 'domain', web_cloud: 'option' };
+
+    const byService = new Map();
+    for (const row of rows) {
+      const category = classifyWebCloud(row.description, row.domain) || fallback[row.resource_type];
+      if (!category) continue;
+
+      // A domain and its DNS zone share the same `domain` value, so the family
+      // is part of the key: they are two billable services.
+      const key = `${category}|${row.domain}`;
+      const item = byService.get(key) || {
+        name: row.domain,
+        category,
+        description: row.description,
+        total: 0,
+        line_count: 0,
+        first_date: row.date,
+        last_date: row.date
+      };
+      item.total = Math.round((item.total + row.price) * 100) / 100;
+      item.line_count += 1;
+      if (row.date < item.first_date) item.first_date = row.date;
+      if (row.date > item.last_date) {
+        item.last_date = row.date;
+        item.description = row.description; // keep the most recent wording
+      }
+      byService.set(key, item);
+    }
+
+    return [...byService.values()].sort((a, b) => b.total - a.total || a.name.localeCompare(b.name));
+  },
+
+  /**
+   * Count and cost per family, for the summary cards.
+   */
+  getSummary: (fromDate, toDate) => {
+    const items = webCloudOps.getItems(fromDate, toDate);
+    const summary = {};
+    for (const category of WEB_CLOUD_FAMILIES) {
+      summary[category] = { count: 0, total: 0 };
+    }
+    for (const item of items) {
+      summary[item.category].count += 1;
+      summary[item.category].total = Math.round((summary[item.category].total + item.total) * 100) / 100;
+    }
+    summary.total = Math.round(items.reduce((sum, i) => sum + i.total, 0) * 100) / 100;
+    return summary;
+  }
+};
+
 module.exports = {
   getDb,
   closeDb,
@@ -1665,5 +1747,6 @@ module.exports = {
   consumption: consumptionOps,
   account: accountOps,
   inventory: inventoryOps,
-  cloudDetails: cloudDetailOps
+  cloudDetails: cloudDetailOps,
+  webCloud: webCloudOps
 };

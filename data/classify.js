@@ -176,4 +176,51 @@ function classifyResourceTypeFromDomain(domain, description = '') {
   return 'other';
 }
 
-module.exports = { classifyService, classifyResourceTypeFromDomain };
+// Families classifyWebCloud() returns. db.js builds the Web Cloud summary from
+// this list, so a new family has to be added here.
+const WEB_CLOUD_FAMILIES = ['domain', 'dns_zone', 'hosting', 'email', 'option'];
+
+/**
+ * Classify a Web Cloud bill line into a family.
+ *
+ * Web Cloud (domains, DNS, hosting, mail) is not exposed to this project's API
+ * credentials in most setups, so the families are read from the bill wording.
+ * Only the lines that already fall outside of Public Cloud, dedicated servers
+ * and private cloud are passed here, which is what keeps generic plan names
+ * such as "Performance 1 renewal" from matching anything else.
+ *
+ * @param {string} description - bill line description
+ * @param {string} domain - bill line domain (service identifier)
+ * @returns {string|null} one of WEB_CLOUD_FAMILIES, null when not Web Cloud
+ */
+function classifyWebCloud(description, domain = '') {
+  const desc = (description || '').toLowerCase();
+  if (!desc) return null;
+
+  // "example.com - Zone DNS - Renouvellement", DNS Anycast
+  if (desc.includes('zone dns') || desc.includes('dns zone') || desc.includes('dns anycast')) return 'dns_zone';
+
+  // "example.com - .tech demande de renouvellement - 12 mois", "example.com - .com création - 12 mois"
+  if (/demande de renouvellement/.test(desc) || /domain (renewal|registration)/.test(desc) ||
+      /\.[a-z]+ (création|creation|transfert|transfer)/.test(desc)) return 'domain';
+
+  // MX plan, Email Pro, Zimbra, email options tied to a hosting
+  if (desc.includes('mx plan') || desc.includes('exchange') ||
+      desc.includes('email pro') || desc.includes('zimbra') ||
+      desc.includes('option email') || desc.includes('email option')) return 'email';
+
+  // Hosting add-ons: databases, CDN, redirections, SSL certificates
+  if (desc.includes('sql option') || desc.includes('sql privé') || desc.includes('sql prive') ||
+      desc.includes('private sql') || desc.includes('ssl certificate') ||
+      desc.includes('cdn ') || desc.startsWith('redirection') ||
+      (domain || '').includes('-optional-')) return 'option';
+
+  // Web hosting plans. OVH names them after the offer, hence the explicit list.
+  if (/\b(performance|pro|perso|personal|starter|freedom)\b/.test(desc) &&
+      /(renewal|rental|renouvellement|hosting|hébergement|hebergement)/.test(desc)) return 'hosting';
+  if (desc.includes('hosting') || desc.includes('hébergement') || desc.includes('hebergement')) return 'hosting';
+
+  return null;
+}
+
+module.exports = { classifyService, classifyResourceTypeFromDomain, classifyWebCloud, WEB_CLOUD_FAMILIES };

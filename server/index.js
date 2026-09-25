@@ -1271,6 +1271,41 @@ function registerRoutes() {
     }
   });
 
+  // ========================
+  // Web Cloud (domains, DNS, hosting, email)
+  // ========================
+
+  app.get('/api/web-cloud/summary', (req, res) => {
+    try {
+      const { from, to } = req.query;
+      const validation = validateDateRange(from, to);
+      if (!validation.valid) return res.status(400).json({ error: validation.error });
+      res.json(db.webCloud.getSummary(from, to));
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.get('/api/web-cloud/items', (req, res) => {
+    try {
+      const { from, to } = req.query;
+      const validation = validateDateRange(from, to);
+      if (!validation.valid) return res.status(400).json({ error: validation.error });
+      const items = db.webCloud.getItems(from, to).map(i => ({
+        name: i.name,
+        category: i.category,
+        description: i.description,
+        lineCount: i.line_count,
+        firstDate: i.first_date,
+        lastDate: i.last_date,
+        total: i.total
+      }));
+      res.json(items);
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   app.get('/api/projects/:id/instances', (req, res) => {
     try {
       // from/to are optional: without them the list carries no cost
