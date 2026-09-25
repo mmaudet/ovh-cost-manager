@@ -115,6 +115,18 @@ describe('object storage inventory import', () => {
     expect(storedBuckets()).toEqual(['archives:Public Cloud Archive', 'photos:Standard']);
   });
 
+  // The ovh client puts the HTTP status in `error`, not in `statusCode`
+  test('retries a region detail call that answers a server error', async () => {
+    let calls = 0;
+    mockRoutes.set(`${BASE}/region/GRA`, () => (++calls === 1
+      ? Promise.reject({ error: 503, message: 'Service unavailable' })
+      : Promise.resolve({ services: [{ name: 'storage-s3-standard', status: 'UP' }] })));
+
+    await importProject();
+
+    expect(storedBuckets()).toEqual(['archives:Public Cloud Archive', 'photos:Standard']);
+  });
+
   test('keeps the stored buckets when a region detail call keeps failing', async () => {
     await importProject();
     mockRoutes.set(`${BASE}/region/GRA`, fail(429, 'Too many requests'));
