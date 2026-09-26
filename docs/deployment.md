@@ -67,6 +67,9 @@ Open http://localhost:3001
 | --------------------------- | ------------------------------------ | ----------------- |
 | `OCM_PORT`                  | Host port mapping                    | `3001`            |
 | `AUTH_REQUIRED`             | Require authentication headers       | `false`           |
+| `OIDC_ENABLED`              | OIDC sign-in, `true` or `false`: overrides `auth.enabled` of `config.json` (see [OIDC settings](#oidc-settings)) | (`config.json`) |
+| `SESSION_SECRET`            | With OIDC, signs the session cookie: at least 32 random characters, such as the output of `openssl rand -hex 32` | (required with OIDC) |
+| `COOKIE_SECURE`             | With OIDC, `true` or `false` forces the `Secure` flag of the session cookie (see [OIDC settings](#oidc-settings)) | (auto) |
 | `NODE_ENV`                  | Node environment                     | `production`      |
 | `TRUST_PROXY`               | Trust X-Forwarded-For headers (required for K8s/reverse proxy), X-Forwarded-Host for the CORS check and `ALLOWED_HOSTS`, and X-Forwarded-Proto for the CORS check | `false` |
 | `RATE_LIMIT_ENABLED`        | Enable rate limiting                 | `true`            |
@@ -100,6 +103,15 @@ ALLOWED_HOSTS=ocm.example.com,ocm.lan:3001
 - With `TRUST_PROXY=true`, the last `X-Forwarded-Host`, the one the nearest proxy set or appended, must be listed too, and the loopback names never pass there. The proxy must set or overwrite that header, as nginx does with `proxy_set_header X-Forwarded-Host $http_host;`: one that passes the client's on lets a page choose it. And if the server can be reached without the proxy, `TRUST_PROXY` lets any client forge it.
 - Other callers need an allowed host too. Kubernetes probes send the pod's IP address: give them a `Host: localhost` header in `httpHeaders`. A back-channel logout from the identity provider to `http://ocm:3001` needs `ocm:3001` listed.
 - The log names each blocked host once an hour, for up to 100 hosts an hour, then says how many blocked requests it left out.
+
+#### OIDC settings
+
+As elsewhere, the environment overrides `config.json`:
+
+- **`OIDC_ENABLED`**: `false` turns OIDC off even when `auth.enabled` is `true` in `config.json`; unset or empty, `config.json` decides. Another value than `true` or `false` stops the server at startup. With OIDC on, the server never falls back to header mode: a missing setting stops it at startup, and until the discovery of the provider succeeds, retried with backoff, `/api` and `/auth` answer 503, except `/api/health`.
+- **`SESSION_SECRET`** signs the session cookie, so changing it signs every user out. The server warns at startup when it is shorter than 32 characters.
+- **`COOKIE_SECURE`**: unset, the session cookie is `Secure` when the request comes over HTTPS, as the connection or, with `TRUST_PROXY=true`, the proxy's `X-Forwarded-Proto` says, or when `OIDC_BASE_URL` is `https`. On an HTTP stack it is not, as browsers would not store it. `COOKIE_SECURE=true` or `false`, or `"secure": true` or `false` under `auth.session` in `config.json`, forces it. Another value of `COOKIE_SECURE` stops the server at startup.
+- **Back-channel logout**: the provider can end the dashboard's sessions when a user signs out, by posting a logout token to `/logout/backchannel`. The server checks the token's signature against the provider's `jwks_uri`, its issuer, its audience (the client id), that it was issued less than 5 minutes ago, that it holds the back-channel logout event and a `sid` or a `sub`, and no `nonce`. `"backChannelLogout": false` under `auth` in `config.json` leaves the endpoint out; the front-channel logout, `/auth/logout`, stays.
 
 ### Customization
 
