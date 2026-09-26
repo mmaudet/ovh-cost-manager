@@ -104,6 +104,26 @@ describe('useWebCloudTab', () => {
     ]);
   });
 
+  // Until then, the tab shows that it is loading, not zero services billed (#62)
+  it('says it is loading until the answers for the period arrive (#62)', async () => {
+    const { result, rerender } = await renderTabHook(useWebCloudTab,
+      { selectedMonth: september, activeTab: 'overview' });
+    // What the hook says as the requests leave, and once their answers arrived
+    const loading = [];
+    const loadingUntilAnswered = async (props) => {
+      const answered = rerender(props);
+      loading.push(result.current.loadingWebCloud);
+      await answered;
+      loading.push(result.current.loadingWebCloud);
+    };
+
+    await loadingUntilAnswered({ selectedMonth: september, activeTab: 'webcloud' });
+    // Another period waits for its own answers
+    await loadingUntilAnswered({ selectedMonth: august, activeTab: 'webcloud' });
+
+    expect(loading).toEqual([true, false, true, false]);
+  });
+
   // The period itself is unit tested with webCloudPeriodEndingOn()
   it('requests the 12 months that end on a January from the February before', async () => {
     const { result } = await renderTabHook(useWebCloudTab,

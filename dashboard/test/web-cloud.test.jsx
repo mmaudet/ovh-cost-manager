@@ -12,6 +12,7 @@ import {
   rowsOf,
   selectLanguage,
   selectMonth,
+  settle,
   texts,
 } from './support/render.jsx';
 
@@ -214,6 +215,47 @@ describe('Web Cloud tab', () => {
         ].join('\n'),
       });
     });
+  });
+
+  // Rather than zero services, and that none was billed (#62)
+  it.each([
+    ['figures', 'fetchWebCloudSummary'],
+    ['services', 'fetchWebCloudItems'],
+  ])('shows that it is loading until its %s arrive (#62)', async (_, request) => {
+    const { user } = await renderDashboard();
+    // Hold back one of its two answers
+    const answer = api[request].getMockImplementation();
+    let release;
+    const heldBack = new Promise((resolve) => {
+      release = resolve;
+    });
+    api[request].mockImplementation(async (...args) => {
+      await heldBack;
+      return answer(...args);
+    });
+
+    await user.click(screen.getByRole('button', { name: 'Web Cloud' }));
+
+    expect(screen.getByText('Chargement des données...')).toBeInTheDocument();
+    expect(screen.queryByText('Domaines')).not.toBeInTheDocument();
+    expect(screen.queryByText('Aucun service Web Cloud facturé sur cette période'))
+      .not.toBeInTheDocument();
+    // The period needs no answer
+    expect(texts(periodLine())).toContain('(oct. 2025 → sept. 2026)');
+
+    release();
+    await settle();
+
+    expect(screen.queryByText('Chargement des données...')).not.toBeInTheDocument();
+    expect(texts(familyCards())).toEqual([
+      'Domaines', '2', '28,48€',
+      'Zones DNS', '1', '1,20€',
+      'Hébergements', '1', '71,88€',
+      'Emails', '2', '44,52€',
+      'Options', '1', '11,88€',
+      'Total', '157,96€',
+    ]);
+    expect(familyHeadings()).toHaveLength(5);
   });
 
   it('says when no Web Cloud service was billed over the period', async () => {

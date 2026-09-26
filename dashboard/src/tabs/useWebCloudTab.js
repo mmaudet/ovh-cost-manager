@@ -11,13 +11,13 @@ const useWebCloudTab = ({ selectedMonth, activeTab }) => {
 
   const webCloudPeriod = webCloudPeriodEndingOn(selectedMonth);
 
-  const { data: webCloudSummary } = useQuery({
+  const { data: webCloudSummary, isPending: summaryPending } = useQuery({
     queryKey: ['webCloudSummary', webCloudPeriod?.from, webCloudPeriod?.to],
     queryFn: () => fetchWebCloudSummary(webCloudPeriod.from, webCloudPeriod.to),
     enabled: !!webCloudPeriod && activeTab === 'webcloud'
   });
 
-  const { data: webCloudItems = [] } = useQuery({
+  const { data: webCloudItems = [], isPending: itemsPending } = useQuery({
     queryKey: ['webCloudItems', webCloudPeriod?.from, webCloudPeriod?.to],
     queryFn: () => fetchWebCloudItems(webCloudPeriod.from, webCloudPeriod.to),
     enabled: !!webCloudPeriod && activeTab === 'webcloud'
@@ -27,6 +27,9 @@ const useWebCloudTab = ({ selectedMonth, activeTab }) => {
     webCloudPeriod,
     webCloudSummary,
     webCloudItems,
+    // Until both queries have answered, the tab shows that it is loading, rather than zero
+    // services and that none was billed (#62)
+    loadingWebCloud: summaryPending || itemsPending,
     showAllWebCloud,
     setShowAllWebCloud,
   };

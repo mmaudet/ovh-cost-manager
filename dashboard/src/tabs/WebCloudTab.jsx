@@ -16,7 +16,7 @@ const WEB_CLOUD_CATEGORIES = [
 // The Web Cloud tab, which the shell renders while it is active: what useWebCloudTab()
 // returns, with the shell's language, translations (t) and amount format (fmt).
 const WebCloudTab = ({
-  webCloudPeriod, webCloudSummary, webCloudItems, setShowAllWebCloud,
+  webCloudPeriod, webCloudSummary, webCloudItems, loadingWebCloud, setShowAllWebCloud,
   language, t, fmt,
 }) => (
   <div className="space-y-6">
@@ -34,26 +34,36 @@ const WebCloudTab = ({
       </span>
     </div>
 
-    {/* Web Cloud summary cards */}
-    <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
-      {WEB_CLOUD_CATEGORIES.map(cat => (
-        <div key={cat.key} className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
-          <span className="text-gray-500 text-sm">{t(cat.labelKey)}</span>
-          <div className={`text-3xl font-bold ${cat.color} mt-2`}>{webCloudSummary?.[cat.key]?.count || 0}</div>
-          {webCloudSummary?.[cat.key]?.total > 0 && (
-            <p className="text-xs text-gray-400">{fmt(webCloudSummary[cat.key].total)}€</p>
-          )}
+    {/* Web Cloud summary cards, once their figures have arrived (#62) */}
+    {!loadingWebCloud && (
+      <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+        {WEB_CLOUD_CATEGORIES.map(cat => (
+          <div key={cat.key} className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
+            <span className="text-gray-500 text-sm">{t(cat.labelKey)}</span>
+            <div className={`text-3xl font-bold ${cat.color} mt-2`}>
+              {webCloudSummary?.[cat.key]?.count || 0}
+            </div>
+            {webCloudSummary?.[cat.key]?.total > 0 && (
+              <p className="text-xs text-gray-400">{fmt(webCloudSummary[cat.key].total)}€</p>
+            )}
+          </div>
+        ))}
+        <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
+          <span className="text-gray-500 text-sm">Total</span>
+          <div className="text-3xl font-bold text-gray-900 mt-2">
+            {fmt(webCloudSummary?.total || 0)}€
+          </div>
         </div>
-      ))}
-      <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
-        <span className="text-gray-500 text-sm">Total</span>
-        <div className="text-3xl font-bold text-gray-900 mt-2">{fmt(webCloudSummary?.total || 0)}€</div>
       </div>
-    </div>
+    )}
 
     {/* Web Cloud is read from the bills: the domain, hosting and email
-        API routes are not granted to the credentials this project asks for. */}
-    {webCloudItems.length === 0 ? (
+        API routes are not granted to the credentials this project asks for.
+        Until both answers arrive, the tab says it is loading, in the words of
+        the page's loading screen (#62). */}
+    {loadingWebCloud ? (
+      <div className="text-center text-gray-500 py-8">{t('loading')}</div>
+    ) : webCloudItems.length === 0 ? (
       <div className="bg-white rounded-xl p-8 shadow-sm border border-gray-100 text-center text-gray-400">
         {language === 'en' ? 'No Web Cloud service billed over this period' : 'Aucun service Web Cloud facturé sur cette période'}
       </div>
