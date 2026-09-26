@@ -27,7 +27,7 @@ This guide covers Docker deployment options for OVH Cost Manager (OCM), includin
 
 ## Upgrading to 2.4.1
 
-2.4.1 hardens authentication. Before upgrading a deployment that signs in with OIDC, or reads `Auth-User` with `AUTH_REQUIRED`:
+2.4.1 hardens authentication and reads the settings strictly. Before upgrading, check these points: those on sessions, sign-in, the provider and back-channel logout only concern a deployment that signs in with OIDC, the others every deployment.
 
 - **Everyone signs in again once**: the session cookie is now signed with `SESSION_SECRET`, and named `__Host-ocm.sid` when it is `Secure`, over HTTPS: the sessions of 2.4.0 are refused. From then on, changing `SESSION_SECRET` signs everyone out, and a secret shorter than 32 characters logs a warning at startup.
 - **Sign-in needs cookies**: `/auth/login` sets an `ocm.login.<state>` cookie (`__Host-ocm.login.<state>` over HTTPS) that the callback needs. A sign-in must start on the host of `OIDC_BASE_URL`, where the provider sends the browser back, and finish within 10 minutes.
@@ -37,7 +37,7 @@ This guide covers Docker deployment options for OVH Cost Manager (OCM), includin
 - **`OIDC_ENABLED=false` now overrides `auth.enabled: true`**: a leftover `OIDC_ENABLED=false` in the environment turns OIDC off, and header mode then serves the API to anyone, unless `AUTH_REQUIRED=true`.
 - **A missing OIDC setting, or a `config.json` that cannot be read as JSON, stops the server at startup**, with an error naming the setting or the file, rather than let it start without authentication.
 - **While the provider is unreachable**, sign-in and the API answer 503, and the server retries its discovery with backoff, instead of falling back to header mode. `/api/health` keeps answering: the container stays healthy.
-- **The log quotes the provider's texts as JSON strings**, such as `OIDC sign-in: session opened for "alice"`, so that a newline in a `sub` or an error description cannot forge a line of the log.
+- **The log quotes the texts it did not write as JSON strings**: the provider's, such as `OIDC sign-in: session opened for "alice"`, the user of each request, `["alice"]` or `["anonymous"]` where it was `[alice]`, and the origin the CORS check blocks, so that a control character in a `sub`, an error description, an `Auth-User` or an `Origin` header cannot forge a line of the log. A tool that parses these lines may need its pattern updated.
 - **Back-channel logout now works**, and ends only the sessions of the token's `sid`, or of its `sub` when it has no `sid`. The provider's logout tokens must hold `exp`; a replay is refused, told by the token's `jti`, or by the token itself when it has none, as LemonLDAP-NG's may not.
 
 ---
