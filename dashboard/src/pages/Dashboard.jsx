@@ -306,6 +306,8 @@ export default function Dashboard() {
   const infrastructureTab = useInfrastructureTab({
     selectedMonth, activeTab, selectedResourceType,
   });
+  // The Compare markup reads the servers inventory too, which only loads on the
+  // Infrastructure tab (#35)
   const { inventoryServers } = infrastructureTab;
 
   const { data: expiringServices = [] } = useQuery({
