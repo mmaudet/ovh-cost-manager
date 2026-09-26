@@ -26,8 +26,8 @@ const generateMarkdownReport = (summary, byService, byProject, selectedMonth, la
   const totalService = byService.reduce((sum, s) => sum + s.value, 0);
   byService.forEach(s => {
     // In the number format of the language, as the amounts are, and 0 % of service types
-    // that sum to 0 € (#60)
-    const share = totalService ? s.value / totalService : 0;
+    // that sum to 0 € (#60). A type at 0 € weighs 0 %, not -0 %, when they sum below 0 €
+    const share = totalService ? (s.value / totalService) || 0 : 0;
     md += `| ${s.name} | ${fmt(s.value)}€ | ${formatPercent(share, language)} |\n`;
   });
 

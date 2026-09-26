@@ -142,6 +142,18 @@ describe('Markdown report', () => {
     ]);
   });
 
+  // When they sum below 0 €, a type at 0 € weighs 0 %, not -0 %
+  it('writes a share of 0 % for a service type at 0 € when the types sum below 0 €', () => {
+    const creditNote = [
+      { name: 'Compute', value: 30 }, { name: 'Storage', value: 0 }, { name: 'Other', value: -90 },
+    ];
+
+    const report = generateMarkdownReport(summary, creditNote, byProject, january, 'fr');
+    expect(report).toContain(`| Storage | 0,00€ | 0,0${NBSP}% |`);
+    const english = generateMarkdownReport(summary, creditNote, byProject, january, 'en');
+    expect(english).toContain('| Storage | 0.00€ | 0.0% |');
+  });
+
   it('lists the first ten projects only', () => {
     const elevenProjects = [
       'Production', 'Staging', 'Sandbox', 'Data', 'AI', 'Web', 'Mail', 'Backup', 'CI', 'Demo',
