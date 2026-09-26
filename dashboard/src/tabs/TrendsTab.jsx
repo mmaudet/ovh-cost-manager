@@ -5,8 +5,7 @@ import { formatYearMonth } from '../utils/format.js';
 import { PERIOD_OPTIONS } from '../utils/trendPeriods.js';
 
 // The Trends tab, which the shell renders while it is active: what useTrendsTab() returns,
-// with the shell's language, translations (t) and amount format (fmt). Its period selector
-// sits in the shell's tab bar.
+// with the shell's language, translations (t) and amount format (fmt).
 const TrendsTab = ({
   trendPeriod, monthlyTrend, trendByCategory, hiddenCategories, toggleCategory, gpuTrend,
   language, t, fmt,
@@ -166,4 +165,22 @@ const TrendsTab = ({
   );
 };
 
-export { TrendsTab };
+// The period selector of the Trends tab, which the shell renders in its tab bar while the
+// tab is active, so that the tab bar keeps its markup: see
+// docs/adr/0001-tab-state-lives-in-the-dashboard-shell.md
+const TrendsPeriodSelector = ({ trendPeriod, setTrendPeriod, availablePeriods, t }) => (
+  <div className="flex items-center gap-2">
+    <span className="text-sm text-gray-600">{t('period')}:</span>
+    <select
+      value={trendPeriod}
+      onChange={(e) => setTrendPeriod(Number(e.target.value))}
+      className="px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm shadow-sm cursor-pointer"
+    >
+      {availablePeriods.map(opt => (
+        <option key={opt.months} value={opt.months}>{t(opt.key)}</option>
+      ))}
+    </select>
+  </div>
+);
+
+export { TrendsTab, TrendsPeriodSelector };

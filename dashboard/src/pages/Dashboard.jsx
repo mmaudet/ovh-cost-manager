@@ -38,7 +38,7 @@ import { WebCloudTab, WebCloudTabModals } from '../tabs/WebCloudTab.jsx';
 import { useBackupTab } from '../tabs/useBackupTab.js';
 import { BackupTab } from '../tabs/BackupTab.jsx';
 import { useTrendsTab } from '../tabs/useTrendsTab.js';
-import { TrendsTab } from '../tabs/TrendsTab.jsx';
+import { TrendsTab, TrendsPeriodSelector } from '../tabs/TrendsTab.jsx';
 import ProjectProductComparison from './ProjectProductComparison.jsx';
 
 // Translation keys for the import_log type and status values
@@ -217,8 +217,6 @@ export default function Dashboard() {
   });
 
   const trendsTab = useTrendsTab({ months, activeTab });
-  // The tab bar holds the period selector of the Trends tab
-  const { trendPeriod, setTrendPeriod, availablePeriods } = trendsTab;
 
   // Comparison data
   const { data: compareDataA } = useQuery({
@@ -734,18 +732,7 @@ export default function Dashboard() {
             ))}
           </div>
           {activeTab === 'trends' && (
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-gray-600">{t('period')}:</span>
-              <select
-                value={trendPeriod}
-                onChange={(e) => setTrendPeriod(Number(e.target.value))}
-                className="px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm shadow-sm cursor-pointer"
-              >
-                {availablePeriods.map(opt => (
-                  <option key={opt.months} value={opt.months}>{t(opt.key)}</option>
-                ))}
-              </select>
-            </div>
+            <TrendsPeriodSelector {...trendsTab} t={t} />
           )}
         </div>
 
