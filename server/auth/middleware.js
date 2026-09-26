@@ -3,11 +3,10 @@
  */
 const sessionStore = require('./session-store');
 const { unsignValue } = require('./session-cookie');
+const { isHealthCheck } = require('./health');
 
-// The paths as Express routes them, without case and with or without a
-// trailing slash: the API, /api itself included, and its health check
+// The API as Express routes it, without case, /api itself included
 const API_PATH = /^\/api(\/|$)/i;
-const HEALTH_PATH = /^\/api\/health\/?$/i;
 
 function createAuthMiddleware(config) {
   const cookieName = config.auth?.session?.name || 'ocm.sid';
@@ -39,7 +38,7 @@ function createAuthMiddleware(config) {
     req.user = null;
 
     // Public paths - no auth required
-    if (HEALTH_PATH.test(req.path) ||
+    if (isHealthCheck(req) ||
         req.path.startsWith('/auth/') ||
         req.path === '/logout/backchannel') {
       return next();

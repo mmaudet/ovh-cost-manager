@@ -4,6 +4,8 @@
  * 503 on the API and the sign-in routes.
  */
 
+const { isHealthCheck } = require('./health');
+
 const FIRST_RETRY_DELAY_MS = 1000;
 const MAX_RETRY_DELAY_MS = 60 * 1000;
 
@@ -21,17 +23,15 @@ function discoveryRetryDelay(failures) {
 /**
  * A middleware that answers 503 until the provider is discovered. Mounted on
  * /api and /auth, it matches their paths as Express matches their routes:
- * without case, with or without a trailing slash.
+ * without case, with or without a trailing slash. The health check stays open,
+ * for the container's healthcheck.
  *
  * @param {function(): boolean} isDiscovered
- * @param {object} [options]
- * @param {string} [options.except] - a path under the mount path left open,
- *   such as /health for /api/health, which the container's healthcheck calls
  * @returns {function} the middleware
  */
-function createDiscoveryGate(isDiscovered, { except } = {}) {
+function createDiscoveryGate(isDiscovered) {
   return (req, res, next) => {
-    if (isDiscovered() || req.path === except) {
+    if (isDiscovered() || isHealthCheck(req)) {
       return next();
     }
     res.status(503).json({ error: 'Authentication provider unavailable, try again later' });

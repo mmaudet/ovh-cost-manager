@@ -31,7 +31,7 @@ describe('createDiscoveryGate, mounted as server/index.js mounts it', () => {
   beforeAll(async () => {
     const app = express();
     const isDiscovered = () => discovered;
-    app.use('/api', createDiscoveryGate(isDiscovered, { except: '/health' }));
+    app.use('/api', createDiscoveryGate(isDiscovered));
     app.use('/auth', createDiscoveryGate(isDiscovered));
     // The routes come after the gates, as in server/index.js
     app.get('/api/health', (req, res) => res.json({ status: 'ok' }));
@@ -52,7 +52,8 @@ describe('createDiscoveryGate, mounted as server/index.js mounts it', () => {
       '/api/months',
       '/API/months',
       '/api/months/',
-      '/api/health/',
+      '/api/healthz',
+      '/api/health/x',
       '/auth/login',
       '/AUTH/login',
       '/auth/callback?code=x&state=y',
@@ -63,11 +64,14 @@ describe('createDiscoveryGate, mounted as server/index.js mounts it', () => {
       expect(JSON.parse(res.body)).toEqual({ error: expect.any(String) });
     });
 
-    test('keeps /api/health up, for the container\'s healthcheck', async () => {
-      const res = await server.request('GET', '/api/health');
-      expect(res.status).toBe(200);
-      expect(JSON.parse(res.body)).toEqual({ status: 'ok' });
-    });
+    test.each(['/api/health', '/API/HEALTH', '/api/health/'])(
+      'keeps %s up, for the container\'s healthcheck',
+      async (path) => {
+        const res = await server.request('GET', path);
+        expect(res.status).toBe(200);
+        expect(JSON.parse(res.body)).toEqual({ status: 'ok' });
+      }
+    );
 
     test('leaves the pages to the authentication middleware', async () => {
       const res = await server.request('GET', '/');

@@ -49,6 +49,9 @@ describe('header mode with AUTH_REQUIRED=true', () => {
     '/api//months',
     '/api/%6Donths',
     '/api/months%2F',
+    // Neither the health check
+    '/api/healthz',
+    '/api/health/x',
   ])('answers 401 on GET %s without Auth-User', async (path) => {
     const res = await server.request('GET', path);
     expect(res.status).toBe(401);
@@ -79,11 +82,14 @@ describe('header mode with AUTH_REQUIRED=true', () => {
     expect(res.body).toBe('page');
   });
 
-  test.each(['/api/health', '/API/health'])('serves %s without Auth-User', async (path) => {
-    const res = await server.request('GET', path);
-    expect(res.status).toBe(200);
-    expect(JSON.parse(res.body)).toEqual({ status: 'ok' });
-  });
+  test.each(['/api/health', '/API/health', '/api/HEALTH', '/api/health/'])(
+    'serves %s without Auth-User',
+    async (path) => {
+      const res = await server.request('GET', path);
+      expect(res.status).toBe(200);
+      expect(JSON.parse(res.body)).toEqual({ status: 'ok' });
+    }
+  );
 
   test.each(['/api/months', '/API/months'])('serves %s with Auth-User', async (path) => {
     const res = await server.request('GET', path, ALICE);

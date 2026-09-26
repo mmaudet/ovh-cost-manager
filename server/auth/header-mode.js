@@ -3,6 +3,7 @@
  * (LemonLDAP-NG) authenticates the user and passes it in the Auth-User,
  * Auth-Mail and Auth-CN headers.
  */
+const { isHealthCheck } = require('./health');
 
 // Reads the user from the headers, on every request
 function readHeaderUser(req, res, next) {
@@ -18,9 +19,9 @@ function readHeaderUser(req, res, next) {
 // Refuses an API request without Auth-User, except the health check. Mounted
 // on /api, it runs for every path that reaches an API route: Express matches
 // the mount path as it matches the routes, without case and whatever the
-// trailing slash. req.path is relative to the mount path.
+// trailing slash.
 function requireHeaderUser(req, res, next) {
-  if (req.user || req.path === '/health') {
+  if (req.user || isHealthCheck(req)) {
     return next();
   }
   res.status(401).json({ error: 'Authentication required' });

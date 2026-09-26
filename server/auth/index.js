@@ -74,12 +74,11 @@ function discover(config, failures = 0) {
 }
 
 /**
- * A middleware that answers 503 until the provider is discovered.
- *
- * @param {object} [options] - see createDiscoveryGate
+ * A middleware that answers 503 until the provider is discovered, except on
+ * the health check.
  */
-function awaitDiscovery(options) {
-  return createDiscoveryGate(() => oidcClient.getConfig() !== null, options);
+function awaitDiscovery() {
+  return createDiscoveryGate(() => oidcClient.getConfig() !== null);
 }
 
 module.exports = {

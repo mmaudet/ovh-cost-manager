@@ -255,7 +255,7 @@ async function initializeServer() {
   if (authConfig.auth.enabled) {
     // Until the provider is discovered, the API and the sign-in routes answer
     // 503, except /api/health for the container's healthcheck
-    app.use('/api', auth.awaitDiscovery({ except: '/health' }));
+    app.use('/api', auth.awaitDiscovery());
     app.use('/auth', auth.awaitDiscovery());
 
     // Mount auth routes with stricter rate limiting
