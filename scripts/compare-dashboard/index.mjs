@@ -117,17 +117,21 @@ async function main(argv) {
   const clock = resolveClock(options.clock, snapshot.latestBill);
   const { months, openingMonth } = resolveMonths(options.months, snapshot.months);
 
+  const state = describeSnapshot(snapshot, clock, new Date());
   const monthList = months.map((month) => (month === openingMonth ? `${month} (the page opens on it)` : month));
-  console.log([
+  const header = [
     `Snapshot  ${options.data}: ${snapshot.bills} bills, the latest on ${snapshot.latestBill}`,
-    `Clock     ${clock.toISOString()}`,
+    `Import    ${state.lastImport}`,
+    `Empty     ${state.empty}`,
+    `Clock     ${clock.toISOString()} in the browser, frozen; the real date is ${state.realDate} (UTC)`,
     `Base      ${sides[0].label}`,
     `Head      ${sides[1].label}`,
     `Captures  ${options.languages.join(', ')}; months ${monthList.join(', ')}; `
       + `${options.projects} Public Cloud project(s)`,
     `Output    ${out}`,
-    '',
-  ].join('\n'));
+    ...state.warnings.map((warning) => `Warning   ${warning}`),
+  ];
+  console.log(`${header.join('\n')}\n`);
 
   stopIfInterrupted();
   await Promise.all(sides.map((side) => prepare(side, { repo, work, logs })));
@@ -169,6 +173,7 @@ async function main(argv) {
       languages: options.languages,
       months,
       projects: options.projects,
+      snapshot: state.stored,
       failures: result.failures,
       sections: result.sections,
     };
@@ -189,7 +194,7 @@ async function main(argv) {
     ? [`${failures.length} capture step(s) failed, the comparison is incomplete:`, ...failures.map((f) => `  ${f}`)]
     : [];
   fs.writeFileSync(path.join(out, 'report.txt'), [
-    `Base ${sides[0].label}, head ${sides[1].label}, snapshot ${options.data}, clock ${clock.toISOString()}`,
+    ...header,
     '',
     formatDifferences(differences),
     ...incomplete,
@@ -300,6 +305,48 @@ function ignoredByGit(workTree, target) {
   } catch {
     return false;
   }
+}
+
+// What the snapshot holds, and what the real date does to the comparison: the browser's
+// clock is frozen, the server's is not
+function describeSnapshot(snapshot, clock, now) {
+  const { lastImport, emptyTables, latestBill } = snapshot;
+  const realDate = now.toISOString().slice(0, 10);
+  const warnings = [];
+  if (lastImport?.status === 'running') {
+    warnings.push('the last import has not ended: it is still running, or it stopped halfway, and '
+      + 'the snapshot may lack data');
+  }
+  if (lastImport?.status === 'failed' || lastImport?.status === 'partial') {
+    warnings.push(`the last import ${lastImport.status === 'failed' ? 'failed' : 'was partial'}`
+      + `${lastImport.error_message ? `: ${lastImport.error_message}` : ''}`);
+  }
+  if (realDate.slice(0, 7) !== latestBill.slice(0, 7)) {
+    // SQLite's date('now') for the Trends months, JavaScript's for the services to expire
+    warnings.push(`the latest bill is from ${latestBill.slice(0, 7)} but the real month is `
+      + `${realDate.slice(0, 7)}: the server takes the months of the Trends tab and the services `
+      + 'about to expire from the real date, so the Trends tab shows fewer months of the snapshot '
+      + 'as time passes');
+  }
+  const empty = Object.entries(emptyTables).map(([dataset, tables]) => `${dataset} (${tables.join(', ')})`);
+  return {
+    lastImport: lastImport
+      ? `${lastImport.type} import, ${lastImport.status}, started ${lastImport.started_at} UTC`
+        + (lastImport.completed_at ? `, ended ${lastImport.completed_at} UTC` : '')
+      : 'none recorded',
+    empty: empty.join('; ') || 'no dataset',
+    realDate,
+    warnings,
+    stored: {
+      bills: snapshot.bills,
+      latestBill,
+      lastImport,
+      emptyTables,
+      clock: clock.toISOString(),
+      realDate,
+      warnings,
+    },
+  };
 }
 
 // Noon UTC: the same calendar day from UTC-11 to UTC+11

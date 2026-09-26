@@ -74,9 +74,19 @@ async function stopProcess(child) {
   }
 }
 
+// The datasets an import adds to the bills (import.js --all), shown by the page
+const DATASETS = {
+  inventory: ['dedicated_servers', 'vps_instances', 'storage_services'],
+  'cloud details': ['cloud_instances', 'cloud_volumes', 'cloud_snapshots', 'object_storage_buckets',
+    'project_quotas', 'project_consumption'],
+  consumption: ['consumption_snapshots', 'consumption_history'],
+};
+
 /**
  * Freezes the snapshot: copies its database into `destination`, never writing to it.
- * @returns {{ bills: number, latestBill: string, months: string[] }} months newest first
+ * @returns {{ bills: number, latestBill: string, months: string[], lastImport: object|null,
+ *   emptyTables: Record<string, string[]> }} months newest first, and the tables of each
+ *   dataset that hold nothing
  */
 export async function freezeSnapshot(dataDir, destination, Database) {
   const source = path.join(dataDir, DB_FILE);
@@ -112,7 +122,19 @@ export async function freezeSnapshot(dataDir, destination, Database) {
     const months = copy.prepare(`SELECT DISTINCT strftime('%Y-%m', date) AS month FROM bills ORDER BY month DESC`)
       .all()
       .map((row) => row.month);
-    return { bills, latestBill: String(latest).slice(0, 10), months };
+    const lastImport = copy.prepare(`SELECT type, status, started_at, completed_at, error_message
+      FROM import_log ORDER BY id DESC LIMIT 1`).get() ?? null;
+    const holdsRows = (table) => {
+      try {
+        return copy.prepare(`SELECT 1 FROM ${table} LIMIT 1`).get() !== undefined;
+      } catch {
+        return false; // A table an older schema does not have yet
+      }
+    };
+    const emptyTables = Object.fromEntries(Object.entries(DATASETS)
+      .map(([dataset, tables]) => [dataset, tables.filter((table) => !holdsRows(table))])
+      .filter(([, tables]) => tables.length));
+    return { bills, latestBill: String(latest).slice(0, 10), months, lastImport, emptyTables };
   } finally {
     copy.close();
   }

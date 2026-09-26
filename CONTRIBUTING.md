@@ -159,10 +159,14 @@ directory it prints, or to `--out`. A refactoring step is ready to merge only
 when the comparison finds no difference.
 
 The comparison does not see everything: styles, tooltips and chart shapes are
-not captured, and the server's own clock is not frozen, so what it computes
-from today (trend periods, services about to expire, forecasts) follows the
-real date, the same on both sides. When the working tree holds a `config.json`,
-the base reads it too, so that both show the same budget.
+not captured. Nor is the server's clock frozen: the months of the Trends tab
+(SQLite's `date('now')`) and the services about to expire follow the real
+date. Both sides see the same, but as real time passes during a refactoring,
+the Trends tab shows fewer and fewer months of the snapshot. The report starts
+with the state of the snapshot (bills, last import, empty datasets) and both
+dates, and warns when an import is running or has failed, and when the real
+month is past the latest bill. When the working tree holds a `config.json`, the
+base reads it too, so that both show the same budget.
 
 Snapshots, database copies and captures hold real billing data: never commit
 them, nor attach them to an issue or a pull request. The script refuses an
