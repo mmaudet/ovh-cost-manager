@@ -39,11 +39,12 @@ const emptySummary = {
 // ends with the time it was generated.
 describe('Markdown report', () => {
   it('sums up a month, its service types and its projects', () => {
-    // All in French: the title, the period, the totals and the percentages (#60)
+    // All in French: the title, the period, the totals and the percentages (#60), with a
+    // space before the colon
     expect(generateMarkdownReport(summary, byService, byProject, january, 'fr')).toBe([
       '# Rapport de coûts OVH - Janvier 2026',
       '',
-      '**Période:** du 2026-01-01 au 2026-01-31',
+      '**Période :** du 2026-01-01 au 2026-01-31',
       '',
       '## Résumé',
       '',
@@ -82,7 +83,7 @@ describe('Markdown report', () => {
     expect(generateMarkdownReport(emptySummary, [], [], august, 'fr')).toBe([
       '# Rapport de coûts OVH - Août 2026',
       '',
-      '**Période:** du 2026-08-01 au 2026-08-31',
+      '**Période :** du 2026-08-01 au 2026-08-31',
       '',
       '## Résumé',
       '',
@@ -110,14 +111,20 @@ describe('Markdown report', () => {
     ].join('\n'));
   });
 
-  it('writes N/A for the month when none is selected', () => {
+  // The page offers the export only once a month is selected, and each month has its
+  // period: without one, the report names neither (#60)
+  it('writes N/A for the month and its period when none is selected', () => {
     const report = generateMarkdownReport(summary, byService, byProject, undefined, 'fr');
-
-    // The page offers the export only once a month is selected. In French (#60)
     expect(report.split('\n').slice(0, 3)).toEqual([
       '# Rapport de coûts OVH - N/A',
       '',
-      '**Période:** du undefined au undefined',
+      '**Période :** N/A',
+    ]);
+    const english = generateMarkdownReport(summary, byService, byProject, undefined, 'en');
+    expect(english.split('\n').slice(0, 3)).toEqual([
+      '# OVH Cost Report - N/A',
+      '',
+      '**Period:** N/A',
     ]);
   });
 

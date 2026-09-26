@@ -4,13 +4,15 @@ import { formatCurrency, formatMonthLabel, formatPercent, localeOf } from './for
 const generateMarkdownReport = (summary, byService, byProject, selectedMonth, language = 'fr') => {
   const locale = localeOf(language);
   const fmt = (v) => formatCurrency(v, language);
+  // The month and its period, N/A without them: the page exports the report of a selected
+  // month only, which always has its period
   const month = formatMonthLabel(selectedMonth?.value, language) || 'N/A';
-  const period = language === 'en'
-    ? `${selectedMonth?.from} to ${selectedMonth?.to}`
-    : `du ${selectedMonth?.from} au ${selectedMonth?.to}`;
+  const { from, to } = selectedMonth ?? {};
+  let period = 'N/A';
+  if (from && to) period = language === 'en' ? `${from} to ${to}` : `du ${from} au ${to}`;
 
   let md = `# ${language === 'en' ? 'OVH Cost Report' : 'Rapport de coûts OVH'} - ${month}\n\n`;
-  md += `**${language === 'en' ? 'Period' : 'Période'}:** ${period}\n\n`;
+  md += `**${language === 'en' ? 'Period:' : 'Période :'}** ${period}\n\n`;
   md += `## ${language === 'en' ? 'Summary' : 'Résumé'}\n\n`;
   md += `| ${language === 'en' ? 'Metric' : 'Métrique'} | ${language === 'en' ? 'Value' : 'Valeur'} |\n|--------|-------|\n`;
   md += `| ${language === 'en' ? 'Total Cost' : 'Coût Total'} | ${fmt(summary?.total || 0)}€ |\n`;

@@ -465,11 +465,12 @@ describe('dashboard shell', () => {
       expect(files).toHaveLength(1);
       expect(files[0].name).toBe('ovh-report-2026-09.md');
       expect(files[0].type).toBe('text/markdown');
-      // All in French: the title, the period, the totals and the percentages (#60)
+      // All in French: the title, the period, the totals and the percentages (#60), with a
+      // space before the colon
       expect(files[0].content).toBe([
         '# Rapport de coûts OVH - Septembre 2026',
         '',
-        '**Période:** du 2026-09-01 au 2026-09-30',
+        '**Période :** du 2026-09-01 au 2026-09-30',
         '',
         '## Résumé',
         '',
