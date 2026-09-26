@@ -18,11 +18,17 @@ const TABS = [
   { id: 'infrastructure', label: { fr: 'Infrastructure', en: 'Infrastructure' } },
   { id: 'backup', label: { fr: 'Backup', en: 'Backup' } },
 ];
-// The overview comes last. When the page opens, or changes month, the loading screen only
-// waits for the summary, so the bar chart mounts before its projects arrive, and a chart
-// axis that mounts without labels measures them at the wrong font size for good. Coming
-// back to the overview mounts its charts again, on data already loaded.
-const VISIT_ORDER = [...TABS.slice(1), TABS[0]];
+// The tabs in the order they are visited, each visit naming its sections.
+// - Compare comes a second time after Infrastructure: it only lists the dedicated servers
+//   once that tab has loaded their inventory (#35).
+// - The overview comes last. When the page opens, or changes month, the loading screen only
+//   waits for the summary, so the bar chart mounts before its projects arrive, and a chart
+//   axis that mounts without labels measures them at the wrong font size for good. Coming
+//   back to the overview mounts its charts again, on data already loaded.
+const VISITS = [
+  ['compare'], ['trends'], ['inventory'], ['webcloud'], ['infrastructure'],
+  ['compare', 'compare-after-infrastructure'], ['backup'], ['overview'],
+].map(([id, name = id]) => ({ tab: TABS.find((tab) => tab.id === id), name }));
 const SHOW_ALL = { fr: 'Tout afficher', en: 'Show all' };
 const LOCALES = { fr: 'fr-FR', en: 'en-US' };
 const LANGUAGE_KEY = 'ovh-dashboard-language';
@@ -176,20 +182,20 @@ class Walker {
       return;
     }
     let reload = false;
-    for (const [index, tab] of VISIT_ORDER.entries()) {
+    for (const [index, { tab, name }] of VISITS.entries()) {
       // After a failure the page may be blank, or covered by a modal
       if (reload) {
         try {
           await this.open(month);
           reload = false;
         } catch (error) {
-          for (const skipped of VISIT_ORDER.slice(index)) {
-            this.capture.fail(`${prefix}/${skipped.id}`, `the dashboard did not load again: ${firstLine(error)}`);
+          for (const skipped of VISITS.slice(index)) {
+            this.capture.fail(`${prefix}/${skipped.name}`, `the dashboard did not load again: ${firstLine(error)}`);
           }
           break;
         }
       }
-      const key = `${prefix}/${tab.id}`;
+      const key = `${prefix}/${name}`;
       try {
         await this.captureTab(tab, key, prefix);
       } catch (error) {

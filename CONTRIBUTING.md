@@ -144,7 +144,8 @@ script:
   bar, footer), of every tab and of every "show all" modal, and the content of
   the CSV exports and of the Markdown report; it also opens the Compare
   accordions, the first three Public Cloud projects (`--projects`) and every
-  resource type of the Infrastructure tab;
+  resource type of the Infrastructure tab, then the Compare tab again, which
+  only lists the dedicated servers once the Infrastructure tab has loaded them;
 - compares the two captures section by section, normalising nothing but runs
   of spaces, tabs and line breaks (the no-break spaces of amounts are kept),
   prints the differences, and exits with 1 when there is any, 0 otherwise, or
