@@ -13,7 +13,7 @@ const {
 // built on, verifies them
 const { createRemoteJWKSet, jwtVerify } = require('jose');
 const { logoutTokenVerifyOptions, checkLogoutTokenClaims } = require('./logout-token');
-const { authorizationParameters } = require('./provider');
+const { authorizationParameters, plainHttpAllowed, jwksUriToFetch } = require('./provider');
 
 let config = null;
 let authConfig = null;
@@ -32,12 +32,12 @@ async function initialize(appConfig) {
     provider.clientId,
     provider.clientSecret,
     undefined,
-    {
-      execute: [allowInsecureRequests]
-    }
+    // Plain HTTP only for an http:// issuer, as in the demo stack
+    plainHttpAllowed(provider.issuer) ? { execute: [allowInsecureRequests] } : undefined
   );
 
-  const { jwks_uri: jwksUri } = discovered.serverMetadata();
+  // For the back-channel logout, under the same rule
+  const jwksUri = jwksUriToFetch(discovered.serverMetadata().jwks_uri, provider.issuer);
   jwks = jwksUri ? createRemoteJWKSet(new URL(jwksUri)) : null;
   // Set last: a configuration means the provider is discovered
   config = discovered;
@@ -105,7 +105,7 @@ async function verifyLogoutToken(logoutToken) {
     throw new Error('OIDC not initialized');
   }
   if (!jwks) {
-    throw new Error('the provider publishes no jwks_uri');
+    throw new Error('no jwks_uri to fetch: none, or an http:// one for an https:// issuer');
   }
 
   // jwtVerify checks the signature against the provider's JWKS, with an

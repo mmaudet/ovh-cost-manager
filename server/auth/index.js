@@ -14,6 +14,7 @@ const { buildAuthConfig, missingSettings } = require('./config');
 const { discoveryRetryDelay, createDiscoveryGate } = require('./discovery');
 const { mountHeaderMode } = require('./header-mode');
 const { sessionSecretWarning } = require('./session-cookie');
+const { plainHttpWarning } = require('./provider');
 
 /**
  * Initialize OIDC authentication. When it is enabled, the server never falls
@@ -45,6 +46,10 @@ async function initialize(app, db, fileConfig) {
   const secretWarning = sessionSecretWarning(config.auth.session.secret);
   if (secretWarning) {
     console.warn(`OIDC: ${secretWarning}`);
+  }
+  const httpWarning = plainHttpWarning(provider.issuer, process.env.NODE_ENV);
+  if (httpWarning) {
+    console.warn(`OIDC: ${httpWarning}`);
   }
 
   discover(config);
