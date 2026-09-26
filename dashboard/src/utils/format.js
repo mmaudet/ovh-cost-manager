@@ -31,6 +31,18 @@ const formatYearMonth = (yearMonth, language = 'fr') => {
   return new Date(year, month - 1, 1).toLocaleDateString(locale, { month: 'short', year: 'numeric' });
 };
 
+// Format a 'YYYY-MM' string into the full name of the month and its year, capitalised, as
+// the month selectors and the report show it: Septembre 2026 in French, September 2026 in
+// English. The label of /api/months, always in French, is left for compatibility (#33).
+const formatMonthLabel = (yearMonth, language = 'fr') => {
+  if (!yearMonth) return '';
+  const [year, month] = yearMonth.split('-').map(Number);
+  if (!year || !month) return yearMonth;
+  const label = new Date(year, month - 1, 1)
+    .toLocaleDateString(localeOf(language), { month: 'long', year: 'numeric' });
+  return label.charAt(0).toUpperCase() + label.slice(1);
+};
+
 const BYTE_UNITS = {
   fr: ['o', 'Ko', 'Mo', 'Go', 'To', 'Po'],
   en: ['B', 'KB', 'MB', 'GB', 'TB', 'PB'],
@@ -73,4 +85,4 @@ const fmtBytes = (bytes, language = 'fr') => {
   return `${number} ${units[rank]}`;
 };
 
-export { formatCurrency, formatPercent, formatYearMonth, fmtBytes };
+export { formatCurrency, formatPercent, formatYearMonth, formatMonthLabel, fmtBytes };

@@ -10,6 +10,7 @@ import {
   InstancesTable, instanceCsvColumns, instanceCsvRows
 } from '../components/InstancesTable.jsx';
 import { downloadCSV } from '../utils/csv.js';
+import { formatMonthLabel } from '../utils/format.js';
 
 // The Public Cloud tab, which the shell renders while it is active: what usePublicCloudTab()
 // returns, with the shell's language, translations (t), amount format (fmt) and locale, the
@@ -387,8 +388,10 @@ const PublicCloudTabModals = ({
           <span className="ml-2 text-sm font-normal text-green-600">
             {fmt(projectBuckets.reduce((sum, b) => sum + (b.total || 0), 0))}€
           </span>
-          {selectedMonth?.label && (
-            <span className="ml-2 text-sm font-normal text-gray-400">{selectedMonth.label}</span>
+          {selectedMonth?.value && (
+            <span className="ml-2 text-sm font-normal text-gray-400">
+              {formatMonthLabel(selectedMonth.value, language)}
+            </span>
           )}
         </>
       }

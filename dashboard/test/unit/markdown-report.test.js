@@ -2,7 +2,8 @@ import { describe, it, expect } from 'vitest';
 import { generateMarkdownReport } from '../../src/utils/markdownReport.js';
 import { NNBSP } from '../support/amounts.js';
 
-// A month as /api/months lists it: labels always in French (#33)
+// A month as /api/months lists it, with a label always in French: the report names the
+// month in its own language instead (#33)
 const january = { value: '2026-01', label: 'Janvier 2026', from: '2026-01-01', to: '2026-01-31' };
 const summary = {
   total: 3000,
@@ -144,9 +145,9 @@ describe('Markdown report', () => {
     ]);
   });
 
-  it('speaks English when the page does', () => {
+  it('speaks English when the page does, the month included (#33)', () => {
     expect(generateMarkdownReport(summary, byService, byProject, january, 'en')).toBe([
-      '# OVH Cost Report - Janvier 2026',
+      '# OVH Cost Report - January 2026',
       '',
       '**Period:** 2026-01-01 to 2026-01-31',
       '',

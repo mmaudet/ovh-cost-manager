@@ -597,5 +597,10 @@ describe('Public Cloud tab', () => {
     expect(lines[0]).toBe(`${BOM}"Name";"Flavor";"Region";"State";"Cost (EUR)";"Estimated";`
       + '"Monthly billing";"Created at";"ID"');
     expect(lines[6]).toBe('"Unallocated (deleted instances)";"";;;6,4;0;;;');
+
+    await user.click(resourceButton('Buckets', 'Show all'));
+
+    // The month in the language of the page, not in the French of the API (#33)
+    expect(within(screen.getByRole('dialog')).getByText('September 2026')).toBeInTheDocument();
   });
 });

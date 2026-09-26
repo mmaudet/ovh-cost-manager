@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  formatCurrency, formatPercent, formatYearMonth, fmtBytes,
+  formatCurrency, formatPercent, formatYearMonth, formatMonthLabel, fmtBytes,
 } from '../../src/utils/format.js';
 import { NBSP, NNBSP } from '../support/amounts.js';
 
@@ -84,6 +84,38 @@ describe('formatYearMonth', () => {
     expect(formatYearMonth('2026')).toBe('2026');
     expect(formatYearMonth('2026-00')).toBe('2026-00');
     expect(formatYearMonth('N/A')).toBe('N/A');
+  });
+});
+
+// A month as the month selectors and the report name it: in the language of the page, where
+// the label of /api/months is always in French (#33)
+describe('formatMonthLabel', () => {
+  it('names each month in full with its year, capitalised as /api/months does (#33)', () => {
+    const months = ['2026-01', '2026-02', '2026-03', '2026-04', '2026-05', '2026-06',
+      '2026-07', '2026-08', '2026-09', '2026-10', '2026-11', '2026-12'];
+
+    expect(months.map((month) => formatMonthLabel(month, 'fr'))).toEqual([
+      'Janvier 2026', 'Février 2026', 'Mars 2026', 'Avril 2026', 'Mai 2026', 'Juin 2026',
+      'Juillet 2026', 'Août 2026', 'Septembre 2026', 'Octobre 2026', 'Novembre 2026',
+      'Décembre 2026',
+    ]);
+  });
+
+  it('names a month in English in English (#33)', () => {
+    expect(formatMonthLabel('2026-09', 'en')).toBe('September 2026');
+    expect(formatMonthLabel('2026-01', 'en')).toBe('January 2026');
+    expect(formatMonthLabel('2025-12', 'en')).toBe('December 2025');
+  });
+
+  it('names a month in French by default (#33)', () => {
+    expect(formatMonthLabel('2026-08')).toBe('Août 2026');
+  });
+
+  it('names nothing without a month, and leaves as it is what is not one (#33)', () => {
+    expect(formatMonthLabel(undefined)).toBe('');
+    expect(formatMonthLabel('')).toBe('');
+    expect(formatMonthLabel('2026-00')).toBe('2026-00');
+    expect(formatMonthLabel('N/A')).toBe('N/A');
   });
 });
 

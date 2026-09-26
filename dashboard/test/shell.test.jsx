@@ -512,6 +512,8 @@ describe('dashboard shell', () => {
       await user.selectOptions(screen.getByDisplayValue('Choose...'), 'Markdown');
 
       const [{ content: report }] = await downloadedFiles();
+      // The month in English too (#33)
+      expect(report).toContain('# OVH Cost Report - September 2026');
       expect(report).toContain('**Period:** 2026-09-01 to 2026-09-30');
       expect(report).toContain('| Total Cost | 1,250.40€ |');
       expect(report).toContain('## By Service Type');
@@ -575,14 +577,19 @@ describe('dashboard shell', () => {
       expect(screen.getByRole('button', { name: 'Trends' })).toBeInTheDocument();
       expect(screen.getByText('Data synchronized via OVHcloud API')).toBeInTheDocument();
       expect(screen.getByText('Last sync: 9/14/2026, 6:02:30 AM (3 bills)')).toBeInTheDocument();
-      // Month labels come from the API, in French only (#33)
-      expect(monthSelector()).toHaveDisplayValue('Septembre 2026');
+      // The months in the language of the page, not in the French of the API (#33)
+      expect(optionsOf(dropdown('July 2026')))
+        .toEqual(['September 2026', 'August 2026', 'July 2026']);
+      expect(dropdown('July 2026')).toHaveDisplayValue('September 2026');
 
       await selectLanguage(user, 'fr');
 
       expect(texts(cardOf('Coût total du mois')))
         .toEqual(['Coût total du mois', '1 250,40€', '0.0% vs mois précédent']);
       expect(screen.getByRole('button', { name: "Vue d'ensemble" })).toBeInTheDocument();
+      // The months back in French (#33)
+      expect(optionsOf(monthSelector())).toEqual(['Septembre 2026', 'Août 2026', 'Juillet 2026']);
+      expect(monthSelector()).toHaveDisplayValue('Septembre 2026');
     });
   });
 });

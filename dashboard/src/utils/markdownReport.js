@@ -1,11 +1,12 @@
-import { formatCurrency } from './format.js';
+import { formatCurrency, formatMonthLabel } from './format.js';
 
 // Generate markdown report
 const generateMarkdownReport = (summary, byService, byProject, selectedMonth, language = 'fr') => {
   const locale = language === 'en' ? 'en-US' : 'fr-FR';
   const fmt = (v) => formatCurrency(v, language);
+  const month = formatMonthLabel(selectedMonth?.value, language) || 'N/A';
 
-  let md = `# OVH Cost Report - ${selectedMonth?.label || 'N/A'}\n\n`;
+  let md = `# OVH Cost Report - ${month}\n\n`;
   md += `**${language === 'en' ? 'Period' : 'Période'}:** ${selectedMonth?.from} to ${selectedMonth?.to}\n\n`;
   md += `## ${language === 'en' ? 'Summary' : 'Résumé'}\n\n`;
   md += `| ${language === 'en' ? 'Metric' : 'Métrique'} | ${language === 'en' ? 'Value' : 'Valeur'} |\n|--------|-------|\n`;

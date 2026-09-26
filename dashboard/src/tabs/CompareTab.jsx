@@ -5,6 +5,7 @@ import Accordion from '../components/Accordion.jsx';
 import { SortIcon } from '../components/SortIcon.jsx';
 import ProjectProductComparison from '../components/ProjectProductComparison.jsx';
 import { Variation } from '../components/Variation.jsx';
+import { formatMonthLabel } from '../utils/format.js';
 import { projectComparisonRows } from '../utils/projectComparison.js';
 
 // The cost of a resource type in a month, from its costs by resource type (#32)
@@ -30,6 +31,10 @@ const CompareTab = ({
   byResourceTypeA, byResourceTypeB, backupStatsA, backupStatsB,
   language, t, fmt, months, inventoryServers,
 }) => {
+  // Months A and B as the page names them, in its language (#33)
+  const monthALabel = formatMonthLabel(compareMonthA?.value, language);
+  const monthBLabel = formatMonthLabel(compareMonthB?.value, language);
+
   // Merge and sort comparison data: the projects of months A and B, paired by id (#55)
   const getSortedCompareProjects = () => {
     const merged = projectComparisonRows(byProjectA, byProjectB);
@@ -107,7 +112,11 @@ const CompareTab = ({
               }}
               className="px-3 py-2 bg-blue-50 border border-blue-200 rounded-lg text-sm font-medium text-blue-700"
             >
-              {months.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
+              {months.map(m => (
+                <option key={m.value} value={m.value}>
+                  {formatMonthLabel(m.value, language)}
+                </option>
+              ))}
             </select>
           </div>
           <span className="text-2xl font-bold text-gray-300">{t('vs')}</span>
@@ -121,7 +130,11 @@ const CompareTab = ({
               }}
               className="px-3 py-2 bg-gray-100 border border-gray-200 rounded-lg text-sm"
             >
-              {months.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
+              {months.map(m => (
+                <option key={m.value} value={m.value}>
+                  {formatMonthLabel(m.value, language)}
+                </option>
+              ))}
             </select>
           </div>
         </div>
@@ -131,7 +144,7 @@ const CompareTab = ({
             <div className="text-3xl md:text-4xl font-bold text-blue-600">
               {fmt(compareDataA?.total || 0)}€
             </div>
-            <div className="text-gray-500 mt-1 text-sm">{compareMonthA?.label}</div>
+            <div className="text-gray-500 mt-1 text-sm">{monthALabel}</div>
           </div>
           <div className="flex flex-col items-center">
             {/* From the total of month A to that of month B, once both are in */}
@@ -145,7 +158,7 @@ const CompareTab = ({
             <div className="text-3xl md:text-4xl font-bold text-gray-400">
               {fmt(compareDataB?.total || 0)}€
             </div>
-            <div className="text-gray-500 mt-1 text-sm">{compareMonthB?.label}</div>
+            <div className="text-gray-500 mt-1 text-sm">{monthBLabel}</div>
           </div>
         </div>
       </div>
@@ -160,8 +173,8 @@ const CompareTab = ({
               <YAxis tickFormatter={(v) => `${v}€`} />
               <Tooltip formatter={(v) => `${fmt(v)}€`} />
               <Legend />
-              <Bar dataKey="moisA" fill="#3b82f6" name={compareMonthA?.label} />
-              <Bar dataKey="moisB" fill="#94a3b8" name={compareMonthB?.label} />
+              <Bar dataKey="moisA" fill="#3b82f6" name={monthALabel} />
+              <Bar dataKey="moisB" fill="#94a3b8" name={monthBLabel} />
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -181,13 +194,13 @@ const CompareTab = ({
                 className="p-3 font-medium text-right cursor-pointer hover:bg-gray-100 select-none"
                 onClick={() => handleCompareSort('totalA')}
               >
-                {compareMonthA?.label}<SortIcon column="totalA" current={compareSort} />
+                {monthALabel}<SortIcon column="totalA" current={compareSort} />
               </th>
               <th
                 className="p-3 font-medium text-right cursor-pointer hover:bg-gray-100 select-none"
                 onClick={() => handleCompareSort('totalB')}
               >
-                {compareMonthB?.label}<SortIcon column="totalB" current={compareSort} />
+                {monthBLabel}<SortIcon column="totalB" current={compareSort} />
               </th>
               <th
                 className="p-3 font-medium text-right rounded-tr-lg cursor-pointer hover:bg-gray-100 select-none"
@@ -219,8 +232,8 @@ const CompareTab = ({
           <thead>
             <tr className="border-b text-left bg-gray-50">
               <th className="p-3 font-medium rounded-tl-lg">{language === 'en' ? 'Type' : 'Type'}</th>
-              <th className="p-3 font-medium text-right">{compareMonthA?.label}</th>
-              <th className="p-3 font-medium text-right">{compareMonthB?.label}</th>
+              <th className="p-3 font-medium text-right">{monthALabel}</th>
+              <th className="p-3 font-medium text-right">{monthBLabel}</th>
               <th className="p-3 font-medium text-right rounded-tr-lg">{t('variation')}</th>
             </tr>
           </thead>
@@ -255,8 +268,8 @@ const CompareTab = ({
           <thead>
             <tr className="border-b text-left bg-gray-50">
               <th className="p-3 font-medium rounded-tl-lg">{language === 'en' ? 'Category' : 'Catégorie'}</th>
-              <th className="p-3 font-medium text-right">{compareMonthA?.label}</th>
-              <th className="p-3 font-medium text-right">{compareMonthB?.label}</th>
+              <th className="p-3 font-medium text-right">{monthALabel}</th>
+              <th className="p-3 font-medium text-right">{monthBLabel}</th>
               <th className="p-3 font-medium text-right rounded-tr-lg">{t('variation')}</th>
             </tr>
           </thead>
@@ -299,8 +312,8 @@ const CompareTab = ({
           <thead>
             <tr className="border-b text-left bg-gray-50">
               <th className="p-3 font-medium rounded-tl-lg">{language === 'en' ? 'Type' : 'Type'}</th>
-              <th className="p-3 font-medium text-right">{compareMonthA?.label}</th>
-              <th className="p-3 font-medium text-right">{compareMonthB?.label}</th>
+              <th className="p-3 font-medium text-right">{monthALabel}</th>
+              <th className="p-3 font-medium text-right">{monthBLabel}</th>
               <th className="p-3 font-medium text-right rounded-tr-lg">{t('variation')}</th>
             </tr>
           </thead>

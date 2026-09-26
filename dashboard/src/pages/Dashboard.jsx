@@ -9,7 +9,7 @@ import {
 } from '../services/api';
 import { useLanguage } from '../hooks/useLanguage.jsx';
 import Logo from '../components/Logo';
-import { formatCurrency } from '../utils/format.js';
+import { formatCurrency, formatMonthLabel } from '../utils/format.js';
 import { parseSqliteDate } from '../utils/sqliteDate.js';
 import { generateMarkdownReport } from '../utils/markdownReport.js';
 import { useWebCloudTab } from '../tabs/useWebCloudTab.js';
@@ -333,7 +333,11 @@ export default function Dashboard() {
                   }}
                   className="px-4 py-2 bg-white border border-gray-200 rounded-lg text-sm shadow-sm cursor-pointer"
                 >
-                  {months.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
+                  {months.map(m => (
+                    <option key={m.value} value={m.value}>
+                      {formatMonthLabel(m.value, language)}
+                    </option>
+                  ))}
                 </select>
                 <div className="flex items-center gap-2">
                   <span className="text-sm text-gray-600">{t('export')}:</span>
