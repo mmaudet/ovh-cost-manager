@@ -188,6 +188,20 @@ export function accordionOf(toggle) {
   return toggle.parentElement;
 }
 
+// The breakdown by resource type of the Overview, with its links to the
+// Infrastructure and Web Cloud tabs
+export function resourceTypeBreakdown() {
+  return cardOf(screen.getByRole('heading',
+    { name: /^(Répartition par type de ressource|Breakdown by resource type)$/ }));
+}
+
+// The breakdown by project of the Overview, each project a link to its detail
+// on the Public Cloud tab
+export function projectBreakdown() {
+  return cardOf(screen.getByRole('heading',
+    { name: /^(Répartition par projet|Breakdown by project)$/ }));
+}
+
 // The Public Cloud projects, each showing its detail under it on a click
 export function cloudProjects() {
   return cardOf(screen.getByRole('heading', { name: /^(Projets Cloud|Cloud Projects)$/ }));
@@ -196,6 +210,34 @@ export function cloudProjects() {
 // The row of a Public Cloud project, found by its name
 export function cloudProjectRow(name) {
   return within(cloudProjects()).getByRole('row', { name: new RegExp(`^${name}`) });
+}
+
+// Opens the detail of a Public Cloud project with a click on its name; a
+// second click closes it
+export async function openProject(user, name) {
+  await user.click(within(cloudProjects()).getByText(name));
+  await settle();
+}
+
+// The headings of the detail of the open Public Cloud project, each as the
+// texts it shows: none while no project is open
+export function projectDetailHeadings() {
+  return within(cloudProjects())
+    .queryAllByRole('heading', { level: 4 })
+    .map((heading) => texts(heading));
+}
+
+// The costs by resource type of the Infrastructure tab, each showing its bill
+// lines under it on a click. The heading ends with the month.
+export function costsByResourceType() {
+  return cardOf(screen.getByRole('heading',
+    { name: /^(Coûts par type de ressource|Costs by resource type)/ }));
+}
+
+// A resource type of the costs by resource type, found by the name the server
+// gives it
+export function resourceType(name) {
+  return within(costsByResourceType()).getByText(name);
 }
 
 // A badge of the header: a count and its label
