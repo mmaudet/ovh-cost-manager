@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { useBackupTab } from '../../src/tabs/useBackupTab.js';
 import { months } from '../fixtures/calendar.js';
 import { api } from '../support/api.js';
-import { renderTabHook } from '../support/hooks.jsx';
+import { renderTabHook, TAB_IDS } from '../support/hooks.jsx';
 
 // The data query of the Backup tab, as the dashboard shell sees it: what the hook requests
 // and returns for the selected month and the active tab.
@@ -10,7 +10,7 @@ import { renderTabHook } from '../support/hooks.jsx';
 const [september, august] = months;
 
 describe('useBackupTab', () => {
-  it.each(['overview', 'compare', 'trends', 'inventory', 'infrastructure', 'webcloud'])(
+  it.each(TAB_IDS.filter((tab) => tab !== 'backup'))(
     'requests nothing while the %s tab is active',
     async (activeTab) => {
       const { result } = await renderTabHook(useBackupTab,

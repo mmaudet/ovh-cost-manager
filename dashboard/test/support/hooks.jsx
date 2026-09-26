@@ -8,6 +8,12 @@ import { account } from '../fixtures/account.js';
 import { serve } from './api.js';
 import { createQueryClient, settle } from './query-client.js';
 
+// The ids of the dashboard's tabs, in the order of the tab bar, as the shell's activeTab
+// holds them: 'inventory' is the Public Cloud tab.
+export const TAB_IDS = [
+  'overview', 'compare', 'trends', 'inventory', 'webcloud', 'infrastructure', 'backup',
+];
+
 // Calls useTab(props), the API answering from the dataset, and waits until the hook holds
 // every answer it asked for. Returns its result, the query client that holds the answers,
 // and rerender(props), which calls it again with other props, as the shell does when its
