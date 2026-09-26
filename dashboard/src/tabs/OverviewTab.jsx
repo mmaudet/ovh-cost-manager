@@ -307,7 +307,7 @@ const OverviewTab = ({
             </tbody>
             <tfoot>
               <tr className="bg-gray-50 font-semibold">
-                <td className="p-3">{t('totalCloud')}</td>
+                <td className="p-3">{t('cloudTotal')}</td>
                 <td className="p-3 text-right">{fmt(summary?.cloudTotal || 0)}€</td>
                 <td className="p-3 text-right">{formatPercent(1, language, { decimals: 0 })}</td>
               </tr>

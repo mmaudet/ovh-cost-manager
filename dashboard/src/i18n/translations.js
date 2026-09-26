@@ -44,7 +44,6 @@ export const translations = {
     projectBreakdown: 'Répartition par projet',
     project: 'Projet',
     amount: 'Montant',
-    totalCloud: 'Total Cloud',
 
     // Compare
     monthA: 'Mois A',
@@ -230,7 +229,6 @@ export const translations = {
     projectBreakdown: 'Breakdown by project',
     project: 'Project',
     amount: 'Amount',
-    totalCloud: 'Cloud Total',
 
     // Compare
     monthA: 'Month A',
