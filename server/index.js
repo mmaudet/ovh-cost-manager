@@ -12,7 +12,7 @@ const db = require('../data/db');
 
 // Import auth module
 const auth = require('./auth');
-const { isAllowedOrigin } = require('./cors');
+const { createOriginCheck } = require('./cors');
 const { monthBounds } = require('./months');
 
 // Load configuration
@@ -98,20 +98,22 @@ const app = express();
 const PORT = process.env.PORT || 3001;
 const rateLimitConfig = getRateLimitConfig();
 
-// CORS configuration - restrict to allowed origins and the request's own.
-// Per-request options, as the check reads the request's Host headers.
+// CORS configuration - restrict to allowed origins and the request's own
+const isAllowedOrigin = createOriginCheck({
+  // Allowed origins from config or environment
+  allowedOrigins: process.env.ALLOWED_ORIGINS
+    ? process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim())
+    : config.allowedOrigins || [],
+  isDev: process.env.NODE_ENV !== 'production',
+  trustProxy: rateLimitConfig.trustProxy,
+});
+
+// Per-request options, as the check reads the request's headers
 function corsOptionsDelegate(req, callback) {
   const origin = req.headers.origin;
-  const allowed = isAllowedOrigin({
-    origin,
+  const allowed = isAllowedOrigin(origin, {
     host: req.headers.host,
     forwardedHost: req.headers['x-forwarded-host'],
-    trustProxy: rateLimitConfig.trustProxy,
-    // Check allowed origins from config or environment
-    allowedOrigins: process.env.ALLOWED_ORIGINS
-      ? process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim())
-      : config.allowedOrigins || [],
-    isDev: process.env.NODE_ENV !== 'production',
   });
 
   if (allowed) {
