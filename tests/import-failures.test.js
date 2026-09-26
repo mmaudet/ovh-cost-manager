@@ -3,48 +3,32 @@
  * API: each one is skipped, its log line says why, and the summary counts it.
  */
 
-const fs = require('fs');
-const os = require('os');
-const path = require('path');
+const { routes, ok, fail, useThrowawayImport } = require('./support/simulated-ovh');
 
-// Simulated OVH API: route -> handler returning a promise. Unknown routes
-// answer 404, like the real API does.
-const mockRoutes = new Map();
-jest.mock('ovh', () => () => ({
-  requestPromised: (method, route) => {
-    const handler = mockRoutes.get(route);
-    return handler ? handler() : Promise.reject({ error: 404, message: `Not found: ${route}` });
-  }
-}));
+jest.mock('ovh', () => require('./support/simulated-ovh').ovh);
+jest.mock('jsonfile', () => require('./support/simulated-ovh').jsonfile);
 
-// Never read the real credentials of the machine running the tests
-jest.mock('jsonfile', () => ({
-  readFileSync: () => ({ appKey: 'test', appSecret: 'test', consumerKey: 'test' })
-}));
-
-const ok = (value) => () => Promise.resolve(value);
-const fail = (error, message) => () => Promise.reject({ error, message });
-
+const throwaway = useThrowawayImport('ocm-import-failures-');
 let db;
 let importer;
-let dataDir;
-const previousDataDir = process.env.DATA_DIR;
+beforeAll(() => {
+  ({ db, importer } = throwaway);
+});
 
 // One bill of September with two lines, and no Public Cloud project
 function serveBill() {
-  mockRoutes.clear();
-  mockRoutes.set('/cloud/project', ok([]));
-  mockRoutes.set('/me/bill', ok(['FR1']));
-  mockRoutes.set('/me/bill/FR1', ok({
+  routes.set('/cloud/project', ok([]));
+  routes.set('/me/bill', ok(['FR1']));
+  routes.set('/me/bill/FR1', ok({
     billId: 'FR1',
     date: '2026-09-01T00:00:00+02:00',
     priceWithoutTax: { value: 20, currencyCode: 'EUR' },
     priceWithTax: { value: 24, currencyCode: 'EUR' },
     tax: { value: 4, currencyCode: 'EUR' },
   }));
-  mockRoutes.set('/me/bill/FR1/details', ok(['D1', 'D2']));
+  routes.set('/me/bill/FR1/details', ok(['D1', 'D2']));
   for (const id of ['D1', 'D2']) {
-    mockRoutes.set(`/me/bill/FR1/details/${id}`, ok({
+    routes.set(`/me/bill/FR1/details/${id}`, ok({
       domain: 'example.com',
       description: 'Nom de domaine example.com',
       quantity: '1',
@@ -65,40 +49,15 @@ async function importSeptember() {
 // The summary that ends the import: its last five lines
 const summary = () => console.log.mock.calls.slice(-5).map(([line]) => line);
 
-beforeAll(() => {
-  // data/db.js reads DATA_DIR once, when it is first required
-  dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ocm-import-failures-'));
-  process.env.DATA_DIR = dataDir;
-  db = require('../data/db');
-  importer = require('../data/import');
-});
-
-afterAll(() => {
-  db.closeDb();
-  fs.rmSync(dataDir, { recursive: true, force: true });
-  if (previousDataDir === undefined) delete process.env.DATA_DIR;
-  else process.env.DATA_DIR = previousDataDir;
-});
-
 beforeEach(() => {
-  jest.useFakeTimers();
-  jest.spyOn(console, 'log').mockImplementation(() => {});
-  jest.spyOn(console, 'warn').mockImplementation(() => {});
-  jest.spyOn(console, 'error').mockImplementation(() => {});
   // The progress of the bills
   jest.spyOn(process.stdout, 'write').mockImplementation(() => true);
-  db.clearAll();
   serveBill();
-});
-
-afterEach(() => {
-  jest.useRealTimers();
-  jest.restoreAllMocks();
 });
 
 describe('an item that the import fails to fetch', () => {
   test('is logged with the status and the message of the OVH error', async () => {
-    mockRoutes.set('/me/bill/FR1/details/D2',
+    routes.set('/me/bill/FR1/details/D2',
       fail(404, 'The requested object (billDetailId = D2) does not exist'));
 
     await importSeptember();
@@ -117,7 +76,7 @@ describe('an item that the import fails to fetch', () => {
     ['a string', 'Unable to reach the API', 'Unable to reach the API'],
     ['an object without a status or a message', { code: 'ECONNRESET' }, "{ code: 'ECONNRESET' }"],
   ])('is logged with a readable reason when the error is %s', async (_, error, reason) => {
-    mockRoutes.set('/me/bill/FR1/details/D2', () => Promise.reject(error));
+    routes.set('/me/bill/FR1/details/D2', () => Promise.reject(error));
 
     await importSeptember();
 
@@ -126,7 +85,7 @@ describe('an item that the import fails to fetch', () => {
   });
 
   test('is skipped, and the rest of its bill stored', async () => {
-    mockRoutes.set('/me/bill/FR1/details/D2', fail(404, 'The requested object does not exist'));
+    routes.set('/me/bill/FR1/details/D2', fail(404, 'The requested object does not exist'));
 
     await importSeptember();
 
@@ -135,7 +94,7 @@ describe('an item that the import fails to fetch', () => {
   });
 
   test('is counted in the summary at the end of the import', async () => {
-    mockRoutes.set('/me/bill/FR1/details/D2', fail(404, 'The requested object does not exist'));
+    routes.set('/me/bill/FR1/details/D2', fail(404, 'The requested object does not exist'));
 
     await importSeptember();
 
@@ -145,7 +104,7 @@ describe('an item that the import fails to fetch', () => {
   });
 
   test('is counted once, after the retries of a server error', async () => {
-    mockRoutes.set('/me/bill/FR1/details/D2', fail(503, 'Service unavailable'));
+    routes.set('/me/bill/FR1/details/D2', fail(503, 'Service unavailable'));
 
     await importSeptember();
 
@@ -157,7 +116,7 @@ describe('an item that the import fails to fetch', () => {
 
 describe('a bill that the import fails to fetch', () => {
   test('is skipped, logged with the reason, and counted in the summary', async () => {
-    mockRoutes.set('/me/bill/FR1',
+    routes.set('/me/bill/FR1',
       fail(404, 'The requested object (billId = FR1) does not exist'));
 
     await importSeptember();
@@ -173,9 +132,9 @@ describe('a bill that the import fails to fetch', () => {
   // As the calls of the other items are
   test.each(['/me/bill/FR1', '/me/bill/FR1/details'])(
     'is fetched again when %s answers a server error', async (route) => {
-      const answer = mockRoutes.get(route);
+      const answer = routes.get(route);
       let calls = 0;
-      mockRoutes.set(route, () => (++calls === 1 ? fail(503, 'Service unavailable')() : answer()));
+      routes.set(route, () => (++calls === 1 ? fail(503, 'Service unavailable')() : answer()));
 
       await importSeptember();
 
@@ -193,9 +152,9 @@ describe('a call that the import retries', () => {
     ['a server error without a message', { error: 503, message: null },
       '  [retry 1/3] 503 — waiting 1000ms'],
   ])('is logged with the reason of %s', async (_, error, line) => {
-    const answer = mockRoutes.get('/me/bill/FR1/details/D2');
+    const answer = routes.get('/me/bill/FR1/details/D2');
     let calls = 0;
-    mockRoutes.set('/me/bill/FR1/details/D2',
+    routes.set('/me/bill/FR1/details/D2',
       () => (++calls === 1 ? Promise.reject(error) : answer()));
 
     await importSeptember();

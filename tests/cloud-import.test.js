@@ -4,54 +4,38 @@
  * consumption of each month is kept.
  */
 
-const fs = require('fs');
-const os = require('os');
-const path = require('path');
+const { routes, ok, fail, useThrowawayImport } = require('./support/simulated-ovh');
 
-// Simulated OVH API: route -> handler returning a promise. Unknown routes
-// answer 404, like the real API does.
-const mockRoutes = new Map();
-jest.mock('ovh', () => () => ({
-  requestPromised: (method, route) => {
-    const handler = mockRoutes.get(route);
-    return handler ? handler() : Promise.reject({ error: 404, message: `Not found: ${route}` });
-  }
-}));
-
-// Never read the real credentials of the machine running the tests
-jest.mock('jsonfile', () => ({
-  readFileSync: () => ({ appKey: 'test', appSecret: 'test', consumerKey: 'test' })
-}));
+jest.mock('ovh', () => require('./support/simulated-ovh').ovh);
+jest.mock('jsonfile', () => require('./support/simulated-ovh').jsonfile);
 
 const PROJECT = 'proj-1';
 const BASE = `/cloud/project/${PROJECT}`;
 
-const ok = (value) => () => Promise.resolve(value);
-const fail = (error, message) => () => Promise.reject({ error, message });
-
+const throwaway = useThrowawayImport('ocm-import-');
 let db;
 let importer;
-let dataDir;
-const previousDataDir = process.env.DATA_DIR;
+beforeAll(() => {
+  ({ db, importer } = throwaway);
+});
 
 // One S3 region (GRA), one legacy alias without detail route (GRA1, left to
 // the 404 default) and one Public Cloud Archive Swift container.
 function serveProject() {
-  mockRoutes.clear();
-  mockRoutes.set(`${BASE}/region`, ok(['GRA', 'GRA1']));
-  mockRoutes.set(`${BASE}/region/GRA`, ok({ services: [{ name: 'storage-s3-standard', status: 'UP' }] }));
-  mockRoutes.set(`${BASE}/region/GRA/storage`, ok([
+  routes.set(`${BASE}/region`, ok(['GRA', 'GRA1']));
+  routes.set(`${BASE}/region/GRA`, ok({ services: [{ name: 'storage-s3-standard', status: 'UP' }] }));
+  routes.set(`${BASE}/region/GRA/storage`, ok([
     { name: 'photos', objectsCount: 2, objectsSize: 2048, createdAt: '2025-01-01T00:00:00Z' }
   ]));
-  mockRoutes.set(`${BASE}/region/GRA/storage/photos/object`, ok([{ storageClass: 'STANDARD' }]));
-  mockRoutes.set(`${BASE}/storage`, ok([
+  routes.set(`${BASE}/region/GRA/storage/photos/object`, ok([{ storageClass: 'STANDARD' }]));
+  routes.set(`${BASE}/storage`, ok([
     { id: 'c-1', name: 'archives', region: 'GRA', storedObjects: 1, storedBytes: 4096 }
   ]));
-  mockRoutes.set(`${BASE}/storage/c-1`, ok({ archive: true }));
-  mockRoutes.set(`${BASE}/volume`, ok([
+  routes.set(`${BASE}/storage/c-1`, ok({ archive: true }));
+  routes.set(`${BASE}/volume`, ok([
     { id: 'vol-1', name: 'data', region: 'GRA11', type: 'classic', size: 100, status: 'available', attachedTo: [] }
   ]));
-  mockRoutes.set(`${BASE}/snapshot`, ok([
+  routes.set(`${BASE}/snapshot`, ok([
     { id: 'snap-1', name: 'before-upgrade', region: 'GRA11', size: 10, status: 'active', visibility: 'private', type: 'linux' }
   ]));
 }
@@ -68,34 +52,9 @@ const storedBuckets = () =>
     .map(b => `${b.name}:${b.storage_class}`)
     .sort();
 
-beforeAll(() => {
-  // data/db.js reads DATA_DIR once, when it is first required
-  dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ocm-import-'));
-  process.env.DATA_DIR = dataDir;
-  db = require('../data/db');
-  importer = require('../data/import');
-});
-
-afterAll(() => {
-  db.closeDb();
-  fs.rmSync(dataDir, { recursive: true, force: true });
-  if (previousDataDir === undefined) delete process.env.DATA_DIR;
-  else process.env.DATA_DIR = previousDataDir;
-});
-
 beforeEach(() => {
-  jest.useFakeTimers();
-  jest.spyOn(console, 'log').mockImplementation(() => {});
-  jest.spyOn(console, 'warn').mockImplementation(() => {});
-  jest.spyOn(console, 'error').mockImplementation(() => {});
-  db.clearAll();
   db.projects.upsert({ id: PROJECT, name: 'Project 1', description: null, status: 'ok', created_at: null });
   serveProject();
-});
-
-afterEach(() => {
-  jest.useRealTimers();
-  jest.restoreAllMocks();
 });
 
 describe('object storage inventory import', () => {
@@ -107,7 +66,7 @@ describe('object storage inventory import', () => {
 
   test('retries a region detail call that is rate limited', async () => {
     let calls = 0;
-    mockRoutes.set(`${BASE}/region/GRA`, () => (++calls === 1
+    routes.set(`${BASE}/region/GRA`, () => (++calls === 1
       ? Promise.reject({ error: 429, message: 'Too many requests' })
       : Promise.resolve({ services: [{ name: 'storage-s3-standard', status: 'UP' }] })));
 
@@ -119,7 +78,7 @@ describe('object storage inventory import', () => {
   // The ovh client puts the HTTP status in `error`, not in `statusCode`
   test('retries a region detail call that answers a server error', async () => {
     let calls = 0;
-    mockRoutes.set(`${BASE}/region/GRA`, () => (++calls === 1
+    routes.set(`${BASE}/region/GRA`, () => (++calls === 1
       ? Promise.reject({ error: 503, message: 'Service unavailable' })
       : Promise.resolve({ services: [{ name: 'storage-s3-standard', status: 'UP' }] })));
 
@@ -130,9 +89,9 @@ describe('object storage inventory import', () => {
 
   test('keeps the stored buckets when a region detail call keeps failing', async () => {
     await importProject();
-    mockRoutes.set(`${BASE}/region/GRA`, fail(429, 'Too many requests'));
+    routes.set(`${BASE}/region/GRA`, fail(429, 'Too many requests'));
     // Replacing the inventory now would also drop the Swift container
-    mockRoutes.set(`${BASE}/storage`, ok([]));
+    routes.set(`${BASE}/storage`, ok([]));
 
     await importProject();
 
@@ -143,7 +102,7 @@ describe('object storage inventory import', () => {
   test('keeps the stored buckets when a Swift container detail call fails', async () => {
     await importProject();
     // Without the detail, the archive container would be stored as plain Swift
-    mockRoutes.set(`${BASE}/storage/c-1`, fail(500, 'Internal server error'));
+    routes.set(`${BASE}/storage/c-1`, fail(500, 'Internal server error'));
 
     await importProject();
 
@@ -152,7 +111,7 @@ describe('object storage inventory import', () => {
 
   test('keeps the stored buckets when the Swift container list fails', async () => {
     await importProject();
-    mockRoutes.set(`${BASE}/storage`, fail(503, 'Service unavailable'));
+    routes.set(`${BASE}/storage`, fail(503, 'Service unavailable'));
 
     await importProject();
 
@@ -163,8 +122,8 @@ describe('object storage inventory import', () => {
 describe('volume and snapshot inventory import', () => {
   test('keeps the stored volumes and snapshots when their listing fails', async () => {
     await importProject();
-    mockRoutes.set(`${BASE}/volume`, fail(429, 'Too many requests'));
-    mockRoutes.set(`${BASE}/snapshot`, fail(503, 'Service unavailable'));
+    routes.set(`${BASE}/volume`, fail(429, 'Too many requests'));
+    routes.set(`${BASE}/snapshot`, fail(503, 'Service unavailable'));
 
     await importProject();
 
@@ -194,7 +153,7 @@ describe('project consumption import', () => {
 
   async function importUsageAt(instant, usage) {
     jest.setSystemTime(new Date(instant));
-    mockRoutes.set(`${BASE}/usage/current`, ok(usage));
+    routes.set(`${BASE}/usage/current`, ok(usage));
     await importProject();
   }
   const importUsageOn = (day, usage) => importUsageAt(`${day}T10:00:00Z`, usage);
@@ -298,12 +257,12 @@ describe('project consumption import', () => {
   test('replaces the instances and quotas of the project at each import', async () => {
     const instance = (id) => ({ id, name: id, flavor: { name: 'b2-7' }, region: 'GRA11' });
     const quota = (region) => ({ region, instance: { maxCores: 20, usedCores: 2 } });
-    mockRoutes.set(`${BASE}/instance`, ok([instance('inst-1'), instance('inst-2')]));
-    mockRoutes.set(`${BASE}/quota`, ok([quota('GRA11')]));
+    routes.set(`${BASE}/instance`, ok([instance('inst-1'), instance('inst-2')]));
+    routes.set(`${BASE}/quota`, ok([quota('GRA11')]));
     await importUsageOn('2026-08-28', usageOfInstance('b2-7', 30.5));
 
-    mockRoutes.set(`${BASE}/instance`, ok([instance('inst-2')]));
-    mockRoutes.set(`${BASE}/quota`, ok([quota('SBG5')]));
+    routes.set(`${BASE}/instance`, ok([instance('inst-2')]));
+    routes.set(`${BASE}/quota`, ok([quota('SBG5')]));
     await importUsageOn('2026-09-15', usageOfInstance('b2-15', 12.25));
 
     expect(db.cloudDetails.getInstancesByProject(PROJECT).map(i => i.id)).toEqual(['inst-2']);
