@@ -51,10 +51,17 @@ describe('createOriginCheck', () => {
   });
 
   // The Vite dev server calls the API from another port
-  test.each(['http://localhost:5173', 'http://127.0.0.1:5173'])(
+  test.each(['http://localhost:5173', 'http://127.0.0.1:5173', 'http://[::1]:5173'])(
     'allows %s in development',
     (origin) => {
       expect(development(origin, { host: 'localhost:3001' })).toBe(true);
+    }
+  );
+
+  test.each(['http://localhost.evil.example', 'https://notlocalhost.com'])(
+    'rejects %s in development, as its hostname is not localhost',
+    (origin) => {
+      expect(development(origin, { host: 'localhost:3001' })).toBe(false);
     }
   );
 

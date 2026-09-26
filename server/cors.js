@@ -1,12 +1,16 @@
 /**
  * The origin check of the CORS middleware.
  *
- * Allowed: requests without an Origin, the listed origins, localhost and
- * 127.0.0.1 in development, and the request's own origin. Chromium sends an
- * Origin even on the page's own script and stylesheet, which Vite marks
- * crossorigin (#76). CORS only restricts cross-origin requests, so accepting
- * the request's own origin does not widen access.
+ * Allowed: requests without an Origin, the listed origins, localhost in
+ * development, and the request's own origin. Chromium sends an Origin even on
+ * the page's own script and stylesheet, which Vite marks crossorigin (#76).
+ * CORS only restricts cross-origin requests, so accepting the request's own
+ * origin does not widen access.
  */
+
+// Allowed in development, where the Vite dev server calls the API from
+// another port. Compared with the whole hostname, as URL writes it.
+const LOOPBACK_HOSTNAMES = ['localhost', '127.0.0.1', '[::1]'];
 
 /**
  * Builds the check once, from the server's settings.
@@ -29,21 +33,29 @@ function createOriginCheck({ allowedOrigins, isDev, trustProxy }) {
     if (!origin || allowedOrigins.includes(origin)) {
       return true;
     }
-    if (isDev && (origin.includes('localhost') || origin.includes('127.0.0.1'))) {
+    const url = parseOrigin(origin);
+    if (!url) {
+      return false;
+    }
+    if (isDev && LOOPBACK_HOSTNAMES.includes(url.hostname)) {
       return true;
     }
     const ownHosts = [host];
     if (trustProxy && forwardedHost) {
       ownHosts.push(forwardedHost.split(',')[0].trim());
     }
-    try {
-      // Hostname and port, the default port left out as in the Host header
-      return ownHosts.includes(new URL(origin).host);
-    } catch (e) {
-      // A malformed Origin, or 'null', is nobody's own origin
-      return false;
-    }
+    // Hostname and port, the default port left out as in the Host header
+    return ownHosts.includes(url.host);
   };
+}
+
+// The Origin header as a URL, or null when it is malformed, or 'null'
+function parseOrigin(origin) {
+  try {
+    return new URL(origin);
+  } catch (e) {
+    return null;
+  }
 }
 
 module.exports = { createOriginCheck };
