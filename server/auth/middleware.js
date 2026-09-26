@@ -2,14 +2,13 @@
  * Authentication Middleware
  */
 const sessionStore = require('./session-store');
-const { unsignValue } = require('./session-cookie');
+const { sessionCookie, unsignValue } = require('./session-cookie');
 const { isHealthCheck } = require('./health');
 
 // The API as Express routes it, without case, /api itself included
 const API_PATH = /^\/api(\/|$)/i;
 
 function createAuthMiddleware(config) {
-  const cookieName = config.auth?.session?.name || 'ocm.sid';
   const secret = config.auth?.session?.secret;
 
   return (req, res, next) => {
@@ -19,8 +18,10 @@ function createAuthMiddleware(config) {
       return next();
     }
 
-    // Get session from cookie, when its signature matches
-    const sid = unsignValue(req.cookies?.[cookieName], secret, 'session');
+    // Get session from cookie, when its signature matches: over HTTPS, from
+    // the __Host- cookie only, which no other host can set
+    const { name } = sessionCookie(req, config.auth);
+    const sid = unsignValue(req.cookies?.[name], secret, 'session');
 
     if (sid) {
       const session = sessionStore.get(sid);

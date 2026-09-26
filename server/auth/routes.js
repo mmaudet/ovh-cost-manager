@@ -11,7 +11,7 @@ const {
 const oidcClient = require('./oidc-client');
 const sessionStore = require('./session-store');
 const { safeReturnTo } = require('./return-to');
-const { sessionCookieOptions, signValue, unsignValue } = require('./session-cookie');
+const { sessionCookie, signValue, unsignValue } = require('./session-cookie');
 const {
   LOGIN_MAX_AGE_MS,
   encodeLoginState,
@@ -120,9 +120,11 @@ function setup(config) {
         authConfig.session.maxAge
       );
 
-      // Set cookie, signed: Secure over HTTPS, unless COOKIE_SECURE says otherwise
-      res.cookie(authConfig.session.name, signValue(sid, authConfig.session.secret, 'session'), {
-        ...sessionCookieOptions(req, authConfig),
+      // Set cookie, signed: Secure over HTTPS, unless COOKIE_SECURE says
+      // otherwise, and then named __Host-
+      const session = sessionCookie(req, authConfig);
+      res.cookie(session.name, signValue(sid, authConfig.session.secret, 'session'), {
+        ...session.options,
         maxAge: authConfig.session.maxAge,
       });
 
@@ -149,11 +151,8 @@ function setup(config) {
 
   // GET /auth/logout - Front-channel logout
   router.get('/logout', (req, res) => {
-    const sid = unsignValue(
-      req.cookies[authConfig.session.name],
-      authConfig.session.secret,
-      'session'
-    );
+    const session = sessionCookie(req, authConfig);
+    const sid = unsignValue(req.cookies[session.name], authConfig.session.secret, 'session');
 
     // Delete local session and get id_token
     let idToken = null;
@@ -162,7 +161,7 @@ function setup(config) {
     }
 
     // Clear cookie, with the flags it was set with
-    res.clearCookie(authConfig.session.name, sessionCookieOptions(req, authConfig));
+    res.clearCookie(session.name, session.options);
 
     // Redirect to OP end_session_endpoint if available
     const logoutUrl = oidcClient.getEndSessionUrl(idToken);

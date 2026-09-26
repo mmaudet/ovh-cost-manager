@@ -71,6 +71,8 @@ describe('sign-in', () => {
     expect(provider.lastPkce).toEqual({ method: 'S256', verified: true });
     const user = await browser.fetch('/api/user');
     expect(await user.json()).toMatchObject({ id: 'alice', authEnabled: true });
+    // Over plain HTTP, where browsers refuse a __Host- cookie
+    expect([...browser.cookies.keys()]).toEqual(['ocm.sid']);
   });
 
   test('refuses a callback opened without the sign-in cookie', async () => {
@@ -168,7 +170,57 @@ describe('sign-in over HTTPS through a trusted proxy', () => {
     const authorization = await browser.fetch(login.headers.get('location'));
     const callback = await browser.fetch(authorization.headers.get('location'), https);
     expect(callback.status).toBe(302);
-    expect(browser.cookies.has('ocm.sid')).toBe(true);
+    expect(browser.cookies.has('__Host-ocm.sid')).toBe(true);
+  });
+
+  // A browser signed in as user over HTTPS, and the value of its session cookie
+  async function signedInOverHttps(user) {
+    provider.user = user;
+    const browser = createBrowser(proxied.url);
+    const login = await browser.fetch('/auth/login', https);
+    const authorization = await browser.fetch(login.headers.get('location'));
+    const callback = await browser.fetch(authorization.headers.get('location'), https);
+    return { browser, callback, session: browser.cookies.get('__Host-ocm.sid') };
+  }
+
+  const userOf = async (cookie) => {
+    const res = await fetch(`${proxied.url}/api/user`, {
+      headers: { ...https.headers, Cookie: cookie },
+    });
+    return (await res.json()).id;
+  };
+
+  test('keeps the session in a __Host- cookie, Secure, on Path=/', async () => {
+    const { callback } = await signedInOverHttps('alice');
+    const cookie = callback.headers.getSetCookie()
+      .find((line) => !line.startsWith('__Host-ocm.login.'));
+    expect(cookie).toMatch(/^__Host-ocm\.sid=/);
+    expect(cookie).toMatch(/; Path=\/;/);
+    expect(cookie).toMatch(/; Secure/);
+    expect(cookie).toMatch(/; HttpOnly/);
+    expect(cookie).toMatch(/; SameSite=Lax/);
+  });
+
+  // A sibling host can plant a plain ocm.sid for the domain on Path=/api,
+  // which the browser sends before the session cookie: the API ran as its user
+  test('reads the session from its __Host- cookie only', async () => {
+    const mallory = await signedInOverHttps('mallory');
+    const alice = await signedInOverHttps('alice');
+
+    expect(await userOf(`__Host-ocm.sid=${alice.session}`)).toBe('alice');
+    expect(await userOf(`ocm.sid=${mallory.session}; __Host-ocm.sid=${alice.session}`))
+      .toBe('alice');
+    expect(await userOf(`ocm.sid=${mallory.session}`)).toBeUndefined();
+  });
+
+  test('clears the __Host- cookie at sign-out, and ends the session', async () => {
+    const { browser, session } = await signedInOverHttps('alice');
+    const res = await browser.fetch('/auth/logout', https);
+    const [cookie] = res.headers.getSetCookie();
+    expect(cookie).toMatch(/^__Host-ocm\.sid=;/);
+    expect(cookie).toMatch(/; Path=\/;/);
+    expect(cookie).toMatch(/; Secure/);
+    expect(await userOf(`__Host-ocm.sid=${session}`)).toBeUndefined();
   });
 });
 

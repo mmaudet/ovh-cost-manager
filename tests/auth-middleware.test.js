@@ -106,3 +106,56 @@ describe('the OIDC authentication middleware', () => {
     });
   });
 });
+
+// Over HTTPS, the session cookie is __Host-ocm.sid, which no other host can
+// set: a plain ocm.sid, which a sibling host can plant, is not read
+describe('the OIDC authentication middleware, over HTTPS through a trusted proxy', () => {
+  const HTTPS = { 'X-Forwarded-Proto': 'https' };
+  let db;
+  let server;
+  const session = (user) => signValue(
+    sessionStore.create(user, { name: user }, {}, null, 60 * 1000),
+    SECRET,
+    'session'
+  );
+
+  beforeAll(async () => {
+    db = new Database(':memory:');
+    sessionStore.init(db);
+    const app = createApp();
+    app.set('trust proxy', true);
+    server = await serve(app);
+  });
+
+  afterAll(async () => {
+    await server.close();
+    db.close();
+  });
+
+  test('reads the session from __Host-ocm.sid', async () => {
+    const res = await server.request('GET', '/api/months', {
+      ...HTTPS,
+      Cookie: `__Host-ocm.sid=${session('alice')}`,
+    });
+    expect(res.status).toBe(200);
+    expect(JSON.parse(res.body).user).toBe('alice');
+  });
+
+  test('ignores a plain ocm.sid, even of a valid session', async () => {
+    const res = await server.request('GET', '/api/months', {
+      ...HTTPS,
+      Cookie: `ocm.sid=${session('mallory')}`,
+    });
+    expect(res.status).toBe(401);
+  });
+
+  // A browser sends the cookie of the longer path first: the one planted on
+  // Path=/api comes before the session's own
+  test('ignores a plain ocm.sid sent before the session cookie', async () => {
+    const res = await server.request('GET', '/api/months', {
+      ...HTTPS,
+      Cookie: `ocm.sid=${session('mallory')}; __Host-ocm.sid=${session('alice')}`,
+    });
+    expect(JSON.parse(res.body).user).toBe('alice');
+  });
+});

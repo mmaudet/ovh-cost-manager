@@ -41,6 +41,25 @@ function sessionCookieOptions(req, auth) {
 }
 
 /**
+ * The session cookie of a request: its name and its options, to set it, clear
+ * it and read it. Secure, it is named with the __Host- prefix, on Path=/: a
+ * browser accepts such a cookie only from this host, so that a sibling host
+ * cannot plant one, as it can a plain ocm.sid for the whole domain on
+ * Path=/api, which the browser sends first. Over plain HTTP, where browsers
+ * refuse a __Host- cookie, it keeps its plain name.
+ *
+ * @param {object} req - the request
+ * @param {object} auth - the auth settings: baseUrl, session.name and
+ *   session.secure
+ * @returns {{ name: string, options: object }}
+ */
+function sessionCookie(req, auth) {
+  const options = { ...sessionCookieOptions(req, auth), path: '/' };
+  const name = options.secure ? `__Host-${auth.session.name}` : auth.session.name;
+  return { name, options };
+}
+
+/**
  * A cookie value signed with SESSION_SECRET for a purpose: the value, a dot,
  * and the HMAC-SHA256 of the purpose, a colon and the value. The session
  * cookie holds the session id signed for 'session': a session id alone, as
@@ -118,6 +137,7 @@ function sessionSecretWarning(secret) {
 module.exports = {
   cookieSecure,
   sessionCookieOptions,
+  sessionCookie,
   signValue,
   unsignValue,
   sessionSecretWarning,

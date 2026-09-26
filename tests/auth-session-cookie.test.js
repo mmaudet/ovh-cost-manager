@@ -8,6 +8,7 @@ const crypto = require('crypto');
 const {
   cookieSecure,
   sessionCookieOptions,
+  sessionCookie,
   signValue,
   unsignValue,
   sessionSecretWarning,
@@ -74,6 +75,42 @@ describe('sessionCookieOptions', () => {
   test('follows the setting', () => {
     const forced = { ...auth, session: { secure: true } };
     expect(sessionCookieOptions(overHttp, forced).secure).toBe(true);
+  });
+});
+
+// A sibling host can plant a plain ocm.sid for the whole domain, on Path=/api,
+// which the browser then sends first. A browser accepts a __Host- cookie only
+// Secure, from the host itself, without Domain and on Path=/
+describe('sessionCookie', () => {
+  const auth = { baseUrl: HTTP_BASE_URL, session: { name: 'ocm.sid', secure: 'auto' } };
+
+  test('is __Host-ocm.sid, Secure, on Path=/, over HTTPS', () => {
+    expect(sessionCookie(overHttps, auth)).toEqual({
+      name: '__Host-ocm.sid',
+      options: { httpOnly: true, secure: true, sameSite: 'lax', path: '/' },
+    });
+  });
+
+  // Browsers refuse a __Host- cookie without Secure
+  test('keeps its plain name over plain HTTP', () => {
+    expect(sessionCookie(overHttp, auth)).toEqual({
+      name: 'ocm.sid',
+      options: { httpOnly: true, secure: false, sameSite: 'lax', path: '/' },
+    });
+  });
+
+  test('is __Host- whenever the cookie is Secure', () => {
+    expect(sessionCookie(overHttp, { ...auth, baseUrl: HTTPS_BASE_URL }).name)
+      .toBe('__Host-ocm.sid');
+    expect(sessionCookie(overHttp, { ...auth, session: { name: 'ocm.sid', secure: true } }).name)
+      .toBe('__Host-ocm.sid');
+    expect(sessionCookie(overHttps, { ...auth, session: { name: 'ocm.sid', secure: false } }))
+      .toMatchObject({ name: 'ocm.sid', options: { secure: false } });
+  });
+
+  test('prefixes the name that auth.session.name sets', () => {
+    expect(sessionCookie(overHttps, { ...auth, session: { name: 'sid', secure: 'auto' } }).name)
+      .toBe('__Host-sid');
   });
 });
 
