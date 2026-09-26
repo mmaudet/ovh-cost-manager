@@ -8,6 +8,13 @@ its selections (compared months, trend period, selected project…) would reset 
 tab switch, and the queries that load at page start would only start when their tab is
 opened. Both would change what users see, so the state stays above the tabs.
 
+A tab component also receives, as props, what the shell already holds for the whole
+page: the language, `t`, `fmt`, the selected month, and the data that loads at page
+start for the KPI cards and several tabs, such as the month's summary and its costs by
+resource type. That data is passed on as it is, neither queried again nor routed through
+the tab's hook, so that each query keeps a single owner and a hook returns only what its
+tab owns.
+
 A tab whose panels open "show all" modals also exports a component for them
 (`WebCloudTabModals`…), which the shell renders where the modals were: after the page
 column, whatever the tab. Inside the tab, a modal would sit in that column, whose
