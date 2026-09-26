@@ -521,12 +521,14 @@ const accountOps = {
 
 // Makes the function that deletes the services of an inventory table whose id is not in
 // `ids`, the list the OVH API gave of all those that exist now: the services cancelled since
-// an import stored them (#74). The function returns how many it deleted.
+// an import stored them (#74). The ids compare as text, as the table stores them: json_each()
+// gives a number as an integer, which no text equals. The function returns how many it
+// deleted.
 function deleteNotIn(table) {
   return (ids) => {
     const db = getDb();
     return db.prepare(`
-      DELETE FROM ${table} WHERE id NOT IN (SELECT value FROM json_each(?))
+      DELETE FROM ${table} WHERE id NOT IN (SELECT CAST(value AS TEXT) FROM json_each(?))
     `).run(JSON.stringify(ids)).changes;
   };
 }

@@ -124,29 +124,27 @@ describe('services that OVH no longer lists', () => {
   };
   const LISTS = ['/dedicated/server', '/vps', '/storage/netapp'];
 
+  // A service that an earlier import stored, expired in March
+  const storeServer = (id) => db.inventory.upsertServer({
+    id, display_name: id, reverse: '', datacenter: 'rbx8', os: '', state: 'ok', cpu: '',
+    ram_size: 0, disk_info: '[]', bandwidth: 0, expiration_date: '2026-03-01', renewal_type: '',
+  });
+  const storeVps = (id) => db.inventory.upsertVps({
+    id, display_name: id, model: '', zone: '', state: 'running', os: '', vcpus: 2,
+    ram_mb: 2048, disk_gb: 40, expiration_date: '2026-03-01', renewal_type: '',
+    ip_addresses: '[]',
+  });
+  const storeStorage = (id, serviceType = 'netapp') => db.inventory.upsertStorage({
+    id, service_type: serviceType, display_name: id, region: 'eu-west-gra',
+    total_size_gb: 1024, used_size_gb: 0, share_count: 0, expiration_date: '2026-03-01',
+  });
+
   // What an earlier import stored: a service of each kind that OVH still lists, and one that
-  // was cancelled since, expired in March
+  // was cancelled since
   function storeServices() {
-    for (const id of [SERVER, CANCELLED.server]) {
-      db.inventory.upsertServer({
-        id, display_name: id, reverse: '', datacenter: 'rbx8', os: '', state: 'ok', cpu: '',
-        ram_size: 0, disk_info: '[]', bandwidth: 0, expiration_date: '2026-03-01',
-        renewal_type: '',
-      });
-    }
-    for (const id of [VPS, CANCELLED.vps]) {
-      db.inventory.upsertVps({
-        id, display_name: id, model: '', zone: '', state: 'running', os: '', vcpus: 2,
-        ram_mb: 2048, disk_gb: 40, expiration_date: '2026-03-01', renewal_type: '',
-        ip_addresses: '[]',
-      });
-    }
-    for (const id of [STORAGE, CANCELLED.storage]) {
-      db.inventory.upsertStorage({
-        id, service_type: 'netapp', display_name: id, region: 'eu-west-gra',
-        total_size_gb: 1024, used_size_gb: 0, share_count: 0, expiration_date: '2026-03-01',
-      });
-    }
+    for (const id of [SERVER, CANCELLED.server]) storeServer(id);
+    for (const id of [VPS, CANCELLED.vps]) storeVps(id);
+    for (const id of [STORAGE, CANCELLED.storage]) storeStorage(id);
   }
 
   // OVH lists the services it still has: the VPS (see serveVps()), a server and a storage
@@ -183,6 +181,17 @@ describe('services that OVH no longer lists', () => {
     await importInventory();
 
     expect(storedIds().servers).toEqual([SERVER]);
+  });
+
+  // The ids compare as text, as the table stores them: the list [123] used to delete the
+  // row '123'. The simulated API does not serve its details, so the row is the one stored.
+  test('keeps a service whose id its list gives as a number', async () => {
+    storeServer('123');
+    routes.set('/dedicated/server', ok([123]));
+
+    await importInventory();
+
+    expect(storedIds().servers).toEqual(['123']);
   });
 
   test.each([
