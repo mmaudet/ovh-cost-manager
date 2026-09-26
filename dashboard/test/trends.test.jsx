@@ -159,13 +159,13 @@ describe('Trends tab', () => {
       await openTab(user, 'Tendances');
 
       expect(texts(growthCard())).toEqual(['Croissance sur la période', '—', 'Sur 3 mois']);
-      expect(within(growthCard()).getByTitle('non calculable : premier mois à 0 €'))
+      expect(within(growthCard()).getByTitle('non calculable : premier mois à 0 € ou moins'))
         .toHaveTextContent('—');
 
       await selectLanguage(user, 'en');
 
       expect(within(cardOf('Growth over period'))
-        .getByTitle('cannot be computed: first month at €0')).toHaveTextContent('—');
+        .getByTitle('cannot be computed: first month at €0 or below')).toHaveTextContent('—');
     });
 
     // Its credits exceed its costs: the growth would have the wrong sign
@@ -175,7 +175,7 @@ describe('Trends tab', () => {
       await openTab(user, 'Tendances');
 
       expect(texts(growthCard())).toEqual(['Croissance sur la période', '—', 'Sur 3 mois']);
-      expect(within(growthCard()).getByTitle('non calculable : premier mois à 0 €'))
+      expect(within(growthCard()).getByTitle('non calculable : premier mois à 0 € ou moins'))
         .toHaveTextContent('—');
     });
   });
