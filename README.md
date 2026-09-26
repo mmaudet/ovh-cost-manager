@@ -52,7 +52,7 @@
 - **Private Cloud / vSphere**: Hosts (ESXi), datastores (SSD), management fees
 - **Dedicated Servers**: Full specs (CPU, RAM, datacenter, expiration, renewal) — Scale, Advance, Infra series
 - **VPS**: Model, zone, specs, state
-- **Storage**: NAS-HA services with size and shares
+- **Storage**: NetApp storage services with size and number of shares
 - **Backup**: Veeam Backup VMs and Enterprise licenses with cost breakdown
 - **Expiring Services**: Lists the services expired or expiring within 30 days, soonest first
 
