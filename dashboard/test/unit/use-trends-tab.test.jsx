@@ -15,6 +15,7 @@ import { settle } from '../support/query-client.js';
 const [september, august] = months;
 // The account first billed in July 2025: 15 months of history
 const fifteenMonths = sinceJuly2025.months;
+const july2025 = fifteenMonths[fifteenMonths.length - 1];
 const billedSinceJuly2025 = { ...account, ...sinceJuly2025 };
 
 // The periods offered, as [months, translation key]
@@ -146,10 +147,33 @@ describe('useTrendsTab', () => {
       expect(result.current.trendPeriod).toBe(6);
     });
 
-    it('comes down to 3 months once the list shows three billed months', async () => {
+    it('counts the billed months up to the selected month only', async () => {
+      const { result } = await renderTabHook(useTrendsTab,
+        { months: fifteenMonths, selectedMonth: july2025, activeTab: 'trends' },
+        billedSinceJuly2025);
+
+      // July 2025, the first billed month, is the only one up to itself
+      expect(periods(result.current.availablePeriods)).toEqual([[3, 'period3m']]);
+      expect(result.current.trendPeriod).toBe(3);
+      expect(api.fetchMonthlyTrend).toHaveBeenLastCalledWith(3, '2025-07');
+    });
+
+    it('keeps its period until a month is selected', async () => {
       const { result, rerender } = await renderTabHook(useTrendsTab,
         { months: [], selectedMonth: null, activeTab: 'overview' });
-      // No month yet: the period waits for the list
+
+      // The list comes before the shell selects its latest month: no month to count up to
+      await rerender({ months: fifteenMonths, selectedMonth: null, activeTab: 'overview' });
+      expect(result.current.trendPeriod).toBe(6);
+
+      await rerender({ months: fifteenMonths, selectedMonth: september, activeTab: 'overview' });
+      expect(result.current.trendPeriod).toBe(6);
+    });
+
+    it('comes down to 3 months once a month is selected, with three billed months', async () => {
+      const { result, rerender } = await renderTabHook(useTrendsTab,
+        { months: [], selectedMonth: null, activeTab: 'overview' });
+      // No month yet: the period waits for one
       expect(result.current.trendPeriod).toBe(6);
 
       await rerender({ months, selectedMonth: september, activeTab: 'overview' });
@@ -158,6 +182,21 @@ describe('useTrendsTab', () => {
       expect(result.current.trendPeriod).toBe(3);
       expect(api.fetchMonthlyTrend).toHaveBeenCalledWith(3, '2026-09');
       expect(api.fetchMonthlyTrendByCategory).toHaveBeenCalledWith(3, '2026-09');
+    });
+
+    it('comes down from the period picked when an older month is selected', async () => {
+      const { result, rerender, queryClient } = await renderTabHook(useTrendsTab,
+        { months: fifteenMonths, selectedMonth: september, activeTab: 'trends' },
+        billedSinceJuly2025);
+      act(() => result.current.setTrendPeriod(24));
+      await settle(queryClient);
+
+      // Up to July 2025, a single billed month: 3 months cover it
+      await rerender({ months: fifteenMonths, selectedMonth: july2025, activeTab: 'trends' });
+
+      expect(periods(result.current.availablePeriods)).toEqual([[3, 'period3m']]);
+      expect(result.current.trendPeriod).toBe(3);
+      expect(api.fetchMonthlyTrend).toHaveBeenLastCalledWith(3, '2025-07');
     });
 
     it('comes down from the period picked when the months list gets shorter', async () => {

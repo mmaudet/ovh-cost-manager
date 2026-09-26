@@ -13,19 +13,21 @@ import {
 const useTrendsTab = ({ months, selectedMonth, activeTab }) => {
   const [trendPeriod, setTrendPeriod] = useState(6); // Months for trend
 
-  const maxMonths = months.length > 0 ? monthsSince(months[months.length - 1].value) : 0;
-  const availablePeriods = availablePeriodsFor(maxMonths);
-
-  useEffect(() => {
-    // Adjust trend period if it is no longer one of the available options
-    if (months.length > 0 && !availablePeriods.some(o => o.months === trendPeriod)) {
-      setTrendPeriod(availablePeriods[availablePeriods.length - 1].months);
-    }
-  }, [months, trendPeriod]);
-
   // The period ends on the month selected in the header, that month included, as the 12
   // months of the Web Cloud tab do (#66)
   const endMonth = selectedMonth?.value;
+
+  // The periods offered go up to the first one that covers the months of data up to it
+  const maxMonths = monthsSince(months[months.length - 1]?.value, endMonth);
+  const availablePeriods = availablePeriodsFor(maxMonths);
+
+  useEffect(() => {
+    // Adjust trend period if it is no longer one of the available options, once there is
+    // a month to count up to
+    if (endMonth && !availablePeriods.some(o => o.months === trendPeriod)) {
+      setTrendPeriod(availablePeriods[availablePeriods.length - 1].months);
+    }
+  }, [months, endMonth, trendPeriod]);
 
   const { data: monthlyTrend = [] } = useQuery({
     queryKey: ['monthlyTrend', trendPeriod, endMonth],

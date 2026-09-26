@@ -51,14 +51,17 @@ describe('query keys', () => {
       ['summary', '2026-08-01', '2026-08-31'],
       ['byService', '2026-08-01', '2026-08-31'],
       ['byProject', '2026-08-01', '2026-08-31'],
-      // The Trends tab's: over 6 months, without a month to end on, then over 3 months up
-      // to September, once the three billed months are known
+      // The Trends tab's: over 6 months, without a month to end on, then up to September,
+      // over 6 months, and over 3 once the billed months up to September are counted
       ['monthlyTrend', 6, undefined],
+      ['monthlyTrend', 6, '2026-09'],
       ['monthlyTrend', 3, '2026-09'],
       ['monthlyTrendByCategory', 6, undefined],
+      ['monthlyTrendByCategory', 6, '2026-09'],
       ['monthlyTrendByCategory', 3, '2026-09'],
       // And the GPU trend over those months, which only runs on the tab
       ['gpuTrend', undefined, undefined],
+      ['gpuTrend', '2026-04-01', '2026-09-30'],
       ['gpuTrend', '2026-07-01', '2026-09-30'],
       // The Public Cloud tab's, while no project is selected
       ['projectsEnriched'],
