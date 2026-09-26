@@ -15,9 +15,11 @@ resource type. That data is passed on as it is, neither queried again nor routed
 the tab's hook, so that each query keeps a single owner and a hook returns only what its
 tab owns.
 
-A tab whose panels open "show all" modals also exports a component for them
-(`WebCloudTabModals`…), which the shell renders where the modals were: after the page
-column, whatever the tab. Inside the tab, a modal would sit in that column, whose
-spacing pushes its fixed backdrop down and leaves a strip of the page neither darkened
-nor blocked. Once the split is done, a portal in `Modal` would let the modals fold back
-into their tab.
+A tab module may also export pieces that the shell renders in place, outside the tab, so
+that the page's markup stays as it is: the Trends period selector (`TrendsPeriodSelector`),
+which sits in the tab bar, and "show all" modals. A tab whose panels open such modals
+exports a component for them (`WebCloudTabModals`…), which the shell renders where the
+modals were: after the page column, whatever the tab. Inside the tab, a modal would sit
+in that column, whose spacing pushes its fixed backdrop down and leaves a strip of the
+page neither darkened nor blocked. Once the split is done, a portal in `Modal` would let
+the modals fold back into their tab.
