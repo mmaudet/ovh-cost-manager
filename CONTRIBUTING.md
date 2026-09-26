@@ -148,7 +148,9 @@ script:
 - compares the two captures section by section, normalising nothing but runs
   of spaces, tabs and line breaks (the no-break spaces of amounts are kept),
   prints the differences, and exits with 1 when there is any, 0 otherwise, or
-  2 when it could not complete.
+  2 when it could not complete. The one exception is the section of the page's
+  console errors: each message keeps its first line only, with the server's
+  address and the bundle's file names replaced, and its number of occurrences.
 
 A run takes about three minutes, twice that with `--lang both`. The captures
 (`base.json`, `head.json`), the report and the logs go to the temporary

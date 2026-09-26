@@ -53,6 +53,13 @@ const normalize = (text) => text
 
 const firstLine = (error) => String(error?.message ?? error).split('\n')[0];
 
+// The page's errors are the one section normalised beyond whitespace: what differs between
+// the two sides by construction goes, that is their stacks (only the first line of a message
+// is kept), the server's address and the hashed file names of the bundle.
+const neutralError = (message) => firstLine(message)
+  .replace(/https?:\/\/(127\.0\.0\.1|localhost):\d+/g, '<server>')
+  .replace(/\b[\w-]+-[\w-]{8}\.(js|css)\b/g, '<bundle>.$1');
+
 // On a signal, Playwright would close the browser and exit at once, before the worktrees
 // and servers are cleaned up: the caller handles signals and closes the browser itself
 const LAUNCH_OPTIONS = { handleSIGINT: false, handleSIGTERM: false, handleSIGHUP: false };
@@ -144,22 +151,24 @@ class Walker {
     this.pending = new Set();
     this.waiting = [];
     this.answering = null;
-    this.errors = [];
+    // Each error message of the page, with its number of occurrences
+    this.errors = new Map();
+    const count = (message) => this.errors.set(message, (this.errors.get(message) ?? 0) + 1);
     page.setDefaultTimeout(ACTION_TIMEOUT);
     const isApiCall = (request) => ['xhr', 'fetch'].includes(request.resourceType());
     page.on('request', (request) => { if (isApiCall(request)) this.pending.add(request); });
     page.on('requestfinished', (request) => this.pending.delete(request));
     page.on('requestfailed', (request) => this.pending.delete(request));
-    page.on('pageerror', (error) => this.errors.push(`page error: ${error.message}`));
+    page.on('pageerror', (error) => count(`page error: ${neutralError(error)}`));
     page.on('console', (message) => {
-      if (message.type() === 'error') this.errors.push(`console error: ${message.text()}`);
+      if (message.type() === 'error') count(`console error: ${neutralError(message.text())}`);
     });
   }
 
   async captureMonth(month) {
     const prefix = `${this.language}/${month}`;
     this.prefix = prefix;
-    this.errors = [];
+    this.errors.clear();
     try {
       await this.open(month);
     } catch (error) {
@@ -188,8 +197,11 @@ class Walker {
         reload = true;
       }
     }
-    // Sorted and deduplicated: which errors occurred, not when
-    if (this.errors.length) this.capture.add(`${prefix}/errors`, [...new Set(this.errors)].sort().join('\n'));
+    // Sorted by message: which errors occurred and how often, not when
+    if (this.errors.size) {
+      const byMessage = [...this.errors].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+      this.capture.add(`${prefix}/errors`, byMessage.map(([message, n]) => `${n} × ${message}`).join('\n'));
+    }
   }
 
   /** Every request of the page: writes are refused, API calls answered in turn. */
