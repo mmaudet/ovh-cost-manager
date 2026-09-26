@@ -43,10 +43,11 @@ const ACTION_TIMEOUT = 10_000;
 const RESPONSE_GAP = 100;
 
 // Whitespace is all that is normalised: innerText breaks lines and separates cells after
-// the layout, not after what the user reads.
+// the layout, not after what the user reads. Only runs of spaces, tabs and line breaks
+// collapse: the no-break spaces of amounts (U+00A0, U+202F) are part of their format.
 const normalize = (text) => text
   .split('\n')
-  .map((line) => line.replace(/\s+/g, ' ').trim())
+  .map((line) => line.replace(/[ \t\r]+/g, ' ').replace(/^ | $/g, ''))
   .filter(Boolean)
   .join('\n');
 

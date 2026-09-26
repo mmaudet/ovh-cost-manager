@@ -145,9 +145,10 @@ script:
   the CSV exports and of the Markdown report; it also opens the Compare
   accordions, the first three Public Cloud projects (`--projects`) and every
   resource type of the Infrastructure tab;
-- compares the two captures section by section, normalising nothing but
-  whitespace, prints the differences, and exits with 1 when there is any, 0
-  otherwise, or 2 when it could not complete.
+- compares the two captures section by section, normalising nothing but runs
+  of spaces, tabs and line breaks (the no-break spaces of amounts are kept),
+  prints the differences, and exits with 1 when there is any, 0 otherwise, or
+  2 when it could not complete.
 
 A run takes about three minutes, twice that with `--lang both`. The captures
 (`base.json`, `head.json`), the report and the logs go to the temporary
