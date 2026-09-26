@@ -14,7 +14,74 @@ sections were written afterwards from the git history.
 
 ## 2.4.1 - 2026-09-26
 
-<!-- Upgrade notes and highlights of this release, if any. -->
+This release fixes the issues open after 2.4.0. It hardens the OIDC
+authentication and the reading of the settings, stops the Docker image from
+wiping its database at each start under authentication, keeps the consumption
+history, completes the Compare tab and the French formats, and brings the SSO
+documentation in line with the LemonLDAP-NG relay and OIDC setup. Read the
+upgrade notes before upgrading a deployment that uses OIDC, `AUTH_REQUIRED` or
+custom settings: the
+[deployment guide](https://github.com/mmaudet/ovh-cost-manager/blob/v2.4.1/docs/deployment.md#upgrading-to-241)
+details them.
+
+### Upgrade notes
+
+- **Database wiped at startup under authentication (Docker).** Up to 2.4.0,
+  with OIDC or `AUTH_REQUIRED=true`, the container ran a full import, which
+  clears the database, at every start. The consumption and balance history,
+  which OVH cannot return again, was lost each time. It now counts the bills in
+  the database and imports in full only when there is none. History lost before
+  this version comes back only from a backup of the `ocm-data` volume.
+- **Everyone signs in again once (OIDC).** The session cookie is now signed with
+  `SESSION_SECRET`, and named `__Host-ocm.sid` over HTTPS. Set `SESSION_SECRET`
+  to 32 random characters or more (`openssl rand -hex 32`): changing it signs
+  everyone out. A sign-in must start on the host of `OIDC_BASE_URL` and end
+  within 10 minutes. Back-channel logout now works; the provider's logout
+  tokens must hold `exp`.
+- **OIDC fails closed.** With OIDC enabled, the server no longer falls back to
+  the `Auth-User` header: a missing setting stops it at startup, and while the
+  provider cannot be discovered, sign-in and the API answer 503 (`/api/health`
+  still answers). `OIDC_ENABLED=false` now overrides `auth.enabled: true` in
+  `config.json`.
+- **Strict settings.** The true/false settings (`OIDC_ENABLED`,
+  `AUTH_REQUIRED`, `TRUST_PROXY`, `RATE_LIMIT_ENABLED`, `IMPORT_ENABLED`…) take
+  `true` or `false`, in any case, and JSON booleans in `config.json`; the rate
+  limits take positive integers; `allowedOrigins` takes an array or a
+  comma-separated string. Any other value, or a `config.json` that is not valid
+  JSON, now stops the server with an error naming the setting, where it used to
+  be misread. `TRUST_PROXY=TRUE` and `IMPORT_ENABLED=FALSE` now mean what they
+  say.
+- **Header mode needs its proxy.** Without OIDC, OCM takes the user from
+  `Auth-User` on any request. `AUTH_REQUIRED=true` protects the API only behind
+  a proxy that sets that header and removes the client's. On the simple compose
+  stack, which has no such proxy, it only keeps out clients that send none.
+- **Log lines.** The request log writes the user as a JSON string, `["alice"]`
+  where it was `[alice]`, and the CORS and OIDC lines quote the texts they did
+  not write. A tool that parses these lines may need its pattern updated.
+- **`ALLOWED_HOSTS`** (new, opt-in) lists the host names the server answers to,
+  against DNS rebinding. Unset, nothing changes.
+- **SSO stack.** `docker-compose.sso.yml` is used on its own, not stacked on
+  `docker-compose.yml`, which published the dashboard's port outside the
+  LemonLDAP-NG relay. Behind a TLS terminator, the dashboard no longer goes
+  blank, though the relay passes port 80. Rate limiting then sees every user at
+  the terminator's address (#101): raise `RATE_LIMIT_API_MAX` meanwhile.
+- **Consumption history** now builds up month by month: an import replaces only
+  the month it imports, and `--full` keeps the history. Months before the
+  upgrade are not backfilled.
+- **Inventory.** The VPS operating system is read from
+  `/vps/{name}/images/current`, as OVH removes `/vps/{name}/distribution` on
+  2026-10-15; it used to hold the disk size. Dedicated servers, VPS and NetApp
+  storage that OVH no longer lists are removed. Both take effect at the next
+  inventory import (`--include-inventory` or `--all`, the Docker default).
+- **Dashboard.**
+  - The "vs previous month" KPI compares the selected month with the calendar
+    month before it, where it read month B of the Compare tab.
+  - The Compare tab fills its Infrastructure, Backup and Private Cloud
+    accordions and lists the projects of both months.
+  - A variation from a month at 0 € or below shows "—" everywhere.
+  - Percentages, sizes and month names follow the interface language:
+    `+20,0 %`, `Go`, "septembre 2026" in French.
+  - With no billed month, the dashboard says so instead of loading forever.
 
 ### Security
 * security: let deployments restrict the host names the server answers to by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/92
