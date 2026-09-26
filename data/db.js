@@ -521,15 +521,19 @@ const accountOps = {
 
 // Makes the function that deletes the services of an inventory table whose id is not in
 // `ids`, the list the OVH API gave of all those that exist now: the services cancelled since
-// an import stored them (#74). The ids compare as text, as the table stores them: json_each()
-// gives a number as an integer, which no text equals. The function returns how many it
-// deleted.
-function deleteNotIn(table) {
+// an import stored them (#74). `serviceType`, for a table whose list covers one type of its
+// services only, leaves the others alone. The ids compare as text, as the table stores them:
+// json_each() gives a number as an integer, which no text equals. The function returns how
+// many it deleted.
+function deleteNotIn(table, serviceType = null) {
+  const ofType = serviceType === null ? '' : 'service_type = ? AND ';
+  const typeParams = serviceType === null ? [] : [serviceType];
   return (ids) => {
     const db = getDb();
     return db.prepare(`
-      DELETE FROM ${table} WHERE id NOT IN (SELECT CAST(value AS TEXT) FROM json_each(?))
-    `).run(JSON.stringify(ids)).changes;
+      DELETE FROM ${table}
+      WHERE ${ofType}id NOT IN (SELECT CAST(value AS TEXT) FROM json_each(?))
+    `).run(...typeParams, JSON.stringify(ids)).changes;
   };
 }
 
@@ -595,7 +599,8 @@ const inventoryOps = {
   // The services cancelled since an import stored them go, see deleteNotIn() (#74)
   deleteServersNotIn: deleteNotIn('dedicated_servers'),
   deleteVpsNotIn: deleteNotIn('vps_instances'),
-  deleteStorageNotIn: deleteNotIn('storage_services'),
+  // Their list, /storage/netapp, names the NetApp services only
+  deleteStorageNotIn: deleteNotIn('storage_services', 'netapp'),
 
   getSummary: () => {
     const db = getDb();

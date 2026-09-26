@@ -194,6 +194,17 @@ describe('services that OVH no longer lists', () => {
     expect(storedIds().servers).toEqual(['123']);
   });
 
+  // The storage list, /storage/netapp, names the NetApp services only
+  test('keeps the storage services other than NetApp, which its list does not cover', async () => {
+    storeServices();
+    storeStorage('nasha-001', 'nasha');
+    serveLists();
+
+    await importInventory();
+
+    expect(storedIds().storage).toEqual(['nasha-001', STORAGE]);
+  });
+
   test.each([
     // As for the maintainer's own key, which is not granted these routes
     ['is not granted', fail(403, 'This call has not been granted')],
