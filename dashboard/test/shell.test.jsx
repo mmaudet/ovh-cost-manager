@@ -7,6 +7,7 @@ import {
   cardOf,
   disclosure,
   dropdown,
+  emptyState,
   fakeTimers,
   headerBadge,
   openTab,
@@ -35,11 +36,70 @@ describe('dashboard shell', () => {
       expect(screen.queryByText('Chargement des données...')).not.toBeInTheDocument();
     });
 
-    it('stays on the loading screen when no month was billed', async () => {
-      await renderDashboard({ ...account, months: [] });
+    // A new account, or one whose first import has not run yet: no month to select, so no
+    // dashboard to show
+    describe('when no month was billed (#51)', () => {
+      // Nothing ever imported: no bill, and no import in the history
+      const noMonth = { ...account, months: [], importStatus: undefined };
+      const hint = "Aucune facture n'a encore été importée. Lancez un import, ou vérifiez"
+        + " les identifiants de l'API OVHcloud.";
 
-      // Forever: the page needs a month to show anything (#51)
-      expect(screen.getByText('Chargement des données...')).toBeInTheDocument();
+      it('keeps the loading screen until the months list arrives', async () => {
+        const loading = renderDashboard(noMonth);
+        expect(screen.getByText('Chargement des données...')).toBeInTheDocument();
+        expect(screen.queryByText('Pas encore de données')).not.toBeInTheDocument();
+
+        await loading;
+        expect(screen.queryByText('Chargement des données...')).not.toBeInTheDocument();
+        expect(emptyState()).toBeInTheDocument();
+      });
+
+      it('says that there is no data yet, and offers the resync of the header', async () => {
+        await renderDashboard(noMonth);
+
+        expect(texts(emptyState())).toEqual(['Pas encore de données', hint, '⟳', 'Synchroniser']);
+      });
+
+      it('offers no resync when the server runs no imports', async () => {
+        await renderDashboard({ ...noMonth, config: { ...account.config, importEnabled: false } });
+
+        expect(texts(emptyState())).toEqual(['Pas encore de données', hint]);
+        expect(screen.queryByRole('button', { name: /Synchroniser/ })).not.toBeInTheDocument();
+      });
+
+      it('resyncs as the header does, and says so', async () => {
+        const { user } = await renderDashboard(noMonth);
+        let started;
+        api.triggerImport.mockImplementation(() => new Promise((resolve) => {
+          started = resolve;
+        }));
+
+        await user.click(screen.getByRole('button', { name: /Synchroniser/ }));
+
+        expect(await screen.findByRole('button', { name: /Synchronisation\.\.\./ }))
+          .toBeDisabled();
+
+        started({ started: true });
+        await settle();
+
+        expect(texts(emptyState())).toEqual([
+          'Pas encore de données', hint, '⟳', 'Synchroniser',
+          'Synchronisation lancée. Les données se mettront à jour dans quelques instants.',
+        ]);
+      });
+
+      it('says so in the language the user picked', async () => {
+        // English, which the page remembers from an earlier visit
+        localStorage.setItem('ovh-dashboard-language', 'en');
+
+        await renderDashboard(noMonth);
+
+        expect(texts(emptyState())).toEqual([
+          'No data yet',
+          'No bill has been imported yet. Run an import, or check the OVHcloud API credentials.',
+          '⟳', 'Resync',
+        ]);
+      });
     });
 
     it('lists the billed months and selects the most recent one', async () => {
@@ -516,6 +576,27 @@ describe('dashboard shell', () => {
       expect(lastSync('15/09/2026 12:00:31 (4 factures)')).toBeInTheDocument();
       expect(monthCost()).toBe('1 300,40€');
     });
+
+    it('shows the dashboard once the import a resync starts with no month billed is over (#51)',
+      async () => {
+        fakeTimers();
+        const { user } = await renderDashboard({ ...signedIn, months: [] });
+        serve({ ...signedIn, months: [], importStatus: importStatus(running) });
+
+        await user.click(within(emptyState()).getByRole('button', { name: /Synchroniser/ }));
+        await settle();
+        await passTime(8000);
+
+        // Still nothing billed while it runs
+        expect(emptyState()).toBeInTheDocument();
+
+        serve(afterImport);
+        await passTime(30000);
+
+        expect(monthSelector()).toHaveDisplayValue('Septembre 2026');
+        expect(monthCost()).toBe('1 300,40€');
+        expect(lastSync('15/09/2026 12:00:31 (4 factures)')).toBeInTheDocument();
+      });
   });
 
   describe('report export', () => {

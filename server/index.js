@@ -833,7 +833,10 @@ function registerRoutes() {
   app.get('/api/config', (req, res) => {
     res.json({
       budget: config.dashboard?.budget || 50000,
-      currency: config.dashboard?.currency || 'EUR'
+      currency: config.dashboard?.currency || 'EUR',
+      // False when IMPORT_ENABLED=false turns imports off, the resync's included: the
+      // dashboard then offers no resync on the page it shows when no month is billed (#51)
+      importEnabled: process.env.IMPORT_ENABLED !== 'false',
     });
   });
 

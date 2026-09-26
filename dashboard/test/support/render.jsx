@@ -251,6 +251,13 @@ export function headerBadge(label) {
   return screen.getByText(label, { selector: 'span' }).parentElement;
 }
 
+// What the page shows in place of the dashboard when no month was billed (#51): its
+// heading, what to do, and the resync when the server runs imports
+export function emptyState() {
+  return screen.getByRole('heading', { name: /^(Pas encore de données|No data yet)$/ })
+    .parentElement;
+}
+
 // What a summary line shows or hides, like the import history
 export function disclosure(summary) {
   return screen.getByText(summary).closest('details');

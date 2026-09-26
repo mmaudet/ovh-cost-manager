@@ -72,7 +72,7 @@ export default function Dashboard() {
   });
 
   // Fetch available months
-  const { data: months = [] } = useQuery({
+  const { data: months = [], isSuccess: monthsLoaded } = useQuery({
     queryKey: ['months'],
     queryFn: fetchMonths
   });
@@ -203,6 +203,23 @@ export default function Dashboard() {
     }
   });
 
+  // The resync button: in the header, and on the page shown when no month was billed (#51)
+  const resyncButton = (
+    <button
+      onClick={() => { setSyncFeedback(null); resync.mutate(); }}
+      disabled={resync.isPending}
+      title={t('resync')}
+      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium border ${
+        resync.isPending
+          ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
+          : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50 cursor-pointer'
+      } transition-colors`}
+    >
+      <span className={resync.isPending ? 'animate-spin' : ''}>⟳</span>
+      <span>{resync.isPending ? t('syncing') : t('resync')}</span>
+    </button>
+  );
+
   // Once the latest import has finished, refresh every query built from
   // imported data (all of them but config, user and the import status).
   const latestImport = importStatus?.latest;
@@ -227,6 +244,30 @@ export default function Dashboard() {
   // when it cannot be computed, as in the Compare and Trends tabs (#65): from a month before
   // at 0 € or less, or without a bill, so at 0 €.
   const variation = variationPercent(previousSummary?.total ?? 0, total)?.toFixed(1) ?? null;
+
+  // Nothing billed yet, as on a new account or before its first import (#51): with no month
+  // to select, there is no dashboard to show. Say so, rather than load forever, and offer the
+  // resync of the header when the server runs imports.
+  if (monthsLoaded && months.length === 0) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 p-4 flex">
+        <div className="m-auto max-w-md text-center space-y-4">
+          <h2 className="text-2xl font-bold text-gray-900">{t('noDataYet')}</h2>
+          <p className="text-gray-500">{t('noDataYetHint')}</p>
+          {configData?.importEnabled && (
+            <div className="flex justify-center">{resyncButton}</div>
+          )}
+          {syncFeedback && (
+            <p className={`text-sm font-medium ${
+              syncFeedback.type === 'ok' ? 'text-green-600' : 'text-red-600'
+            }`}>
+              {syncFeedback.msg}
+            </p>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   // Loading state, until the KPI cards have both months they compare (#50)
   if (!selectedMonth || loadingSummary || loadingPreviousSummary) {
@@ -300,19 +341,7 @@ export default function Dashboard() {
           </div>
           <div className="flex items-center gap-3">
             {/* Manual resync */}
-            <button
-              onClick={() => { setSyncFeedback(null); resync.mutate(); }}
-              disabled={resync.isPending}
-              title={t('resync')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${
-                resync.isPending
-                  ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
-                  : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50 cursor-pointer'
-              }`}
-            >
-              <span className={resync.isPending ? 'animate-spin' : ''}>⟳</span>
-              <span>{resync.isPending ? t('syncing') : t('resync')}</span>
-            </button>
+            {resyncButton}
             {/* Expiration badge */}
             {expiringServices.length > 0 && (
               <div className="flex items-center gap-1 px-3 py-1.5 bg-orange-100 text-orange-700 rounded-lg text-sm font-medium">

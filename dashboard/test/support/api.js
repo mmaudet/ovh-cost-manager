@@ -35,7 +35,7 @@ const emptyAnswers = {
   trendByCategory: () => ({ categories: [], data: [] }),
   // No import yet: the server sends no "latest"
   importStatus: () => ({ running: false, history: [] }),
-  config: () => ({ budget: 50000, currency: 'EUR' }),
+  config: () => ({ budget: 50000, currency: 'EUR', importEnabled: true }),
   user: () => ({ id: null, name: 'Anonymous', email: null, authEnabled: false }),
   consumptionCurrent: () => ({ current_total: 0, currency: 'EUR' }),
   consumptionForecast: () => ({ forecast_total: 0, currency: 'EUR' }),

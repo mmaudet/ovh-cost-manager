@@ -73,6 +73,10 @@ export const translations = {
 
     // Loading
     loading: 'Chargement des données...',
+    // Nothing billed yet (#51)
+    noDataYet: 'Pas encore de données',
+    noDataYetHint: 'Aucune facture n\'a encore été importée. Lancez un import, ou vérifiez'
+      + ' les identifiants de l\'API OVHcloud.',
 
     // Sync warning
     syncWarning: 'Dernière synchronisation il y a',
@@ -250,6 +254,10 @@ export const translations = {
 
     // Loading
     loading: 'Loading data...',
+    // Nothing billed yet (#51)
+    noDataYet: 'No data yet',
+    noDataYetHint: 'No bill has been imported yet. Run an import, or check the OVHcloud API'
+      + ' credentials.',
 
     // Sync warning
     syncWarning: 'Last synchronization was',
