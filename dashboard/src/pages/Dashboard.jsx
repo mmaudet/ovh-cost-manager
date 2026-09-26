@@ -318,7 +318,7 @@ export default function Dashboard() {
             {activeTab !== 'compare' && (
               <>
                 <select
-                  value={selectedMonth?.value || ''}
+                  value={selectedMonth.value}
                   onChange={(e) => {
                     const month = months.find(m => m.value === e.target.value);
                     setSelectedMonth(month);
@@ -338,7 +338,7 @@ export default function Dashboard() {
                         const url = URL.createObjectURL(blob);
                         const a = document.createElement('a');
                         a.href = url;
-                        a.download = `ovh-report-${selectedMonth?.value || 'report'}.md`;
+                        a.download = `ovh-report-${selectedMonth.value}.md`;
                         a.click();
                         URL.revokeObjectURL(url);
                       } else if (format === 'pdf') {
