@@ -1677,19 +1677,22 @@ const cloudDetailOps = {
   }
 };
 
-// Clear all data (for full import)
+// Clear the imported data, for a full import. What the import cannot fetch again is kept:
+// the consumption of each project, of which OVH gives the current month only (#54), with
+// the month of its last import (import_state) and the projects it belongs to. The account
+// and consumption snapshots are cleared: only their latest is read, which the import
+// fetches again.
 function clearAll() {
   const db = getDb();
   // Supprimer d'abord toutes les tables qui référencent projects ou bills
   db.exec('DELETE FROM bill_details');
-  db.exec('DELETE FROM project_consumption');
   db.exec('DELETE FROM cloud_instances');
   db.exec('DELETE FROM project_quotas');
   db.exec('DELETE FROM object_storage_buckets');
   db.exec('DELETE FROM cloud_volumes');
   db.exec('DELETE FROM cloud_snapshots');
   db.exec('DELETE FROM bills');
-  db.exec('DELETE FROM projects');
+  db.exec('DELETE FROM projects WHERE id NOT IN (SELECT project_id FROM project_consumption)');
   // Optionnel : vider aussi les autres tables annexes si besoin
   db.exec('DELETE FROM import_log');
   db.exec('DELETE FROM consumption_snapshots');

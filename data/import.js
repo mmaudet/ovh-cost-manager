@@ -1085,7 +1085,8 @@ async function runImport(params) {
     fromDate = null;
     toDate = null;
     console.log('\n=== FULL IMPORT ===');
-    console.log('This will clear all existing data and reimport everything.\n');
+    console.log('This will clear the imported data and reimport it. The consumption of each');
+    console.log('project is kept: OVH cannot give its past months again.\n');
     // Clear all data in a transaction for atomicity
     db.transaction(() => {
       db.clearAll();
