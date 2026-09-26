@@ -1,5 +1,3 @@
-import { shiftMonths } from './webCloudPeriod.js';
-
 // Trend period options, expressed in months. The largest offered option is
 // derived from the oldest available month so users can never pick a range
 // emptier than their data.
@@ -36,12 +34,4 @@ const availablePeriodsFor = (maxMonths) => {
   return out;
 };
 
-// The first and last day of the trend period of that many months that ends on the selected
-// month, that month included, as the server counts it for the cost trends (#66): 3 months
-// that end on September run from July to September. Null before a month is selected.
-const trendWindowEndingOn = (selectedMonth, months) => (selectedMonth ? {
-  from: shiftMonths(selectedMonth.from, -(months - 1)),
-  to: selectedMonth.to,
-} : null);
-
-export { PERIOD_OPTIONS, monthsBetween, availablePeriodsFor, trendWindowEndingOn };
+export { PERIOD_OPTIONS, monthsBetween, availablePeriodsFor };
