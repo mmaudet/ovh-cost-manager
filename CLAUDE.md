@@ -58,9 +58,11 @@ and `server/index.js` (each loads config on its own, there is no shared config m
   cannot be parsed, rather than run without its settings.
 - **`dataDir`** (where `ovh-bills.db` lives): `DATA_DIR` env var > `config.json` `dataDir` > the `data/` directory.
 - **rate limiting / auth / etc.**: environment variables override `config.json` values.
-  The auth booleans go through one strict parser (`server/auth/config.js`): `true` or
-  `false`, in any case in the environment, JSON booleans in `config.json`, and `auto` for
-  the cookie's `Secure` flag; anything else stops the server, naming the setting.
+  The booleans of authentication, rate limiting and `TRUST_PROXY` go through one strict
+  parser (`server/boolean-setting.js`): `true` or `false`, in any case in the environment,
+  JSON booleans in `config.json`, and `auto` for the cookie's `Secure` flag; anything else
+  stops the server, naming the setting. The rate limiting settings are resolved in
+  `server/rate-limit-config.js`.
 
 When adding a configurable option, follow this same env-over-file pattern and apply it in
 the relevant workspace's own loader.

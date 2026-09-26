@@ -18,6 +18,7 @@ const { createHostCheckMiddleware } = require('./hosts');
 const { importsEnabled } = require('./imports');
 const { trendWindowFromQuery } = require('./months');
 const { readConfigFile } = require('./config-file');
+const { buildRateLimitConfig } = require('./rate-limit-config');
 
 // Load configuration: the first config.json that exists. One that cannot be
 // read stops the server, rather than let it run without its settings
@@ -28,78 +29,21 @@ const CONFIG_PATHS = [
 
 let config = { dashboard: { budget: 50000, currency: 'EUR' } };
 let configPath = null;
+// Rate limiting and TRUST_PROXY: a malformed boolean stops the server too
+let rateLimitConfig;
 
 try {
   const loaded = readConfigFile(CONFIG_PATHS);
   config = { ...config, ...loaded.config };
   configPath = loaded.path;
+  rateLimitConfig = buildRateLimitConfig(config, process.env, configPath || undefined);
 } catch (err) {
   console.error(`Failed to start server: ${err.message}`);
   process.exit(1);
 }
 
-// Rate limit configuration helper
-function getRateLimitConfig() {
-  const defaults = {
-    enabled: true,
-    trustProxy: false,
-    api: {
-      windowMs: 15 * 60 * 1000,
-      max: 100
-    },
-    auth: {
-      windowMs: 15 * 60 * 1000,
-      max: 20
-    }
-  };
-
-  // Start with config.json values
-  const rateLimitConfig = config.rateLimit || {};
-
-  // Merge with defaults
-  const merged = {
-    enabled: rateLimitConfig.enabled !== undefined ? rateLimitConfig.enabled : defaults.enabled,
-    trustProxy: rateLimitConfig.trustProxy !== undefined ? rateLimitConfig.trustProxy : defaults.trustProxy,
-    api: {
-      windowMs: rateLimitConfig.api?.windowMs ?? defaults.api.windowMs,
-      max: rateLimitConfig.api?.max ?? defaults.api.max
-    },
-    auth: {
-      windowMs: rateLimitConfig.auth?.windowMs ?? defaults.auth.windowMs,
-      max: rateLimitConfig.auth?.max ?? defaults.auth.max
-    }
-  };
-
-  // Environment variables override config.json
-  if (process.env.RATE_LIMIT_ENABLED !== undefined) {
-    merged.enabled = process.env.RATE_LIMIT_ENABLED === 'true';
-  }
-  if (process.env.TRUST_PROXY !== undefined) {
-    merged.trustProxy = process.env.TRUST_PROXY === 'true';
-  }
-  if (process.env.RATE_LIMIT_API_WINDOW_MS) {
-    const val = parseInt(process.env.RATE_LIMIT_API_WINDOW_MS, 10);
-    if (!isNaN(val) && val > 0) merged.api.windowMs = val;
-  }
-  if (process.env.RATE_LIMIT_API_MAX) {
-    const val = parseInt(process.env.RATE_LIMIT_API_MAX, 10);
-    if (!isNaN(val) && val > 0) merged.api.max = val;
-  }
-  if (process.env.RATE_LIMIT_AUTH_WINDOW_MS) {
-    const val = parseInt(process.env.RATE_LIMIT_AUTH_WINDOW_MS, 10);
-    if (!isNaN(val) && val > 0) merged.auth.windowMs = val;
-  }
-  if (process.env.RATE_LIMIT_AUTH_MAX) {
-    const val = parseInt(process.env.RATE_LIMIT_AUTH_MAX, 10);
-    if (!isNaN(val) && val > 0) merged.auth.max = val;
-  }
-
-  return merged;
-}
-
 const app = express();
 const PORT = process.env.PORT || 3001;
-const rateLimitConfig = getRateLimitConfig();
 
 // Host check, against DNS rebinding (#78): none unless ALLOWED_HOSTS is set
 const hostCheck = createHostCheckMiddleware({
