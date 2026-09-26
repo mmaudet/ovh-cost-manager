@@ -38,7 +38,7 @@ const openModals = (tab) => Object.entries({
   instances: tab.showAllInstances,
   volumes: tab.showAllVolumes,
   snapshots: tab.showAllSnapshots,
-  savingsPlans: tab.showAllSavingsPlans,
+  'savings plans': tab.showAllSavingsPlans,
 }).filter(([, open]) => open).map(([resources]) => resources);
 
 describe('usePublicCloudTab', () => {
@@ -321,15 +321,25 @@ describe('usePublicCloudTab', () => {
     });
   });
 
-  it('opens each "show all" modal on its own, and keeps it when another tab opens', async () => {
-    const { result, rerender } = await renderTabHook(usePublicCloudTab,
-      { ...onTheTab, selectedProject: production });
-    expect(openModals(result.current)).toEqual([]);
+  // Each panel of the open project opens its "show all" modal with a setter of its own
+  it.each([
+    ['buckets', 'setShowAllBuckets'],
+    ['instances', 'setShowAllInstances'],
+    ['volumes', 'setShowAllVolumes'],
+    ['snapshots', 'setShowAllSnapshots'],
+    ['savings plans', 'setShowAllSavingsPlans'],
+  ])('opens the modal of the %s alone, keeps it open on another tab, and closes it',
+    async (modal, setShowAll) => {
+      const { result, rerender } = await renderTabHook(usePublicCloudTab,
+        { ...onTheTab, selectedProject: production });
+      expect(openModals(result.current)).toEqual([]);
 
-    act(() => result.current.setShowAllVolumes(true));
-    expect(openModals(result.current)).toEqual(['volumes']);
-    await rerender({ ...onTheTab, activeTab: 'overview', selectedProject: production });
+      act(() => result.current[setShowAll](true));
+      expect(openModals(result.current)).toEqual([modal]);
+      await rerender({ ...onTheTab, activeTab: 'overview', selectedProject: production });
+      expect(openModals(result.current)).toEqual([modal]);
 
-    expect(openModals(result.current)).toEqual(['volumes']);
-  });
+      act(() => result.current[setShowAll](false));
+      expect(openModals(result.current)).toEqual([]);
+    });
 });
