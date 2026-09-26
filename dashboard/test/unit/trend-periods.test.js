@@ -45,4 +45,16 @@ describe('monthsSince', () => {
     expect(monthsSince('2026-12')).toBe(2);
     expect(monthsSince('2026-02')).toBe(12);
   });
+
+  it('counts no month without one', () => {
+    expect(monthsSince(undefined)).toBe(0);
+    expect(monthsSince(null)).toBe(0);
+    expect(monthsSince('')).toBe(0);
+  });
+
+  it('counts no month from what is not a month', () => {
+    expect(monthsSince('2026')).toBe(0);
+    expect(monthsSince('2026-00')).toBe(0);
+    expect(monthsSince('N/A')).toBe(0);
+  });
 });

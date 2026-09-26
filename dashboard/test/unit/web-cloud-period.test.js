@@ -18,4 +18,10 @@ describe('shiftMonths', () => {
     // Not on 3 March, as 31 February would
     expect(shiftMonths('2026-03-31', -1)).toBe('2026-02-01');
   });
+
+  it('leaves a missing date as it is', () => {
+    expect(shiftMonths(undefined, -11)).toBeUndefined();
+    expect(shiftMonths(null, -11)).toBeNull();
+    expect(shiftMonths('', -11)).toBe('');
+  });
 });

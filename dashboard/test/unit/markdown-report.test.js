@@ -107,6 +107,17 @@ describe('Markdown report', () => {
     ].join('\n'));
   });
 
+  it('writes N/A for the month when none is selected', () => {
+    const report = generateMarkdownReport(summary, byService, byProject, undefined, 'fr');
+
+    // The page offers the export only once a month is selected
+    expect(report.split('\n').slice(0, 3)).toEqual([
+      '# OVH Cost Report - N/A',
+      '',
+      '**Période:** undefined to undefined',
+    ]);
+  });
+
   it('lists the first ten projects only', () => {
     const elevenProjects = [
       'Production', 'Staging', 'Sandbox', 'Data', 'AI', 'Web', 'Mail', 'Backup', 'CI', 'Demo',

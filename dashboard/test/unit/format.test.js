@@ -47,4 +47,16 @@ describe('formatYearMonth', () => {
   it('labels in French by default', () => {
     expect(formatYearMonth('2026-05')).toBe('mai 2026');
   });
+
+  it('labels nothing without a month', () => {
+    expect(formatYearMonth(undefined)).toBe('');
+    expect(formatYearMonth(null)).toBe('');
+    expect(formatYearMonth('')).toBe('');
+  });
+
+  it('leaves as it is what is not a month', () => {
+    expect(formatYearMonth('2026')).toBe('2026');
+    expect(formatYearMonth('2026-00')).toBe('2026-00');
+    expect(formatYearMonth('N/A')).toBe('N/A');
+  });
 });
