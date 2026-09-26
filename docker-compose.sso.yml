@@ -101,7 +101,6 @@ services:
       ocm-network:
         aliases:
           - auth.${SSO_DOMAIN:-localhost}
-          - manager.${SSO_DOMAIN:-localhost}
           - ocm.${SSO_DOMAIN:-localhost}
 
 volumes:
