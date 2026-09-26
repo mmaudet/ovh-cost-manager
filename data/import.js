@@ -835,11 +835,12 @@ async function importCloudDetails(projectIds) {
       const usage = await ovh.requestPromised('GET', `/cloud/project/${projectId}/usage/current`);
 
       if (usage) {
-        // Clear old data for this project
-        db.cloudDetails.clearByProject(projectId);
-
         const now = new Date().toISOString().split('T')[0];
         const monthStart = now.substring(0, 8) + '01';
+
+        // Clear old data for this project: its consumption of the other months is kept
+        db.cloudDetails.clearByProject(projectId);
+        db.cloudDetails.clearConsumptionOfMonth(projectId, monthStart);
 
         // Process hourly usage
         if (usage.hourlyUsage) {

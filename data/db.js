@@ -1075,6 +1075,10 @@ function allocateSwiftArchive(db, rows, projectId, fromDate, toDate) {
   }
 }
 
+// The consumption of every month is kept (#54). Read without a period, it is that of the
+// latest month imported: the current one, and the only one the import used to keep.
+const LATEST_CONSUMPTION_MONTH = '(SELECT MAX(period_start) FROM project_consumption)';
+
 // Cloud detail operations (Phase 4)
 const cloudDetailOps = {
   insertConsumption: (entry) => {
@@ -1093,6 +1097,8 @@ const cloudDetailOps = {
     if (fromDate && toDate) {
       query += ' AND period_start >= ? AND period_end <= ?';
       params.push(fromDate, toDate);
+    } else {
+      query += ` AND period_start = ${LATEST_CONSUMPTION_MONTH}`;
     }
     query += ' ORDER BY period_start DESC';
     return db.prepare(query).all(...params);
@@ -1103,7 +1109,7 @@ const cloudDetailOps = {
     return db.prepare(`
       SELECT resource_type, SUM(total_price) as total, COUNT(*) as count
       FROM project_consumption
-      WHERE project_id = ?
+      WHERE project_id = ? AND period_start = ${LATEST_CONSUMPTION_MONTH}
       GROUP BY resource_type
       ORDER BY total DESC
     `).all(projectId);
@@ -1492,11 +1498,19 @@ const cloudDetailOps = {
     db.prepare('DELETE FROM object_storage_buckets WHERE project_id = ?').run(projectId);
   },
 
+  // A project's instances and quotas: inventories, which each import replaces
   clearByProject: (projectId) => {
     const db = getDb();
-    db.prepare('DELETE FROM project_consumption WHERE project_id = ?').run(projectId);
     db.prepare('DELETE FROM cloud_instances WHERE project_id = ?').run(projectId);
     db.prepare('DELETE FROM project_quotas WHERE project_id = ?').run(projectId);
+  },
+
+  // A project's consumption of the month that starts on `periodStart` (YYYY-MM-01). The
+  // consumption is kept month by month: an import replaces the month it imports only (#54)
+  clearConsumptionOfMonth: (projectId, periodStart) => {
+    const db = getDb();
+    db.prepare('DELETE FROM project_consumption WHERE project_id = ? AND period_start = ?')
+      .run(projectId, periodStart);
   },
 
   // Aggregate total cloud consumption across all projects for the current period
@@ -1509,6 +1523,7 @@ const cloudDetailOps = {
         SUM(total_price) as total,
         COUNT(DISTINCT project_id) as project_count
       FROM project_consumption
+      WHERE period_start = ${LATEST_CONSUMPTION_MONTH}
     `).get();
   },
 
@@ -1591,10 +1606,11 @@ const cloudDetailOps = {
     const projectFlavors = db.prepare(`
       SELECT project_id, GROUP_CONCAT(DISTINCT resource_name) as gpu_flavors
       FROM project_consumption
-      WHERE resource_name LIKE 'l4-%' OR resource_name LIKE 'l40s-%'
+      WHERE period_start = ${LATEST_CONSUMPTION_MONTH}
+        AND (resource_name LIKE 'l4-%' OR resource_name LIKE 'l40s-%'
         OR resource_name LIKE 'a100-%' OR resource_name LIKE 't1-%'
         OR resource_name LIKE 't2-%' OR resource_name LIKE 'h100-%'
-        OR resource_name LIKE 'v100-%'
+        OR resource_name LIKE 'v100-%')
       GROUP BY project_id
     `).all();
     const flavorMap = {};

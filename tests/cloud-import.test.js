@@ -1,6 +1,7 @@
 /**
  * Tests for the cloud inventory import (Phase 4), against a simulated OVH API:
- * a call that fails must never wipe the inventory already stored.
+ * a call that fails must never wipe the inventory already stored, and the
+ * consumption of each month is kept.
  */
 
 const fs = require('fs');
@@ -173,5 +174,108 @@ describe('volume and snapshot inventory import', () => {
     expect(snapshots.map(s => s.id)).toEqual(['snap-1']);
     expect(console.warn).toHaveBeenCalledWith(expect.stringContaining('keeping the stored volumes'));
     expect(console.warn).toHaveBeenCalledWith(expect.stringContaining('keeping the stored snapshots'));
+  });
+});
+
+describe('project consumption import', () => {
+  // What usage/current answers for a project that ran one instance, billed by the hour
+  const usageOfInstance = (flavor, totalPrice) => ({
+    hourlyUsage: {
+      instance: [{
+        reference: flavor,
+        region: 'GRA11',
+        details: [{ instanceId: 'inst-1', quantity: { value: 100, unit: 'Hour' }, totalPrice }],
+      }],
+    },
+  });
+
+  // The import takes the month of its consumption from the clock
+  async function importUsageOn(day, usage) {
+    jest.setSystemTime(new Date(`${day}T10:00:00Z`));
+    mockRoutes.set(`${BASE}/usage/current`, ok(usage));
+    await importProject();
+  }
+
+  // The project's consumption as [cloud resource kind, resource, cost]
+  const consumption = (from, to) => db.cloudDetails.getConsumptionByProject(PROJECT, from, to)
+    .map(c => [c.resource_type, c.resource_name, c.total_price]);
+
+  test('keeps the consumption of each month it imports', async () => {
+    await importUsageOn('2026-08-28', usageOfInstance('b2-7', 30.5));
+    await importUsageOn('2026-09-15', usageOfInstance('b2-15', 12.25));
+
+    // Read by month, as the Compare tab does
+    expect(consumption('2026-08-01', '2026-08-31')).toEqual([['instance', 'b2-7', 30.5]]);
+    expect(consumption('2026-09-01', '2026-09-30')).toEqual([['instance', 'b2-15', 12.25]]);
+  });
+
+  test('replaces the consumption of a month it imports again', async () => {
+    await importUsageOn('2026-08-28', usageOfInstance('b2-7', 30.5));
+    await importUsageOn('2026-09-10', usageOfInstance('b2-15', 6));
+    await importUsageOn('2026-09-15', usageOfInstance('b2-15', 12.25));
+
+    expect(consumption('2026-08-01', '2026-08-31')).toEqual([['instance', 'b2-7', 30.5]]);
+    expect(consumption('2026-09-01', '2026-09-30')).toEqual([['instance', 'b2-15', 12.25]]);
+  });
+
+  // The Public Cloud tab reads it without a period: that of the current month, the only
+  // one the import used to keep
+  test('reads the latest month imported without a period', async () => {
+    await importUsageOn('2026-08-28', usageOfInstance('b2-7', 30.5));
+    await importUsageOn('2026-09-15', usageOfInstance('b2-15', 12.25));
+
+    expect(consumption()).toEqual([['instance', 'b2-15', 12.25]]);
+  });
+
+  // The consumption KPIs fall back on it when /me/consumption has nothing
+  test('sums the latest month imported in the consumption summary', async () => {
+    await importUsageOn('2026-08-28', usageOfInstance('b2-7', 30.5));
+    await importUsageOn('2026-09-15', usageOfInstance('b2-15', 12.25));
+
+    expect(db.cloudDetails.getConsumptionSummary()).toEqual({
+      period_start: '2026-09-01', period_end: '2026-09-15', total: 12.25, project_count: 1,
+    });
+  });
+
+  test('splits the latest month imported by cloud resource kind', async () => {
+    await importUsageOn('2026-08-28', usageOfInstance('b2-7', 30.5));
+    await importUsageOn('2026-09-15', usageOfInstance('b2-15', 12.25));
+
+    expect(db.cloudDetails.getConsumptionByResourceType(PROJECT))
+      .toEqual([{ resource_type: 'instance', total: 12.25, count: 1 }]);
+  });
+
+  // The GPU panel names the GPU flavors that each project runs
+  test('names the GPU flavors of the latest month imported', async () => {
+    db.bills.upsert({
+      id: 'FR1', date: '2026-09-01', price_without_tax: 100, price_with_tax: 120, tax: 20,
+      currency: 'EUR', pdf_url: null, html_url: null,
+    });
+    db.details.insert({
+      id: 'FR1_1', bill_id: 'FR1', project_id: PROJECT, domain: PROJECT,
+      description: 'Consommation des instances l4-90', quantity: 1, unit_price: 100,
+      total_price: 100, service_type: 'AI/ML',
+    });
+    await importUsageOn('2026-08-28', usageOfInstance('l40s-180', 30.5));
+    await importUsageOn('2026-09-15', usageOfInstance('l4-90', 12.25));
+
+    const { byProject } = db.cloudDetails.getGpuSummary('2026-09-01', '2026-09-30');
+    expect(byProject.map(p => [p.project_id, p.gpu_flavors])).toEqual([[PROJECT, 'l4-90']]);
+  });
+
+  // Unlike the consumption, they are inventories: what the project has now
+  test('replaces the instances and quotas of the project at each import', async () => {
+    const instance = (id) => ({ id, name: id, flavor: { name: 'b2-7' }, region: 'GRA11' });
+    const quota = (region) => ({ region, instance: { maxCores: 20, usedCores: 2 } });
+    mockRoutes.set(`${BASE}/instance`, ok([instance('inst-1'), instance('inst-2')]));
+    mockRoutes.set(`${BASE}/quota`, ok([quota('GRA11')]));
+    await importUsageOn('2026-08-28', usageOfInstance('b2-7', 30.5));
+
+    mockRoutes.set(`${BASE}/instance`, ok([instance('inst-2')]));
+    mockRoutes.set(`${BASE}/quota`, ok([quota('SBG5')]));
+    await importUsageOn('2026-09-15', usageOfInstance('b2-15', 12.25));
+
+    expect(db.cloudDetails.getInstancesByProject(PROJECT).map(i => i.id)).toEqual(['inst-2']);
+    expect(db.cloudDetails.getQuotasByProject(PROJECT).map(q => q.region)).toEqual(['SBG5']);
   });
 });

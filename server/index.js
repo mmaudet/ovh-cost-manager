@@ -419,6 +419,7 @@ function registerRoutes() {
   app.get('/api/projects/enriched', (req, res) => {
     try {
       const database = db.getDb();
+      // The consumption of the latest month imported: the import keeps the others (#54)
       const projects = database.prepare(`
       SELECT
         p.id, p.name, p.description, p.status,
@@ -435,6 +436,7 @@ function registerRoutes() {
         SELECT project_id, SUM(total_price) as consumption_total,
                MIN(period_start) as period_start, MAX(period_end) as period_end
         FROM project_consumption
+        WHERE period_start = (SELECT MAX(period_start) FROM project_consumption)
         GROUP BY project_id
       ) pc ON pc.project_id = p.id
       ORDER BY consumption_total DESC
