@@ -29,6 +29,7 @@ export const translations = {
     activeProjects: 'Projets actifs',
     withConsumption: 'avec consommation',
     vsPreviousMonth: 'vs mois précédent',
+    vsPreviousMonthNotComputable: 'non calculable : mois précédent à 0 € ou moins',
     noPreviousData: 'Pas de données précédentes',
 
     // Budget
@@ -71,7 +72,12 @@ export const translations = {
     bills: 'factures',
 
     // Loading
+    loadingTitle: 'Chargement...',
     loading: 'Chargement des données...',
+    // Nothing billed yet (#51)
+    noDataYet: 'Pas encore de données',
+    noDataYetHint: 'Aucune facture n\'a encore été importée. Lancez un import, ou vérifiez'
+      + ' les identifiants de l\'API OVHcloud.',
 
     // Sync warning
     syncWarning: 'Dernière synchronisation il y a',
@@ -209,6 +215,7 @@ export const translations = {
     activeProjects: 'Active projects',
     withConsumption: 'with consumption',
     vsPreviousMonth: 'vs previous month',
+    vsPreviousMonthNotComputable: 'cannot be computed: previous month at €0 or below',
     noPreviousData: 'No previous data',
 
     // Budget
@@ -251,7 +258,12 @@ export const translations = {
     bills: 'bills',
 
     // Loading
+    loadingTitle: 'Loading...',
     loading: 'Loading data...',
+    // Nothing billed yet (#51)
+    noDataYet: 'No data yet',
+    noDataYetHint: 'No bill has been imported yet. Run an import, or check the OVHcloud API'
+      + ' credentials.',
 
     // Sync warning
     syncWarning: 'Last synchronization was',

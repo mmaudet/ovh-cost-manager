@@ -34,7 +34,8 @@ const lastImport = {
 };
 
 export const account = {
-  config: { budget: 50000, currency: 'EUR' },
+  // Imports enabled on the server, as by default (#51)
+  config: { budget: 50000, currency: 'EUR', importEnabled: true },
   // Authentication disabled
   user: { id: null, name: 'Anonymous', email: null, authEnabled: false },
   months,

@@ -1,17 +1,20 @@
 import { useState, useEffect, useRef } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   fetchMonths, fetchSummary, fetchByProject, fetchByService,
   fetchImportStatus, fetchConfig, fetchUser,
   fetchConsumptionCurrent, fetchConsumptionForecast,
   fetchExpiringServices,
-  fetchByResourceType, fetchGpuSummary, triggerImport
+  fetchByResourceType, fetchGpuSummary,
 } from '../services/api';
 import { useLanguage } from '../hooks/useLanguage.jsx';
 import Logo from '../components/Logo';
+import { ResyncButton } from '../components/ResyncButton.jsx';
 import { formatCurrency, formatMonthLabel, yearMonthOf } from '../utils/format.js';
 import { parseSqliteDate } from '../utils/sqliteDate.js';
 import { generateMarkdownReport } from '../utils/markdownReport.js';
+import { shiftMonths } from '../utils/monthWindow.js';
+import { variationPercent } from '../utils/variation.js';
 import { useWebCloudTab } from '../tabs/useWebCloudTab.js';
 import { WebCloudTab, WebCloudTabModals } from '../tabs/WebCloudTab.jsx';
 import { useBackupTab } from '../tabs/useBackupTab.js';
@@ -48,7 +51,6 @@ export default function Dashboard() {
   const [syncWarningDismissed, setSyncWarningDismissed] = useState(false);
   const [selectedProject, setSelectedProject] = useState(null);
   const [selectedResourceType, setSelectedResourceType] = useState(null);
-  const [syncFeedback, setSyncFeedback] = useState(null); // { type: 'ok'|'error', msg }
 
   // Helper to format currency with current language
   const fmt = (value) => formatCurrency(value, language);
@@ -62,6 +64,9 @@ export default function Dashboard() {
     queryKey: ['config'],
     queryFn: fetchConfig
   });
+  // Whether the server runs imports: the resync shows only then, as the server would refuse
+  // it otherwise (#51)
+  const importsEnabled = !!configData?.importEnabled;
 
   // Fetch current user
   const { data: userData } = useQuery({
@@ -70,7 +75,7 @@ export default function Dashboard() {
   });
 
   // Fetch available months
-  const { data: months = [] } = useQuery({
+  const { data: months = [], isSuccess: monthsLoaded } = useQuery({
     queryKey: ['months'],
     queryFn: fetchMonths
   });
@@ -80,6 +85,20 @@ export default function Dashboard() {
     queryKey: ['summary', selectedMonth?.from, selectedMonth?.to],
     queryFn: () => fetchSummary(selectedMonth.from, selectedMonth.to),
     enabled: !!selectedMonth
+  });
+
+  // The month just before the selected one in the calendar, as the months list gives it:
+  // none when nothing was billed that month, as before the first billed month. The "vs
+  // previous month" KPI compares the selected month with its summary (#50), under the key of
+  // the Compare tab's month A when they are the same month. Month A defaults to the second
+  // latest billed month (months[1]): the month before the latest, unless that one had no bill.
+  const previousMonth = selectedMonth
+    ? months.find((m) => m.from === shiftMonths(selectedMonth.from, -1))
+    : undefined;
+  const { data: previousSummary, isLoading: loadingPreviousSummary } = useQuery({
+    queryKey: ['summary', previousMonth?.from, previousMonth?.to],
+    queryFn: () => fetchSummary(previousMonth.from, previousMonth.to),
+    enabled: !!previousMonth,
   });
 
   const { data: byService = [] } = useQuery({
@@ -138,10 +157,6 @@ export default function Dashboard() {
   const overviewTab = useOverviewTab();
 
   const compareTab = useCompareTab({ months, selectedMonth, activeTab });
-  // The "vs previous month" KPI reads the summary of month B (#50). Its query only runs on
-  // the Compare tab, but month B defaults to the latest month, whose summary the page loads
-  // at start under the same key: the KPI reads it from page start.
-  const { compareDataB } = compareTab;
 
   const trendsTab = useTrendsTab({ months, selectedMonth, activeTab });
 
@@ -173,55 +188,57 @@ export default function Dashboard() {
     }
   }, [months, selectedMonth]);
 
-  // Manual resync
   const queryClient = useQueryClient();
-  const resync = useMutation({
-    mutationFn: triggerImport,
-    onSuccess: () => {
-      setSyncFeedback({ type: 'ok', msg: t('syncStarted') });
-      // The import runs in the background; refresh status a bit later.
-      setTimeout(() => queryClient.invalidateQueries({ queryKey: ['importStatus'] }), 8000);
-    },
-    onError: (err) => {
-      const status = err?.response?.status;
-      const key = status === 429 ? 'syncRateLimited'
-        : err?.response?.data?.error === 'syncDisabled' ? 'syncDisabled'
-        : status === 409 ? 'syncRunning'
-        : 'syncError';
-      setSyncFeedback({ type: 'error', msg: t(key) });
-    }
-  });
 
   // Once the latest import has finished, refresh every query built from
   // imported data (all of them but config, user and the import status).
-  const latestImport = importStatus?.latest;
+  // The latest import: undefined until the import status loads, null when there was none
+  const latestImport = importStatus ? (importStatus.latest ?? null) : undefined;
   const previousImport = useRef(latestImport);
   useEffect(() => {
     const previous = previousImport.current;
     previousImport.current = latestImport;
-    if (!previous || !latestImport || latestImport.status === 'running') return;
-    if (previous.id !== latestImport.id || previous.status === 'running') {
+    if (previous === undefined || !latestImport || latestImport.status === 'running') return;
+    // Over since the status was last read: another import, the one that was running, or the
+    // first one ever, which the refresh 8 s after a resync can find over already (#51)
+    if (!previous || previous.id !== latestImport.id || previous.status === 'running') {
       queryClient.invalidateQueries({
         predicate: (query) => !['config', 'user', 'importStatus'].includes(query.queryKey[0])
       });
     }
   }, [latestImport, queryClient]);
 
-  // Check if previous month exists
-  const previousMonthExists = selectedMonth && months.length > 1 &&
-    months.findIndex(m => m.value === selectedMonth.value) < months.length - 1;
+  // The oldest month of the list: there is no month before it to compare with
+  const isFirstBilledMonth = selectedMonth?.value === months[months.length - 1]?.value;
 
   // Calculations
   const total = summary?.total || 0;
-  const previousTotal = compareDataB?.total || 0;
-  const variation = previousMonthExists && previousTotal ? ((total - previousTotal) / previousTotal * 100).toFixed(1) : null;
+  // The "vs previous month" variation, from the month before (#50), with one decimal. Null
+  // when it cannot be computed, as in the Compare and Trends tabs (#65): from a month before
+  // at 0 € or less, or without a bill, so at 0 €.
+  const variation = variationPercent(previousSummary?.total ?? 0, total)?.toFixed(1) ?? null;
 
-  // Loading state
-  if (!selectedMonth || loadingSummary) {
+  // Nothing billed yet, as on a new account or before its first import (#51): with no month
+  // to select, there is no dashboard to show. Say so, rather than load forever, and offer the
+  // resync of the header when the server runs imports.
+  if (monthsLoaded && months.length === 0) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 p-4 flex">
+        <div className="m-auto max-w-md text-center space-y-4">
+          <h2 className="text-2xl font-bold text-gray-900">{t('noDataYet')}</h2>
+          <p className="text-gray-500">{t('noDataYetHint')}</p>
+          {importsEnabled && <ResyncButton t={t} />}
+        </div>
+      </div>
+    );
+  }
+
+  // Loading state, until the KPI cards have both months they compare (#50)
+  if (!selectedMonth || loadingSummary || loadingPreviousSummary) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 flex items-center justify-center">
         <div className="text-center">
-          <div className="text-4xl mb-4">Loading...</div>
+          <div className="text-4xl mb-4">{t('loadingTitle')}</div>
           <p className="text-gray-500">{t('loading')}</p>
         </div>
       </div>
@@ -288,19 +305,7 @@ export default function Dashboard() {
           </div>
           <div className="flex items-center gap-3">
             {/* Manual resync */}
-            <button
-              onClick={() => { setSyncFeedback(null); resync.mutate(); }}
-              disabled={resync.isPending}
-              title={t('resync')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${
-                resync.isPending
-                  ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
-                  : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50 cursor-pointer'
-              }`}
-            >
-              <span className={resync.isPending ? 'animate-spin' : ''}>⟳</span>
-              <span>{resync.isPending ? t('syncing') : t('resync')}</span>
-            </button>
+            {importsEnabled && <ResyncButton t={t} />}
             {/* Expiration badge */}
             {expiringServices.length > 0 && (
               <div className="flex items-center gap-1 px-3 py-1.5 bg-orange-100 text-orange-700 rounded-lg text-sm font-medium">
@@ -382,9 +387,17 @@ export default function Dashboard() {
               <div className={`flex items-center mt-2 text-sm ${Number(variation) > 0 ? 'text-red-500' : 'text-green-500'}`}>
                 {Number(variation) > 0 ? '+' : ''}{variation}% {t('vsPreviousMonth')}
               </div>
-            ) : (
+            ) : isFirstBilledMonth ? (
               <div className="flex items-center mt-2 text-sm text-gray-400">
                 {t('noPreviousData')}
+              </div>
+            ) : (
+              // "—", with a tooltip that says why, as in the Compare and Trends tabs (#65)
+              <div
+                className="flex items-center mt-2 text-sm text-gray-400"
+                title={t('vsPreviousMonthNotComputable')}
+              >
+                — {t('vsPreviousMonth')}
               </div>
             )}
           </div>
@@ -571,18 +584,13 @@ export default function Dashboard() {
         {/* Tab Content - Backup */}
         {activeTab === 'backup' && (
           <BackupTab
-            {...backupTab} language={language} fmt={fmt}
+            {...backupTab} language={language} t={t} fmt={fmt}
             selectedMonth={selectedMonth} summary={summary} byResourceType={byResourceType}
           />
         )}
 
         {/* Footer */}
         <div className="text-center text-sm text-gray-400 pt-4 pb-2">
-          {syncFeedback && (
-            <p className={`mb-2 text-sm font-medium ${syncFeedback.type === 'ok' ? 'text-green-600' : 'text-red-600'}`}>
-              {syncFeedback.msg}
-            </p>
-          )}
           <p>{t('syncedVia')}</p>
           {importStatus?.latest && (
             <p className="mt-1">

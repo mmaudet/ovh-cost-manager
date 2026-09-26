@@ -2,20 +2,17 @@ import { backupFigures } from '../utils/backupFigures.js';
 import { formatMonthLabel, formatPercent } from '../utils/format.js';
 
 // The Backup tab, which the shell renders while it is active: what useBackupTab() returns,
-// with the shell's language, amount format (fmt) and selected month, and two of its
-// queries that load at page start: the month's summary and its costs by resource type.
+// with the shell's language, translations (t), amount format (fmt) and selected month, and
+// two of its queries that load at page start: the month's summary and its costs by resource
+// type.
 const BackupTab = ({
   backupStats, loadingBackup, failedBackup,
-  language, fmt, selectedMonth, summary, byResourceType,
+  language, t, fmt, selectedMonth, summary, byResourceType,
 }) => {
   // Until the statistics arrive, the tab says it is loading, in the words of the page's
   // loading screen, as the Web Cloud tab does (#64)
   if (loadingBackup) {
-    return (
-      <div className="text-center text-gray-500 py-8">
-        {language === 'en' ? 'Loading data...' : 'Chargement des données...'}
-      </div>
-    );
+    return <div className="text-center text-gray-500 py-8">{t('loading')}</div>;
   }
 
   // What the cards and the table show, read once so that they read alike (#64)

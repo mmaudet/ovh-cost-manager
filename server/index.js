@@ -15,6 +15,7 @@ const { monthBounds } = require('../data/months');
 const auth = require('./auth');
 const { createOriginCheck } = require('./cors');
 const { createHostCheckMiddleware } = require('./hosts');
+const { importsEnabled } = require('./imports');
 const { trendWindowFromQuery } = require('./months');
 
 // Load configuration
@@ -768,7 +769,7 @@ function registerRoutes() {
   app.post('/api/import/run', importLimiter, (req, res) => {
     try {
       // IMPORT_ENABLED=false turns off manual imports as well as the cron
-      if (process.env.IMPORT_ENABLED === 'false') {
+      if (!importsEnabled()) {
         return res.status(409).json({ error: 'syncDisabled' });
       }
       if (db.importLog.isRunning()) {
@@ -833,7 +834,10 @@ function registerRoutes() {
   app.get('/api/config', (req, res) => {
     res.json({
       budget: config.dashboard?.budget || 50000,
-      currency: config.dashboard?.currency || 'EUR'
+      currency: config.dashboard?.currency || 'EUR',
+      // Whether the server runs imports, on the resync route's rule: the dashboard reads it
+      // to offer the resync or not (#51)
+      importEnabled: importsEnabled(),
     });
   });
 

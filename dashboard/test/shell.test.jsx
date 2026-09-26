@@ -7,12 +7,15 @@ import {
   cardOf,
   disclosure,
   dropdown,
+  emptyState,
   fakeTimers,
   headerBadge,
+  loadingScreen,
   openTab,
   optionsOf,
   passTime,
   renderDashboard,
+  resync,
   rowsOf,
   selectLanguage,
   selectMonth,
@@ -35,11 +38,85 @@ describe('dashboard shell', () => {
       expect(screen.queryByText('Chargement des données...')).not.toBeInTheDocument();
     });
 
-    it('stays on the loading screen when no month was billed', async () => {
-      await renderDashboard({ ...account, months: [] });
+    it.each([
+      ['fr', ['Chargement...', 'Chargement des données...']],
+      ['en', ['Loading...', 'Loading data...']],
+    ])('says that it is loading in the language of the page (%s)', async (language, shown) => {
+      // The language the page remembers from an earlier visit
+      localStorage.setItem('ovh-dashboard-language', language);
 
-      // Forever: the page needs a month to show anything (#51)
-      expect(screen.getByText('Chargement des données...')).toBeInTheDocument();
+      const loading = renderDashboard();
+      // Read before the answers arrive, checked once they did
+      const loadingTexts = texts(loadingScreen());
+      await loading;
+
+      expect(loadingTexts).toEqual(shown);
+    });
+
+    // A new account, or one whose first import has not run yet: no month to select, so no
+    // dashboard to show
+    describe('when no month was billed (#51)', () => {
+      // Nothing ever imported: no bill, and no import in the history
+      const noMonth = { ...account, months: [], importStatus: undefined };
+      const hint = "Aucune facture n'a encore été importée. Lancez un import, ou vérifiez"
+        + " les identifiants de l'API OVHcloud.";
+
+      it('keeps the loading screen until the months list arrives', async () => {
+        const loading = renderDashboard(noMonth);
+        expect(screen.getByText('Chargement des données...')).toBeInTheDocument();
+        expect(screen.queryByText('Pas encore de données')).not.toBeInTheDocument();
+
+        await loading;
+        expect(screen.queryByText('Chargement des données...')).not.toBeInTheDocument();
+        expect(emptyState()).toBeInTheDocument();
+      });
+
+      it('says that there is no data yet, and offers the resync of the header', async () => {
+        await renderDashboard(noMonth);
+
+        expect(texts(emptyState())).toEqual(['Pas encore de données', hint, '⟳', 'Synchroniser']);
+      });
+
+      it('offers no resync when the server runs no imports', async () => {
+        await renderDashboard({ ...noMonth, config: { ...account.config, importEnabled: false } });
+
+        expect(texts(emptyState())).toEqual(['Pas encore de données', hint]);
+        expect(screen.queryByRole('button', { name: /Synchroniser/ })).not.toBeInTheDocument();
+      });
+
+      it('resyncs as the header does, and says so', async () => {
+        const { user } = await renderDashboard(noMonth);
+        let started;
+        api.triggerImport.mockImplementation(() => new Promise((resolve) => {
+          started = resolve;
+        }));
+
+        await user.click(screen.getByRole('button', { name: /Synchroniser/ }));
+
+        expect(await screen.findByRole('button', { name: /Synchronisation\.\.\./ }))
+          .toBeDisabled();
+
+        started({ started: true });
+        await settle();
+
+        expect(texts(emptyState())).toEqual([
+          'Pas encore de données', hint, '⟳', 'Synchroniser',
+          'Synchronisation lancée. Les données se mettront à jour dans quelques instants.',
+        ]);
+      });
+
+      it('says so in the language the user picked', async () => {
+        // English, which the page remembers from an earlier visit
+        localStorage.setItem('ovh-dashboard-language', 'en');
+
+        await renderDashboard(noMonth);
+
+        expect(texts(emptyState())).toEqual([
+          'No data yet',
+          'No bill has been imported yet. Run an import, or check the OVHcloud API credentials.',
+          '⟳', 'Resync',
+        ]);
+      });
     });
 
     it('lists the billed months and selects the most recent one', async () => {
@@ -55,8 +132,9 @@ describe('dashboard shell', () => {
       await selectMonth(user, 'Août 2026');
 
       expect(monthSelector()).toHaveDisplayValue('Août 2026');
+      // Compared with July, the month before (#50)
       expect(texts(cardOf('Coût total du mois')))
-        .toEqual(['Coût total du mois', '1 042,00€', '-16.7% vs mois précédent']);
+        .toEqual(['Coût total du mois', '1 042,00€', '+6.3% vs mois précédent']);
       expect(texts(cardOf('Cloud Total'))).toEqual(['Cloud Total', '702,00€', 'Public Cloud']);
       expect(texts(cardOf('Coût moyen / jour')))
         .toEqual(['Coût moyen / jour', '33,61€', 'Sur 30 jours']);
@@ -67,17 +145,18 @@ describe('dashboard shell', () => {
 
     it('shows the loading screen again while the summary of the new month loads', async () => {
       const { user } = await renderDashboard();
-      // Hold back the summary of August, and only that one
-      const releaseAugust = holdBack(api.fetchSummary,
-        (from, to) => from === '2026-08-01' && to === '2026-08-31');
+      // Hold back the summary of July, and only that one. Not August's: the page loads it at
+      // start, for the variation of September (#50)
+      const releaseJuly = holdBack(api.fetchSummary,
+        (from, to) => from === '2026-07-01' && to === '2026-07-31');
 
-      await user.selectOptions(monthSelector(), 'Août 2026');
+      await user.selectOptions(monthSelector(), 'Juillet 2026');
       expect(screen.getByText('Chargement des données...')).toBeInTheDocument();
 
-      releaseAugust();
+      releaseJuly();
       await settle();
       expect(texts(cardOf('Coût total du mois')))
-        .toEqual(['Coût total du mois', '1 042,00€', '-16.7% vs mois précédent']);
+        .toEqual(['Coût total du mois', '980,00€', 'Pas de données précédentes']);
     });
   });
 
@@ -85,9 +164,9 @@ describe('dashboard shell', () => {
     it("show the month's cost, Cloud total, daily average and active projects", async () => {
       await renderDashboard();
 
-      // The latest month is compared with itself (#50, see below)
+      // Compared with August, the month before (#50, see below)
       expect(texts(cardOf('Coût total du mois')))
-        .toEqual(['Coût total du mois', '1 250,40€', '0.0% vs mois précédent']);
+        .toEqual(['Coût total du mois', '1 250,40€', '+20.0% vs mois précédent']);
       expect(texts(cardOf('Cloud Total'))).toEqual(['Cloud Total', '830,40€', 'Public Cloud']);
       expect(texts(cardOf('Coût moyen / jour')))
         .toEqual(['Coût moyen / jour', '41,68€', 'Sur 30 jours']);
@@ -116,39 +195,100 @@ describe('dashboard shell', () => {
     });
   });
 
-  // The variation reads the summary of the Compare tab's month B, which is
-  // the latest month until the user picks another one there (#50).
-  describe('"vs previous month" variation', () => {
-    it('compares the selected month with the latest one, not with the month before', async () => {
+  // From the month just before the selected one in the calendar, whatever the Compare tab
+  // compares (#50)
+  describe('"vs previous month" variation (#50)', () => {
+    const totalCostCard = () => cardOf('Coût total du mois');
+    // What shows in place of a variation that cannot be computed, and its tooltip
+    const notComputable = '— vs mois précédent';
+    const whyNotComputable = 'non calculable : mois précédent à 0 € ou moins';
+
+    it('compares the latest month with the month before', async () => {
+      await renderDashboard();
+
+      // (1 250.40 - 1 042) / 1 042
+      expect(texts(totalCostCard())).toContain('+20.0% vs mois précédent');
+    });
+
+    it('compares an older month with the month before it, not with the latest', async () => {
       const { user } = await renderDashboard();
 
       await selectMonth(user, 'Août 2026');
 
-      // (1 042 - 1 250.40) / 1 250.40
-      expect(texts(cardOf('Coût total du mois'))).toContain('-16.7% vs mois précédent');
+      // (1 042 - 980) / 980
+      expect(texts(totalCostCard())).toContain('+6.3% vs mois précédent');
     });
 
-    it('shows no previous data for the oldest month', async () => {
+    it('ignores the months picked in the Compare tab', async () => {
+      const { user } = await renderDashboard();
+      await openTab(user, 'Comparaison');
+
+      // Month B, September until then, becomes July
+      await user.selectOptions(dropdown('Juillet 2026', 'Septembre 2026'), 'Juillet 2026');
+      await settle();
+
+      // Still from August, not from July
+      expect(texts(totalCostCard())).toContain('+20.0% vs mois précédent');
+    });
+
+    it('waits for the summary of the month before, rather than showing none', async () => {
+      const { user } = await renderDashboard();
+      // Hold back the summary of July, the month before August. August's is there already:
+      // the page loaded it for the variation of September.
+      const releaseJuly = holdBack(api.fetchSummary,
+        (from, to) => from === '2026-07-01' && to === '2026-07-31');
+
+      await user.selectOptions(monthSelector(), 'Août 2026');
+      expect(screen.getByText('Chargement des données...')).toBeInTheDocument();
+
+      releaseJuly();
+      await settle();
+      expect(texts(totalCostCard()))
+        .toEqual(['Coût total du mois', '1 042,00€', '+6.3% vs mois précédent']);
+    });
+
+    // As in the Compare and Trends tabs (#65): it would be infinite from 0 €, and of the
+    // wrong sign from credits larger than the costs
+    it.each([
+      ['at 0 €', 0],
+      ['whose credits exceed its costs', -120.5],
+    ])('shows none from a month before %s, and says why', async (_, total) => {
+      const { user } = await renderDashboard({
+        ...account,
+        summary: { ...account.summary, '2026-08': { ...account.summary['2026-08'], total } },
+      });
+
+      expect(texts(totalCostCard())).toEqual(['Coût total du mois', '1 250,40€', notComputable]);
+      expect(within(totalCostCard()).getByTitle(whyNotComputable))
+        .toHaveTextContent(notComputable);
+
+      await selectLanguage(user, 'en');
+
+      expect(within(cardOf('Total monthly cost'))
+        .getByTitle('cannot be computed: previous month at €0 or below'))
+        .toHaveTextContent('— vs previous month');
+    });
+
+    it('shows none from a month before without a bill, and says why', async () => {
+      // Nothing billed in August: the months list skips it
+      await renderDashboard({
+        ...account,
+        months: account.months.filter(({ value }) => value !== '2026-08'),
+        summary: { '2026-09': account.summary['2026-09'], '2026-07': account.summary['2026-07'] },
+      });
+
+      expect(texts(totalCostCard())).toEqual(['Coût total du mois', '1 250,40€', notComputable]);
+      expect(within(totalCostCard()).getByTitle(whyNotComputable))
+        .toHaveTextContent(notComputable);
+    });
+
+    it('shows no previous data for the first billed month', async () => {
       const { user } = await renderDashboard();
 
       await selectMonth(user, 'Juillet 2026');
 
-      expect(texts(cardOf('Coût total du mois')))
+      expect(texts(totalCostCard()))
         .toEqual(['Coût total du mois', '980,00€', 'Pas de données précédentes']);
-    });
-
-    it('follows the month B picked in the Compare tab', async () => {
-      const { user } = await renderDashboard();
-      await selectMonth(user, 'Août 2026');
-      await openTab(user, 'Comparaison');
-
-      // Month B shows the latest month, month A the one before
-      const monthB = dropdown('Juillet 2026', 'Septembre 2026');
-      await user.selectOptions(monthB, 'Juillet 2026');
-      await settle();
-
-      // (1 042 - 980) / 980
-      expect(texts(cardOf('Coût total du mois'))).toContain('+6.3% vs mois précédent');
     });
   });
 
@@ -297,7 +437,7 @@ describe('dashboard shell', () => {
   });
 
   describe('resync', () => {
-    it('starts an import and says so in the footer', async () => {
+    it('starts an import and says so under its button', async () => {
       const { user } = await renderDashboard();
       let started;
       api.triggerImport.mockImplementation(() => new Promise((resolve) => {
@@ -312,9 +452,12 @@ describe('dashboard shell', () => {
       await settle();
 
       expect(screen.getByRole('button', { name: /Synchroniser/ })).toBeEnabled();
-      expect(screen.getByText(
+      // Under the button, as on the page shown when no month was billed, rather than in the
+      // footer: one component for both (#51)
+      expect(texts(resync())).toEqual([
+        '⟳', 'Synchroniser',
         'Synchronisation lancée. Les données se mettront à jour dans quelques instants.',
-      )).toBeInTheDocument();
+      ]);
     });
 
     // As axios rejects: the answer of the server under "response"
@@ -326,7 +469,8 @@ describe('dashboard shell', () => {
     it.each([
       ['more than once an hour', refusal(429, { error: 'Too many requests' }),
         'Synchronisation limitée à une fois par heure. Réessayez plus tard.'],
-      ['with imports disabled on the server', refusal(409, { error: 'syncDisabled' }),
+      // Its config said it ran them when the page loaded: the button shows (#51)
+      ['by a server that no longer runs imports', refusal(409, { error: 'syncDisabled' }),
         'La synchronisation est désactivée sur ce serveur (IMPORT_ENABLED=false).'],
       ['while an import runs', refusal(409, { error: 'syncRunning' }),
         'Une synchronisation est déjà en cours.'],
@@ -339,7 +483,18 @@ describe('dashboard shell', () => {
       await user.click(screen.getByRole('button', { name: /Synchroniser/ }));
       await settle();
 
-      expect(screen.getByText(message)).toBeInTheDocument();
+      // Under the button too (#51)
+      expect(texts(resync())).toEqual(['⟳', 'Synchroniser', message]);
+    });
+
+    // Rather than a button that could only answer that imports are disabled (#51)
+    it('does not show when the server runs no imports', async () => {
+      await renderDashboard({ ...account, config: { ...account.config, importEnabled: false } });
+
+      expect(screen.queryByRole('button', { name: /Synchroniser/ })).not.toBeInTheDocument();
+      // The rest of the header shows as ever
+      expect(screen.getByText('Tableau de bord de suivi des coûts OVHcloud')).toBeInTheDocument();
+      expect(monthSelector()).toHaveDisplayValue('Septembre 2026');
     });
   });
 
@@ -453,6 +608,48 @@ describe('dashboard shell', () => {
       expect(lastSync('15/09/2026 12:00:31 (4 factures)')).toBeInTheDocument();
       expect(monthCost()).toBe('1 300,40€');
     });
+
+    it('shows the dashboard once the import a resync starts with no month billed is over (#51)',
+      async () => {
+        fakeTimers();
+        const { user } = await renderDashboard({ ...signedIn, months: [] });
+        serve({ ...signedIn, months: [], importStatus: importStatus(running) });
+
+        await user.click(within(emptyState()).getByRole('button', { name: /Synchroniser/ }));
+        await settle();
+        await passTime(8000);
+
+        // Still nothing billed while it runs
+        expect(emptyState()).toBeInTheDocument();
+
+        serve(afterImport);
+        await passTime(30000);
+
+        expect(monthSelector()).toHaveDisplayValue('Septembre 2026');
+        expect(monthCost()).toBe('1 300,40€');
+        expect(lastSync('15/09/2026 12:00:31 (4 factures)')).toBeInTheDocument();
+      });
+
+    it('shows the dashboard once the first import ever is over, even before the refresh (#51)',
+      async () => {
+        fakeTimers();
+        // Nothing ever imported: no bill, and no import in the history
+        const neverImported = { ...signedIn, months: [], importStatus: undefined };
+        const { user } = await renderDashboard(neverImported);
+        // An import quick enough to be over before the status is asked again: the first one
+        serve({
+          ...afterImport,
+          importStatus: { latest: finished, running: false, history: [finished] },
+        });
+
+        await user.click(within(emptyState()).getByRole('button', { name: /Synchroniser/ }));
+        await settle();
+        await passTime(8000);
+
+        expect(monthSelector()).toHaveDisplayValue('Septembre 2026');
+        expect(monthCost()).toBe('1 300,40€');
+        expect(lastSync('15/09/2026 12:00:31 (4 factures)')).toBeInTheDocument();
+      });
   });
 
   describe('report export', () => {
@@ -576,9 +773,9 @@ describe('dashboard shell', () => {
 
       expect(screen.getByText('OVHcloud cost tracking dashboard')).toBeInTheDocument();
       expect(screen.getByRole('button', { name: /Resync/ })).toBeInTheDocument();
-      // The latest month, compared with itself (#50)
+      // The latest month, compared with August, the month before (#50)
       expect(texts(cardOf('Total monthly cost')))
-        .toEqual(['Total monthly cost', '1,250.40€', '0.0% vs previous month']);
+        .toEqual(['Total monthly cost', '1,250.40€', '+20.0% vs previous month']);
       expect(texts(cardOf('Daily average cost')))
         .toEqual(['Daily average cost', '41.68€', 'Over 30 days']);
       expect(screen.getByRole('button', { name: 'Overview' })).toBeInTheDocument();
@@ -595,7 +792,7 @@ describe('dashboard shell', () => {
       await selectLanguage(user, 'fr');
 
       expect(texts(cardOf('Coût total du mois')))
-        .toEqual(['Coût total du mois', '1 250,40€', '0.0% vs mois précédent']);
+        .toEqual(['Coût total du mois', '1 250,40€', '+20.0% vs mois précédent']);
       expect(screen.getByRole('button', { name: "Vue d'ensemble" })).toBeInTheDocument();
       // The months back in French (#33)
       expect(optionsOf(monthSelector())).toEqual(['Septembre 2026', 'Août 2026', 'Juillet 2026']);
