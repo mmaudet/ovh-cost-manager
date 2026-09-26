@@ -1,0 +1,25 @@
+// Trend period options, expressed in months. The largest offered option is
+// derived from the oldest available month so users can never pick a range
+// emptier than their data.
+const PERIOD_OPTIONS = [
+  { months: 3, key: 'period3m' },
+  { months: 6, key: 'period6m' },
+  { months: 12, key: 'period1y' },
+  { months: 24, key: 'period2y' },
+  { months: 36, key: 'period3y' },
+  { months: 60, key: 'period5y' },
+  { months: 120, key: 'period10y' },
+  { months: 180, key: 'period15y' },
+  { months: 240, key: 'period20y' }
+];
+
+// Number of months from a 'YYYY-MM' up to the current month, inclusive.
+const monthsSince = (yearMonth) => {
+  if (!yearMonth) return 0;
+  const [y, m] = yearMonth.split('-').map(Number);
+  if (!y || !m) return 0;
+  const now = new Date();
+  return (now.getFullYear() - y) * 12 + (now.getMonth() + 1 - m) + 1;
+};
+
+export { PERIOD_OPTIONS, monthsSince };
