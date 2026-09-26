@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { useBackupTab } from '../../src/tabs/useBackupTab.js';
 import { months } from '../fixtures/calendar.js';
 import { api } from '../support/api.js';
-import { renderTabHook, TAB_IDS } from '../support/hooks.jsx';
+import { renderTabHook, TAB_IDS, WAITING } from '../support/hooks.jsx';
 
 // The data query of the Backup tab, as the dashboard shell sees it: what the hook requests
 // and returns for the selected month and the active tab.
@@ -29,7 +29,7 @@ describe('useBackupTab', () => {
     expect(result.current.backupStats).toBeUndefined();
     // The query waits for a month, rather than failing for the lack of one
     expect(queryClient.getQueryState(['backupStats', undefined, undefined]))
-      .toMatchObject({ status: 'pending', fetchStatus: 'idle', error: null });
+      .toMatchObject(WAITING);
   });
 
   it('requests the selected month once the tab opens', async () => {

@@ -14,6 +14,12 @@ export const TAB_IDS = [
   'overview', 'compare', 'trends', 'inventory', 'webcloud', 'infrastructure', 'backup',
 ];
 
+// The state, in the query cache, of a query that waits for what it needs, a month or a
+// project, rather than failing for the lack of it: pending, not fetching, and without
+// error. A query that fails before its request sends nothing either: only this state tells
+// them apart.
+export const WAITING = { status: 'pending', fetchStatus: 'idle', error: null };
+
 // Calls useTab(props), the API answering from the dataset, and waits until the hook holds
 // every answer it asked for. Returns its result, the query client that holds the answers,
 // keysOf(name), the keys that client caches the answers of a query under, and

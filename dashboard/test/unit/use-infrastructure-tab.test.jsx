@@ -3,7 +3,7 @@ import { act } from '@testing-library/react';
 import { useInfrastructureTab } from '../../src/tabs/useInfrastructureTab.js';
 import { months } from '../fixtures/calendar.js';
 import { api } from '../support/api.js';
-import { renderTabHook, TAB_IDS } from '../support/hooks.jsx';
+import { renderTabHook, TAB_IDS, WAITING } from '../support/hooks.jsx';
 
 // The state and data queries of the Infrastructure tab, as the dashboard shell sees them:
 // what the hook requests and returns for the selected month, the active tab and the
@@ -129,8 +129,7 @@ describe('useInfrastructureTab', () => {
     expect(result.current.resourceTypeDetails).toEqual([]);
     // The query waits for a month, rather than failing for the lack of one
     const key = ['resourceTypeDetails', 'dedicated_server', undefined, undefined];
-    expect(queryClient.getQueryState(key))
-      .toMatchObject({ status: 'pending', fetchStatus: 'idle', error: null });
+    expect(queryClient.getQueryState(key)).toMatchObject(WAITING);
   });
 
   // The inventory is what exists now, whatever the month: one answer for every month

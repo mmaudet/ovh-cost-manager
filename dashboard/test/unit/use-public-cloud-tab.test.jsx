@@ -3,7 +3,7 @@ import { act } from '@testing-library/react';
 import { usePublicCloudTab } from '../../src/tabs/usePublicCloudTab.js';
 import { months } from '../fixtures/calendar.js';
 import { api } from '../support/api.js';
-import { renderTabHook, TAB_IDS } from '../support/hooks.jsx';
+import { renderTabHook, TAB_IDS, WAITING } from '../support/hooks.jsx';
 
 // The state and data queries of the Public Cloud tab, as the dashboard shell sees them: what
 // the hook requests and returns for the selected month, the active tab and the selected
@@ -15,9 +15,6 @@ const production = { id: 'project-production', name: 'Production' };
 const staging = { id: 'project-staging', name: 'Staging' };
 // The tab open on September, no project open
 const onTheTab = { selectedMonth: september, activeTab: 'inventory', selectedProject: null };
-
-// A query that waits for what it needs, rather than failing for the lack of it
-const waiting = { status: 'pending', fetchStatus: 'idle', error: null };
 
 // The requests of the resources of a project, and those the hook made
 const PROJECT_REQUESTS = [
@@ -90,7 +87,7 @@ describe('usePublicCloudTab', () => {
         .toEqual(['Production', 'Staging', 'Sandbox']);
       expect(api.fetchPublicCloudStats).not.toHaveBeenCalled();
       expect(queryClient.getQueryState(['publicCloudStats', undefined, undefined]))
-        .toMatchObject(waiting);
+        .toMatchObject(WAITING);
     });
 
     it('follow the selected month', async () => {
@@ -113,20 +110,20 @@ describe('usePublicCloudTab', () => {
       expect(made(PROJECT_REQUESTS)).toEqual([]);
       // Each query waits for a project, rather than failing for the lack of one
       const stateOf = (key) => queryClient.getQueryState(key);
-      expect(stateOf(['projectConsumption', undefined])).toMatchObject(waiting);
-      expect(stateOf(['projectQuotas', undefined])).toMatchObject(waiting);
+      expect(stateOf(['projectConsumption', undefined])).toMatchObject(WAITING);
+      expect(stateOf(['projectQuotas', undefined])).toMatchObject(WAITING);
       expect(stateOf(['projectInstances', undefined, '2026-09-01', '2026-09-30']))
-        .toMatchObject(waiting);
+        .toMatchObject(WAITING);
       expect(stateOf(['projectInstanceTotal', undefined, '2026-09-01', '2026-09-30']))
-        .toMatchObject(waiting);
+        .toMatchObject(WAITING);
       expect(stateOf(['projectBuckets', undefined, '2026-09-01', '2026-09-30']))
-        .toMatchObject(waiting);
+        .toMatchObject(WAITING);
       expect(stateOf(['projectVolumes', undefined, '2026-09-01', '2026-09-30']))
-        .toMatchObject(waiting);
+        .toMatchObject(WAITING);
       expect(stateOf(['projectSnapshots', undefined, '2026-09-01', '2026-09-30']))
-        .toMatchObject(waiting);
+        .toMatchObject(WAITING);
       expect(stateOf(['projectSavingsPlans', undefined, '2026-09-01', '2026-09-30']))
-        .toMatchObject(waiting);
+        .toMatchObject(WAITING);
       expect(result.current.projectInstances).toEqual([]);
       expect(result.current.instanceCount).toBe(0);
     });
@@ -284,15 +281,15 @@ describe('usePublicCloudTab', () => {
         .toHaveBeenCalledWith('project-production', undefined, undefined);
       const stateOf = (key) => queryClient.getQueryState(key);
       expect(stateOf(['projectInstanceTotal', 'project-production', undefined, undefined]))
-        .toMatchObject(waiting);
+        .toMatchObject(WAITING);
       expect(stateOf(['projectBuckets', 'project-production', undefined, undefined]))
-        .toMatchObject(waiting);
+        .toMatchObject(WAITING);
       expect(stateOf(['projectVolumes', 'project-production', undefined, undefined]))
-        .toMatchObject(waiting);
+        .toMatchObject(WAITING);
       expect(stateOf(['projectSnapshots', 'project-production', undefined, undefined]))
-        .toMatchObject(waiting);
+        .toMatchObject(WAITING);
       expect(stateOf(['projectSavingsPlans', 'project-production', undefined, undefined]))
-        .toMatchObject(waiting);
+        .toMatchObject(WAITING);
       expect(result.current.projectInstanceTotal).toBeUndefined();
     });
   });
