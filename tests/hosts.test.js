@@ -86,11 +86,37 @@ describe('createHostCheck', () => {
 
   // The Docker healthcheck, the import cron and local tools call localhost
   test.each(['localhost', 'localhost:3001', '127.0.0.1:3001', '[::1]:3001', 'LOCALHOST:5173'])(
-    'always allows the loopback host %s, on any port',
+    'allows the loopback host %s on any port, on a direct request',
     (host) => {
       expect(passes(direct, { host })).toBe(true);
     }
   );
+
+  // A proxy on the same machine may send its upstream as Host, as nginx does
+  // by default, whatever the browser asked for
+  test.each([
+    ['x-forwarded-for', '203.0.113.7'],
+    ['x-forwarded-host', 'ocm.example.com'],
+    ['forwarded', 'for=203.0.113.7'],
+  ])('rejects a loopback Host on a request with %s, which a proxy adds', (name, value) => {
+    expect(passes(direct, { host: '127.0.0.1:3001', [name]: value })).toBe(false);
+  });
+
+  test('rejects a loopback Host with X-Forwarded-For behind a trusted proxy too', () => {
+    expect(passes(behindTrustedProxy, {
+      host: 'localhost:3001',
+      'x-forwarded-for': '203.0.113.7',
+    })).toBe(false);
+  });
+
+  test('allows a loopback Host behind a proxy when it is listed, as the proxy\'s upstream', () => {
+    const check = createHostCheck({
+      allowedHosts: [...allowedHosts, '127.0.0.1:3001'],
+      trustProxy: false,
+    });
+    expect(passes(check, { host: '127.0.0.1:3001', 'x-forwarded-for': '203.0.113.7' }))
+      .toBe(true);
+  });
 
   test.each(['localhost.evil.example', 'notlocalhost:3001', '127.0.0.1.evil.example:3001'])(
     'rejects %s, whose name is not a loopback name',

@@ -5,12 +5,15 @@
  * browser then sends the page's requests to the server as same-origin ones,
  * which CORS does not restrict, with the page's domain in the Host header.
  * When ALLOWED_HOSTS is set, the server only answers a request whose Host it
- * lists, or is a loopback name, and behind a trusted proxy, whose last
- * X-Forwarded-Host it lists too. When it is not, no check runs, so that no
- * existing deployment breaks.
+ * lists, or is a loopback name on a direct request, and behind a trusted
+ * proxy, whose last X-Forwarded-Host it lists too. When it is not, no check
+ * runs, so that no existing deployment breaks.
  */
 
 const { LOOPBACK_HOSTNAMES, lastValue, parseHost } = require('./hostHeader');
+
+// The headers a proxy adds: a request with any of them is not a direct one
+const PROXY_HEADERS = ['x-forwarded-for', 'x-forwarded-host', 'forwarded'];
 
 // The log names each blocked host once an hour, and at most this many hosts
 // an hour, as any client can send any number of them. It counts the others.
@@ -55,9 +58,12 @@ function createHostCheck({ allowedHosts, trustProxy }) {
 
   return function checkHost(headers) {
     // Host is always checked: a page that rebinds its own domain sends it
-    // there, and a proxy that keeps Host passes it on
+    // there, and a proxy that keeps Host passes it on. The loopback names pass
+    // on direct requests only: a proxy on the same machine may send its
+    // upstream, 127.0.0.1:3001, as Host, whatever the browser asked for.
     const host = parseHost(headers.host);
-    if (!isListed(host) && !isLoopback(host)) {
+    const direct = PROXY_HEADERS.every((name) => headers[name] === undefined);
+    if (!isListed(host) && !(direct && isLoopback(host))) {
       return refuse('Host', host);
     }
     // Behind a trusted proxy, the last X-Forwarded-Host must be listed too. A
