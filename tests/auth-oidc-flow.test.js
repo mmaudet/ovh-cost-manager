@@ -122,6 +122,30 @@ describe('sign-in', () => {
     expect((await browser.fetch(first)).status).toBe(302);
     expect(signInCookies()).toHaveLength(0);
   });
+
+  // Each visit of /auth/login sets a cookie for 10 minutes: a page that opens
+  // it again and again grew the Cookie header until every request failed
+  test('keeps the three newest sign-ins in progress in a browser', async () => {
+    provider.user = 'alice';
+    const browser = createBrowser(ocm.url);
+    const callbacks = [];
+    for (let i = 0; i < 6; i += 1) {
+      callbacks.push(await startSignIn(browser));
+    }
+    expect([...browser.cookies.keys()].filter((name) => name.startsWith('ocm.login.')))
+      .toHaveLength(3);
+
+    expect((await browser.fetch(callbacks[2])).status).toBe(400);
+    expect((await browser.fetch(callbacks[3])).status).toBe(302);
+  });
+
+  test('goes back to / when returnTo is longer than 1 KB', async () => {
+    provider.user = 'alice';
+    const browser = createBrowser(ocm.url);
+    const callback = await signIn(browser, `/${'a'.repeat(1024)}`);
+    expect(callback.status).toBe(302);
+    expect(callback.headers.get('location')).toBe('/');
+  });
 });
 
 // A second server, behind a trusted proxy, with rate limiting on

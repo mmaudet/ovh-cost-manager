@@ -17,6 +17,7 @@ const {
   encodeLoginState,
   readLoginState,
   loginCookie,
+  staleLoginCookies,
 } = require('./login-state');
 const { sessionsToEnd } = require('./logout-token');
 
@@ -61,6 +62,10 @@ function setup(config) {
       // with the cookie of that state. returnTo: a path of this site only, or
       // the callback would redirect to any site
       const pending = { state, nonce, codeVerifier, returnTo: safeReturnTo(req.query.returnTo) };
+      // A few sign-ins in progress at most, the newest
+      for (const stale of staleLoginCookies(req, authConfig)) {
+        res.clearCookie(stale.name, stale.options);
+      }
       const cookie = loginCookie(req, authConfig, state);
       res.cookie(cookie.name, encodeLoginState(pending, authConfig.session.secret), {
         ...cookie.options,

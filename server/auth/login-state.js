@@ -46,6 +46,16 @@ function encodeLoginState({ state, nonce, codeVerifier, returnTo }, secret, now 
  *   when the cookie is missing, altered or expired, or holds another state
  */
 function readLoginState(cookie, state, secret, now = Date.now()) {
+  const pending = decodeLoginState(cookie, state, secret, now);
+  if (!pending) {
+    return null;
+  }
+  return { nonce: pending.nonce, codeVerifier: pending.codeVerifier, returnTo: pending.returnTo };
+}
+
+// The sign-in a login cookie holds, with its expiresAt, when its signature
+// matches, its 10 minutes are not over and its state is the one given
+function decodeLoginState(cookie, state, secret, now) {
   const payload = unsignValue(cookie, secret, 'login');
   if (!payload || typeof state !== 'string' || state === '') {
     return null;
@@ -62,7 +72,7 @@ function readLoginState(cookie, state, secret, now = Date.now()) {
     || pending.state !== state) {
     return null;
   }
-  return { nonce: pending.nonce, codeVerifier: pending.codeVerifier, returnTo: pending.returnTo };
+  return pending;
 }
 
 /**
@@ -86,15 +96,63 @@ function loginCookie(req, auth, state) {
   if (typeof state !== 'string' || !STATE_FORMAT.test(state)) {
     return null;
   }
+  const { prefix, options } = loginCookieKind(req, auth);
+  return { name: `${prefix}${state}`, options };
+}
+
+// The prefix of the sign-in cookies of a request, and their options
+function loginCookieKind(req, auth) {
   const options = sessionCookieOptions(req, auth);
   return options.secure
-    ? { name: `__Host-${LOGIN_COOKIE_PREFIX}${state}`, options: { ...options, path: '/' } }
-    : { name: `${LOGIN_COOKIE_PREFIX}${state}`, options: { ...options, path: '/auth' } };
+    ? { prefix: `__Host-${LOGIN_COOKIE_PREFIX}`, options: { ...options, path: '/' } }
+    : { prefix: LOGIN_COOKIE_PREFIX, options: { ...options, path: '/auth' } };
+}
+
+// The sign-ins in progress a browser keeps at most, the newest. With a
+// returnTo of 1 KB at most, a sign-in cookie holds less than 2 KB: three,
+// and the session cookie, keep the Cookie header under 8 KB, the longest
+// header line nginx accepts by default
+const MAX_PENDING_SIGN_INS = 3;
+
+/**
+ * The sign-in cookies that a new sign-in clears, so that a browser keeps
+ * MAX_PENDING_SIGN_INS at most, the new one included: all but the newest of
+ * those the request carries, told by the expiry they hold, and every one
+ * that no callback would accept, altered or expired. Otherwise each visit of
+ * /auth/login adds a cookie for 10 minutes, and a page that opens it again
+ * and again grows the Cookie header until the server, or a proxy, refuses
+ * every request of the dashboard.
+ *
+ * @param {object} req - the request of /auth/login, with its cookies
+ * @param {object} auth - the auth settings
+ * @param {number} [now] - the current time, in milliseconds
+ * @returns {Array<{ name: string, options: object }>} the cookies to clear
+ */
+function staleLoginCookies(req, auth, now = Date.now()) {
+  const { prefix, options } = loginCookieKind(req, auth);
+  // A browser sends the cookies of one path oldest first: reversed, the
+  // newest come first among those of the same expiry
+  const pending = Object.entries(req.cookies || {})
+    .filter(([name]) => name.startsWith(prefix) && STATE_FORMAT.test(name.slice(prefix.length)))
+    .reverse()
+    .map(([name, cookie]) => {
+      const sign = decodeLoginState(cookie, name.slice(prefix.length), auth.session.secret, now);
+      return { name, expiresAt: sign ? sign.expiresAt : null };
+    });
+  const kept = pending
+    .filter(({ expiresAt }) => expiresAt !== null)
+    .sort((a, b) => b.expiresAt - a.expiresAt)
+    .slice(0, MAX_PENDING_SIGN_INS - 1);
+  return pending
+    .filter((cookie) => !kept.includes(cookie))
+    .map(({ name }) => ({ name, options }));
 }
 
 module.exports = {
   LOGIN_MAX_AGE_MS,
+  MAX_PENDING_SIGN_INS,
   encodeLoginState,
   readLoginState,
   loginCookie,
+  staleLoginCookies,
 };

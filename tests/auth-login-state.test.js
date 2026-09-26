@@ -6,9 +6,11 @@
 
 const {
   LOGIN_MAX_AGE_MS,
+  MAX_PENDING_SIGN_INS,
   encodeLoginState,
   readLoginState,
   loginCookie,
+  staleLoginCookies,
 } = require('../server/auth/login-state');
 const { signValue } = require('../server/auth/session-cookie');
 
@@ -151,5 +153,99 @@ describe('loginCookie', () => {
 
   test('gives the cookie 10 minutes', () => {
     expect(LOGIN_MAX_AGE_MS).toBe(10 * 60 * 1000);
+  });
+});
+
+// Each visit of /auth/login sets a cookie for 10 minutes: without a bound, a
+// page that opens it again and again grows the Cookie header until the
+// server, or a proxy, refuses every request of the dashboard
+describe('staleLoginCookies', () => {
+  const auth = {
+    baseUrl: 'http://ocm.example.com',
+    session: { secure: 'auto', secret: SECRET },
+  };
+  const AT = NOW + 60 * 1000;
+  // The cookie of the sign-in of state n, started n seconds after NOW
+  const cookieOf = (n, prefix = 'ocm.login.') => [
+    `${prefix}state-${n}`,
+    encodeLoginState({ ...PENDING, state: `state-${n}` }, SECRET, NOW + n * 1000),
+  ];
+  const request = (cookies, secure = false) => ({ secure, cookies: Object.fromEntries(cookies) });
+  const names = (stale) => stale.map(({ name }) => name).sort();
+
+  test('keeps three sign-ins in progress at most, the new one included', () => {
+    expect(MAX_PENDING_SIGN_INS).toBe(3);
+  });
+
+  test('clears all but the two newest, for the new sign-in to make three', () => {
+    const cookies = [1, 2, 3, 4, 5].map((n) => cookieOf(n));
+    expect(names(staleLoginCookies(request(cookies), auth, AT)))
+      .toEqual(['ocm.login.state-1', 'ocm.login.state-2', 'ocm.login.state-3']);
+  });
+
+  test('clears nothing with two sign-ins in progress', () => {
+    expect(staleLoginCookies(request([cookieOf(1), cookieOf(2)]), auth, AT)).toEqual([]);
+  });
+
+  test('tells the newest by the expiry the cookies hold, whatever their order', () => {
+    const cookies = [cookieOf(4), cookieOf(1), cookieOf(3), cookieOf(2)];
+    expect(names(staleLoginCookies(request(cookies), auth, AT)))
+      .toEqual(['ocm.login.state-1', 'ocm.login.state-2']);
+  });
+
+  // A browser sends the cookies of one path oldest first
+  test('tells two sign-ins of the same millisecond by their order', () => {
+    const cookies = ['a', 'b', 'c'].map((state) => [
+      `ocm.login.${state}`,
+      encodeLoginState({ ...PENDING, state }, SECRET, NOW),
+    ]);
+    expect(names(staleLoginCookies(request(cookies), auth, AT))).toEqual(['ocm.login.a']);
+  });
+
+  test('clears the cookies that no callback would accept', () => {
+    const [, ofState1] = cookieOf(1);
+    const cookies = [
+      ['ocm.login.expired', encodeLoginState({ ...PENDING, state: 'expired' }, SECRET,
+        AT - LOGIN_MAX_AGE_MS)],
+      ['ocm.login.foreign', encodeLoginState({ ...PENDING, state: 'foreign' },
+        'another-secret-another-secret-12', NOW)],
+      ['ocm.login.state-9', ofState1],
+      ['ocm.login.garbage', 'garbage'],
+    ];
+    expect(names(staleLoginCookies(request(cookies), auth, AT))).toEqual([
+      'ocm.login.expired',
+      'ocm.login.foreign',
+      'ocm.login.garbage',
+      'ocm.login.state-9',
+    ]);
+  });
+
+  test('leaves alone the cookies that are not sign-in cookies', () => {
+    const cookies = [
+      ['ocm.sid', 'x'],
+      ['__Host-ocm.sid', 'x'],
+      ['another.app', 'x'],
+      ['ocm.login.', 'x'],
+      ['ocm.login.a b', 'x'],
+      ['ocm.login.a;b', 'x'],
+    ];
+    expect(staleLoginCookies(request(cookies), auth, AT)).toEqual([]);
+    expect(staleLoginCookies({ secure: false }, auth, AT)).toEqual([]);
+  });
+
+  test('clears the plain cookies on /auth, over HTTP', () => {
+    const cookies = [1, 2, 3].map((n) => cookieOf(n));
+    expect(staleLoginCookies(request(cookies), auth, AT)).toEqual([{
+      name: 'ocm.login.state-1',
+      options: { httpOnly: true, secure: false, sameSite: 'lax', path: '/auth' },
+    }]);
+  });
+
+  test('clears the __Host- cookies, Secure, on Path=/, over HTTPS', () => {
+    const cookies = [1, 2, 3].map((n) => cookieOf(n, '__Host-ocm.login.'));
+    expect(staleLoginCookies(request(cookies, true), auth, AT)).toEqual([{
+      name: '__Host-ocm.login.state-1',
+      options: { httpOnly: true, secure: true, sameSite: 'lax', path: '/' },
+    }]);
   });
 });

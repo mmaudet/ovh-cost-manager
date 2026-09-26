@@ -40,6 +40,27 @@ describe('safeReturnTo', () => {
     expect(safeReturnTo(value)).toBe('/');
   });
 
+  // The sign-in cookie holds the returnTo, in JSON: 1 KB at most, so that the
+  // cookies of a few sign-ins in progress stay well within a request's headers
+  describe('of 1 KB at most, in UTF-8, as JSON writes it', () => {
+    test.each([
+      ['1,024 ASCII characters', `/${'a'.repeat(1023)}`],
+      ['1,023 bytes in 512 characters', `/${'é'.repeat(511)}`],
+      ['quotes, of 2 bytes each in JSON: 1,023 bytes', `/${'"'.repeat(511)}`],
+    ])('keeps a path of %s', (label, path) => {
+      expect(safeReturnTo(path)).toBe(path);
+    });
+
+    test.each([
+      ['1,025 ASCII characters', `/${'a'.repeat(1024)}`],
+      ['1,025 bytes in 513 characters', `/${'é'.repeat(512)}`],
+      ['quotes, of 2 bytes each in JSON: 1,025 bytes', `/${'"'.repeat(512)}`],
+      ['100 KB', `/${'a'.repeat(100 * 1024)}`],
+    ])('gives / for a path of %s', (label, path) => {
+      expect(safeReturnTo(path)).toBe('/');
+    });
+  });
+
   // req.query can hold an array (?returnTo=a&returnTo=b) or an object
   test.each([
     ['nothing', undefined],
