@@ -125,8 +125,10 @@ This compares `main` with your working tree, uncommitted changes included. Use
 `--base` and `--head` to compare two refs, and `--help` for all the options. The
 script:
 
-- copies the snapshot database with SQLite's backup API, and gives each side its
-  own copy, which its server migrates as it starts;
+- copies the snapshot database once: as plain files when nothing has it open,
+  or with SQLite's backup API when an import may be writing to it (a `-shm`
+  file exists), which updates the snapshot's `-shm` index, never its data.
+  Each side gets its own copy, which its server migrates as it starts;
 - builds the base in a temporary git worktree (`npm ci`, native binaries of
   better-sqlite3 and esbuild, `npm run build`), and the working tree in place;
 - serves each side with imports turned off (`IMPORT_ENABLED=false`), without

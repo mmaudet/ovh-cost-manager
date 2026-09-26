@@ -81,9 +81,13 @@ async function stopProcess(child) {
 export async function freezeSnapshot(dataDir, destination, Database) {
   const source = path.join(dataDir, DB_FILE);
   if (!fs.existsSync(source)) throw new Error(`${source} not found: --data takes a data directory holding ${DB_FILE}`);
-  if (fs.existsSync(`${source}-wal`)) {
-    // Something may be writing to it (an import): SQLite's backup API copies a consistent
-    // state. The connection is read-only, and the -wal and -shm files it needs exist already.
+  const journal = `${source}-wal`;
+  if (fs.existsSync(`${source}-shm`) && fs.existsSync(journal)) {
+    // An open connection keeps a -shm index next to its -wal journal: an import may be
+    // writing. SQLite's backup API reads a consistent state through a read-only connection,
+    // which takes its read lock in the -shm index like any reader: in this case only, the
+    // snapshot's -shm file is updated, never its data. Should the import close at that very
+    // moment, SQLite may leave empty -wal and -shm files behind.
     const snapshot = new Database(source, { readonly: true, fileMustExist: true });
     try {
       await snapshot.backup(destination);
@@ -91,9 +95,11 @@ export async function freezeSnapshot(dataDir, destination, Database) {
       snapshot.close();
     }
   } else {
-    // No -wal file: nothing has the database open. Opening it, even read-only, would create
-    // the -wal and -shm files next to it, while a plain copy leaves the directory untouched.
+    // No -shm index: nothing has the database open. Opening it, even read-only, would create
+    // or rewrite the -shm and -wal files; plain copies of the database and of its journal
+    // leave the directory untouched, and opening the copies reads the journal back.
     fs.copyFileSync(source, destination, fs.constants.COPYFILE_EXCL);
+    if (fs.existsSync(journal)) fs.copyFileSync(journal, `${destination}-wal`, fs.constants.COPYFILE_EXCL);
   }
   // Read-write on purpose: closing the copy folds its journal back into the file
   const copy = new Database(destination);
