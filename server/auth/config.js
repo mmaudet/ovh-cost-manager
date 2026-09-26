@@ -32,7 +32,8 @@ function cookieSecureSetting(env, fileSession) {
 }
 
 /**
- * Builds the auth settings from environment variables and the config file.
+ * Builds the auth settings from environment variables and the config file:
+ * the environment overrides the file.
  *
  * @param {object} fileConfig - the content of config.json
  * @param {object} [env] - the environment variables
@@ -40,10 +41,10 @@ function cookieSecureSetting(env, fileSession) {
  */
 function buildAuthConfig(fileConfig, env = process.env) {
   const file = fileConfig?.auth || {};
-  const envEnabled = env.OIDC_ENABLED === 'true';
-  const fileEnabled = file.enabled === true;
+  // OIDC_ENABLED overrides auth.enabled, whichever way
+  const enabled = envBoolean(env, 'OIDC_ENABLED') ?? file.enabled === true;
 
-  if (!envEnabled && !fileEnabled) {
+  if (!enabled) {
     return { enabled: false };
   }
 

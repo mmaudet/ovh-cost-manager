@@ -15,6 +15,37 @@ const OIDC_ENV = {
   SESSION_SECRET: '0123456789abcdef0123456789abcdef',
 };
 
+describe('OIDC_ENABLED', () => {
+  const enabledInFile = { auth: { enabled: true } };
+  const disabledInFile = { auth: { enabled: false } };
+
+  test('false disables OIDC, even when config.json enables it', () => {
+    expect(buildAuthConfig(enabledInFile, { ...OIDC_ENV, OIDC_ENABLED: 'false' }))
+      .toEqual({ enabled: false });
+  });
+
+  test('true enables OIDC, even when config.json disables it', () => {
+    expect(buildAuthConfig(disabledInFile, OIDC_ENV).enabled).toBe(true);
+  });
+
+  test.each([
+    ['unset', undefined],
+    ['empty', ''],
+  ])('leaves it to config.json when %s', (label, value) => {
+    const env = { ...OIDC_ENV, OIDC_ENABLED: value };
+    expect(buildAuthConfig(enabledInFile, env).enabled).toBe(true);
+    expect(buildAuthConfig(disabledInFile, env).enabled).toBe(false);
+    expect(buildAuthConfig({}, env).enabled).toBe(false);
+  });
+
+  // Rather than guess: with config.json enabling OIDC, reading 1 as false
+  // would disable it
+  test.each(['1', 'yes', 'TRUE', 'on'])('refuses %s', (value) => {
+    expect(() => buildAuthConfig(enabledInFile, { ...OIDC_ENV, OIDC_ENABLED: value }))
+      .toThrow(`OIDC_ENABLED must be true or false, not '${value}'`);
+  });
+});
+
 describe('missingSettings', () => {
   test('finds none when every setting is set', () => {
     expect(missingSettings(buildAuthConfig({}, OIDC_ENV))).toEqual([]);
