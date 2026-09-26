@@ -445,12 +445,12 @@ async function fetchBillPayment(billId) {
 
 // --- Phase 3: Inventory ---
 
-// Takes the answer of an inventory list call, all the services of a kind that exist now, and
-// deletes the services of that kind that it does not name: those cancelled since an import
-// stored them, which only a full import removed before (#74). Anything but a list, such as
-// the null that the ovh client answers for an empty body, fails like the call, and the
-// import keeps every service of that kind. Returns the names.
-function keepListedServices(answer, deleteNotIn, kind) {
+// Removes the services of a kind that the answer of its inventory list call, all those that
+// exist now, no longer names: those cancelled since an import stored them, which only a full
+// import removed before (#74). Anything but a list, such as the null that the ovh client
+// answers for an empty body, fails like the call, and the import keeps every service of that
+// kind. Returns the names of the list.
+function removeUnlistedServices(answer, deleteNotIn, kind) {
   if (!Array.isArray(answer)) {
     throw new Error(`the list is ${util.inspect(answer)}, not an array`);
   }
@@ -561,7 +561,7 @@ async function importInventory(projectMap) {
   // Dedicated servers - parallel fetch
   try {
     console.log('Fetching dedicated servers...');
-    const serverNames = keepListedServices(
+    const serverNames = removeUnlistedServices(
       await ovh.requestPromised('GET', '/dedicated/server'),
       db.inventory.deleteServersNotIn, 'dedicated servers',
     );
@@ -608,7 +608,7 @@ async function importInventory(projectMap) {
   // VPS - parallel fetch
   try {
     console.log('Fetching VPS instances...');
-    const vpsNames = keepListedServices(
+    const vpsNames = removeUnlistedServices(
       await ovh.requestPromised('GET', '/vps'), db.inventory.deleteVpsNotIn, 'VPS instances',
     );
 
@@ -662,7 +662,7 @@ async function importInventory(projectMap) {
   // NetApp Storage - parallel fetch
   try {
     console.log('Fetching storage services...');
-    const storageIds = keepListedServices(
+    const storageIds = removeUnlistedServices(
       await ovh.requestPromised('GET', '/storage/netapp'),
       db.inventory.deleteStorageNotIn, 'storage services',
     );
