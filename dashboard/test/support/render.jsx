@@ -15,12 +15,16 @@ import App from '../../src/App.jsx';
 import { account } from '../fixtures/account.js';
 import { TODAY } from '../fixtures/calendar.js';
 import { serve } from './api.js';
-import { createQueryClient, settle as settleQueries, timersAreFake } from './query-client.js';
+import {
+  createQueryClient, keysIn, settle as settleQueries, timersAreFake,
+} from './query-client.js';
 
 let queryClient;
 
 // Renders the whole dashboard as src/main.jsx does, with the API answering
-// from the dataset, and waits until the page shows every answer.
+// from the dataset, and waits until the page shows every answer. Returns the
+// user, and allKeys(), the key of every query the page holds in its cache,
+// the shell's and the tab hooks', as renderTabHook() gives for one hook.
 export async function renderDashboard(data = account) {
   serve(data);
   queryClient = createQueryClient();
@@ -38,7 +42,7 @@ export async function renderDashboard(data = account) {
     </StrictMode>,
   );
   await settle();
-  return { user };
+  return { user, allKeys: () => keysIn(queryClient) };
 }
 
 // Waits until the page has received every answer it asked for, including the

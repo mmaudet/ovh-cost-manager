@@ -13,7 +13,7 @@ import {
 const useInfrastructureTab = ({ selectedMonth, activeTab, selectedResourceType }) => {
   const [showAllServers, setShowAllServers] = useState(false);
 
-  // Phase 3: Inventory
+  // The inventory: the servers, VPS and storage services that exist now
   const { data: inventoryServers = [] } = useQuery({
     queryKey: ['inventoryServers'],
     queryFn: fetchInventoryServers,

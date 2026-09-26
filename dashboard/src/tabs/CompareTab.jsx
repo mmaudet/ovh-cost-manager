@@ -179,9 +179,9 @@ const CompareTab = ({
         </table>
       </Accordion>
 
-      {/* Accordéon pour l'infrastructure (serveurs dédiés, VPS, stockage, etc.) */}
+      {/* Accordion for the infrastructure (dedicated servers, VPS, storage, etc.) */}
       <Accordion title={language === 'en' ? 'Infrastructure Comparison' : 'Comparaison Infrastructure'}>
-        {/* Tableau comparatif infrastructure */}
+        {/* Infrastructure comparison table */}
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b text-left bg-gray-50">
@@ -239,9 +239,9 @@ const CompareTab = ({
         </table>
       </Accordion>
 
-      {/* Accordéon pour le backup */}
+      {/* Accordion for the backup */}
       <Accordion title={language === 'en' ? 'Backup Comparison' : 'Comparaison Backup'}>
-        {/* Tableau comparatif backup */}
+        {/* Backup comparison table */}
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b text-left bg-gray-50">
@@ -294,9 +294,9 @@ const CompareTab = ({
         </table>
       </Accordion>
 
-      {/* Accordéon pour le Private Cloud */}
+      {/* Accordion for the Private Cloud */}
       <Accordion title={language === 'en' ? 'Private Cloud Comparison' : 'Comparaison Private Cloud'}>
-        {/* Tableau comparatif Private Cloud */}
+        {/* Private Cloud comparison table */}
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b text-left bg-gray-50">
@@ -334,7 +334,7 @@ const CompareTab = ({
           </tbody>
         </table>
       </Accordion>
-      {/* Accordéons par projet public cloud : comparaison détaillée produits/services */}
+      {/* One accordion per Public Cloud project: detailed comparison of products/services */}
       {getSortedCompareProjects().map((proj) => (
         <Accordion key={proj.projectId} title={`${proj.projectName} (${t('project')})`}>
           <ProjectProductComparison projectId={proj.projectId} monthA={compareMonthA} monthB={compareMonthB} fmt={fmt} language={language} />

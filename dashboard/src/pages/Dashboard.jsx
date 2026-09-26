@@ -48,10 +48,14 @@ export default function Dashboard() {
   const [syncWarningDismissed, setSyncWarningDismissed] = useState(false);
   const [selectedProject, setSelectedProject] = useState(null);
   const [selectedResourceType, setSelectedResourceType] = useState(null);
+  const [syncFeedback, setSyncFeedback] = useState(null); // { type: 'ok'|'error', msg }
 
   // Helper to format currency with current language
   const fmt = (value) => formatCurrency(value, language);
   const locale = language === 'en' ? 'en-US' : 'fr-FR';
+
+  // What loads at page start: the header, the KPI cards, the footer and several tabs read
+  // it, and the tabs get it as props (ADR 0001)
 
   // Fetch config (budget)
   const { data: configData } = useQuery({
@@ -65,26 +69,11 @@ export default function Dashboard() {
     queryFn: fetchUser
   });
 
-  // Update budget when config loads
-  useEffect(() => {
-    if (configData?.budget) {
-      setBudget(configData.budget);
-    }
-  }, [configData]);
-
   // Fetch available months
   const { data: months = [] } = useQuery({
     queryKey: ['months'],
     queryFn: fetchMonths
   });
-
-  // Set the default month when data loads: the latest one. useCompareTab sets months A
-  // and B on the same condition, in the same commit
-  useEffect(() => {
-    if (months.length > 0 && !selectedMonth) {
-      setSelectedMonth(months[0]);
-    }
-  }, [months, selectedMonth]);
 
   // Fetch data for selected month
   const { data: summary, isLoading: loadingSummary } = useQuery({
@@ -105,15 +94,18 @@ export default function Dashboard() {
     enabled: !!selectedMonth
   });
 
-  const overviewTab = useOverviewTab();
+  const { data: byResourceType = [] } = useQuery({
+    queryKey: ['byResourceType', selectedMonth?.from, selectedMonth?.to],
+    queryFn: () => fetchByResourceType(selectedMonth.from, selectedMonth.to),
+    enabled: !!selectedMonth
+  });
 
-  const trendsTab = useTrendsTab({ months, activeTab });
-
-  const compareTab = useCompareTab({ months, selectedMonth, activeTab });
-  // The "vs previous month" KPI reads the summary of month B (#50). Its query only runs on
-  // the Compare tab, but month B defaults to the latest month, whose summary the page loads
-  // at start under the same key: the KPI reads it from page start.
-  const { compareDataB } = compareTab;
+  // GPU costs of the selected month, for the Overview and the Public Cloud tab
+  const { data: gpuSummary } = useQuery({
+    queryKey: ['gpuSummary', selectedMonth?.from, selectedMonth?.to],
+    queryFn: () => fetchGpuSummary(selectedMonth.from, selectedMonth.to),
+    enabled: !!selectedMonth
+  });
 
   const { data: importStatus } = useQuery({
     queryKey: ['importStatus'],
@@ -124,9 +116,65 @@ export default function Dashboard() {
     refetchInterval: (query) => (query.state.data?.running ? 30000 : false)
   });
 
+  // The current month's consumption so far and its month-end forecast, for the KPI cards
+  const { data: consumptionCurrent } = useQuery({
+    queryKey: ['consumptionCurrent'],
+    queryFn: fetchConsumptionCurrent
+  });
+
+  const { data: consumptionForecast } = useQuery({
+    queryKey: ['consumptionForecast'],
+    queryFn: fetchConsumptionForecast
+  });
+
+  const { data: expiringServices = [] } = useQuery({
+    queryKey: ['expiringServices'],
+    queryFn: () => fetchExpiringServices(30)
+  });
+
+  // Each tab's state and queries, in the order of the tab bar: its hook runs on every render,
+  // before the loading screen, so that the tab keeps them while another one is open (ADR 0001)
+
+  const overviewTab = useOverviewTab();
+
+  const compareTab = useCompareTab({ months, selectedMonth, activeTab });
+  // The "vs previous month" KPI reads the summary of month B (#50). Its query only runs on
+  // the Compare tab, but month B defaults to the latest month, whose summary the page loads
+  // at start under the same key: the KPI reads it from page start.
+  const { compareDataB } = compareTab;
+
+  const trendsTab = useTrendsTab({ months, activeTab });
+
+  const publicCloudTab = usePublicCloudTab({ selectedMonth, activeTab, selectedProject });
+
+  const webCloudTab = useWebCloudTab({ selectedMonth, activeTab });
+
+  const infrastructureTab = useInfrastructureTab({
+    selectedMonth, activeTab, selectedResourceType,
+  });
+  // The Compare tab lists the dedicated servers too: the shell passes them on, though they
+  // only load on the Infrastructure tab (#35)
+  const { inventoryServers } = infrastructureTab;
+
+  const backupTab = useBackupTab({ selectedMonth, activeTab });
+
+  // Update budget when config loads
+  useEffect(() => {
+    if (configData?.budget) {
+      setBudget(configData.budget);
+    }
+  }, [configData]);
+
+  // Set the default month when data loads: the latest one. useCompareTab sets months A
+  // and B on the same condition, in the same commit
+  useEffect(() => {
+    if (months.length > 0 && !selectedMonth) {
+      setSelectedMonth(months[0]);
+    }
+  }, [months, selectedMonth]);
+
   // Manual resync
   const queryClient = useQueryClient();
-  const [syncFeedback, setSyncFeedback] = useState(null); // { type: 'ok'|'error', msg }
   const resync = useMutation({
     mutationFn: triggerImport,
     onSuccess: () => {
@@ -158,49 +206,6 @@ export default function Dashboard() {
       });
     }
   }, [latestImport, queryClient]);
-
-  // Phase 1: Consumption data
-  const { data: consumptionCurrent } = useQuery({
-    queryKey: ['consumptionCurrent'],
-    queryFn: fetchConsumptionCurrent
-  });
-
-  const { data: consumptionForecast } = useQuery({
-    queryKey: ['consumptionForecast'],
-    queryFn: fetchConsumptionForecast
-  });
-
-
-  const infrastructureTab = useInfrastructureTab({
-    selectedMonth, activeTab, selectedResourceType,
-  });
-  // The Compare tab lists the dedicated servers too: the shell passes them on, though they
-  // only load on the Infrastructure tab (#35)
-  const { inventoryServers } = infrastructureTab;
-
-  const { data: expiringServices = [] } = useQuery({
-    queryKey: ['expiringServices'],
-    queryFn: () => fetchExpiringServices(30)
-  });
-
-  const webCloudTab = useWebCloudTab({ selectedMonth, activeTab });
-
-  const { data: byResourceType = [] } = useQuery({
-    queryKey: ['byResourceType', selectedMonth?.from, selectedMonth?.to],
-    queryFn: () => fetchByResourceType(selectedMonth.from, selectedMonth.to),
-    enabled: !!selectedMonth
-  });
-
-  const publicCloudTab = usePublicCloudTab({ selectedMonth, activeTab, selectedProject });
-
-  // GPU cost summary — filtered by selected month (for overview)
-  const { data: gpuSummary } = useQuery({
-    queryKey: ['gpuSummary', selectedMonth?.from, selectedMonth?.to],
-    queryFn: () => fetchGpuSummary(selectedMonth.from, selectedMonth.to),
-    enabled: !!selectedMonth
-  });
-
-  const backupTab = useBackupTab({ selectedMonth, activeTab });
 
   // Check if previous month exists
   const previousMonthExists = selectedMonth && months.length > 1 &&
@@ -303,7 +308,7 @@ export default function Dashboard() {
                   <a
                     href="/auth/logout"
                     className="text-xs text-gray-500 hover:text-red-600 ml-1"
-                    title={t('logout') || 'Logout'}
+                    title={t('logout')}
                   >
                     ✕
                   </a>
@@ -313,7 +318,7 @@ export default function Dashboard() {
             {activeTab !== 'compare' && (
               <>
                 <select
-                  value={selectedMonth?.value || ''}
+                  value={selectedMonth.value}
                   onChange={(e) => {
                     const month = months.find(m => m.value === e.target.value);
                     setSelectedMonth(month);
@@ -333,7 +338,7 @@ export default function Dashboard() {
                         const url = URL.createObjectURL(blob);
                         const a = document.createElement('a');
                         a.href = url;
-                        a.download = `ovh-report-${selectedMonth?.value || 'report'}.md`;
+                        a.download = `ovh-report-${selectedMonth.value}.md`;
                         a.click();
                         URL.revokeObjectURL(url);
                       } else if (format === 'pdf') {
@@ -397,7 +402,7 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Phase 1: Consumption KPI Cards */}
+        {/* Consumption, Forecast and Resource Count KPI Cards */}
         {(consumptionCurrent || byResourceType.length > 0) && (
           <div className="grid grid-cols-3 gap-4">
             {consumptionCurrent && (
@@ -443,7 +448,8 @@ export default function Dashboard() {
                   {consumptionForecast.forecast_total > budget
                     ? <span className="text-red-500 font-medium">{`> ${t('budget')}!`}</span>
                     : consumptionForecast.days_elapsed
-                      ? `${consumptionForecast.days_elapsed}/${consumptionForecast.days_in_month} ${t('days') || 'jours'}`
+                      ? `${consumptionForecast.days_elapsed}/${consumptionForecast.days_in_month}`
+                        + ` ${t('days')}`
                       : t('forecastEndOfMonth')}
                 </div>
               </div>

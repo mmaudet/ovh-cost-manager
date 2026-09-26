@@ -6,7 +6,7 @@ import { renderHook } from '@testing-library/react';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { account } from '../fixtures/account.js';
 import { serve } from './api.js';
-import { createQueryClient, settle } from './query-client.js';
+import { createQueryClient, keysIn, settle } from './query-client.js';
 
 // The ids of the dashboard's tabs, in the order of the tab bar, as the shell's activeTab
 // holds them: 'inventory' is the Public Cloud tab.
@@ -40,10 +40,9 @@ export async function renderTabHook(useTab, props, data = account) {
     queryClient,
     // The cache is the page's: each period keeps its own answers there, and the end of an
     // import invalidates them by the name of their query
-    keysOf: (name) => queryClient.getQueriesData({ queryKey: [name] })
-      .map(([queryKey]) => queryKey),
+    keysOf: (name) => keysIn(queryClient, { queryKey: [name] }),
     // Whatever their name, as for a hook that should hold no query at all
-    allKeys: () => queryClient.getQueriesData({}).map(([queryKey]) => queryKey),
+    allKeys: () => keysIn(queryClient),
     async rerender(nextProps) {
       rerender(nextProps);
       await settle(queryClient);

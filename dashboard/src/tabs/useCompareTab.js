@@ -26,8 +26,8 @@ const useCompareTab = ({ months, selectedMonth, activeTab }) => {
   // Set default months when data loads
   useEffect(() => {
     if (months.length > 0 && !selectedMonth) {
-      // Pour la comparaison :
-      // A = mois précédent, B = mois courant
+      // For the comparison:
+      // A = previous month, B = latest month
       if (months.length > 1) {
         setCompareMonthA(months[1]);
         setCompareMonthB(months[0]);

@@ -39,10 +39,6 @@ const emptyAnswers = {
   user: () => ({ id: null, name: 'Anonymous', email: null, authEnabled: false }),
   consumptionCurrent: () => ({ current_total: 0, currency: 'EUR' }),
   consumptionForecast: () => ({ forecast_total: 0, currency: 'EUR' }),
-  accountBalance: () => ({ debt_balance: 0, credit_balance: 0, deposit_total: 0, currency: 'EUR' }),
-  inventorySummary: () => ({
-    servers: 0, vps: 0, storage: 0, cloud_projects: 0, total: 0, expiring_soon: 0,
-  }),
   webCloudSummary: () => ({
     domain: { count: 0, total: 0 },
     dns_zone: { count: 0, total: 0 },
@@ -84,11 +80,9 @@ const entryForProject = (key, empty) => (data, projectId, from, to) =>
 const answers = {
   fetchMonths: entry('months', emptyAnswers.list),
   fetchSummary: entryForPeriod('summary', emptyAnswers.summary),
-  fetchProjects: entry('projects', emptyAnswers.list),
   fetchProjectsEnriched: entry('projectsEnriched', emptyAnswers.list),
   fetchByProject: entryForPeriod('byProject', emptyAnswers.list),
   fetchByService: entryForPeriod('byService', emptyAnswers.list),
-  fetchDailyTrend: entryForPeriod('dailyTrend', emptyAnswers.list),
   fetchMonthlyTrend: (data, months) => data.monthlyTrend?.[months] ?? emptyAnswers.list(),
   fetchMonthlyTrendByCategory: (data, months) =>
     data.monthlyTrendByCategory?.[months] ?? emptyAnswers.trendByCategory(),
@@ -98,13 +92,9 @@ const answers = {
   fetchUser: entry('user', emptyAnswers.user),
   fetchConsumptionCurrent: entry('consumptionCurrent', emptyAnswers.consumptionCurrent),
   fetchConsumptionForecast: entry('consumptionForecast', emptyAnswers.consumptionForecast),
-  fetchConsumptionHistory: entryForPeriod('consumptionHistory', emptyAnswers.list),
-  fetchAccountBalance: entry('accountBalance', emptyAnswers.accountBalance),
-  fetchAccountCredits: entry('accountCredits', emptyAnswers.list),
   fetchInventoryServers: entry('inventoryServers', emptyAnswers.list),
   fetchInventoryVps: entry('inventoryVps', emptyAnswers.list),
   fetchInventoryStorage: entry('inventoryStorage', emptyAnswers.list),
-  fetchInventorySummary: entry('inventorySummary', emptyAnswers.inventorySummary),
   fetchExpiringServices: entry('expiringServices', emptyAnswers.list),
   fetchByResourceType: entryForPeriod('byResourceType', emptyAnswers.list),
   fetchResourceTypeDetails: (data, type, from, to) =>
