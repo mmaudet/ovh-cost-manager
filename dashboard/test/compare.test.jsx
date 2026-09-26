@@ -516,8 +516,8 @@ describe('Compare tab', () => {
         .toHaveBeenCalledWith('project-production', '2026-08-01', '2026-08-31');
       expect(api.fetchProjectConsumption)
         .toHaveBeenCalledWith('project-production', '2026-09-01', '2026-09-30');
-      // The import keeps the consumption of the current month only (#54):
-      // nothing in August, so no variation to compute (#65)
+      // Nothing stored for August, as when the upgrade that keeps each month's
+      // consumption came in September (#54): no variation to compute (#65)
       expect(rowsOf(comparisonTable(PRODUCTION_CONSUMPTION))).toEqual([
         ['Produit/Type', 'Août 2026', 'Septembre 2026', 'Variation'],
         ['instance', '0,00€', '234,25€', '—'],
@@ -530,7 +530,7 @@ describe('Compare tab', () => {
         .getAllByTitle('non calculable : mois A à 0 € ou moins')).toHaveLength(5);
     });
 
-    it('show a variation of -100% from the current month to any past one (#54)', async () => {
+    it('show a variation of -100% to a month without any consumption stored (#54)', async () => {
       const { user } = await renderDashboard();
       await openTab(user, 'Comparaison');
       await pickMonth(user, 'Septembre 2026', 'Juillet 2026');
@@ -538,8 +538,8 @@ describe('Compare tab', () => {
 
       await openComparison(user, PRODUCTION_CONSUMPTION);
 
-      // Month A is the current month, the only one whose consumption the
-      // import keeps (#54): every cloud resource kind drops to nothing
+      // Nothing stored for July, month B, which came before the upgrade that keeps
+      // each month's consumption (#54): every cloud resource kind drops to nothing
       expect(rowsOf(comparisonTable(PRODUCTION_CONSUMPTION))).toEqual([
         ['Produit/Type', 'Septembre 2026', 'Juillet 2026', 'Variation'],
         ['instance', '234,25€', '0,00€', '-100.0%'],
@@ -558,8 +558,8 @@ describe('Compare tab', () => {
 
       await openComparison(user, PRODUCTION_CONSUMPTION);
 
-      // Production was billed both months, but the import keeps the
-      // consumption of the current month only (#54)
+      // Production was billed both months, but they came before the upgrade that
+      // keeps each month's consumption (#54): nothing is stored for them
       expect(within(comparison(PRODUCTION_CONSUMPTION))
         .getByText('Aucune donnée pour ce projet')).toBeInTheDocument();
       expect(comparisonTable(PRODUCTION_CONSUMPTION)).not.toBeInTheDocument();
