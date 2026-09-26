@@ -299,7 +299,9 @@ OCM uses it only when OIDC is off: with `OIDC_ENABLED=false`, or with `OIDC_ENAB
 
 ## LemonLDAP-NG Configuration
 
-In the SSO stack, LemonLDAP-NG is the OIDC provider of OCM. How it authenticates users in turn is its own configuration, for which the [LemonLDAP-NG documentation](https://lemonldap-ng.org/documentation) is the reference. It can act as a Service Provider (SP) for external Identity Providers using SAML or OIDC protocols, as below. These steps use the LemonLDAP-NG Manager, which the SSO stack does not run (see [2. Register OCM in LemonLDAP-NG](#2-register-ocm-in-lemonldap-ng)).
+In the SSO stack, LemonLDAP-NG is the OIDC provider of OCM, and how it authenticates users is its own configuration. The demo signs users in against LemonLDAP-NG's built-in demo accounts (see [demo/README.md](../demo/README.md#before-any-real-use)). For real use, configure LemonLDAP-NG's authentication backend, such as your directory, following the [LemonLDAP-NG documentation](https://lemonldap-ng.org/documentation), through the Manager of a full LemonLDAP-NG installation or through overrides. LemonLDAP-NG can also act as a Service Provider (SP) for external Identity Providers using SAML or OIDC protocols, as below. Replace the demo's key pair too, which signs the tokens and is public in this repository: put a key pair of your own in its two files.
+
+The steps below use the Manager of a full LemonLDAP-NG installation, which the demo image lacks. With the demo image, the same configuration keys go into the overrides directory, one file per key, as `demo/sso/` does (see [demo/README.md](../demo/README.md)).
 
 ---
 
