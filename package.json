@@ -37,6 +37,9 @@
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage"
   },
+  "jest": {
+    "roots": ["<rootDir>/tests"]
+  },
   "devDependencies": {
     "concurrently": "^8.2.2",
     "eslint": "^10.11.0",
