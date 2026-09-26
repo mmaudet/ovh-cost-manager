@@ -3,6 +3,7 @@ import { screen, within } from '@testing-library/react';
 import {
   cloudProjectRow,
   costsByResourceType,
+  gpuCosts,
   openProject,
   openTab,
   projectBreakdown,
@@ -45,14 +46,14 @@ const productionDetail = [
   ['Instances (5)', '538,90€', 'Tout afficher', 'CSV'],
 ];
 
-// Opens the Production project on the Public Cloud tab, then the bill lines of the
-// dedicated servers on the Infrastructure tab, where the user stays. Every test starts
-// there, so the helper checks that both opened.
-const openProjectAndResourceType = async () => {
+// Opens a project on the Public Cloud tab, Production unless told otherwise, then the bill
+// lines of the dedicated servers on the Infrastructure tab, where the user stays. Every test
+// starts there, so the helper checks that both opened.
+const openProjectAndResourceType = async (project = 'Production') => {
   const { user } = await renderDashboard();
   await openTab(user, 'Public Cloud');
-  await openProject(user, 'Production');
-  expect(texts(cloudProjectRow('Production'))).toContain('▲');
+  await openProject(user, project);
+  expect(texts(cloudProjectRow(project))).toContain('▲');
   await openTab(user, 'Infrastructure');
   await user.click(resourceType('Dedicated Servers'));
   await settle();
@@ -129,24 +130,45 @@ describe('navigation', () => {
       expect(projectDetailHeadings().slice(0, 2)).toEqual(productionDetail);
     });
 
-    it('to a project opens that project, and keeps the open resource type', async () => {
-      const { user } = await openProjectAndResourceType();
-      await openTab(user, "Vue d'ensemble");
+    // The bars of the top projects chart are project links too, with the same handler, but
+    // jsdom cannot click them: Recharts draws nothing without a layout
+    describe('to a project', () => {
+      it('of the project breakdown opens it, and keeps the open resource type', async () => {
+        const { user } = await openProjectAndResourceType();
+        await openTab(user, "Vue d'ensemble");
 
-      // Another project than the open one
-      await user.click(within(projectBreakdown()).getByRole('button', { name: 'Staging' }));
-      await settle();
+        // Another project than the open one
+        await user.click(within(projectBreakdown()).getByRole('button', { name: 'Staging' }));
+        await settle();
 
-      expect(texts(cloudProjectRow('Staging'))).toEqual(['Staging', 'ok', '0', '52,35€', '▲']);
-      expect(texts(cloudProjectRow('Production'))).toContain('▼');
-      expect(projectDetailHeadings()).toEqual([
-        ['Consommation par ressource'],
-        ['Instances (0)', '180,00€', 'Tout afficher', 'CSV'],
-      ]);
+        expect(texts(cloudProjectRow('Staging'))).toEqual(['Staging', 'ok', '0', '52,35€', '▲']);
+        expect(texts(cloudProjectRow('Production'))).toContain('▼');
+        expect(projectDetailHeadings()).toEqual([
+          ['Consommation par ressource'],
+          ['Instances (0)', '180,00€', 'Tout afficher', 'CSV'],
+        ]);
 
-      await openTab(user, 'Infrastructure');
+        await openTab(user, 'Infrastructure');
 
-      expect(texts(costsByResourceType())).toEqual(withServerBillLines);
+        expect(texts(costsByResourceType())).toEqual(withServerBillLines);
+      });
+
+      it('of the GPU costs opens it, and keeps the open resource type', async () => {
+        // Another project than the one the link opens: the only one running GPUs
+        const { user } = await openProjectAndResourceType('Staging');
+        await openTab(user, "Vue d'ensemble");
+
+        await user.click(within(gpuCosts()).getByRole('button', { name: 'Production' }));
+        await settle();
+
+        expect(texts(cloudProjectRow('Production'))).toContain('▲');
+        expect(texts(cloudProjectRow('Staging'))).toContain('▼');
+        expect(projectDetailHeadings().slice(0, 2)).toEqual(productionDetail);
+
+        await openTab(user, 'Infrastructure');
+
+        expect(texts(costsByResourceType())).toEqual(withServerBillLines);
+      });
     });
   });
 });

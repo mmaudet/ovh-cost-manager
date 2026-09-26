@@ -202,6 +202,12 @@ export function projectBreakdown() {
     { name: /^(Répartition par projet|Breakdown by project)$/ }));
 }
 
+// The GPU costs of the Overview, by model and by project, each project a link
+// to its detail on the Public Cloud tab
+export function gpuCosts() {
+  return cardOf(screen.getByRole('heading', { name: /^(Coûts GPU|GPU Costs)$/ }));
+}
+
 // The Public Cloud projects, each showing its detail under it on a click
 export function cloudProjects() {
   return cardOf(screen.getByRole('heading', { name: /^(Projets Cloud|Cloud Projects)$/ }));
