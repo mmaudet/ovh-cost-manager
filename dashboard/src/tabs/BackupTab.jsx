@@ -1,15 +1,5 @@
+import { backupFigures } from '../utils/backupFigures.js';
 import { formatPercent } from '../utils/format.js';
-
-// The Veeam VMs of the month, for the VMs row of the backup resources and their Total: from
-// the backup statistics or, once these failed, from the costs by resource type, which sum
-// the same bill lines (#64)
-const veeamVms = (backupStats, byResourceType) => {
-  const backup = byResourceType.find(r => r.resource_type === 'backup');
-  return {
-    count: backupStats?.vms?.count || backup?.serviceCount || 0,
-    total: backupStats?.vms?.total || backup?.value || 0,
-  };
-};
 
 // The Backup tab, which the shell renders while it is active: what useBackupTab() returns,
 // with the shell's language, amount format (fmt) and selected month, and two of its
@@ -28,6 +18,8 @@ const BackupTab = ({
     );
   }
 
+  // What the cards and the table show, read once so that they read alike (#64)
+  const figures = backupFigures(backupStats, byResourceType);
   // Whether the month has backup resources to list
   const hasBackups = byResourceType.some(r => r.resource_type === 'backup')
     || backupStats?.vms?.count > 0;
@@ -50,7 +42,7 @@ const BackupTab = ({
             {language === 'en' ? 'Total Backup Cost' : 'Coût total backup'}
           </span>
           <div className="text-3xl font-bold text-emerald-600 mt-2">
-            {fmt((backupStats?.vms?.total || 0) + (backupStats?.enterprise?.total || 0))}€
+            {fmt(figures.total.cost)}€
           </div>
         </div>
         <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
@@ -58,10 +50,10 @@ const BackupTab = ({
             {language === 'en' ? 'Veeam VMs' : 'VMs Veeam'}
           </span>
           <div className="text-3xl font-bold text-green-600 mt-2">
-            {backupStats?.vms?.count || 0}
+            {figures.vms.count}
           </div>
-          {backupStats?.vms?.total > 0 && (
-            <p className="text-xs text-gray-400">{fmt(backupStats.vms.total)}€</p>
+          {figures.vms.cost > 0 && (
+            <p className="text-xs text-gray-400">{fmt(figures.vms.cost)}€</p>
           )}
         </div>
         <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
@@ -69,10 +61,10 @@ const BackupTab = ({
             {language === 'en' ? 'Veeam Enterprise Licenses' : 'Licences Veeam Enterprise'}
           </span>
           <div className="text-3xl font-bold text-teal-600 mt-2">
-            {backupStats?.enterprise?.count || 0}
+            {figures.enterprise.count}
           </div>
-          {backupStats?.enterprise?.total > 0 && (
-            <p className="text-xs text-gray-400">{fmt(backupStats.enterprise.total)}€</p>
+          {figures.enterprise.cost > 0 && (
+            <p className="text-xs text-gray-400">{fmt(figures.enterprise.cost)}€</p>
           )}
         </div>
         <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
@@ -82,10 +74,7 @@ const BackupTab = ({
           <div className="text-3xl font-bold text-gray-600 mt-2">
             {/* In the number format of the language, and 0,0 % of a month without cost (#64) */}
             {formatPercent(
-              (summary?.total || 0) > 0
-                ? ((backupStats?.vms?.total || 0) + (backupStats?.enterprise?.total || 0))
-                  / summary.total
-                : 0,
+              (summary?.total || 0) > 0 ? figures.total.cost / summary.total : 0,
               language,
             )}
           </div>
@@ -123,21 +112,19 @@ const BackupTab = ({
                   <td className="p-3 font-medium">
                     {language === 'en' ? 'Veeam Backup VMs' : 'VMs Veeam Backup'}
                   </td>
-                  <td className="p-3 text-right">{veeamVms(backupStats, byResourceType).count}</td>
-                  <td className="p-3 text-right font-medium">
-                    {fmt(veeamVms(backupStats, byResourceType).total)}€
-                  </td>
+                  <td className="p-3 text-right">{figures.vms.count}</td>
+                  <td className="p-3 text-right font-medium">{fmt(figures.vms.cost)}€</td>
                 </tr>
-                {backupStats?.enterprise?.count > 0 && (
+                {figures.enterprise.count > 0 && (
                   <tr className="border-b hover:bg-gray-50">
                     <td className="p-3 font-medium">
                       {language === 'en'
                         ? 'Veeam Enterprise License'
                         : 'Licence Veeam Enterprise'}
                     </td>
-                    <td className="p-3 text-right">{backupStats.enterprise.count}</td>
+                    <td className="p-3 text-right">{figures.enterprise.count}</td>
                     <td className="p-3 text-right font-medium">
-                      {fmt(backupStats.enterprise.total)}€
+                      {fmt(figures.enterprise.cost)}€
                     </td>
                   </tr>
                 )}
@@ -145,14 +132,8 @@ const BackupTab = ({
               <tfoot>
                 <tr className="bg-gray-50 font-semibold">
                   <td className="p-3">Total</td>
-                  <td className="p-3 text-right">
-                    {veeamVms(backupStats, byResourceType).count
-                      + (backupStats?.enterprise?.count || 0)}
-                  </td>
-                  <td className="p-3 text-right">
-                    {fmt(veeamVms(backupStats, byResourceType).total
-                      + (backupStats?.enterprise?.total || 0))}€
-                  </td>
+                  <td className="p-3 text-right">{figures.total.count}</td>
+                  <td className="p-3 text-right">{fmt(figures.total.cost)}€</td>
                 </tr>
               </tfoot>
             </table>

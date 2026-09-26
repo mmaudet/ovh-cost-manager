@@ -141,7 +141,7 @@ describe('Backup tab', () => {
   });
 
   // It then says so, above what the costs by resource type still tell: the VMs, whose bill
-  // lines they sum, in the VMs row and in the Total row (#64)
+  // lines they sum, in the cards and in the table (#64)
   describe('when the backup statistics fail', () => {
     it('says so, and totals the VMs of the costs by resource type (#64)', async () => {
       const { user } = await renderDashboard();
@@ -150,6 +150,14 @@ describe('Backup tab', () => {
       await openTab(user, 'Backup');
 
       expect(screen.getByText('Impossible de charger les données Backup.')).toBeInTheDocument();
+      // The cards read the same figures as the table, where they read 0 (#64)
+      expect(texts(backupCards())).toEqual([
+        'Coût total backup', '90,00€',
+        'VMs Veeam', '3', '90,00€',
+        'Licences Veeam Enterprise', '0',
+        // 90 / 1 250.40
+        '% du coût total', '7,2 %',
+      ]);
       expect(resourceRows()).toEqual([
         ['Catégorie', 'Nombre', 'Coût'],
         ['VMs Veeam Backup', '3', '90,00€'],
