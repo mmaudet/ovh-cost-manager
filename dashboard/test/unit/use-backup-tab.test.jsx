@@ -50,15 +50,11 @@ describe('useBackupTab', () => {
     });
   });
 
-  // The cache is the page's: each month keeps its own answer there, and the end of an
-  // import invalidates it by the name of its query
   it('caches the answer under the name of its query and its month', async () => {
-    const { queryClient } = await renderTabHook(useBackupTab,
+    const { keysOf } = await renderTabHook(useBackupTab,
       { selectedMonth: september, activeTab: 'backup' });
-    const keys = queryClient.getQueriesData({ queryKey: ['backupStats'] })
-      .map(([queryKey]) => queryKey);
 
-    expect(keys).toEqual([['backupStats', '2026-09-01', '2026-09-30']]);
+    expect(keysOf('backupStats')).toEqual([['backupStats', '2026-09-01', '2026-09-30']]);
   });
 
   it('follows the selected month', async () => {
