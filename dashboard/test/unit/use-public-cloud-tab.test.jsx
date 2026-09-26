@@ -109,21 +109,18 @@ describe('usePublicCloudTab', () => {
 
       expect(made(PROJECT_REQUESTS)).toEqual([]);
       // Each query waits for a project, rather than failing for the lack of one
-      const stateOf = (key) => queryClient.getQueryState(key);
-      expect(stateOf(['projectConsumption', undefined])).toMatchObject(WAITING);
-      expect(stateOf(['projectQuotas', undefined])).toMatchObject(WAITING);
-      expect(stateOf(['projectInstances', undefined, '2026-09-01', '2026-09-30']))
-        .toMatchObject(WAITING);
-      expect(stateOf(['projectInstanceTotal', undefined, '2026-09-01', '2026-09-30']))
-        .toMatchObject(WAITING);
-      expect(stateOf(['projectBuckets', undefined, '2026-09-01', '2026-09-30']))
-        .toMatchObject(WAITING);
-      expect(stateOf(['projectVolumes', undefined, '2026-09-01', '2026-09-30']))
-        .toMatchObject(WAITING);
-      expect(stateOf(['projectSnapshots', undefined, '2026-09-01', '2026-09-30']))
-        .toMatchObject(WAITING);
-      expect(stateOf(['projectSavingsPlans', undefined, '2026-09-01', '2026-09-30']))
-        .toMatchObject(WAITING);
+      for (const key of [
+        ['projectConsumption', undefined],
+        ['projectQuotas', undefined],
+        ['projectInstances', undefined, '2026-09-01', '2026-09-30'],
+        ['projectInstanceTotal', undefined, '2026-09-01', '2026-09-30'],
+        ['projectBuckets', undefined, '2026-09-01', '2026-09-30'],
+        ['projectVolumes', undefined, '2026-09-01', '2026-09-30'],
+        ['projectSnapshots', undefined, '2026-09-01', '2026-09-30'],
+        ['projectSavingsPlans', undefined, '2026-09-01', '2026-09-30'],
+      ]) {
+        expect(queryClient.getQueryState(key), key[0]).toMatchObject(WAITING);
+      }
       expect(result.current.projectInstances).toEqual([]);
       expect(result.current.instanceCount).toBe(0);
     });
@@ -279,17 +276,15 @@ describe('usePublicCloudTab', () => {
       // Without a month, the instances come without their costs
       expect(api.fetchProjectInstances)
         .toHaveBeenCalledWith('project-production', undefined, undefined);
-      const stateOf = (key) => queryClient.getQueryState(key);
-      expect(stateOf(['projectInstanceTotal', 'project-production', undefined, undefined]))
-        .toMatchObject(WAITING);
-      expect(stateOf(['projectBuckets', 'project-production', undefined, undefined]))
-        .toMatchObject(WAITING);
-      expect(stateOf(['projectVolumes', 'project-production', undefined, undefined]))
-        .toMatchObject(WAITING);
-      expect(stateOf(['projectSnapshots', 'project-production', undefined, undefined]))
-        .toMatchObject(WAITING);
-      expect(stateOf(['projectSavingsPlans', 'project-production', undefined, undefined]))
-        .toMatchObject(WAITING);
+      for (const key of [
+        ['projectInstanceTotal', 'project-production', undefined, undefined],
+        ['projectBuckets', 'project-production', undefined, undefined],
+        ['projectVolumes', 'project-production', undefined, undefined],
+        ['projectSnapshots', 'project-production', undefined, undefined],
+        ['projectSavingsPlans', 'project-production', undefined, undefined],
+      ]) {
+        expect(queryClient.getQueryState(key), key[0]).toMatchObject(WAITING);
+      }
       expect(result.current.projectInstanceTotal).toBeUndefined();
     });
   });
