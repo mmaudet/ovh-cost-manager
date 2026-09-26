@@ -1,6 +1,9 @@
+// The locale the page writes numbers and dates in, for its language
+const localeOf = (language) => (language === 'en' ? 'en-US' : 'fr-FR');
+
 // Format currency based on language
 const formatCurrency = (value, language = 'fr') => {
-  const locale = language === 'en' ? 'en-US' : 'fr-FR';
+  const locale = localeOf(language);
   return new Intl.NumberFormat(locale, {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2
@@ -10,7 +13,7 @@ const formatCurrency = (value, language = 'fr') => {
 // Format a share (0.092) as a percentage with one decimal, based on language:
 // 9,2 % in French, 9.2% in English
 const formatPercent = (share, language = 'fr') => {
-  const locale = language === 'en' ? 'en-US' : 'fr-FR';
+  const locale = localeOf(language);
   return new Intl.NumberFormat(locale, {
     style: 'percent',
     minimumFractionDigits: 1,
@@ -24,7 +27,7 @@ const formatYearMonth = (yearMonth, language = 'fr') => {
   if (!yearMonth) return '';
   const [year, month] = yearMonth.split('-').map(Number);
   if (!year || !month) return yearMonth;
-  const locale = language === 'en' ? 'en-US' : 'fr-FR';
+  const locale = localeOf(language);
   return new Date(year, month - 1, 1).toLocaleDateString(locale, { month: 'short', year: 'numeric' });
 };
 
@@ -45,7 +48,7 @@ const fmtBytes = (bytes, language = 'fr') => {
   if (i < units.length - 1 && Math.round(bytes / Math.pow(1000, i)) >= 1000) i += 1;
   const value = bytes / Math.pow(1000, i);
   const decimals = value < 10 && i > 0 ? 1 : 0;
-  const number = new Intl.NumberFormat(language === 'en' ? 'en-US' : 'fr-FR', {
+  const number = new Intl.NumberFormat(localeOf(language), {
     minimumFractionDigits: decimals,
     maximumFractionDigits: decimals,
   }).format(value);
