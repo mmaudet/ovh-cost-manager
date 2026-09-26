@@ -7,7 +7,7 @@ import {
   fetchMonthlyTrend, fetchMonthlyTrendByCategory, fetchGpuSummary,
 } from '../services/api.js';
 import {
-  monthsSince, availablePeriodsFor, trendWindowEndingOn,
+  monthsBetween, availablePeriodsFor, trendWindowEndingOn,
 } from '../utils/trendPeriods.js';
 
 const useTrendsTab = ({ months, selectedMonth, activeTab }) => {
@@ -18,7 +18,7 @@ const useTrendsTab = ({ months, selectedMonth, activeTab }) => {
   const endMonth = selectedMonth?.value;
 
   // The periods offered go up to the first one that covers the months of data up to it
-  const maxMonths = monthsSince(months[months.length - 1]?.value, endMonth);
+  const maxMonths = monthsBetween(months[months.length - 1]?.value, endMonth);
   const availablePeriods = availablePeriodsFor(maxMonths);
 
   useEffect(() => {

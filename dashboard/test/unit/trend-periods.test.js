@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { translations } from '../../src/i18n/translations.js';
 import {
-  PERIOD_OPTIONS, monthsSince, availablePeriodsFor, trendWindowEndingOn,
+  PERIOD_OPTIONS, monthsBetween, availablePeriodsFor, trendWindowEndingOn,
 } from '../../src/utils/trendPeriods.js';
 
 // "Today" is 15 September 2026 (see setup.js)
@@ -27,7 +27,7 @@ describe('trend period options', () => {
 
 // The months of data up to the selected month: the Trends tab offers the period options up
 // to the first one that covers them all.
-describe('monthsSince', () => {
+describe('monthsBetween', () => {
   it.each([
     ['2026-09', 1],
     ['2026-07', 3],
@@ -37,40 +37,40 @@ describe('monthsSince', () => {
     ['2006-10', 240],
     ['2006-09', 241],
   ])('counts the months from %s to September 2026, both included: %i', (oldest, months) => {
-    expect(monthsSince(oldest, '2026-09')).toBe(months);
+    expect(monthsBetween(oldest, '2026-09')).toBe(months);
   });
 
   // The selected month, not this one
   it('counts up to the month it is given, whatever the date today', () => {
-    expect(monthsSince('2025-07', '2025-09')).toBe(3);
-    expect(monthsSince('2025-07', '2026-07')).toBe(13);
+    expect(monthsBetween('2025-07', '2025-09')).toBe(3);
+    expect(monthsBetween('2025-07', '2026-07')).toBe(13);
   });
 
   it('counts across New Year', () => {
-    expect(monthsSince('2027-01', '2027-01')).toBe(1);
-    expect(monthsSince('2026-12', '2027-01')).toBe(2);
-    expect(monthsSince('2026-02', '2027-01')).toBe(12);
+    expect(monthsBetween('2027-01', '2027-01')).toBe(1);
+    expect(monthsBetween('2026-12', '2027-01')).toBe(2);
+    expect(monthsBetween('2026-02', '2027-01')).toBe(12);
   });
 
   it('counts no month without one', () => {
-    expect(monthsSince(undefined, '2026-09')).toBe(0);
-    expect(monthsSince(null, '2026-09')).toBe(0);
-    expect(monthsSince('', '2026-09')).toBe(0);
+    expect(monthsBetween(undefined, '2026-09')).toBe(0);
+    expect(monthsBetween(null, '2026-09')).toBe(0);
+    expect(monthsBetween('', '2026-09')).toBe(0);
   });
 
   it('counts no month without a month to count up to', () => {
-    expect(monthsSince('2025-07', undefined)).toBe(0);
-    expect(monthsSince('2025-07', null)).toBe(0);
-    expect(monthsSince('2025-07', '')).toBe(0);
+    expect(monthsBetween('2025-07', undefined)).toBe(0);
+    expect(monthsBetween('2025-07', null)).toBe(0);
+    expect(monthsBetween('2025-07', '')).toBe(0);
   });
 
   it('counts no month from or up to what is not a month', () => {
-    expect(monthsSince('2026', '2026-09')).toBe(0);
-    expect(monthsSince('2026-00', '2026-09')).toBe(0);
-    expect(monthsSince('N/A', '2026-09')).toBe(0);
-    expect(monthsSince('2025-07', '2026')).toBe(0);
-    expect(monthsSince('2025-07', '2026-00')).toBe(0);
-    expect(monthsSince('2025-07', 'N/A')).toBe(0);
+    expect(monthsBetween('2026', '2026-09')).toBe(0);
+    expect(monthsBetween('2026-00', '2026-09')).toBe(0);
+    expect(monthsBetween('N/A', '2026-09')).toBe(0);
+    expect(monthsBetween('2025-07', '2026')).toBe(0);
+    expect(monthsBetween('2025-07', '2026-00')).toBe(0);
+    expect(monthsBetween('2025-07', 'N/A')).toBe(0);
   });
 });
 
