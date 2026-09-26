@@ -49,20 +49,26 @@ log "Server is ready"
 
 # Count the bills in the database itself: the API needs a login once
 # authentication is on. import-decision.sh picks the first import from it.
+# The errors of the count come with its output, to go through log; Node's
+# warnings are silenced, as they would mix with the count.
 COUNT_STATUS=0
-BILL_COUNT=$(node /app/data/count-bills.js) || COUNT_STATUS=$?
+COUNT_OUTPUT=$(node --no-warnings /app/data/count-bills.js 2>&1) || COUNT_STATUS=$?
 
-case "$(first_import_mode "$COUNT_STATUS" "$BILL_COUNT")" in
+case "$(first_import_mode "$COUNT_STATUS" "$COUNT_OUTPUT")" in
   full)
     log "No existing data found — running full import"
     run_import --full
     log "Full import completed"
     ;;
   none)
-    log "Existing data found ($BILL_COUNT bills) — skipping initial import"
+    log "Existing data found ($COUNT_OUTPUT bills) — skipping initial import"
     ;;
   *)
-    log "Could not count the bills in the database — running differential import"
+    if [ -n "$COUNT_OUTPUT" ]; then
+      printf '%s\n' "$COUNT_OUTPUT" | while read -r line; do log "$line"; done
+    fi
+    log "Could not count the bills in the database (exit status $COUNT_STATUS)" \
+      "— running differential import"
     run_import --diff
     log "Differential import completed"
     ;;
