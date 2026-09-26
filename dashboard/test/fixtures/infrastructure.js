@@ -47,8 +47,7 @@ const vps = {
   model: 'vps-le-2-2-40',
   zone: 'Region OpenStack: os-gra7',
   state: 'running',
-  // The import stores the disk size there, not the operating system (#57)
-  os: '40',
+  os: 'Debian 12',
   vcpus: 2,
   ram_mb: 2048,
   disk_gb: 40,
