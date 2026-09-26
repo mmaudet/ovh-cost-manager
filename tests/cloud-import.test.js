@@ -164,6 +164,23 @@ describe('project consumption import', () => {
   const consumption = (from, to) => db.cloudDetails.getConsumptionByProject(PROJECT, from, to)
     .map(c => [c.resource_type, c.resource_name, c.total_price]);
 
+  // A bill line of September for L4 GPU instances of the project, which the GPU panel lists
+  function billGpuInstances() {
+    db.bills.upsert({
+      id: 'FR1', date: '2026-09-01', price_without_tax: 100, price_with_tax: 120, tax: 20,
+      currency: 'EUR', pdf_url: null, html_url: null,
+    });
+    db.details.insert({
+      id: 'FR1_1', bill_id: 'FR1', project_id: PROJECT, domain: PROJECT,
+      description: 'Consommation des instances l4-90', quantity: 1, unit_price: 100,
+      total_price: 100, service_type: 'AI/ML',
+    });
+  }
+
+  // The GPU flavors that the GPU panel names for each project billed in September
+  const gpuFlavors = () => db.cloudDetails.getGpuSummary('2026-09-01', '2026-09-30')
+    .byProject.map(p => [p.project_id, p.gpu_flavors]);
+
   test('keeps the consumption of each month it imports', async () => {
     await importUsageOn('2026-08-28', 'b2-7', 30.5);
     await importUsageOn('2026-09-15', 'b2-15', 12.25);
@@ -240,20 +257,80 @@ describe('project consumption import', () => {
 
   // The GPU panel names the GPU flavors that each project runs
   test('names the GPU flavors of the latest month imported', async () => {
-    db.bills.upsert({
-      id: 'FR1', date: '2026-09-01', price_without_tax: 100, price_with_tax: 120, tax: 20,
-      currency: 'EUR', pdf_url: null, html_url: null,
-    });
-    db.details.insert({
-      id: 'FR1_1', bill_id: 'FR1', project_id: PROJECT, domain: PROJECT,
-      description: 'Consommation des instances l4-90', quantity: 1, unit_price: 100,
-      total_price: 100, service_type: 'AI/ML',
-    });
+    billGpuInstances();
     await importUsageOn('2026-08-28', 'l40s-180', 30.5);
     await importUsageOn('2026-09-15', 'l4-90', 12.25);
 
-    const { byProject } = db.cloudDetails.getGpuSummary('2026-09-01', '2026-09-30');
-    expect(byProject.map(p => [p.project_id, p.gpu_flavors])).toEqual([[PROJECT, 'l4-90']]);
+    expect(gpuFlavors()).toEqual([[PROJECT, 'l4-90']]);
+  });
+
+  // On 2 September, OVH reports September, without any usage yet: the current consumption
+  // is that of September, none, not that of August
+  describe('once a month starts without any usage yet', () => {
+    beforeEach(async () => {
+      billGpuInstances();
+      await importUsageOn('2026-08-28', 'l4-90', 30.5);
+      await importUsageAt('2026-09-02T10:00:00Z', {
+        from: '2026-09-01T00:00:00+02:00', to: '2026-09-02T12:00:00+02:00',
+      }, {});
+    });
+
+    test('keeps the consumption of the previous month', () => {
+      expect(consumption('2026-08-01', '2026-08-31')).toEqual([['instance', 'l4-90', 30.5]]);
+    });
+
+    test('reads no consumption when no month is asked for', () => {
+      expect(consumption()).toEqual([]);
+    });
+
+    test('sums no consumption in the consumption summary', () => {
+      expect(db.cloudDetails.getConsumptionSummary()).toEqual({
+        period_start: null, period_end: null, total: null, project_count: 0,
+      });
+    });
+
+    test('splits no consumption by cloud resource kind', () => {
+      expect(db.cloudDetails.getConsumptionByResourceType(PROJECT)).toEqual([]);
+    });
+
+    test('names no GPU flavor', () => {
+      expect(gpuFlavors()).toEqual([[PROJECT, '']]);
+    });
+  });
+
+  // When OVH is late to start the month for some projects
+  test('reads the latest month that the usage of a project reports', async () => {
+    jest.setSystemTime(new Date('2026-09-01T10:00:00Z'));
+    db.projects.upsert({
+      id: 'proj-2', name: 'Project 2', description: null, status: 'ok', created_at: null,
+    });
+    routes.set(`${BASE}/usage/current`, ok({
+      period: { from: '2026-09-01T00:00:00+02:00', to: '2026-09-01T12:00:00+02:00' },
+      hourlyUsage: oneInstance('b2-15', 1.5),
+    }));
+    routes.set('/cloud/project/proj-2/usage/current', ok({
+      period: { from: '2026-08-01T00:00:00+02:00', to: '2026-09-01T00:00:00+02:00' },
+      hourlyUsage: oneInstance('b2-7', 31),
+    }));
+
+    const done = importer.importCloudDetails([PROJECT, 'proj-2']);
+    await jest.runAllTimersAsync();
+    await done;
+
+    expect(consumption()).toEqual([['instance', 'b2-15', 1.5]]);
+  });
+
+  // Consumption stored by a version that did not record the month of its import
+  test('reads the latest month stored before any import records its month', () => {
+    const stored = (month, flavor, totalPrice) => db.cloudDetails.insertConsumption({
+      project_id: PROJECT, period_start: `${month}-01`, period_end: `${month}-15`,
+      resource_type: 'instance', resource_id: 'inst-1', resource_name: flavor,
+      quantity: 100, unit: 'Hour', unit_price: 0, total_price: totalPrice, region: 'GRA11',
+    });
+    stored('2026-08', 'b2-7', 30.5);
+    stored('2026-09', 'b2-15', 12.25);
+
+    expect(consumption()).toEqual([['instance', 'b2-15', 12.25]]);
   });
 
   // Unlike the consumption, they are inventories: what the project has now

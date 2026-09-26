@@ -880,6 +880,9 @@ function usagePeriod(usage) {
 async function importCloudDetails(projectIds) {
   console.log('\n--- Importing cloud project details ---');
 
+  // The month of the current consumption: the latest that the usage of a project reports
+  let consumptionMonth = null;
+
   for (const projectId of projectIds) {
     console.log(`  Project ${projectId}...`);
 
@@ -889,6 +892,7 @@ async function importCloudDetails(projectIds) {
 
       if (usage) {
         const { start: periodStart, end: periodEnd } = usagePeriod(usage);
+        if (!consumptionMonth || periodStart > consumptionMonth) consumptionMonth = periodStart;
 
         // Clear old data for this project: its consumption of the other months is kept
         db.cloudDetails.clearByProject(projectId);
@@ -1061,6 +1065,9 @@ async function importCloudDetails(projectIds) {
       console.warn(`    Object storage fetch failed, keeping the stored buckets: ${err.message || err.error}`);
     }
   }
+
+  // Read as the current consumption, even when no project used anything yet this month
+  if (consumptionMonth) db.cloudDetails.setCurrentConsumptionMonth(consumptionMonth);
 }
 
 // Main import function
