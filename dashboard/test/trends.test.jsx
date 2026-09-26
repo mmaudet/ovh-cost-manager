@@ -116,11 +116,12 @@ describe('Trends tab', () => {
       await user.selectOptions(periodSelector(), '2 ans');
       await settle();
 
+      expect(api.fetchMonthlyTrend).toHaveBeenCalledWith(24, '2026-09');
       expect(screen.getByRole('heading', { name: 'Évolution des coûts (total) sur 2 ans' }))
         .toBeInTheDocument();
-      // From July 2025: (1 250.40 - 450) / 450
+      // From October 2024, before the first bill: a first month at 0 € (#65)
       expect(texts(cardOf('Croissance sur la période')))
-        .toEqual(['Croissance sur la période', '+177.9%', 'Sur 2 ans']);
+        .toEqual(['Croissance sur la période', '—', 'Sur 2 ans']);
     });
   });
 
@@ -139,6 +140,46 @@ describe('Trends tab', () => {
       .toEqual(['Projection annuelle', '~15 004,80€', 'Basé sur le dernier mois']);
   });
 
+  // #65: a first month at 0 € or less leaves no growth to compute
+  describe('growth over the period', () => {
+    // The account with July, the first of the 3 months up to September, at that cost
+    const julyAt = (cost) => {
+      const [july, ...augustAndSeptember] = account.monthlyTrend['2026-09'][3];
+      return {
+        ...account,
+        monthlyTrend: { '2026-09': { 3: [{ ...july, cost }, ...augustAndSeptember] } },
+      };
+    };
+    const growthCard = () => cardOf('Croissance sur la période');
+
+    // Its credits cancel its costs out: the growth would be infinite
+    it('shows none from a first month at 0 €, and says why', async () => {
+      const { user } = await renderDashboard(julyAt(0));
+
+      await openTab(user, 'Tendances');
+
+      expect(texts(growthCard())).toEqual(['Croissance sur la période', '—', 'Sur 3 mois']);
+      expect(within(growthCard()).getByTitle('non calculable : premier mois à 0 € ou moins'))
+        .toHaveTextContent('—');
+
+      await selectLanguage(user, 'en');
+
+      expect(within(cardOf('Growth over period'))
+        .getByTitle('cannot be computed: first month at €0 or below')).toHaveTextContent('—');
+    });
+
+    // Its credits exceed its costs: the growth would have the wrong sign
+    it('shows none from a negative first month', async () => {
+      const { user } = await renderDashboard(julyAt(-120.5));
+
+      await openTab(user, 'Tendances');
+
+      expect(texts(growthCard())).toEqual(['Croissance sur la période', '—', 'Sur 3 mois']);
+      expect(within(growthCard()).getByTitle('non calculable : premier mois à 0 € ou moins'))
+        .toHaveTextContent('—');
+    });
+  });
+
   it('ends on the month selected in the header', async () => {
     const { user } = await renderDashboard();
     await openTab(user, 'Tendances');
@@ -150,8 +191,9 @@ describe('Trends tab', () => {
     expect(api.fetchMonthlyTrendByCategory).toHaveBeenCalledWith(3, '2026-08');
     expect(api.fetchGpuSummary).toHaveBeenCalledWith('2026-06-01', '2026-08-31');
     expect(periodSelector()).toHaveDisplayValue('3 mois');
-    // The growth over the period is left unchecked: June, its first month, was not billed,
-    // a case left to #65
+    // June, not billed, comes at 0 €: no growth to compute from it (#65)
+    expect(texts(cardOf('Croissance sur la période')))
+      .toEqual(['Croissance sur la période', '—', 'Sur 3 mois']);
     expect(texts(cardOf('Mois le plus coûteux')))
       .toEqual(['Mois le plus coûteux', 'août 2026', '1 042,00€']);
     expect(texts(cardOf('Projection annuelle')))
@@ -237,6 +279,7 @@ describe('Trends tab', () => {
     });
   });
 
+  // The trend routes then answer no months, rather than months at 0 € (#65)
   it('says there is no data when nothing was billed over the period', async () => {
     const { user } = await renderDashboard({
       ...account,

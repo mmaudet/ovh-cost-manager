@@ -75,8 +75,11 @@ describe('useTrendsTab', () => {
       expect(api.fetchMonthlyTrendByCategory).toHaveBeenLastCalledWith(6, '2026-08');
       expect(api.fetchGpuSummary).toHaveBeenLastCalledWith('2026-03-01', '2026-08-31');
       expect(result.current.trendPeriod).toBe(6);
-      // March to August: only July and August were billed
-      expect(costs(result.current.monthlyTrend)).toEqual([['2026-07', 980], ['2026-08', 1042]]);
+      // March to August: March to June, not billed, come at 0 € (#65)
+      expect(costs(result.current.monthlyTrend)).toEqual([
+        ['2026-03', 0], ['2026-04', 0], ['2026-05', 0], ['2026-06', 0],
+        ['2026-07', 980], ['2026-08', 1042],
+      ]);
       expect(resourceTypes(result.current.trendByCategory))
         .toEqual(['Public Cloud', 'Dedicated Servers', 'Domains', 'Backup']);
     });

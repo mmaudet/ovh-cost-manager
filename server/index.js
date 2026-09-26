@@ -9,11 +9,12 @@ const { spawn } = require('child_process');
 
 // Import database module from data workspace
 const db = require('../data/db');
+const { monthBounds } = require('../data/months');
 
 // Import auth module
 const auth = require('./auth');
 const { createOriginCheck } = require('./cors');
-const { monthBounds, trendWindowFromQuery } = require('./months');
+const { trendWindowFromQuery } = require('./months');
 
 // Load configuration
 const CONFIG_PATHS = [
@@ -609,7 +610,8 @@ function registerRoutes() {
   const latestBilledMonth = () => db.bills.getLatestDate()?.slice(0, 7);
 
   // The trend over the `months` months that end on the `end` month (YYYY-MM), that one
-  // included: 6 months, and the month of the latest bill, by default
+  // included: 6 months, and the month of the latest bill, by default. Each of them, at 0
+  // for a month without any bill, or none when none of them has a bill (#65).
   app.get('/api/analysis/monthly-trend', (req, res) => {
     try {
       const { valid, error, from, to } = trendWindowFromQuery(req.query, latestBilledMonth());
@@ -651,10 +653,8 @@ function registerRoutes() {
 
       // Total per resource_type to order categories by spend.
       const totals = {};
-      const monthsSet = new Set();
       for (const r of rows) {
         totals[r.resource_type] = (totals[r.resource_type] || 0) + r.total;
-        monthsSet.add(r.month);
       }
 
       const categories = Object.keys(totals)
@@ -665,18 +665,20 @@ function registerRoutes() {
           color: RESOURCE_TYPE_COLORS[key] || RESOURCE_TYPE_COLORS['other']
         }));
 
-      // One row per month with every category present (0 when absent) so lines
-      // stay continuous.
+      // One row per month with every category, in their order, so lines stay continuous: the
+      // query gives every resource type in every month, at 0 when it was not billed (#65)
       const byMonth = {};
-      for (const ym of monthsSet) {
-        byMonth[ym] = { yearMonth: ym };
-        for (const c of categories) byMonth[ym][c.key] = 0;
-      }
       for (const r of rows) {
+        byMonth[r.month] = byMonth[r.month] || {};
         byMonth[r.month][r.resource_type] = Math.round(r.total * 100) / 100;
       }
 
-      const data = Object.values(byMonth).sort((a, b) => a.yearMonth.localeCompare(b.yearMonth));
+      const data = Object.keys(byMonth)
+        .sort((a, b) => a.localeCompare(b))
+        .map((yearMonth) => ({
+          yearMonth,
+          ...Object.fromEntries(categories.map(({ key }) => [key, byMonth[yearMonth][key]])),
+        }));
 
       res.json({ categories, data });
     } catch (err) {
