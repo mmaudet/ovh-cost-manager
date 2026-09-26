@@ -320,14 +320,14 @@ const OverviewTab = ({
       <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100 lg:col-span-2">
         <div className="flex justify-between items-center mb-3">
           <span className="font-semibold text-gray-900">{t('budgetConsumption')}</span>
-          <span className={`px-3 py-1 rounded-full text-sm font-medium ${Number(budgetUsage) > 80 ? 'bg-orange-100 text-orange-700' : 'bg-green-100 text-green-700'}`}>
+          <span className={`px-3 py-1 rounded-full text-sm font-medium ${budgetUsage > 80 ? 'bg-orange-100 text-orange-700' : 'bg-green-100 text-green-700'}`}>
             {formatPercent(budgetShare, language, { decimals: 0 })} {t('used')}
           </span>
         </div>
         <div className="w-full bg-gray-200 rounded-full h-3 overflow-hidden">
           <div
-            className={`h-3 rounded-full transition-all duration-500 ${Number(budgetUsage) > 80 ? 'bg-orange-500' : 'bg-blue-600'}`}
-            style={{ width: `${Math.min(Number(budgetUsage), 100)}%` }}
+            className={`h-3 rounded-full transition-all duration-500 ${budgetUsage > 80 ? 'bg-orange-500' : 'bg-blue-600'}`}
+            style={{ width: `${Math.min(budgetUsage, 100)}%` }}
           />
         </div>
         <div className="flex justify-between items-center mt-2 text-sm text-gray-500">
