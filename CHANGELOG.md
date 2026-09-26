@@ -14,7 +14,32 @@ sections were written afterwards from the git history.
 
 ## 2.4.0 - 2026-09-26
 
-<!-- Upgrade notes and highlights of this release, if any. -->
+The dashboard page is now split into one module per tab, pinned down by 375
+dashboard tests. The split itself changes nothing users see. This release also
+fixes a blank page in production and changes how the Trends tab counts its
+periods.
+
+### Upgrade notes
+
+- **Blank page in production.** With `NODE_ENV=production`, as in the compose
+  files, the dashboard stayed blank unless `ALLOWED_ORIGINS` listed its own URL.
+  It now always accepts its own origin, so `ALLOWED_ORIGINS` is only needed for
+  other sites. `TRUST_PROXY=true` also makes it trust `X-Forwarded-Host` and
+  `X-Forwarded-Proto` for this check (see
+  [docs/deployment.md](https://github.com/mmaudet/ovh-cost-manager/blob/v2.4.0/docs/deployment.md)).
+  In development, only `localhost`, `127.0.0.1` and `[::1]` are accepted, where
+  any origin containing `localhost` used to be.
+- **Trends periods.** A period of N months now covers N calendar months, the
+  current one included, and ends on the month selected in the header. Before, it
+  covered N+1 months and always ended today. Months without any bill show at
+  0 €. The growth over the period shows "—" when the first month costs 0 € or
+  less.
+- **Trends API.** `GET /api/analysis/monthly-trend` and
+  `/api/analysis/monthly-trend-by-category` accept `end=YYYY-MM`, the last month
+  of the window, which defaults to the latest billed month. `months` must be an
+  integer from 1 to 240: other values now get a 400.
+- **Navigation.** The tab bar keeps the open Public Cloud project and the open
+  resource type detail; the logo closes both.
 
 ### Bug fixes
 * fix: stop the CORS check from blanking the dashboard in production by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/79
