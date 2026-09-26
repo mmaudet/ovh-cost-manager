@@ -29,6 +29,7 @@ import {
 import { SortIcon } from '../components/SortIcon.jsx';
 import { downloadCSV } from '../utils/csv.js';
 import { formatCurrency } from '../utils/format.js';
+import { fmtBytes } from '../utils/byteSize.js';
 import { parseSqliteDate } from '../utils/sqliteDate.js';
 import { generateMarkdownReport } from '../utils/markdownReport.js';
 import { useWebCloudTab } from '../tabs/useWebCloudTab.js';
@@ -75,16 +76,6 @@ export default function Dashboard() {
   // Helper to format currency with current language
   const fmt = (value) => formatCurrency(value, language);
   const locale = language === 'en' ? 'en-US' : 'fr-FR';
-
-  // Human-readable byte size (decimal units, like the OVH manager)
-  const fmtBytes = (bytes) => {
-    if (bytes === null || bytes === undefined) return '-';
-    if (bytes === 0) return '0 B';
-    const units = ['B', 'KB', 'MB', 'GB', 'TB', 'PB'];
-    const i = Math.min(Math.floor(Math.log10(bytes) / 3), units.length - 1);
-    const value = bytes / Math.pow(1000, i);
-    return `${value.toFixed(value < 10 && i > 0 ? 1 : 0)} ${units[i]}`;
-  };
 
   // Sort projects helper
   const sortProjects = (projects, sortConfig) => {
