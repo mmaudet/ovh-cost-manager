@@ -5,13 +5,13 @@ import { months } from './fixtures/calendar.js';
 import { threeBilledProjects } from './fixtures/public-cloud.js';
 import { api } from './support/api.js';
 import {
+  accordionOf,
   cardOf,
   dropdown,
   openTab,
   renderDashboard,
   rowTextsOf,
   rowsOf,
-  sectionOf,
   selectLanguage,
   settle,
   texts,
@@ -30,9 +30,10 @@ const PROJECTS = /^Comparaison par projet/;
 const INFRASTRUCTURE = /^Comparaison Infrastructure/;
 const BACKUP = /^Comparaison Backup/;
 const PRIVATE_CLOUD = /^Comparaison Private Cloud/;
-const PRODUCTION = /^Production \(Projet\)/;
+// The comparison of what the Production project consumed
+const PRODUCTION_CONSUMPTION = /^Production \(Projet\)/;
 const toggle = (title) => screen.getByRole('button', { name: title });
-const comparison = (title) => sectionOf(toggle(title));
+const comparison = (title) => accordionOf(toggle(title));
 const comparisonTable = (title) => within(comparison(title)).queryByRole('table');
 const openComparison = async (user, title) => {
   await user.click(toggle(title));
@@ -326,14 +327,14 @@ describe('Compare tab', () => {
       await openTab(user, 'Comparaison');
 
       expect(projectComparisons()).toEqual(['Production (Projet)', 'Staging (Projet)']);
-      expect(comparisonTable(PRODUCTION)).not.toBeInTheDocument();
+      expect(comparisonTable(PRODUCTION_CONSUMPTION)).not.toBeInTheDocument();
     });
 
     it('compare what a project consumed by cloud resource kind, once opened', async () => {
       const { user } = await renderDashboard();
       await openTab(user, 'Comparaison');
 
-      await openComparison(user, PRODUCTION);
+      await openComparison(user, PRODUCTION_CONSUMPTION);
 
       expect(api.fetchProjectConsumption)
         .toHaveBeenCalledWith('project-production', '2026-08-01', '2026-08-31');
@@ -341,7 +342,7 @@ describe('Compare tab', () => {
         .toHaveBeenCalledWith('project-production', '2026-09-01', '2026-09-30');
       // The import keeps the consumption of the current month only: nothing
       // in August, so no variation
-      expect(rowsOf(comparisonTable(PRODUCTION))).toEqual([
+      expect(rowsOf(comparisonTable(PRODUCTION_CONSUMPTION))).toEqual([
         ['Produit/Type', 'Août 2026', 'Septembre 2026', 'Variation'],
         ['instance', '0,00€', '234,25€', ''],
         ['instance_monthly', '0,00€', '64,00€', ''],
@@ -357,11 +358,11 @@ describe('Compare tab', () => {
       await pickMonth(user, 'Août 2026', 'Juillet 2026');
       await pickMonth(user, 'Septembre 2026', 'Août 2026');
 
-      await openComparison(user, PRODUCTION);
+      await openComparison(user, PRODUCTION_CONSUMPTION);
 
-      expect(within(comparison(PRODUCTION)).getByText('Aucune donnée pour ce projet'))
-        .toBeInTheDocument();
-      expect(comparisonTable(PRODUCTION)).not.toBeInTheDocument();
+      expect(within(comparison(PRODUCTION_CONSUMPTION))
+        .getByText('Aucune donnée pour ce projet')).toBeInTheDocument();
+      expect(comparisonTable(PRODUCTION_CONSUMPTION)).not.toBeInTheDocument();
     });
   });
 

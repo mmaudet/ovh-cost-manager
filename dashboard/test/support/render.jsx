@@ -189,11 +189,16 @@ export function cardRowOf(label) {
   return cardOf(label).parentElement;
 }
 
-// The section a title heads: the title and what shows under it, like a
-// resource table of a Public Cloud project under its heading, or a
-// comparison of the Compare tab under the button that shows or hides it
-export function sectionOf(title) {
-  return title.parentElement;
+// The panel a heading heads within a card: the heading with its actions, and
+// what shows under it, like the buckets of a Public Cloud project
+export function panelOf(heading) {
+  return heading.parentElement;
+}
+
+// The accordion a button shows or hides: the button, and what shows under it
+// once open, like a comparison of the Compare tab
+export function accordionOf(toggle) {
+  return toggle.parentElement;
 }
 
 // A badge of the header: a count and its label

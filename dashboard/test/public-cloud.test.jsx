@@ -13,10 +13,10 @@ import {
   cardOf,
   cardRowOf,
   openTab,
+  panelOf,
   renderDashboard,
   rowTextsOf,
   rowsOf,
-  sectionOf,
   selectLanguage,
   selectMonth,
   settle,
@@ -38,11 +38,12 @@ const openProject = async (user, name) => {
 const detailHeadings = () => within(projectList())
   .queryAllByRole('heading', { level: 4 })
   .map((heading) => texts(heading));
-// A resource table of the open project, found by its heading: "Buckets (4)"
-const resources = (kind) =>
-  sectionOf(screen.getByRole('heading', { name: new RegExp(`^${kind} \\(`) }));
-const resourceTable = (kind) => within(resources(kind)).getByRole('table');
-const resourceButton = (kind, name) => within(resources(kind)).getByRole('button', { name });
+// The panel of a resource table of the open project, found by its heading:
+// "Buckets (4)"
+const resourcePanel = (kind) =>
+  panelOf(screen.getByRole('heading', { name: new RegExp(`^${kind} \\(`) }));
+const resourceTable = (kind) => within(resourcePanel(kind)).getByRole('table');
+const resourceButton = (kind, name) => within(resourcePanel(kind)).getByRole('button', { name });
 const showAll = async (user, kind) => {
   await user.click(resourceButton(kind, 'Tout afficher'));
   return screen.getByRole('dialog');
@@ -260,7 +261,7 @@ describe('Public Cloud tab', () => {
     it('shows the quotas of the regions where the project runs something', async () => {
       await openProduction();
 
-      const quotas = sectionOf(screen.getByRole('heading', { name: 'Quotas par région' }));
+      const quotas = panelOf(screen.getByRole('heading', { name: 'Quotas par région' }));
       expect(texts(quotas)).toEqual([
         'Quotas par région',
         'GRA11', 'vCPU: 28/64', 'Instances: 4/20',
@@ -352,7 +353,7 @@ describe('Public Cloud tab', () => {
       const { user } = await openProduction();
 
       const [fromPanel, fromModal] =
-        await downloadFromPanelAndModal(user, resources('Instances'));
+        await downloadFromPanelAndModal(user, resourcePanel('Instances'));
 
       expect(fromModal).toEqual(fromPanel);
       expect(fromPanel).toEqual(csvFile('ovh-instances-Production.csv', [
@@ -404,7 +405,7 @@ describe('Public Cloud tab', () => {
       const { user } = await openProduction();
 
       const [fromPanel, fromModal] =
-        await downloadFromPanelAndModal(user, resources('Buckets'));
+        await downloadFromPanelAndModal(user, resourcePanel('Buckets'));
 
       expect(fromModal).toEqual(fromPanel);
       expect(fromPanel).toEqual(csvFile('ovh-buckets-2026-09.csv', [
@@ -447,7 +448,7 @@ describe('Public Cloud tab', () => {
       const { user } = await openProduction();
 
       const [fromPanel, fromModal] =
-        await downloadFromPanelAndModal(user, resources('Volumes'));
+        await downloadFromPanelAndModal(user, resourcePanel('Volumes'));
 
       expect(fromModal).toEqual(fromPanel);
       expect(fromPanel).toEqual(csvFile('ovh-volumes-2026-09.csv', [
@@ -491,7 +492,7 @@ describe('Public Cloud tab', () => {
       const { user } = await openProduction();
 
       const [fromPanel, fromModal] =
-        await downloadFromPanelAndModal(user, resources('Snapshots'));
+        await downloadFromPanelAndModal(user, resourcePanel('Snapshots'));
 
       expect(fromModal).toEqual(fromPanel);
       expect(fromPanel).toEqual(csvFile('ovh-snapshots-2026-09.csv', [
@@ -535,7 +536,7 @@ describe('Public Cloud tab', () => {
       const { user } = await openProduction();
 
       const [fromPanel, fromModal] =
-        await downloadFromPanelAndModal(user, resources('Savings plans'));
+        await downloadFromPanelAndModal(user, resourcePanel('Savings plans'));
 
       expect(fromModal).toEqual(fromPanel);
       expect(fromPanel).toEqual(csvFile('ovh-savings-plans-2026-09.csv', [

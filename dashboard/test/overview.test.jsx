@@ -28,7 +28,12 @@ const typeBudget = async (user, amount) => {
   await user.keyboard(amount);
 };
 const forecastCard = () => cardOf('Prévision fin de mois');
-const link = (name) => screen.getByRole('button', { name });
+// The buttons of the resource type breakdown that open the Infrastructure tab
+// and, in a month billed for domains, the Web Cloud tab
+const infrastructureDetailButton = () =>
+  screen.getByRole('button', { name: 'Voir le détail infrastructure →' });
+const webCloudDetailButton = () =>
+  screen.queryByRole('button', { name: 'Voir le détail Web Cloud (domaines) →' });
 // The projects of the Public Cloud tab, and one of them by its name
 const cloudProjectRow = (name) =>
   within(cardOf(screen.getByRole('heading', { name: 'Projets Cloud' })))
@@ -147,7 +152,7 @@ describe('Overview tab', () => {
     it('open the Infrastructure tab from the resource type breakdown', async () => {
       const { user } = await renderDashboard();
 
-      await user.click(link('Voir le détail infrastructure →'));
+      await user.click(infrastructureDetailButton());
       await settle();
 
       expect(texts(cardRowOf('Serveurs dédiés')).slice(0, 3))
@@ -158,7 +163,7 @@ describe('Overview tab', () => {
     it('open the Web Cloud tab from the resource type breakdown', async () => {
       const { user } = await renderDashboard();
 
-      await user.click(link('Voir le détail Web Cloud (domaines) →'));
+      await user.click(webCloudDetailButton());
       await settle();
 
       expect(api.fetchWebCloudItems).toHaveBeenCalledWith('2025-10-01', '2026-09-30');
@@ -174,12 +179,11 @@ describe('Overview tab', () => {
         byResourceType: { ...account.byResourceType, '2026-09': withoutDomains },
       });
 
-      expect(screen.queryByRole('button', { name: 'Voir le détail Web Cloud (domaines) →' }))
-        .not.toBeInTheDocument();
+      expect(webCloudDetailButton()).not.toBeInTheDocument();
 
       await selectMonth(user, 'Août 2026');
 
-      expect(link('Voir le détail Web Cloud (domaines) →')).toBeInTheDocument();
+      expect(webCloudDetailButton()).toBeInTheDocument();
     });
 
     it('open a project of the project breakdown on the Public Cloud tab', async () => {
