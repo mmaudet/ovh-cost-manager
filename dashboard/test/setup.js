@@ -2,6 +2,7 @@ import '@testing-library/jest-dom/vitest';
 import { cleanup } from '@testing-library/react';
 import { afterEach, beforeEach, vi } from 'vitest';
 import { TODAY } from './fixtures/calendar.js';
+import { endTest } from './support/query-client.js';
 
 // Every test file gets the stand-in of the API service module (support/api.js)
 vi.mock('../src/services/api.js', async () => (await import('./support/api.js')).api);
@@ -41,7 +42,10 @@ beforeEach(() => {
   vi.setSystemTime(TODAY);
 });
 
-afterEach(() => {
+afterEach(async () => {
+  // First stop what the test left running, if it failed or timed out while a helper of
+  // support/ waited, so that the next test starts clean (see endTest())
+  await endTest();
   // Without Vitest globals, Testing Library cannot register its own cleanup
   cleanup();
   vi.useRealTimers();

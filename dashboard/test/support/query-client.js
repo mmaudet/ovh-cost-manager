@@ -1,5 +1,6 @@
 // The React Query client of the tests, how to wait for its answers, and the keys it caches
-// them under: shared by renderDashboard() (render.jsx) and renderTabHook() (hooks.jsx).
+// them under: shared by renderDashboard() (render.jsx) and renderTabHook() (hooks.jsx). And
+// the session of each test, which stops what a test left running once it is over.
 
 import { vi } from 'vitest';
 import { act } from '@testing-library/react';
@@ -23,6 +24,43 @@ notifyManager.setScheduler((callback) => {
 // their clock, which is what Testing Library looks for too.
 export const timersAreFake = () => Object.hasOwn(globalThis.setTimeout, 'clock');
 
+// A test that fails or times out while a helper waits, such as a renderDashboard() it has
+// not awaited yet, leaves the helper running into the next test. Its act() then overlaps
+// those of the next test, which React does not support: from then on, React no longer
+// renders what the page loads, and every following test of the file fails. And its next
+// steps would act on the page of the next test. So each test runs in a session, which
+// endTest() closes after it (see setup.js): what the test left running stops at its next
+// step, for good.
+const openSession = () => ({ over: false, acting: Promise.resolve() });
+let session = openSession();
+const never = new Promise(() => {});
+
+// The session of the test that runs
+export const currentSession = () => session;
+
+// Nothing while the test of the session runs; once it is over, a wait that never ends
+export const stopIfOver = (from) => (from.over ? never : undefined);
+
+// Runs callback in act() for the test of the session, unless it is over
+export async function actIn(from, callback) {
+  await stopIfOver(from);
+  // Awaited once only: each then() on what act() returns closes its scope again
+  from.acting = (async () => {
+    await act(callback);
+  })();
+  await from.acting;
+  await stopIfOver(from);
+}
+
+// Closes the session of the test that ran: its act() in progress, if any, ends before the
+// next test opens its own, and what the test left running stops
+export async function endTest() {
+  const ended = session;
+  ended.over = true;
+  session = openSession();
+  await ended.acting.catch(() => {});
+}
+
 // A fresh client per test, with the options of src/main.jsx; no retry, and
 // no garbage collection timer left behind. From now on, settle() waits for
 // the answers it hands over.
@@ -44,9 +82,10 @@ export function createQueryClient() {
 // Waits until the client has received every answer it was asked for,
 // including the requests those answers lead to, and handed them over.
 export async function settle(queryClient) {
+  const from = currentSession();
   do {
     // Fake timers make a zero-delay timer set while others run due 1 ms later
-    await act(() => (timersAreFake()
+    await actIn(from, () => (timersAreFake()
       ? vi.advanceTimersByTimeAsync(1)
       : new Promise((resolve) => setTimeout(resolve, 0))));
   } while (queryClient.isFetching() + queryClient.isMutating() + pendingNotifications.size > 0);

@@ -7,7 +7,7 @@
 
 import { StrictMode } from 'react';
 import { vi } from 'vitest';
-import { act, render, screen, within } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { LanguageProvider } from '../../src/hooks/useLanguage.jsx';
@@ -16,16 +16,30 @@ import { account } from '../fixtures/account.js';
 import { TODAY } from '../fixtures/calendar.js';
 import { serve } from './api.js';
 import {
-  createQueryClient, keysIn, settle as settleQueries, timersAreFake,
+  actIn, createQueryClient, currentSession, keysIn, settle as settleQueries, stopIfOver,
+  timersAreFake,
 } from './query-client.js';
 
 let queryClient;
+
+// The user of a test, whose actions stop for good once the test is over, failed or timed
+// out: an action it left running would go on to wait in act() and act on the page of the
+// next test (see endTest() in query-client.js). setup() is no action: it derives a user.
+const userOf = (from, user) => Object.fromEntries(Object.entries(user).map(
+  ([name, action]) => [name, name === 'setup' ? action : async (...args) => {
+    await stopIfOver(from);
+    const done = await action(...args);
+    await stopIfOver(from);
+    return done;
+  }],
+));
 
 // Renders the whole dashboard as src/main.jsx does, with the API answering
 // from the dataset, and waits until the page shows every answer. Returns the
 // user, and allKeys(), the key of every query the page holds in its cache,
 // the shell's and the tab hooks', as renderTabHook() gives for one hook.
 export async function renderDashboard(data = account) {
+  const from = currentSession();
   serve(data);
   queryClient = createQueryClient();
   // Under fake timers, user-event moves the clock on for its own delays
@@ -42,7 +56,7 @@ export async function renderDashboard(data = account) {
     </StrictMode>,
   );
   await settle();
-  return { user, allKeys: () => keysIn(queryClient) };
+  return { user: userOf(from, user), allKeys: () => keysIn(queryClient) };
 }
 
 // Waits until the page has received every answer it asked for, including the
@@ -64,7 +78,7 @@ export function fakeTimers() {
 // Under fake timers, lets time pass, then waits until the page shows what
 // that time brought
 export async function passTime(ms) {
-  await act(() => vi.advanceTimersByTimeAsync(ms));
+  await actIn(currentSession(), () => vi.advanceTimersByTimeAsync(ms));
   await settle();
 }
 
