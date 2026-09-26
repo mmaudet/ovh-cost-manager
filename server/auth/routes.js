@@ -20,29 +20,13 @@ const {
   staleLoginCookies,
 } = require('./login-state');
 const { sessionsToEnd } = require('./logout-token');
+const { quote, describeRefusal } = require('./log-text');
 
 const router = express.Router();
 
 // What a failed sign-in answers: the details go to the log only
 const SIGN_IN_REFUSED = 'Sign-in failed, please sign in again.';
 const SIGN_IN_FAILED = 'Sign-in failed.';
-
-// What an error of openid-client says of a refused sign-in, for the log: its
-// messages and the provider's error, not its cause's data, which can hold
-// the callback's parameters, the code and the state among them
-function describeRefusal(err) {
-  const parts = [`${err.name}: ${err.message}`];
-  if (err.error) {
-    parts.push(`error ${err.error}`);
-  }
-  if (err.error_description) {
-    parts.push(`description ${err.error_description}`);
-  }
-  if (err.cause instanceof Error) {
-    parts.push(`because ${err.cause.message}`);
-  }
-  return parts.join(', ');
-}
 
 // The routes run once the provider is discovered: awaitDiscovery answers 503
 // until then
@@ -133,7 +117,7 @@ function setup(config) {
         maxAge: authConfig.session.maxAge,
       });
 
-      console.log(`OIDC sign-in: session opened for ${userInfo.sub}`);
+      console.log(`OIDC sign-in: session opened for ${quote(userInfo.sub)}`);
 
       // Checked again: the redirect follows the cookie, which /auth/login set
       res.redirect(safeReturnTo(pending.returnTo));
@@ -141,8 +125,8 @@ function setup(config) {
       // Refused by the provider, or its answer failed a check, as for a
       // replayed callback, a denied consent or another nonce: the user can
       // sign in again. Such errors may carry the callback's parameters, so
-      // the log tells only what they say. Anything else failed on the
-      // server's side, and is logged whole
+      // the log tells only what they say, quoted. Anything else failed on
+      // the server's side, and is logged whole
       const refused = oidcClient.isRefusedSignIn(err);
       if (refused) {
         console.error(`OIDC callback: sign-in refused: ${describeRefusal(err)}`);
@@ -203,7 +187,7 @@ async function backChannelLogout(req, res, config) {
   try {
     claims = await oidcClient.verifyLogoutToken(logoutToken);
   } catch (err) {
-    console.warn('Back-channel logout: invalid logout token:', err.message);
+    console.warn(`Back-channel logout: invalid logout token: ${quote(err.message)}`);
     return res.status(400).send('Invalid logout token');
   }
 
@@ -215,7 +199,7 @@ async function backChannelLogout(req, res, config) {
       ? sessionStore.deleteByOidcSid(target.sid)
       : sessionStore.deleteByUserId(target.sub);
     const [by, value] = Object.entries(target)[0];
-    console.log(`Back-channel logout: deleted ${deleted} session(s) for ${by}=${value}`);
+    console.log(`Back-channel logout: deleted ${deleted} session(s) for ${by}=${quote(value)}`);
 
     // Return 200 OK per spec (even if no sessions deleted)
     res.status(200).send('OK');

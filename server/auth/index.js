@@ -15,6 +15,7 @@ const { discoveryRetryDelay, createDiscoveryGate } = require('./discovery');
 const { mountHeaderMode } = require('./header-mode');
 const { sessionSecretWarning } = require('./session-cookie');
 const { plainHttpWarning } = require('./provider');
+const { describeDiscoveryFailure } = require('./log-text');
 
 /**
  * Initialize OIDC authentication. When it is enabled, the server never falls
@@ -65,8 +66,7 @@ function discover(config, failures = 0) {
     () => console.log('OIDC: provider discovered, sign-in is available'),
     (err) => {
       const delay = discoveryRetryDelay(failures);
-      const cause = err.cause?.code || err.cause?.message;
-      const reason = cause ? `${err.message} (${cause})` : err.message;
+      const reason = describeDiscoveryFailure(err);
       console.error(`OIDC: discovery of ${config.auth.provider.issuer} failed: ${reason}. `
         + `/api and /auth answer 503 until it succeeds; next attempt in ${delay / 1000} s`);
       setTimeout(() => discover(config, failures + 1), delay);

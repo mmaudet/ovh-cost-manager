@@ -55,12 +55,15 @@ async function startFakeProvider() {
   const { privateKey, publicKey } = crypto.generateKeyPairSync('rsa', { modulusLength: 2048 });
   const otherKey = crypto.generateKeyPairSync('rsa', { modulusLength: 2048 }).privateKey;
   const codes = new Map();
+  // The user of each access token, for userinfo
+  const accessTokens = new Map();
   const provider = {
     clientId: 'ocm-test',
     clientSecret: 'test-secret',
     user: 'alice',
-    // deny: the next authorization is refused; wrongIss: it names another
-    // issuer; wrongNonce: the next ID token holds another nonce
+    // deny: the next authorization is refused, with an error_description
+    // when it is text; wrongIss: it names another issuer; wrongNonce: the next
+    // ID token holds another nonce
     next: {},
     lastPkce: null,
     // The provider's session of the last authorization, as its tokens' sid
@@ -98,8 +101,11 @@ async function startFakeProvider() {
         target.searchParams.set('iss', iss);
         provider.next.wrongIss = false;
         if (provider.next.deny) {
-          provider.next.deny = false;
           target.searchParams.set('error', 'access_denied');
+          if (typeof provider.next.deny === 'string') {
+            target.searchParams.set('error_description', provider.next.deny);
+          }
+          provider.next.deny = false;
         } else {
           const code = crypto.randomUUID();
           provider.lastSid = `op-session-${crypto.randomUUID()}`;
@@ -135,8 +141,10 @@ async function startFakeProvider() {
         const now = Math.floor(Date.now() / 1000);
         const nonce = provider.next.wrongNonce ? 'another-nonce' : grant.nonce;
         provider.next.wrongNonce = false;
+        const accessToken = crypto.randomUUID();
+        accessTokens.set(accessToken, grant.sub);
         return sendJson(res, 200, {
-          access_token: `${grant.sub}.${crypto.randomUUID()}`,
+          access_token: accessToken,
           token_type: 'Bearer',
           expires_in: 300,
           id_token: signJwt({
@@ -151,7 +159,10 @@ async function startFakeProvider() {
         });
       }
       case '/userinfo': {
-        const sub = (req.headers.authorization || '').replace(/^Bearer /, '').split('.')[0];
+        const sub = accessTokens.get((req.headers.authorization || '').replace(/^Bearer /, ''));
+        if (sub === undefined) {
+          return sendJson(res, 401, { error: 'invalid_token' });
+        }
         return sendJson(res, 200, { sub, name: sub, email: `${sub}@example.test` });
       }
       default:

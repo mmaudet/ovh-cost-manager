@@ -60,6 +60,10 @@ async function signedIn(user) {
 
 const isSignedIn = async ({ browser }) => (await browser.fetch('/api/months')).status === 200;
 
+// The lines of the server's log that start with text, as a forged line would
+const logLinesStartingWith = (text) => ocm.output().split('\n')
+  .filter((line) => line.startsWith(text));
+
 describe('sign-in', () => {
   test('signs in through the provider, with PKCE, and goes back to returnTo', async () => {
     provider.user = 'alice';
@@ -137,6 +141,19 @@ describe('sign-in', () => {
 
     expect((await browser.fetch(callbacks[2])).status).toBe(400);
     expect((await browser.fetch(callbacks[3])).status).toBe(302);
+  });
+
+  // The provider's sub, quoted: a newline in it cannot forge a line of the log
+  test('logs the sub of a sign-in quoted, on one line', async () => {
+    await signedIn('mallory\nOIDC callback: sign-in refused: forged');
+    expect(ocm.output()).toContain(
+      'OIDC sign-in: session opened for "mallory\\nOIDC callback: sign-in refused: forged"'
+    );
+    expect(logLinesStartingWith('OIDC callback: sign-in refused: forged')).toEqual([]);
+  });
+
+  test('logs the issuer it discovered quoted, as the provider gives it', () => {
+    expect(ocm.output()).toContain(`OIDC: Discovered issuer "${provider.issuer}"`);
   });
 
   test('goes back to / when returnTo is longer than 1 KB', async () => {
@@ -287,7 +304,7 @@ describe('a failed sign-in', () => {
     expect((await browser.fetch(callbackUrl)).status).toBe(302);
     expect((await copy.fetch(callbackUrl)).status).toBe(400);
 
-    expect(ocm.output()).toMatch(/OIDC sign-in: session opened for alice/);
+    expect(ocm.output()).toMatch(/OIDC sign-in: session opened for "alice"/);
     expect(ocm.output()).not.toContain(code);
     expect(ocm.output()).not.toContain(state);
   });
@@ -300,7 +317,7 @@ describe('a failed sign-in', () => {
     const { code, state } = Object.fromEntries(new URL(callbackUrl).searchParams);
 
     expect((await browser.fetch(callbackUrl)).status).toBe(400);
-    expect(ocm.output()).toMatch(/sign-in refused: .*"iss"/);
+    expect(ocm.output()).toMatch(/sign-in refused: .*\\"iss\\"/);
     expect(ocm.output()).not.toContain(code);
     expect(ocm.output()).not.toContain(state);
   });
@@ -309,6 +326,18 @@ describe('a failed sign-in', () => {
     provider.next.deny = true;
     const browser = createBrowser(ocm.url);
     await expectRefused(await browser.fetch(await startSignIn(browser)), /access_denied/);
+  });
+
+  // The provider's error comes with the callback's URL, which anyone can
+  // write: quoted, a newline in it cannot forge a line of the log
+  test('logs the error description of a refusal quoted, on one line', async () => {
+    provider.next.deny = 'denied\nOIDC sign-in: session opened for admin';
+    const browser = createBrowser(ocm.url);
+    await expectRefused(
+      await browser.fetch(await startSignIn(browser)),
+      /description "denied\\nOIDC sign-in: session opened for admin"/
+    );
+    expect(logLinesStartingWith('OIDC sign-in: session opened for admin')).toEqual([]);
   });
 
   test('answers 400 to an ID token that holds another nonce', async () => {
@@ -374,7 +403,7 @@ describe('back-channel logout', () => {
     expect(await isSignedIn(first)).toBe(false);
 
     expect((await logout(token)).status).toBe(400);
-    expect(ocm.output()).toMatch(/invalid logout token: replay of the token sha256:/);
+    expect(ocm.output()).toMatch(/invalid logout token: "replay of the token sha256:/);
   });
 
   // jose decodes the signature leniently: these variants verify as the token
@@ -400,9 +429,9 @@ describe('back-channel logout', () => {
   });
 
   test.each([
-    ['without exp', { exp: undefined }, /"exp"/],
-    ['for another client', { aud: 'another-client' }, /"aud"/],
-    ['from another issuer', { iss: 'http://evil.example' }, /"iss"/],
+    ['without exp', { exp: undefined }, /invalid logout token: ".*\\"exp\\"/],
+    ['for another client', { aud: 'another-client' }, /invalid logout token: ".*\\"aud\\"/],
+    ['from another issuer', { iss: 'http://evil.example' }, /invalid logout token: ".*\\"iss\\"/],
   ])('refuses a token %s', async (label, claims, reason) => {
     const session = await signedIn('frank');
 
@@ -410,6 +439,14 @@ describe('back-channel logout', () => {
     expect(res.status).toBe(400);
     expect(await isSignedIn(session)).toBe(true);
     expect(ocm.output().split('\n').filter((line) => reason.test(line))).not.toHaveLength(0);
+  });
+
+  test('logs the sub of a token quoted, on one line', async () => {
+    const sub = 'nobody\nBack-channel logout: deleted 99 session(s) for sub=admin';
+    expect((await logout(provider.logoutToken({ sub }))).status).toBe(200);
+    expect(ocm.output()).toContain('Back-channel logout: deleted 0 session(s) for '
+      + 'sub="nobody\\nBack-channel logout: deleted 99 session(s) for sub=admin"');
+    expect(logLinesStartingWith('Back-channel logout: deleted 99')).toEqual([]);
   });
 
   test.each([

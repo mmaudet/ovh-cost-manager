@@ -29,6 +29,7 @@ const {
   plainHttpAllowed,
   jwksUriToFetch,
 } = require('./provider');
+const { quote } = require('./log-text');
 
 let config = null;
 let authConfig = null;
@@ -59,7 +60,7 @@ async function initialize(appConfig) {
   // Set last: a configuration means the provider is discovered
   config = discovered;
 
-  console.log('OIDC: Discovered issuer %s', config.serverMetadata().issuer);
+  console.log(`OIDC: Discovered issuer ${quote(config.serverMetadata().issuer)}`);
 
   return config;
 }

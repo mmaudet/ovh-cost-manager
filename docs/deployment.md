@@ -36,6 +36,7 @@ This guide covers Docker deployment options for OVH Cost Manager (OCM), includin
 - **`OIDC_ENABLED=false` now overrides `auth.enabled: true`**: a leftover `OIDC_ENABLED=false` in the environment turns OIDC off, and header mode then serves the API to anyone, unless `AUTH_REQUIRED=true`.
 - **A missing OIDC setting, or a `config.json` that cannot be read as JSON, stops the server at startup**, with an error naming the setting or the file, rather than let it start without authentication.
 - **While the provider is unreachable**, sign-in and the API answer 503, and the server retries its discovery with backoff, instead of falling back to header mode. `/api/health` keeps answering: the container stays healthy.
+- **The log quotes the provider's texts as JSON strings**, such as `OIDC sign-in: session opened for "alice"`, so that a newline in a `sub` or an error description cannot forge a line of the log.
 - **Back-channel logout now works**, and ends only the sessions of the token's `sid`, or of its `sub` when it has no `sid`. The provider's logout tokens must hold `exp`; a replay is refused, told by the token's `jti`, or by the token itself when it has none, as LemonLDAP-NG's may not.
 
 ---
