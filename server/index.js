@@ -105,6 +105,16 @@ const authLimiter = rateLimit({
   legacyHeaders: false
 });
 
+// Back-channel logout: the provider posts one request per sign-out. A flood
+// of tokens to verify, as a replay attack sends, is cut
+const backChannelLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 300,
+  message: 'Too many logout requests',
+  standardHeaders: true,
+  legacyHeaders: false
+});
+
 // Manual import trigger: hard-capped at one run per hour for everyone (shared
 // global bucket, not per-IP) to protect the OVH API. This is a functional
 // safeguard, applied even when the DoS rate limiting is disabled.
@@ -208,9 +218,11 @@ async function initializeServer() {
 
     // Back-channel logout endpoint, unless auth.backChannelLogout is false
     if (authConfig.auth.backChannelLogout) {
-      app.post('/logout/backchannel', express.urlencoded({ extended: false }), (req, res) => {
-        auth.backChannelLogout(req, res, authConfig);
-      });
+      const limits = rateLimitConfig.enabled ? [backChannelLimiter] : [];
+      app.post('/logout/backchannel', ...limits, express.urlencoded({ extended: false }),
+        (req, res) => {
+          auth.backChannelLogout(req, res, authConfig);
+        });
     }
 
     // OIDC authentication middleware

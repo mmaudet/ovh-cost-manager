@@ -122,13 +122,35 @@ describe('sign-in', () => {
   });
 });
 
+// A second server, behind a trusted proxy, with rate limiting on
 describe('sign-in over HTTPS through a trusted proxy', () => {
   const https = { headers: { 'X-Forwarded-Proto': 'https' } };
   let proxied;
 
   beforeAll(async () => {
-    proxied = await startOcm((url) => ({ ...oidcEnv(url), TRUST_PROXY: 'true' }));
+    proxied = await startOcm((url) => ({
+      ...oidcEnv(url),
+      TRUST_PROXY: 'true',
+      RATE_LIMIT_ENABLED: 'true',
+      RATE_LIMIT_API_MAX: '10000',
+      RATE_LIMIT_AUTH_MAX: '10000',
+    }));
   }, 30000);
+
+  // The provider posts one request per sign-out: a flood of tokens to verify,
+  // as a replay attack sends, is cut
+  test('limits the back-channel logout to 300 requests a minute', async () => {
+    const post = () => fetch(`${proxied.url}/logout/backchannel`, {
+      method: 'POST',
+      body: new URLSearchParams({ logout_token: 'not.a.token' }),
+    });
+    const statuses = new Set();
+    for (let i = 0; i < 300; i += 1) {
+      statuses.add((await post()).status);
+    }
+    expect([...statuses]).toEqual([400]);
+    expect((await post()).status).toBe(429);
+  });
 
   afterAll(() => proxied?.stop());
 
