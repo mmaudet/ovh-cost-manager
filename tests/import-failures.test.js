@@ -74,7 +74,8 @@ describe('an item that the import fails to fetch', () => {
       '[OVH] Unable to parse JSON reponse'],
     ['an Error', Object.assign(new Error('Forbidden'), { statusCode: 403 }), '403 Forbidden'],
     ['a string', 'Unable to reach the API', 'Unable to reach the API'],
-    ['an object without a status or a message', { code: 'ECONNRESET' }, "{ code: 'ECONNRESET' }"],
+    ['an object without a status or a message', { code: 'ECONNRESET' },
+      '{ code: \'ECONNRESET\' }'],
   ])('is logged with a readable reason when the error is %s', async (_, error, reason) => {
     routes.set('/me/bill/FR1/details/D2', () => Promise.reject(error));
 

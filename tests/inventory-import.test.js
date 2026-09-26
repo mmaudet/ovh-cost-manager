@@ -101,8 +101,7 @@ describe('VPS inventory import', () => {
   test.each([
     ['name none', { id: 1, bitFormat: 64 }],
     ['are empty', null],
-  ])('leaves the operating system empty when the current image and the distribution %s',
-    async (_, answer) => {
+  ])('leaves the operating system empty when both answers %s', async (_, answer) => {
     routes.set(`/vps/${VPS}/images/current`, ok(answer));
     routes.set(`/vps/${VPS}/distribution`, ok(answer));
 
