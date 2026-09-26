@@ -2,7 +2,7 @@ import { months } from './calendar.js';
 
 // Cost trends of the synthetic account, as /api/analysis/monthly-trend and
 // /api/analysis/monthly-trend-by-category answer, keyed by the number of
-// months asked for.
+// months asked for, and its GPU costs, as /api/gpu/summary answers.
 
 const lastThreeMonths = [
   { month: 'Jul', yearMonth: '2026-07', cost: 980 },
@@ -59,12 +59,30 @@ const gpuOverAllMonths = {
   ],
 };
 
+// The Overview and the Public Cloud tab ask for the selected month. The
+// instances are those of the inventory, whatever the month.
+const gpuInMonth = (month, total) => ({
+  total,
+  project_count: 1,
+  byModel: [{ gpu_model: 'NVIDIA L4', total, count: 1, color: '#22c55e' }],
+  byProject: [
+    { project_name: 'Production', project_id: 'project-production',
+      total, gpu_flavors: 'l4-90' },
+  ],
+  monthlyTrend: [{ month, total }],
+  instances: gpuOverAllMonths.instances,
+});
+
 export const trends = {
   // The page asks for 6 months, then for 3: the longest period that three
   // billed months allow. Both periods cover the same bills.
   monthlyTrend: { 3: lastThreeMonths, 6: lastThreeMonths },
   monthlyTrendByCategory: { 3: costByResourceType, 6: costByResourceType },
-  gpuSummary: { all: gpuOverAllMonths },
+  gpuSummary: {
+    all: gpuOverAllMonths,
+    '2026-08': gpuInMonth('2026-08', 310),
+    '2026-09': gpuInMonth('2026-09', 420.5),
+  },
 };
 
 // A variant of the account, first billed in July 2025: 15 months of history.
