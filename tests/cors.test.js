@@ -122,11 +122,20 @@ describe('createOriginCheck', () => {
         .toBe(true);
     });
 
-    test('reads the first host of an X-Forwarded-Host list', () => {
+    // As the Host check reads it: the last host is the one the nearest proxy
+    // set or appended, where a client may have sent the others
+    test('reads the last host of an X-Forwarded-Host list', () => {
       expect(behindTrustedProxy(origin, {
         ...proxied,
-        forwardedHost: 'ocm.example.com, ocm.internal',
+        forwardedHost: 'ocm.internal, ocm.example.com',
       })).toBe(true);
+    });
+
+    test('does not take the first host of a list, which a client may send, as its own', () => {
+      expect(behindTrustedProxy('https://evil.example', {
+        ...proxied,
+        forwardedHost: 'evil.example, ocm.example.com',
+      })).toBe(false);
     });
 
     test('rejects the origin when the trusted proxy sends no X-Forwarded-Host', () => {

@@ -8,7 +8,7 @@
  * origin does not widen access.
  */
 
-const { LOOPBACK_HOSTNAMES, firstValue, parseHost } = require('./hostHeader');
+const { LOOPBACK_HOSTNAMES, firstValue, lastValue, parseHost } = require('./hostHeader');
 
 /**
  * Builds the check once, from the server's settings.
@@ -25,7 +25,8 @@ function createOriginCheck({ allowedOrigins, isDev, trustProxy }) {
    * @typedef {object} RequestFacts
    * @property {string} [host] - Host header
    * @property {string} [forwardedHost] - X-Forwarded-Host header, read only
-   *   behind a trusted proxy: its first host counts as the request's own too
+   *   behind a trusted proxy: its last host, the one the nearest proxy set or
+   *   appended, counts as the request's own too, as for the Host check
    * @property {string} [forwardedProto] - X-Forwarded-Proto header, read only
    *   behind a trusted proxy: its first scheme is the request's
    * @property {boolean} [encrypted] - whether the connection itself is TLS
@@ -52,7 +53,7 @@ function createOriginCheck({ allowedOrigins, isDev, trustProxy }) {
     }
     const ownHosts = [request.host];
     if (trustProxy && request.forwardedHost) {
-      ownHosts.push(firstValue(request.forwardedHost));
+      ownHosts.push(lastValue(request.forwardedHost));
     }
     return ownHosts.some((ownHost) => parseHost(ownHost, url.protocol)?.host === url.host);
   };
