@@ -4,10 +4,19 @@ import { WebCloudTable, webCloudCsvColumns } from '../components/WebCloudFamilyT
 import { downloadCSV } from '../utils/csv.js';
 import { formatYearMonth } from '../utils/format.js';
 
+// Web Cloud families, in display order. Each one gets a card and a table.
+const WEB_CLOUD_CATEGORIES = [
+  { key: 'domain', labelKey: 'domains', color: 'text-violet-600' },
+  { key: 'dns_zone', labelKey: 'dnsZones', color: 'text-sky-600' },
+  { key: 'hosting', labelKey: 'webHosting', color: 'text-blue-600' },
+  { key: 'email', labelKey: 'emails', color: 'text-pink-600' },
+  { key: 'option', labelKey: 'hostingOptions', color: 'text-gray-600' }
+];
+
 // The Web Cloud tab, which the shell renders while it is active: what useWebCloudTab()
 // returns, with the shell's language, translations (t) and amount format (fmt).
 const WebCloudTab = ({
-  WEB_CLOUD_CATEGORIES, webCloudPeriod, webCloudSummary, webCloudItems, setShowAllWebCloud,
+  webCloudPeriod, webCloudSummary, webCloudItems, setShowAllWebCloud,
   language, t, fmt,
 }) => (
   <div className="space-y-6">
@@ -85,7 +94,7 @@ const WebCloudTab = ({
 // renders them after the page column, whatever the active tab: in the column, the margin
 // that spaces its blocks would push the backdrop down.
 const WebCloudTabModals = ({
-  WEB_CLOUD_CATEGORIES, webCloudPeriod, webCloudItems, showAllWebCloud, setShowAllWebCloud,
+  webCloudPeriod, webCloudItems, showAllWebCloud, setShowAllWebCloud,
   language, t, fmt,
 }) => (
   <>

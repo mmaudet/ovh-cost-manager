@@ -6,15 +6,6 @@ import { useQuery } from '@tanstack/react-query';
 import { fetchWebCloudSummary, fetchWebCloudItems } from '../services/api.js';
 import { WEB_CLOUD_MONTHS, shiftMonths } from '../utils/webCloudPeriod.js';
 
-// Web Cloud families, in display order. Each one gets a card and a table.
-const WEB_CLOUD_CATEGORIES = [
-  { key: 'domain', labelKey: 'domains', color: 'text-violet-600' },
-  { key: 'dns_zone', labelKey: 'dnsZones', color: 'text-sky-600' },
-  { key: 'hosting', labelKey: 'webHosting', color: 'text-blue-600' },
-  { key: 'email', labelKey: 'emails', color: 'text-pink-600' },
-  { key: 'option', labelKey: 'hostingOptions', color: 'text-gray-600' }
-];
-
 const useWebCloudTab = ({ selectedMonth, activeTab }) => {
   const [showAllWebCloud, setShowAllWebCloud] = useState(null); // category key, null when closed
 
@@ -38,7 +29,6 @@ const useWebCloudTab = ({ selectedMonth, activeTab }) => {
   });
 
   return {
-    WEB_CLOUD_CATEGORIES,
     webCloudPeriod,
     webCloudSummary,
     webCloudItems,

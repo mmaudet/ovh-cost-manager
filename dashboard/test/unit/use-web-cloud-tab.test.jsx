@@ -110,20 +110,6 @@ describe('useWebCloudTab', () => {
     expect(api.fetchWebCloudItems).toHaveBeenCalledWith(period.from, period.to);
   });
 
-  it('lists the Web Cloud families in display order', async () => {
-    const { result } = await renderTabHook(useWebCloudTab,
-      { selectedMonth: september, activeTab: 'webcloud' });
-
-    expect(result.current.WEB_CLOUD_CATEGORIES.map(({ key, labelKey }) => [key, labelKey]))
-      .toEqual([
-        ['domain', 'domains'],
-        ['dns_zone', 'dnsZones'],
-        ['hosting', 'webHosting'],
-        ['email', 'emails'],
-        ['option', 'hostingOptions'],
-      ]);
-  });
-
   it('keeps the family of the "show all" modal when another tab opens', async () => {
     const { result, rerender } = await renderTabHook(useWebCloudTab,
       { selectedMonth: september, activeTab: 'webcloud' });
