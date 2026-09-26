@@ -66,6 +66,10 @@ docker-compose up -d --build
 
 ### 3. Import billing data
 
+The container imports on its own. At start, once the server answers, it counts the bills in its database: without any, it runs a full import; with some, it skips this first import; when it cannot count them, it runs a differential import, as a full import first clears the imported data. Then it runs a differential import every `IMPORT_INTERVAL` seconds, 24 hours by default, with the flags of `IMPORT_FLAGS`. `IMPORT_ENABLED=false` turns these imports off, and the dashboard's resync button with them.
+
+To import by hand:
+
 ```bash
 # Full import (all historical data)
 docker exec ovh-cost-manager node data/import.js --full
@@ -247,6 +251,8 @@ The output should include `OIDC: provider discovered, sign-in is available`. Unt
 Do not add `docker-compose.yml` (`-f docker-compose.yml -f docker-compose.sso.yml`): OCM would also be published on port 3001, a way in around the relay, and the `TRUST_PROXY=true` of the SSO file would then let any client choose the address that rate limiting sees.
 
 ### 4. Import billing data
+
+The container imports as in the [simple deployment](#3-import-billing-data), and by hand the same way:
 
 ```bash
 docker exec ovh-cost-manager node data/import.js --from 2025-01-01 --to 2025-12-31

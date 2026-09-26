@@ -150,7 +150,10 @@ up to 2.2.2 they did not (`2.2.2`).
 
 `scripts/entrypoint.sh` runs `cron-import.sh` in the background (periodic differential
 import, default 24h, controlled by `IMPORT_*` env vars) and the Express server in the
-foreground. On first start with an empty DB, a full import runs automatically.
+foreground. At start, the cron runs a full import only when the DB holds no bill: it
+counts them with `data/count-bills.js`, straight from the DB, since the API needs a login
+under authentication, and `scripts/import-decision.sh` falls back to a differential
+import when the count fails, as `--full` clears the data first.
 
 - `docker-compose up -d --build` — simple mode, dashboard on `:3001`.
 - `docker-compose -f docker-compose.sso.yml up -d --build` — SSO mode, a standalone file:

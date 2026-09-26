@@ -387,7 +387,7 @@ docker-compose logs -f ocm
 
 Access the dashboard at http://localhost:3001
 
-> **Automatic import**: On first start, a full import runs automatically if the database is empty. Then a differential import runs every 24 hours. Configure with `IMPORT_INTERVAL`, `IMPORT_FLAGS`, or disable with `IMPORT_ENABLED=false`.
+> **Automatic import**: at start, the container runs a full import when its database holds no bill, then a differential import every 24 hours. Configure them with `IMPORT_INTERVAL` and `IMPORT_FLAGS`, or turn them off, with the dashboard's resync button, with `IMPORT_ENABLED=false` (see the [deployment guide](docs/deployment.md#3-import-billing-data)).
 
 The container's settings, such as `ALLOWED_HOSTS` against DNS rebinding, `TRUST_PROXY` behind a reverse proxy, or OIDC sign-in, are listed in the [deployment guide](docs/deployment.md#environment-variables).
 
