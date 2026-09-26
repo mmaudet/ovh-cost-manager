@@ -11,7 +11,7 @@ import {
   fetchInventoryServers,
   fetchInventoryVps, fetchInventoryStorage, fetchExpiringServices,
   fetchByResourceType, fetchResourceTypeDetails, fetchProjectsEnriched, fetchProjectConsumption,
-  fetchProjectInstances, fetchProjectQuotas, fetchGpuSummary, fetchPublicCloudStats, fetchBackupStats,
+  fetchProjectInstances, fetchProjectQuotas, fetchGpuSummary, fetchPublicCloudStats,
   fetchProjectBuckets, fetchProjectInstanceTotal, triggerImport, fetchMonthlyTrendByCategory,
   fetchProjectVolumes, fetchProjectSnapshots, fetchProjectSavingsPlans
 } from '../services/api';
@@ -36,6 +36,8 @@ import { parseSqliteDate } from '../utils/sqliteDate.js';
 import { generateMarkdownReport } from '../utils/markdownReport.js';
 import { useWebCloudTab } from '../tabs/useWebCloudTab.js';
 import { WebCloudTab, WebCloudTabModals } from '../tabs/WebCloudTab.jsx';
+import { useBackupTab } from '../tabs/useBackupTab.js';
+import { BackupTab } from '../tabs/BackupTab.jsx';
 import ProjectProductComparison from './ProjectProductComparison.jsx';
 
 // Translation keys for the import_log type and status values
@@ -460,12 +462,7 @@ export default function Dashboard() {
     enabled: !!selectedMonth && activeTab === 'inventory'
   });
 
-  // Backup stats (Veeam VMs, licenses)
-  const { data: backupStats } = useQuery({
-    queryKey: ['backupStats', selectedMonth?.from, selectedMonth?.to],
-    queryFn: () => fetchBackupStats(selectedMonth.from, selectedMonth.to),
-    enabled: !!selectedMonth && activeTab === 'backup'
-  });
+  const backupTab = useBackupTab({ selectedMonth, activeTab });
 
   // Check if previous month exists
   const previousMonthExists = selectedMonth && months.length > 1 &&
@@ -2093,89 +2090,10 @@ export default function Dashboard() {
 
         {/* Tab Content - Backup */}
         {activeTab === 'backup' && (
-          <div className="space-y-6">
-            {/* Backup Summary Cards */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-              <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
-                <span className="text-gray-500 text-sm">{language === 'en' ? 'Total Backup Cost' : 'Coût total backup'}</span>
-                <div className="text-3xl font-bold text-emerald-600 mt-2">
-                  {fmt((backupStats?.vms?.total || 0) + (backupStats?.enterprise?.total || 0))}€
-                </div>
-              </div>
-              <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
-                <span className="text-gray-500 text-sm">{language === 'en' ? 'Veeam VMs' : 'VMs Veeam'}</span>
-                <div className="text-3xl font-bold text-green-600 mt-2">{backupStats?.vms?.count || 0}</div>
-                {backupStats?.vms?.total > 0 && (
-                  <p className="text-xs text-gray-400">{fmt(backupStats.vms.total)}€</p>
-                )}
-              </div>
-              <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
-                <span className="text-gray-500 text-sm">{language === 'en' ? 'Veeam Enterprise Licenses' : 'Licences Veeam Enterprise'}</span>
-                <div className="text-3xl font-bold text-teal-600 mt-2">{backupStats?.enterprise?.count || 0}</div>
-                {backupStats?.enterprise?.total > 0 && (
-                  <p className="text-xs text-gray-400">{fmt(backupStats.enterprise.total)}€</p>
-                )}
-              </div>
-              <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
-                <span className="text-gray-500 text-sm">{language === 'en' ? '% of Total Cost' : '% du coût total'}</span>
-                <div className="text-3xl font-bold text-gray-600 mt-2">
-                  {(summary?.total || 0) > 0 
-                    ? `${(((backupStats?.vms?.total || 0) + (backupStats?.enterprise?.total || 0)) / summary.total * 100).toFixed(1)}%`
-                    : '0%'}
-                </div>
-              </div>
-            </div>
-
-            {/* Backup Details */}
-            <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
-              <h3 className="font-semibold text-gray-900 mb-4">
-                {language === 'en' ? 'Backup Resources' : 'Ressources Backup'}
-                {selectedMonth && <span className="text-sm font-normal text-gray-400 ml-2">({selectedMonth.label})</span>}
-              </h3>
-              {(byResourceType.find(r => r.resource_type === 'backup') || backupStats?.vms?.count > 0) ? (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b bg-gray-50">
-                        <th className="p-3 text-left font-medium">{language === 'en' ? 'Category' : 'Catégorie'}</th>
-                        <th className="p-3 text-right font-medium">{language === 'en' ? 'Count' : 'Nombre'}</th>
-                        <th className="p-3 text-right font-medium">{language === 'en' ? 'Cost' : 'Coût'}</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <tr className="border-b hover:bg-gray-50">
-                        <td className="p-3 font-medium">{language === 'en' ? 'Veeam Backup VMs' : 'VMs Veeam Backup'}</td>
-                        <td className="p-3 text-right">{backupStats?.vms?.count || byResourceType.find(r => r.resource_type === 'backup')?.serviceCount || 0}</td>
-                        <td className="p-3 text-right font-medium">{fmt(backupStats?.vms?.total || byResourceType.find(r => r.resource_type === 'backup')?.value || 0)}€</td>
-                      </tr>
-                      {backupStats?.enterprise?.count > 0 && (
-                        <tr className="border-b hover:bg-gray-50">
-                          <td className="p-3 font-medium">{language === 'en' ? 'Veeam Enterprise License' : 'Licence Veeam Enterprise'}</td>
-                          <td className="p-3 text-right">{backupStats.enterprise.count}</td>
-                          <td className="p-3 text-right font-medium">{fmt(backupStats.enterprise.total)}€</td>
-                        </tr>
-                      )}
-                    </tbody>
-                    <tfoot>
-                      <tr className="bg-gray-50 font-semibold">
-                        <td className="p-3">Total</td>
-                        <td className="p-3 text-right">
-                          {(backupStats?.vms?.count || 0) + (backupStats?.enterprise?.count || 0)}
-                        </td>
-                        <td className="p-3 text-right">
-                          {fmt((backupStats?.vms?.total || 0) + (backupStats?.enterprise?.total || 0))}€
-                        </td>
-                      </tr>
-                    </tfoot>
-                  </table>
-                </div>
-              ) : (
-                <div className="text-center text-gray-400 py-8">
-                  {language === 'en' ? 'No backup services found for this period' : 'Aucun service de backup trouvé pour cette période'}
-                </div>
-              )}
-            </div>
-          </div>
+          <BackupTab
+            {...backupTab} language={language} fmt={fmt}
+            selectedMonth={selectedMonth} summary={summary} byResourceType={byResourceType}
+          />
         )}
 
         {/* Footer */}

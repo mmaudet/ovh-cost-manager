@@ -3,7 +3,7 @@ import { act } from '@testing-library/react';
 import { useWebCloudTab } from '../../src/tabs/useWebCloudTab.js';
 import { months } from '../fixtures/calendar.js';
 import { api } from '../support/api.js';
-import { renderTabHook } from '../support/hooks.jsx';
+import { renderTabHook, TAB_IDS } from '../support/hooks.jsx';
 
 // The state and data queries of the Web Cloud tab, as the dashboard shell sees them: what
 // the hook requests and returns for the selected month and the active tab.
@@ -18,7 +18,7 @@ const january = {
 const services = (items) => items.map(({ category, name, total }) => [category, name, total]);
 
 describe('useWebCloudTab', () => {
-  it.each(['overview', 'compare', 'trends', 'inventory', 'infrastructure', 'backup'])(
+  it.each(TAB_IDS.filter((tab) => tab !== 'webcloud'))(
     'requests nothing while the %s tab is active',
     async (activeTab) => {
       const { result } = await renderTabHook(useWebCloudTab,
@@ -32,12 +32,18 @@ describe('useWebCloudTab', () => {
   );
 
   it('requests nothing before a month is selected', async () => {
-    const { result } = await renderTabHook(useWebCloudTab,
+    const { result, queryClient } = await renderTabHook(useWebCloudTab,
       { selectedMonth: null, activeTab: 'webcloud' });
 
     expect(api.fetchWebCloudSummary).not.toHaveBeenCalled();
     expect(api.fetchWebCloudItems).not.toHaveBeenCalled();
     expect(result.current.webCloudPeriod).toBeNull();
+    // Both queries wait for a month, rather than failing for the lack of one
+    const waiting = { status: 'pending', fetchStatus: 'idle', error: null };
+    expect(queryClient.getQueryState(['webCloudSummary', undefined, undefined]))
+      .toMatchObject(waiting);
+    expect(queryClient.getQueryState(['webCloudItems', undefined, undefined]))
+      .toMatchObject(waiting);
   });
 
   it('requests the 12 months that end on the selected month once the tab opens', async () => {
