@@ -67,7 +67,7 @@ export function formatDifferences(differences, maxLines = Infinity) {
  * Line diff (Myers), after setting aside the lines both ends have in common.
  * @returns {Array<[' '|'-'|'+', string]>}
  */
-export function diffLines(a, b) {
+function diffLines(a, b) {
   let start = 0;
   while (start < a.length && start < b.length && a[start] === b[start]) start++;
   let endA = a.length;

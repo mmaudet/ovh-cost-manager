@@ -7,6 +7,7 @@ import { createRequire } from 'node:module';
 import net from 'node:net';
 import path from 'node:path';
 import { setTimeout as sleep } from 'node:timers/promises';
+import { waitFor } from './wait.mjs';
 
 export const DB_FILE = 'ovh-bills.db';
 
@@ -28,21 +29,25 @@ export function git(args, cwd) {
   return execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
 }
 
+/** Starts a child process whose output goes to `log`, stopped on cleanup if still running. */
+function spawnLogged(command, args, { cwd, env = childEnvironment(), log, truncate = false }) {
+  checkNotStopping(command);
+  const output = fs.openSync(log, truncate ? 'w' : 'a');
+  const child = spawn(command, args, { cwd, env, stdio: ['ignore', output, output] });
+  fs.closeSync(output);
+  running.add(child);
+  child.on('error', () => running.delete(child));
+  child.on('exit', () => running.delete(child));
+  return child;
+}
+
 /** Runs a command whose output goes to a log file; the error quotes the end of the log. */
 function run(command, args, { cwd, log }) {
   return new Promise((resolve, reject) => {
-    checkNotStopping(command);
     fs.appendFileSync(log, `\n$ ${command} ${args.join(' ')}   (in ${cwd})\n`);
-    const output = fs.openSync(log, 'a');
-    const child = spawn(command, args, { cwd, env: childEnvironment(), stdio: ['ignore', output, output] });
-    fs.closeSync(output);
-    running.add(child);
-    child.on('error', (error) => {
-      running.delete(child);
-      reject(new Error(`${command} could not start: ${error.message}`));
-    });
+    const child = spawnLogged(command, args, { cwd, log });
+    child.on('error', (error) => reject(new Error(`${command} could not start: ${error.message}`)));
     child.on('exit', (code, signal) => {
-      running.delete(child);
       if (code === 0) resolve();
       else reject(new Error(`${command} ${args.join(' ')} failed (${signal ?? `exit code ${code}`}), `
         + `end of ${log}:\n${tail(log)}`));
@@ -187,26 +192,29 @@ export async function startServer({ dir, dataDir, log, defer }) {
     // The walk through the page makes more API calls than the default limit allows
     RATE_LIMIT_ENABLED: 'false',
   });
-  checkNotStopping('the server');
-  const output = fs.openSync(log, 'w');
-  const server = spawn(process.execPath, ['server/index.js'], { cwd: dir, env: environment, stdio: ['ignore', output, output] });
-  fs.closeSync(output);
-  running.add(server);
-  server.on('exit', () => running.delete(server));
+  const server = spawnLogged(process.execPath, ['server/index.js'], {
+    cwd: dir,
+    env: environment,
+    log,
+    truncate: true,
+  });
   defer(() => stopProcess(server));
 
   const url = `http://127.0.0.1:${port}`;
-  const start = Date.now();
-  for (;;) {
-    if (server.exitCode !== null) throw new Error(`the server stopped (exit code ${server.exitCode}), end of ${log}:\n${tail(log)}`);
-    try {
-      if ((await fetch(`${url}/api/health`)).ok) break;
-    } catch {
-      // Not listening yet
+  await waitFor(async () => {
+    if (server.exitCode !== null) {
+      throw new Error(`the server stopped (exit code ${server.exitCode}), end of ${log}:\n${tail(log)}`);
     }
-    if (Date.now() - start > 60_000) throw new Error(`the server did not answer within 60 s, end of ${log}:\n${tail(log)}`);
-    await sleep(200);
-  }
+    try {
+      return (await fetch(`${url}/api/health`)).ok;
+    } catch {
+      return false; // Not listening yet
+    }
+  }, {
+    timeoutMs: 60_000,
+    intervalMs: 200,
+    failure: () => `the server did not answer within 60 s, end of ${log}:\n${tail(log)}`,
+  });
   if ((await fetch(`${url}/api/config`)).status === 401) {
     throw new Error('the server asks for a login: the comparison needs OIDC turned off in the config.json it reads');
   }

@@ -10,7 +10,7 @@
  *
  * @param {{ tabLabels: string[] }} options  the labels of the tab buttons, in page order
  * @returns {{ ok: false, reason: string }
- *   | { ok: true, tabBar: string, tab: string|null, shell: string, view: string, rows: string[] }}
+ *   | { ok: true, tabBar: string, tab: string|null, shell: string, view: string, rowLabels: string[] }}
  *   the CSS paths of the tab bar and of the active tab, the text of the shell and of the
  *   tab, and the label of every collapsed row (marked ▼) of the tab, in page order
  */
@@ -77,7 +77,7 @@ export function readPage({ tabLabels }) {
   const tab = next && next !== column.lastElementChild ? next : null;
 
   // A row that opens a detail ends with ▼, and the whole row takes the click (pointer cursor)
-  const rows = !tab ? [] : [...tab.querySelectorAll('span')]
+  const rowLabels = !tab ? [] : [...tab.querySelectorAll('span')]
     .filter((span) => span.textContent.trim() === '▼')
     .map((span) => {
       let row = span;
@@ -94,7 +94,7 @@ export function readPage({ tabLabels }) {
     tab: tab && cssPath(tab),
     shell: blocks.filter((block) => block !== tab).map(text).join('\n'),
     view: tab ? text(tab) : '',
-    rows,
+    rowLabels,
   };
 }
 

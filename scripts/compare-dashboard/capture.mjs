@@ -5,6 +5,7 @@ import fs from 'node:fs/promises';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { chromium } from 'playwright';
 import { presetLanguage, readPage, rootText } from './in-page.mjs';
+import { waitFor } from './wait.mjs';
 
 // The labels users see. A pull request that renames one on purpose shows up as a
 // difference; update the label here once it is merged.
@@ -216,7 +217,13 @@ class Walker {
     this.pending.clear();
     await this.page.goto(this.url);
     // A loading screen shows until the months and the summary are in
-    await this.until(async () => (await this.page.evaluate(readPage, { tabLabels: this.tabLabels })).ok);
+    const look = () => this.page.evaluate(readPage, { tabLabels: this.tabLabels });
+    await waitFor(async () => (await look()).ok, {
+      timeoutMs: SETTLE_TIMEOUT,
+      intervalMs: 200,
+      failure: async () => `the dashboard did not show up within ${SETTLE_TIMEOUT / 1000} s: `
+        + `${(await look()).reason}`,
+    });
     if (month !== this.openingMonth) {
       const selector = this.page.locator('select').filter({ has: this.page.locator(`option[value="${month}"]`) }).first();
       await selector.selectOption(month);
@@ -241,7 +248,7 @@ class Walker {
     if (tab.id === 'compare') await this.expandAll(key);
     // Public Cloud shows a project's panels once it is selected
     if (tab.id === 'inventory') await this.openRows(key, 'project', this.projects, true);
-    if (tab.id === 'infrastructure') await this.openRows(key, 'type', Infinity, false);
+    if (tab.id === 'infrastructure') await this.openRows(key, 'resource-type', Infinity, false);
   }
 
   /** Every "show all" modal of the tab, with its exports, then the exports of the tab. */
@@ -254,9 +261,7 @@ class Walker {
       await showAll.nth(i).click();
       await this.captureModal(key);
     }
-    const exports = tab.getByRole('button', { name: 'CSV', exact: true });
-    const files = await exports.count();
-    for (let i = 0; i < files; i++) await this.captureDownload(key, () => exports.nth(i).click());
+    await this.captureExports(tab, key);
   }
 
   async captureModal(key) {
@@ -267,12 +272,17 @@ class Walker {
     // Named after its title, counts and amounts left out
     const name = text.split('\n')[0].split(' (')[0].trim() || 'untitled';
     const modalKey = this.capture.add(`${key}/modal:${name}`, text);
-    const exports = dialog.getByRole('button', { name: 'CSV', exact: true });
-    const files = await exports.count();
-    for (let i = 0; i < files; i++) await this.captureDownload(modalKey, () => exports.nth(i).click());
+    await this.captureExports(dialog, modalKey);
     await dialog.getByRole('button', { name: 'Close', exact: true }).click();
     await dialog.waitFor({ state: 'detached' });
     await this.settle(QUIET_AFTER_CLICK);
+  }
+
+  /** Every CSV export offered in `scope`, a tab or a modal. */
+  async captureExports(scope, key) {
+    const buttons = scope.getByRole('button', { name: 'CSV', exact: true });
+    const count = await buttons.count();
+    for (let i = 0; i < count; i++) await this.captureDownload(key, () => buttons.nth(i).click());
   }
 
   /** The Markdown report of the header's export menu. */
@@ -305,13 +315,13 @@ class Walker {
 
   /** Opens the first rows of the tab (▼) one at a time, and closes each one again (▲). */
   async openRows(key, kind, limit, withTableActions) {
-    const { rows } = await this.read();
-    const count = Math.min(rows.length, limit);
+    const { rowLabels } = await this.read();
+    const count = Math.min(rowLabels.length, limit);
     for (let i = 0; i < count; i++) {
       const tab = await this.tabLocator();
       await tab.locator('span').filter({ hasText: /^▼$/ }).nth(i).click();
       await this.settle(QUIET_AFTER_NAVIGATION);
-      const rowKey = this.capture.add(`${key}/${kind}:${rows[i]}`, normalize((await this.read()).view));
+      const rowKey = this.capture.add(`${key}/${kind}:${rowLabels[i]}`, normalize((await this.read()).view));
       if (withTableActions) await this.captureTableActions(rowKey);
       await tab.locator('span').filter({ hasText: /^▲$/ }).first().click();
       await this.settle(QUIET_AFTER_CLICK);
@@ -333,33 +343,17 @@ class Walker {
   async settle(quiet) {
     // A pointer left over a chart would add its tooltip to the text
     await this.page.mouse.move(0, 0);
-    const start = Date.now();
     let text = null;
-    let since = start;
-    for (;;) {
+    let since = Date.now();
+    await waitFor(async () => {
       const current = await this.page.evaluate(rootText);
-      const now = Date.now();
-      if (current !== text || this.pending.size > 0) {
-        text = current;
-        since = now;
-      } else if (now - since >= quiet) {
-        return;
-      }
-      if (now - start > SETTLE_TIMEOUT) {
-        throw new Error(`the page was still changing after ${SETTLE_TIMEOUT / 1000} s`);
-      }
-      await sleep(100);
-    }
-  }
-
-  async until(condition) {
-    const start = Date.now();
-    while (!(await condition())) {
-      if (Date.now() - start > SETTLE_TIMEOUT) {
-        const state = await this.page.evaluate(readPage, { tabLabels: this.tabLabels });
-        throw new Error(`the dashboard did not show up within ${SETTLE_TIMEOUT / 1000} s: ${state.reason}`);
-      }
-      await sleep(200);
-    }
+      if (current === text && this.pending.size === 0) return Date.now() - since >= quiet;
+      text = current;
+      since = Date.now();
+      return false;
+    }, {
+      timeoutMs: SETTLE_TIMEOUT,
+      failure: () => `the page was still changing after ${SETTLE_TIMEOUT / 1000} s`,
+    });
   }
 }
