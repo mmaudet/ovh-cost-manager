@@ -70,8 +70,26 @@ function jwksUriToFetch(jwksUri, issuer) {
   return /^https:\/\//i.test(jwksUri) || plainHttpAllowed(issuer) ? jwksUri : null;
 }
 
+/**
+ * The parameters of the end-session request, the RP-initiated logout at the
+ * provider: the session's ID token as id_token_hint when there is one. Without
+ * one, the hint is left out, as a null value would read "null" in the URL.
+ *
+ * @param {string|null|undefined} idToken - the ID token of the session ending
+ * @param {string} baseUrl - OIDC_BASE_URL, where the provider sends the user back
+ * @returns {object}
+ */
+function endSessionParameters(idToken, baseUrl) {
+  const parameters = { post_logout_redirect_uri: baseUrl };
+  if (idToken) {
+    parameters.id_token_hint = idToken;
+  }
+  return parameters;
+}
+
 module.exports = {
   authorizationParameters,
+  endSessionParameters,
   plainHttpAllowed,
   plainHttpWarning,
   jwksUriToFetch,

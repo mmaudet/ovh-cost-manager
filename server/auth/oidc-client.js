@@ -13,7 +13,12 @@ const {
 // built on, verifies them
 const { createRemoteJWKSet, jwtVerify } = require('jose');
 const { logoutTokenVerifyOptions, checkLogoutTokenClaims } = require('./logout-token');
-const { authorizationParameters, plainHttpAllowed, jwksUriToFetch } = require('./provider');
+const {
+  authorizationParameters,
+  endSessionParameters,
+  plainHttpAllowed,
+  jwksUriToFetch,
+} = require('./provider');
 
 let config = null;
 let authConfig = null;
@@ -79,10 +84,7 @@ function getEndSessionUrl(idToken) {
     return null;
   }
 
-  return buildEndSessionUrl(config, {
-    id_token_hint: idToken,
-    post_logout_redirect_uri: authConfig.baseUrl
-  });
+  return buildEndSessionUrl(config, endSessionParameters(idToken, authConfig.baseUrl));
 }
 
 function getConfig() {
