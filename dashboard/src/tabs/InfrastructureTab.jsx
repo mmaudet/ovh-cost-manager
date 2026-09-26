@@ -146,10 +146,11 @@ const InfrastructureTab = ({
                   <td className="p-3">{v.model}</td>
                   <td className="p-3">{v.zone}</td>
                   {/* In the units and number format of the language (#88): the RAM in powers
-                      of 1024, as OVH names it, the disk in GB in powers of 1000 */}
+                      of 1024, as OVH names it, the disk in GB in powers of 1000. The import
+                      stores 0 for a size the API did not give: "-", as for the servers */}
                   <td className="p-3 text-xs">
-                    {v.vcpus} vCPU / {fmtMemory(v.ram_mb, language)}
-                    {' / '}{fmtBytes(v.disk_gb * 1e9, language)}
+                    {v.vcpus} vCPU / {v.ram_mb ? fmtMemory(v.ram_mb, language) : '-'}
+                    {' / '}{v.disk_gb ? fmtBytes(v.disk_gb * 1e9, language) : '-'}
                   </td>
                   <td className="p-3">
                     <span className={`px-2 py-0.5 rounded text-xs font-medium ${v.state === 'running' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'}`}>
@@ -190,8 +191,10 @@ const InfrastructureTab = ({
                   <td className="p-3">{s.service_type}</td>
                   <td className="p-3">{s.region}</td>
                   {/* In GB, in the units and number format of the language, as the volumes of
-                      the Public Cloud tab (#88) */}
-                  <td className="p-3 text-right">{fmtBytes(s.total_size_gb * 1e9, language)}</td>
+                      the Public Cloud tab (#88), and "-" when the API did not give it (0) */}
+                  <td className="p-3 text-right">
+                    {s.total_size_gb ? fmtBytes(s.total_size_gb * 1e9, language) : '-'}
+                  </td>
                   <td className="p-3 text-right">{s.share_count}</td>
                   <td className="p-3">{s.expiration_date || '-'}</td>
                 </tr>

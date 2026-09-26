@@ -20,7 +20,8 @@ const ServersTable = ({ servers, language, t }) => (
           <td className="p-3 font-medium">{s.display_name || s.id}</td>
           <td className="p-3">{s.datacenter}</td>
           <td className="p-3">{s.cpu}</td>
-          {/* In the units and number format of the language, and in powers of 1024 (#88) */}
+          {/* In the units and number format of the language, and in powers of 1024 (#88). The
+              import stores 0 for a RAM the API did not give: "-" */}
           <td className="p-3">{s.ram_size ? fmtMemory(s.ram_size, language) : '-'}</td>
           <td className="p-3">
             <span className={`px-2 py-0.5 rounded text-xs font-medium ${s.state === 'ok' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>

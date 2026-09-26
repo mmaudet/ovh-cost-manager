@@ -292,6 +292,26 @@ describe('Infrastructure tab', () => {
     ]);
   });
 
+  // The import stores 0 for a size the API did not give: "-", as for the RAM of a server,
+  // rather than "0 o" (#88)
+  it('writes a dash for the sizes of a VPS or storage the API did not give', async () => {
+    const [vps] = account.inventoryVps;
+    const [storage] = account.inventoryStorage;
+    const { user } = await renderDashboard({
+      ...account,
+      inventoryVps: [{ ...vps, ram_mb: 0, disk_gb: 0 }],
+      inventoryStorage: [{ ...storage, total_size_gb: 0 }],
+    });
+
+    await openTab(user, 'Infrastructure');
+
+    expect(rowsOf(within(inventoryPanel('VPS')).getByRole('table'))[1])
+      .toEqual(['vps-0a1b2c3d.vps.ovh.net', 'vps-le-2-2-40', 'Region OpenStack: os-gra7',
+        '2 vCPU / - / -', 'running', '2026-10-10']);
+    expect(rowsOf(within(inventoryPanel('Stockage')).getByRole('table'))[1])
+      .toEqual(['shared-files', 'netapp', 'eu-west-gra', '-', '3', '2027-03-01']);
+  });
+
   it('shows only its cards with nothing of its own billed or in the inventory', async () => {
     // Only Public Cloud and domains billed: they have tabs of their own
     const publicAndWebCloud = account.byResourceType['2026-09']
