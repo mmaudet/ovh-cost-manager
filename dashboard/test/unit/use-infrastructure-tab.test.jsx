@@ -80,8 +80,8 @@ describe('useInfrastructureTab', () => {
       .toEqual([['netapp-5f2c9a1e', 'shared-files', 'netapp']]);
   });
 
-  // The Compare tab, still in the shell, lists the servers this hook returns, though they
-  // only load on the Infrastructure tab (#35)
+  // The Compare tab lists the servers this hook returns, which the shell passes on, though
+  // they only load on the Infrastructure tab (#35)
   it('keeps the servers for the Compare tab once Infrastructure loaded them (#35)', async () => {
     const { result, rerender } = await renderTabHook(useInfrastructureTab,
       { ...onInfrastructure, activeTab: 'compare' });
