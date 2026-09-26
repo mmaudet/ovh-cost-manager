@@ -1,4 +1,4 @@
-import { PRO_RATA_HINT } from './estimatedCost.js';
+import { PRO_RATA_HINT } from '../utils/estimatedCost.js';
 
 // Instance snapshots of a project, shared by the inline panel and its modal.
 const SnapshotsTable = ({ snapshots, language, t, fmt, locale }) => (
