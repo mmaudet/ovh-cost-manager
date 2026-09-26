@@ -615,7 +615,8 @@ const inventoryOps = {
       .sort((a, b) => a.expiration_date.localeCompare(b.expiration_date));
   },
 
-  // Analysis by resource type
+  // Analysis by resource type. The bill lines without a resource type count as 'other', in
+  // the same row as those typed 'other', as the details of that type list them (#86).
   byResourceType: (fromDate, toDate) => {
     const db = getDb();
     return db.prepare(`
@@ -627,7 +628,7 @@ const inventoryOps = {
       FROM bill_details d
       JOIN bills b ON d.bill_id = b.id
       WHERE b.date >= ? AND b.date <= ?
-      GROUP BY d.resource_type
+      GROUP BY COALESCE(d.resource_type, 'other')
       ORDER BY total DESC
     `).all(fromDate, toDate);
   },
