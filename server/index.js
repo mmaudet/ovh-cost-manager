@@ -102,9 +102,8 @@ const rateLimitConfig = getRateLimitConfig();
 
 // Host check, against DNS rebinding (#78): none unless ALLOWED_HOSTS is set
 const hostCheck = createHostCheckMiddleware({
-  allowedHosts: process.env.ALLOWED_HOSTS
-    ? process.env.ALLOWED_HOSTS.split(',')
-    : config.allowedHosts || [],
+  // A comma-separated string, or in config.json an array too
+  allowedHosts: process.env.ALLOWED_HOSTS || config.allowedHosts,
   trustProxy: rateLimitConfig.trustProxy,
 });
 

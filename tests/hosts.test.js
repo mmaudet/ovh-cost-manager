@@ -38,10 +38,36 @@ describe('createHostCheck', () => {
     });
 
     // As ALLOWED_HOSTS=" , ", or blank entries in config.json, give
-    test('takes a list of empty entries as not set', () => {
-      const check = createHostCheck({ allowedHosts: ['', ' '], trustProxy: false });
-      expect(passes(check, { host: 'evil.example' })).toBe(true);
+    test.each([[['', ' ']], [' , '], [undefined]])(
+      'takes %p as not set',
+      (setting) => {
+        const check = createHostCheck({ allowedHosts: setting, trustProxy: false });
+        expect(passes(check, { host: 'evil.example' })).toBe(true);
+      }
+    );
+  });
+
+  // ALLOWED_HOSTS is a string, and allowedHosts in config.json may be one too
+  describe.each([
+    ['a comma-separated string', 'ocm.example.com, ocm.lan:3001'],
+    ['an array', ['ocm.example.com', 'ocm.lan:3001']],
+  ])('with the hosts as %s', (_, setting) => {
+    const check = createHostCheck({ allowedHosts: setting, trustProxy: false });
+
+    test('allows each listed host', () => {
+      expect(passes(check, { host: 'ocm.example.com' })).toBe(true);
+      expect(passes(check, { host: 'ocm.lan:3001' })).toBe(true);
     });
+
+    test('rejects the others', () => {
+      expect(passes(check, { host: 'evil.example' })).toBe(false);
+    });
+  });
+
+  // As "allowedHosts": 3001 in config.json gives: the check must not turn off
+  test('keeps the check on, without throwing, for a setting of another type', () => {
+    const check = createHostCheck({ allowedHosts: 3001, trustProxy: false });
+    expect(passes(check, { host: 'evil.example' })).toBe(false);
   });
 
   test.each(['ocm.example.com', 'ocm.lan:3001'])('allows the listed host %s', (host) => {
@@ -315,10 +341,14 @@ describe('createHostCheckMiddleware', () => {
     return outcome;
   }
 
-  test('is not built when ALLOWED_HOSTS is not set, so that nothing runs', () => {
-    expect(createHostCheckMiddleware({ allowedHosts: [], trustProxy: false }, makeLogger()))
-      .toBeNull();
-  });
+  test.each([[undefined], [''], [[]]])(
+    'is not built when ALLOWED_HOSTS is %p, so that nothing runs',
+    (setting) => {
+      const logger = makeLogger();
+      expect(createHostCheckMiddleware({ allowedHosts: setting, trustProxy: false }, logger))
+        .toBeNull();
+    }
+  );
 
   test('passes an allowed request on', () => {
     const hostCheck = createHostCheckMiddleware(settings, makeLogger());

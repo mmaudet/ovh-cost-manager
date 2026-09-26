@@ -20,18 +20,24 @@ const PROXY_HEADERS = ['x-forwarded-for', 'x-forwarded-host', 'forwarded'];
 const LOG_PERIOD_MS = 60 * 60 * 1000;
 const MAX_LOGGED_HOSTS = 100;
 
-// The entries of ALLOWED_HOSTS, without blanks. The check is on as soon as
-// there is one, well-formed or not, so that a typo does not turn it off.
-function listEntries(allowedHosts) {
-  return allowedHosts.map((entry) => entry.trim()).filter(Boolean);
+// The entries of ALLOWED_HOSTS, or of allowedHosts in config.json, without
+// blanks: a comma-separated string, as the environment gives, or an array.
+// The check is on as soon as there is one, well-formed or not, so that a typo
+// does not turn it off.
+function listEntries(setting) {
+  const entries = typeof setting === 'string' ? setting.split(',') : [].concat(setting ?? []);
+  return entries
+    .map((entry) => (typeof entry === 'string' ? entry.trim() : entry))
+    .filter((entry) => entry !== '');
 }
 
 /**
  * Builds the check once, from the server's settings.
  *
  * @param {object} settings
- * @param {string[]} settings.allowedHosts - ALLOWED_HOSTS, or allowedHosts in
- *   config.json: host names, each with an optional port
+ * @param {string|string[]} [settings.allowedHosts] - ALLOWED_HOSTS, or
+ *   allowedHosts in config.json: host names, each with an optional port, in a
+ *   comma-separated string or an array
  * @param {boolean} settings.trustProxy - whether the server trusts its proxy (TRUST_PROXY)
  * @returns {function(object): {allowed: boolean, header: string, host: string}} the
  *   check of a request's headers, as Node names them: whether it passes, and
@@ -42,9 +48,9 @@ function createHostCheck({ allowedHosts, trustProxy }) {
   if (entries.length === 0) {
     return () => ({ allowed: true });
   }
-  // A malformed entry matches no request
+  // A malformed entry, or one that is not a string, matches no request
   const listedHosts = entries
-    .map((entry) => parseHost(entry))
+    .map((entry) => (typeof entry === 'string' ? parseHost(entry) : null))
     .filter(Boolean)
     .map(({ host }) => host);
 
