@@ -21,9 +21,12 @@ const costByResourceType = {
     { key: 'license', label: 'Licenses', color: '#0891b2' },
   ],
   data: [
-    { yearMonth: '2026-07', cloud_project: 680, dedicated_server: 270, backup: 0, domain: 30, license: 0 },
-    { yearMonth: '2026-08', cloud_project: 702, dedicated_server: 270, backup: 40, domain: 30, license: 0 },
-    { yearMonth: '2026-09', cloud_project: 830.4, dedicated_server: 270, backup: 90, domain: 35, license: 25 },
+    { yearMonth: '2026-07',
+      cloud_project: 680, dedicated_server: 270, backup: 0, domain: 30, license: 0 },
+    { yearMonth: '2026-08',
+      cloud_project: 702, dedicated_server: 270, backup: 40, domain: 30, license: 0 },
+    { yearMonth: '2026-09',
+      cloud_project: 830.4, dedicated_server: 270, backup: 90, domain: 35, license: 25 },
   ],
 };
 
@@ -34,7 +37,8 @@ const gpuOverAllMonths = {
   project_count: 1,
   byModel: [{ gpu_model: 'NVIDIA L4', total: 730.5, count: 1, color: '#22c55e' }],
   byProject: [
-    { project_name: 'Production', project_id: 'project-production', total: 730.5, gpu_flavors: 'l4-90' },
+    { project_name: 'Production', project_id: 'project-production',
+      total: 730.5, gpu_flavors: 'l4-90' },
   ],
   monthlyTrend: [
     { month: '2026-08', total: 310 },
@@ -80,7 +84,8 @@ export const sinceJuly2025 = {
     24: {
       categories: costByResourceType.categories,
       data: [
-        { yearMonth: '2025-07', cloud_project: 450, dedicated_server: 0, backup: 0, domain: 0, license: 0 },
+        { yearMonth: '2025-07',
+          cloud_project: 450, dedicated_server: 0, backup: 0, domain: 0, license: 0 },
         ...costByResourceType.data,
       ],
     },
