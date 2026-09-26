@@ -17,6 +17,7 @@ const util = require('util');
 const Jsonfile = require('jsonfile');
 const db = require('./db');
 const { classifyService, classifyResourceTypeFromDomain } = require('./classify');
+const { monthBounds } = require('./months');
 
 // Skip this run if another import (cron or manual resync) is in progress.
 // Checked first, before --full clears the database.
@@ -855,6 +856,23 @@ async function fetchObjectStorageBuckets(projectId) {
   return buckets;
 }
 
+// The month that a project's usage covers, as its first day and the day the usage runs to,
+// YYYY-MM-DD. OVH gives the period with its own UTC offset: its dates are read from their
+// digits, as those of the bills are. Through the UTC clock, the first hours of a month in
+// Paris would replace the consumption of the previous month (#54). Without a period, the
+// month of the UTC clock.
+function usagePeriod(usage) {
+  const from = usage.period?.from?.split('T')[0];
+  if (!from) {
+    const today = new Date().toISOString().split('T')[0];
+    return { start: `${today.substring(0, 8)}01`, end: today };
+  }
+  const month = monthBounds(from.substring(0, 7));
+  // Within the month: the period may end on the first day of the next one
+  const to = usage.period.to?.split('T')[0];
+  return { start: month.from, end: to && to < month.to ? to : month.to };
+}
+
 async function importCloudDetails(projectIds) {
   console.log('\n--- Importing cloud project details ---');
 
@@ -866,12 +884,11 @@ async function importCloudDetails(projectIds) {
       const usage = await ovh.requestPromised('GET', `/cloud/project/${projectId}/usage/current`);
 
       if (usage) {
-        const now = new Date().toISOString().split('T')[0];
-        const monthStart = now.substring(0, 8) + '01';
+        const { start: periodStart, end: periodEnd } = usagePeriod(usage);
 
         // Clear old data for this project: its consumption of the other months is kept
         db.cloudDetails.clearByProject(projectId);
-        db.cloudDetails.clearConsumptionOfMonth(projectId, monthStart);
+        db.cloudDetails.clearConsumptionOfMonth(projectId, periodStart);
 
         // Process hourly usage
         if (usage.hourlyUsage) {
@@ -882,8 +899,8 @@ async function importCloudDetails(projectIds) {
               for (const detail of (item.details || [])) {
                 db.cloudDetails.insertConsumption({
                   project_id: projectId,
-                  period_start: monthStart,
-                  period_end: now,
+                  period_start: periodStart,
+                  period_end: periodEnd,
                   resource_type: rt,
                   resource_id: detail.instanceId || detail.resourceId || detail.volumeId || '',
                   resource_name: item.reference || '',
@@ -907,8 +924,8 @@ async function importCloudDetails(projectIds) {
               for (const detail of (item.details || [])) {
                 db.cloudDetails.insertConsumption({
                   project_id: projectId,
-                  period_start: monthStart,
-                  period_end: now,
+                  period_start: periodStart,
+                  period_end: periodEnd,
                   resource_type: rt + '_monthly',
                   resource_id: detail.instanceId || detail.resourceId || '',
                   resource_name: item.reference || '',

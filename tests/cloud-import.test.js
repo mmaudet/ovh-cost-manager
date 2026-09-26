@@ -178,8 +178,11 @@ describe('volume and snapshot inventory import', () => {
 });
 
 describe('project consumption import', () => {
-  // What usage/current answers for a project that ran one instance, billed by the hour
-  const usageOfInstance = (flavor, totalPrice) => ({
+  // What usage/current answers for a project that ran one instance, billed by the hour,
+  // over a period that OVH gives with its UTC offset. Without a period, the import dates
+  // the usage by the UTC clock.
+  const usageOfInstance = (flavor, totalPrice, period) => ({
+    period,
     hourlyUsage: {
       instance: [{
         reference: flavor,
@@ -189,12 +192,12 @@ describe('project consumption import', () => {
     },
   });
 
-  // The import takes the month of its consumption from the clock
-  async function importUsageOn(day, usage) {
-    jest.setSystemTime(new Date(`${day}T10:00:00Z`));
+  async function importUsageAt(instant, usage) {
+    jest.setSystemTime(new Date(instant));
     mockRoutes.set(`${BASE}/usage/current`, ok(usage));
     await importProject();
   }
+  const importUsageOn = (day, usage) => importUsageAt(`${day}T10:00:00Z`, usage);
 
   // The project's consumption as [cloud resource kind, resource, cost]
   const consumption = (from, to) => db.cloudDetails.getConsumptionByProject(PROJECT, from, to)
@@ -207,6 +210,34 @@ describe('project consumption import', () => {
     // Read by month, as the Compare tab does
     expect(consumption('2026-08-01', '2026-08-31')).toEqual([['instance', 'b2-7', 30.5]]);
     expect(consumption('2026-09-01', '2026-09-30')).toEqual([['instance', 'b2-15', 12.25]]);
+  });
+
+  // At half past midnight in Paris on 1 September, the UTC clock still reads 31 August
+  test('dates the consumption by the period that OVH reports, not by the UTC clock', async () => {
+    await importUsageAt('2026-08-31T21:30:00Z', usageOfInstance('b2-7', 30.5, {
+      from: '2026-08-01T00:00:00+02:00', to: '2026-08-31T23:30:00+02:00',
+    }));
+    await importUsageAt('2026-08-31T22:30:00Z', usageOfInstance('b2-15', 0.25, {
+      from: '2026-09-01T00:00:00+02:00', to: '2026-09-01T00:30:00+02:00',
+    }));
+
+    expect(consumption('2026-08-01', '2026-08-31')).toEqual([['instance', 'b2-7', 30.5]]);
+    expect(consumption('2026-09-01', '2026-09-30')).toEqual([['instance', 'b2-15', 0.25]]);
+  });
+
+  // The Compare tab reads a month from its first day to its last
+  test('keeps in its month a period that ends on the first day of the next one', async () => {
+    await importUsageAt('2026-08-31T22:30:00Z', usageOfInstance('b2-7', 31, {
+      from: '2026-08-01T00:00:00+02:00', to: '2026-09-01T00:00:00+02:00',
+    }));
+
+    expect(consumption('2026-08-01', '2026-08-31')).toEqual([['instance', 'b2-7', 31]]);
+  });
+
+  test('dates the consumption by the UTC clock when OVH reports no period', async () => {
+    await importUsageAt('2026-08-31T22:30:00Z', usageOfInstance('b2-7', 30.5));
+
+    expect(consumption('2026-08-01', '2026-08-31')).toEqual([['instance', 'b2-7', 30.5]]);
   });
 
   test('replaces the consumption of a month it imports again', async () => {
