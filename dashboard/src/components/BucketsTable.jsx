@@ -38,7 +38,7 @@ const BucketsTable = ({ buckets, language, t, fmt, fmtBytes }) => (
             )}
           </td>
           <td className="p-2 text-xs">{bucket.region}</td>
-          <td className="p-2 text-right text-xs">{fmtBytes(bucket.objectsSize)}</td>
+          <td className="p-2 text-right text-xs">{fmtBytes(bucket.objectsSize, language)}</td>
           <td
             className="p-2 text-right font-medium text-xs"
             title={bucket.allocated

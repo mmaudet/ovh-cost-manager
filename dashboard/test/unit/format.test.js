@@ -87,45 +87,74 @@ describe('formatYearMonth', () => {
   });
 });
 
-// The size of a bucket, as the Public Cloud tab shows it. The same in every language: it
-// takes none, and writes a decimal point in French too.
+// The size of a bucket, as the Public Cloud tab shows it: in the units and the number format
+// of the language (#70)
 describe('fmtBytes', () => {
   it('writes a dash for a size the API does not know', () => {
     // A bucket billed but gone from the inventory
-    expect(fmtBytes(null)).toBe('-');
-    expect(fmtBytes(undefined)).toBe('-');
+    expect(fmtBytes(null, 'fr')).toBe('-');
+    expect(fmtBytes(undefined, 'en')).toBe('-');
   });
 
-  it('writes an empty bucket in bytes', () => {
-    expect(fmtBytes(0)).toBe('0 B');
+  it('writes an empty bucket in bytes (#70)', () => {
+    expect(fmtBytes(0, 'fr')).toBe('0 o');
+    expect(fmtBytes(0, 'en')).toBe('0 B');
   });
 
-  it('writes a size below a kilobyte in bytes', () => {
-    expect(fmtBytes(1)).toBe('1 B');
-    expect(fmtBytes(999)).toBe('999 B');
+  it('writes a size below a kilobyte in bytes (#70)', () => {
+    expect(fmtBytes(1, 'fr')).toBe('1 o');
+    expect(fmtBytes(999, 'fr')).toBe('999 o');
+    expect(fmtBytes(999, 'en')).toBe('999 B');
   });
 
-  it('counts in powers of 1000, as the OVH manager does', () => {
-    expect(fmtBytes(1000)).toBe('1.0 KB');
-    expect(fmtBytes(1024)).toBe('1.0 KB');
-    expect(fmtBytes(1000000)).toBe('1.0 MB');
-    expect(fmtBytes(4200000000)).toBe('4.2 GB');
-    expect(fmtBytes(1500000000000)).toBe('1.5 TB');
-    expect(fmtBytes(2500000000000000)).toBe('2.5 PB');
+  it('counts in powers of 1000, as the OVH manager does, in French units (#70)', () => {
+    expect(fmtBytes(1000, 'fr')).toBe('1,0 Ko');
+    expect(fmtBytes(1024, 'fr')).toBe('1,0 Ko');
+    expect(fmtBytes(1000000, 'fr')).toBe('1,0 Mo');
+    expect(fmtBytes(4200000000, 'fr')).toBe('4,2 Go');
+    expect(fmtBytes(1500000000000, 'fr')).toBe('1,5 To');
+    expect(fmtBytes(2500000000000000, 'fr')).toBe('2,5 Po');
+  });
+
+  it('counts in English units in English', () => {
+    expect(fmtBytes(1000, 'en')).toBe('1.0 KB');
+    expect(fmtBytes(1024, 'en')).toBe('1.0 KB');
+    expect(fmtBytes(1000000, 'en')).toBe('1.0 MB');
+    expect(fmtBytes(4200000000, 'en')).toBe('4.2 GB');
+    expect(fmtBytes(1500000000000, 'en')).toBe('1.5 TB');
+    expect(fmtBytes(2500000000000000, 'en')).toBe('2.5 PB');
+  });
+
+  it('writes French sizes by default (#70)', () => {
+    expect(fmtBytes(4200000000)).toBe('4,2 Go');
   });
 
   it('keeps one decimal below 10 of a unit, and none from 10', () => {
-    expect(fmtBytes(1500)).toBe('1.5 KB');
-    expect(fmtBytes(10000)).toBe('10 KB');
-    expect(fmtBytes(12345)).toBe('12 KB');
+    expect(fmtBytes(1500, 'fr')).toBe('1,5 Ko');
+    expect(fmtBytes(1500, 'en')).toBe('1.5 KB');
+    expect(fmtBytes(10000, 'en')).toBe('10 KB');
+    expect(fmtBytes(12345, 'en')).toBe('12 KB');
   });
 
-  it('rounds in the unit it picks, up to 1000 of it', () => {
-    expect(fmtBytes(9999)).toBe('10.0 KB');
-    expect(fmtBytes(999999)).toBe('1000 KB');
+  it('rounds a half up, as the amounts do (#70)', () => {
+    expect(fmtBytes(1150000000, 'fr')).toBe('1,2 Go');
+    expect(fmtBytes(1150000000, 'en')).toBe('1.2 GB');
   });
 
-  it('counts in petabytes beyond', () => {
-    expect(fmtBytes(5000000000000000000)).toBe('5000 PB');
+  it('rounds in the unit it picks, below 1000 of it', () => {
+    expect(fmtBytes(9999, 'en')).toBe('10.0 KB');
+    expect(fmtBytes(999499, 'en')).toBe('999 KB');
+  });
+
+  it('picks the next unit when the size rounds to 1000 of one (#70)', () => {
+    expect(fmtBytes(999999, 'en')).toBe('1.0 MB');
+    expect(fmtBytes(999999, 'fr')).toBe('1,0 Mo');
+    expect(fmtBytes(999500, 'en')).toBe('1.0 MB');
+    expect(fmtBytes(999999999999, 'en')).toBe('1.0 TB');
+  });
+
+  it('counts in petabytes beyond, with the thousands separator of the language (#70)', () => {
+    expect(fmtBytes(5000000000000000000, 'en')).toBe('5,000 PB');
+    expect(fmtBytes(5000000000000000000, 'fr')).toBe(`5${NNBSP}000 Po`);
   });
 });
