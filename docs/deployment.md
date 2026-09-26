@@ -90,7 +90,7 @@ Open http://localhost:3001
 | Variable                    | Description                          | Default           |
 | --------------------------- | ------------------------------------ | ----------------- |
 | `OCM_PORT`                  | Host port mapping                    | `3001`            |
-| `AUTH_REQUIRED`             | Without OIDC, require an `Auth-User` header on API requests, `true` or `false` (see [Header-Based Authentication](#header-based-authentication-without-oidc)) | `false`           |
+| `AUTH_REQUIRED`             | Without OIDC, require an `Auth-User` header on API requests, `true` or `false`: safe only behind a proxy that sets it (see [Header-Based Authentication](#header-based-authentication-without-oidc)) | `false`           |
 | `OIDC_ENABLED`              | OIDC sign-in, `true` or `false`: overrides `auth.enabled` of `config.json` (see [OIDC settings](#oidc-settings)) | (`config.json`) |
 | `SESSION_SECRET`            | With OIDC, signs the session cookie: at least 32 random characters, such as the output of `openssl rand -hex 32` | (required with OIDC) |
 | `COOKIE_SECURE`             | With OIDC, the `Secure` flag of the session cookie: `true`, `false` or `auto` (see [OIDC settings](#oidc-settings)) | `auto` |
@@ -300,7 +300,7 @@ OCM authenticates users itself, as an OIDC client (`server/auth/`). Its settings
 
 ## Header-Based Authentication (without OIDC)
 
-OCM has a second mode, for a reverse proxy that authenticates users itself and passes them on in request headers, such as a LemonLDAP-NG handler. No compose file of this repository sets it up.
+OCM has a second mode, for a reverse proxy that authenticates users itself and passes them on in request headers, such as a LemonLDAP-NG handler.
 
 OCM uses it only when OIDC is off: with `OIDC_ENABLED=false`, or with `OIDC_ENABLED` unset or empty and `auth.enabled` not `true` in `config.json`. With OIDC on, it never falls back to this mode, even while the provider is unreachable (see [OIDC settings](#oidc-settings)). It reads three headers:
 
@@ -311,7 +311,8 @@ OCM uses it only when OIDC is off: with `OIDC_ENABLED=false`, or with `OIDC_ENAB
 | `Auth-CN`   | Display name, `Auth-User` when missing        |
 
 - **`AUTH_REQUIRED=true`** makes OCM answer `401` to API requests without `Auth-User`, except `/api/health`. The dashboard page and its assets are served either way. Without it, `false` by default, OCM refuses nothing and serves the API to anyone: the headers only name the user, in the logs and in `/api/user`.
-- **What OCM trusts:** these headers, on any request that reaches it. OCM does not check where they come from, and `TRUST_PROXY` plays no part. Only the proxy must be able to reach OCM, so do not publish OCM's port, and the proxy must set or remove the three headers on every request, so that no client can send its own.
+- **Safe only behind such a proxy:** OCM takes these headers from any request that reaches it, without checking where they come from, and `TRUST_PROXY` plays no part. The proxy must set `Auth-User` and remove any of the three headers the client sent, on every request, and OCM must be reachable only through that proxy.
+- **No compose file of this repository provides such a proxy.** `docker-compose.yml` runs OCM in this mode, as OIDC is off by default, and publishes its port 3001: any client can send an `Auth-User` of its choice there, and `AUTH_REQUIRED=true` keeps out only the clients that send none.
 - OCM has no login or logout of its own in this mode.
 
 ---
