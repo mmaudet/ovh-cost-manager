@@ -46,20 +46,22 @@ const infrastructureDetailButton = () =>
 const webCloudDetailButton = () =>
   screen.queryByRole('button', { name: 'Voir le détail Web Cloud (domaines) →' });
 
-// Six services of the inventory that expire within 30 days, as
-// /api/inventory/expiring answers: the servers, then the VPS, then the
-// storage services, each by date
+// Seven services of the inventory that expire within 30 days or already have,
+// as /api/inventory/expiring answers since #74: servers, VPS and storage
+// services in one list, soonest first, so the expired one first
 const expiringSoon = [
+  { id: 'vps-2c3d4e5f.vps.ovh.net', display_name: 'legacy-vps',
+    type: 'vps', expiration_date: '2026-09-10' },
   { id: 'ns3000003.ip-203-0-113.eu', display_name: null,
     type: 'dedicated_server', expiration_date: '2026-09-17' },
   { id: 'ns3000001.ip-203-0-113.eu', display_name: 'backup-server',
     type: 'dedicated_server', expiration_date: '2026-09-20' },
+  { id: 'netapp-8c9d0e1f', display_name: 'archives-nas',
+    type: 'storage', expiration_date: '2026-10-02' },
   { id: 'vps-0a1b2c3d.vps.ovh.net', display_name: 'vps-0a1b2c3d.vps.ovh.net',
     type: 'vps', expiration_date: '2026-10-10' },
   { id: 'vps-4e5f6a7b.vps.ovh.net', display_name: 'staging-vps',
     type: 'vps', expiration_date: '2026-10-12' },
-  { id: 'netapp-8c9d0e1f', display_name: 'archives-nas',
-    type: 'storage', expiration_date: '2026-10-02' },
   { id: 'netapp-5f2c9a1e', display_name: 'shared-files',
     type: 'storage', expiration_date: '2026-10-14' },
 ];
@@ -340,20 +342,22 @@ describe('Overview tab', () => {
     });
   });
 
-  it('lists the first five services that expire within 30 days', async () => {
+  // #74: the server listed the servers first, so that the card could miss the services that
+  // expire soonest, and a service already expired read "Expire dans -5 jours"
+  it('lists the five services that expire soonest, those already expired first', async () => {
     await renderDashboard({ ...account, expiringServices: expiringSoon });
 
     // A service without a display name shows its id
     expect(texts(cardOf(screen.getByRole('heading', { name: 'Expirations proches' })))).toEqual([
       'Expirations proches',
+      'VPS', 'legacy-vps', 'Expiré depuis 5 jours',
       'Serveurs dédiés', 'ns3000003.ip-203-0-113.eu', 'Expire dans 2 jours',
       'Serveurs dédiés', 'backup-server', 'Expire dans 5 jours',
-      'VPS', 'vps-0a1b2c3d.vps.ovh.net', 'Expire dans 25 jours',
-      'VPS', 'staging-vps', 'Expire dans 27 jours',
       'Stockage', 'archives-nas', 'Expire dans 17 jours',
+      'VPS', 'vps-0a1b2c3d.vps.ovh.net', 'Expire dans 25 jours',
     ]);
-    // All six in the header
-    expect(texts(headerBadge('Expirations proches'))).toEqual(['6', 'Expirations proches']);
+    // All seven in the header, the expired one included, as in the card
+    expect(texts(headerBadge('Expirations proches'))).toEqual(['7', 'Expirations proches']);
   });
 
   it('speaks English when the page does', async () => {
@@ -382,9 +386,12 @@ describe('Overview tab', () => {
     ]);
     expect(texts(budget('Budget consumption')))
       .toEqual(['Budget consumption', '3% used', 'Consumed: 1,250.40€', 'Budget:', '€']);
-    expect(texts(cardOf(screen.getByRole('heading', { name: 'Expiring soon' }))).slice(0, 4))
+    // A service already expired, then one about to (#74)
+    expect(texts(cardOf(screen.getByRole('heading', { name: 'Expiring soon' }))).slice(0, 7))
       .toEqual([
-        'Expiring soon', 'Dedicated Servers', 'ns3000003.ip-203-0-113.eu', 'Expires in 2 days',
+        'Expiring soon',
+        'VPS', 'legacy-vps', 'Expired 5 days ago',
+        'Dedicated Servers', 'ns3000003.ip-203-0-113.eu', 'Expires in 2 days',
       ]);
   });
 });

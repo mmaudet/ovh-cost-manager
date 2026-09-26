@@ -352,7 +352,12 @@ const OverviewTab = ({
                     <span className="font-medium">{s.display_name || s.id}</span>
                   </div>
                   <span className={`text-sm font-medium ${daysLeft <= 7 ? 'text-red-600' : 'text-orange-600'}`}>
-                    {t('expiringIn')} {daysLeft} {t('days')}
+                    {/* A service already expired, first in the list, says since when (#74) */}
+                    {daysLeft < 0 ? (
+                      <>{t('expiredSince')} {-daysLeft} {t('daysAgo')}</>
+                    ) : (
+                      <>{t('expiringIn')} {daysLeft} {t('days')}</>
+                    )}
                   </span>
                 </div>
               );

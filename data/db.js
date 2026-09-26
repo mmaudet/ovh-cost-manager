@@ -592,6 +592,9 @@ const inventoryOps = {
     };
   },
 
+  // The servers, VPS and storage services that expire within daysAhead days, in one list,
+  // soonest first: those already expired stay in it, first (#74). Services that expire on the
+  // same day keep the order of the inventories: servers, VPS, then storage.
   getExpiringServices: (daysAhead = 30) => {
     const db = getDb();
     const cutoff = new Date();
@@ -608,7 +611,8 @@ const inventoryOps = {
       "SELECT id, display_name, 'storage' as type, expiration_date FROM storage_services WHERE expiration_date IS NOT NULL AND expiration_date <= ? ORDER BY expiration_date"
     ).all(cutoffStr);
 
-    return [...servers, ...vps, ...storages];
+    return [...servers, ...vps, ...storages]
+      .sort((a, b) => a.expiration_date.localeCompare(b.expiration_date));
   },
 
   // Analysis by resource type

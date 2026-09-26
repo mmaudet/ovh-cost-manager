@@ -529,7 +529,7 @@ or none when none of them has a bill.
 | `GET /api/inventory/vps`                         | VPS instances list                           |
 | `GET /api/inventory/storage`                     | Storage services list                        |
 | `GET /api/inventory/summary`                     | Resource count summary                       |
-| `GET /api/inventory/expiring?days=30`            | Services expiring soon                       |
+| `GET /api/inventory/expiring?days=30`            | Expired and expiring services, soonest first |
 
 ### GPU & System
 

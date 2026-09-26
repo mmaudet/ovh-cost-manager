@@ -154,6 +154,8 @@ export const translations = {
     expiringSoon: 'Expirations proches',
     expiringIn: 'Expire dans',
     days: 'jours',
+    expiredSince: 'Expiré depuis',
+    daysAgo: 'jours',
     noExpirations: 'Aucune expiration proche',
 
     // Cloud details (Phase 4)
@@ -330,6 +332,8 @@ export const translations = {
     expiringSoon: 'Expiring soon',
     expiringIn: 'Expires in',
     days: 'days',
+    expiredSince: 'Expired',
+    daysAgo: 'days ago',
     noExpirations: 'No upcoming expirations',
 
     // Cloud details (Phase 4)
