@@ -175,6 +175,38 @@ describe('a failed sign-in', () => {
     expect(copy.cookies.has('ocm.sid')).toBe(false);
   });
 
+  // The code and the state are credentials of the sign-in: the log tells how
+  // the callback went without them
+  test('logs neither the code nor the state of a callback', async () => {
+    provider.user = 'alice';
+    const browser = createBrowser(ocm.url);
+    const callbackUrl = await startSignIn(browser);
+    const { code, state } = Object.fromEntries(new URL(callbackUrl).searchParams);
+    const copy = createBrowser(ocm.url);
+    for (const [name, value] of browser.cookies) {
+      copy.cookies.set(name, value);
+    }
+    expect((await browser.fetch(callbackUrl)).status).toBe(302);
+    expect((await copy.fetch(callbackUrl)).status).toBe(400);
+
+    expect(ocm.output()).toMatch(/OIDC sign-in: session opened for alice/);
+    expect(ocm.output()).not.toContain(code);
+    expect(ocm.output()).not.toContain(state);
+  });
+
+  // openid-client's error then carries the callback's parameters
+  test('logs neither the code nor the state of a callback from another issuer', async () => {
+    provider.next.wrongIss = true;
+    const browser = createBrowser(ocm.url);
+    const callbackUrl = await startSignIn(browser);
+    const { code, state } = Object.fromEntries(new URL(callbackUrl).searchParams);
+
+    expect((await browser.fetch(callbackUrl)).status).toBe(400);
+    expect(ocm.output()).toMatch(/sign-in refused: .*"iss"/);
+    expect(ocm.output()).not.toContain(code);
+    expect(ocm.output()).not.toContain(state);
+  });
+
   test('answers 400 to a consent the user denied', async () => {
     provider.next.deny = true;
     const browser = createBrowser(ocm.url);

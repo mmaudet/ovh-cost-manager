@@ -59,8 +59,8 @@ async function startFakeProvider() {
     clientId: 'ocm-test',
     clientSecret: 'test-secret',
     user: 'alice',
-    // deny: the next authorization is refused; wrongNonce: the next ID token
-    // holds another nonce
+    // deny: the next authorization is refused; wrongIss: it names another
+    // issuer; wrongNonce: the next ID token holds another nonce
     next: {},
     lastPkce: null,
     // The provider's session of the last authorization, as its tokens' sid
@@ -82,6 +82,8 @@ async function startFakeProvider() {
           subject_types_supported: ['public'],
           id_token_signing_alg_values_supported: ['RS256'],
           code_challenge_methods_supported: ['S256'],
+          // Its authorization responses name it (RFC 9207)
+          authorization_response_iss_parameter_supported: true,
           backchannel_logout_supported: true,
           backchannel_logout_session_supported: true,
         });
@@ -92,6 +94,9 @@ async function startFakeProvider() {
       case '/authorize': {
         const target = new URL(url.searchParams.get('redirect_uri'));
         target.searchParams.set('state', url.searchParams.get('state'));
+        const iss = provider.next.wrongIss ? 'http://evil.example' : provider.issuer;
+        target.searchParams.set('iss', iss);
+        provider.next.wrongIss = false;
         if (provider.next.deny) {
           provider.next.deny = false;
           target.searchParams.set('error', 'access_denied');

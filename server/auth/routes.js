@@ -26,6 +26,23 @@ const router = express.Router();
 const SIGN_IN_REFUSED = 'Sign-in failed, please sign in again.';
 const SIGN_IN_FAILED = 'Sign-in failed.';
 
+// What an error of openid-client says of a refused sign-in, for the log: its
+// messages and the provider's error, not its cause's data, which can hold
+// the callback's parameters, the code and the state among them
+function describeRefusal(err) {
+  const parts = [`${err.name}: ${err.message}`];
+  if (err.error) {
+    parts.push(`error ${err.error}`);
+  }
+  if (err.error_description) {
+    parts.push(`description ${err.error_description}`);
+  }
+  if (err.cause instanceof Error) {
+    parts.push(`because ${err.cause.message}`);
+  }
+  return parts.join(', ');
+}
+
 // The routes run once the provider is discovered: awaitDiscovery answers 503
 // until then
 function setup(config) {
@@ -74,9 +91,9 @@ function setup(config) {
     res.clearCookie(cookie.name, cookie.options);
 
     try {
-      // Build current URL for callback validation
+      // Build current URL for callback validation. Not logged: its code and
+      // state are credentials of the sign-in
       const currentUrl = new URL(req.originalUrl, authConfig.baseUrl);
-      console.log('OIDC callback URL:', currentUrl.href);
 
       // Exchange code for tokens, proving the sign-in with the PKCE code_verifier
       const tokens = await oidcClient.handleCallback(
@@ -85,7 +102,6 @@ function setup(config) {
         pending.nonce,
         pending.codeVerifier
       );
-      console.log('OIDC tokens received');
 
       // Extract sub and sid from id_token claims
       const claims = tokens.claims();
@@ -110,14 +126,22 @@ function setup(config) {
         maxAge: authConfig.session.maxAge,
       });
 
+      console.log(`OIDC sign-in: session opened for ${userInfo.sub}`);
+
       // Checked again: the redirect follows the cookie, which /auth/login set
       res.redirect(safeReturnTo(pending.returnTo));
     } catch (err) {
       // Refused by the provider, or its answer failed a check, as for a
       // replayed callback, a denied consent or another nonce: the user can
-      // sign in again. Anything else failed on the server's side
+      // sign in again. Such errors may carry the callback's parameters, so
+      // the log tells only what they say. Anything else failed on the
+      // server's side, and is logged whole
       const refused = oidcClient.isRefusedSignIn(err);
-      console.error(`OIDC callback: sign-in ${refused ? 'refused' : 'failed'}:`, err);
+      if (refused) {
+        console.error(`OIDC callback: sign-in refused: ${describeRefusal(err)}`);
+      } else {
+        console.error('OIDC callback: sign-in failed:', err);
+      }
       res.status(refused ? 400 : 500).type('text/plain')
         .send(refused ? SIGN_IN_REFUSED : SIGN_IN_FAILED);
     }
