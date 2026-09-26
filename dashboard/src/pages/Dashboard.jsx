@@ -303,7 +303,7 @@ export default function Dashboard() {
                   <a
                     href="/auth/logout"
                     className="text-xs text-gray-500 hover:text-red-600 ml-1"
-                    title={t('logout') || 'Logout'}
+                    title={t('logout')}
                   >
                     ✕
                   </a>
@@ -443,7 +443,8 @@ export default function Dashboard() {
                   {consumptionForecast.forecast_total > budget
                     ? <span className="text-red-500 font-medium">{`> ${t('budget')}!`}</span>
                     : consumptionForecast.days_elapsed
-                      ? `${consumptionForecast.days_elapsed}/${consumptionForecast.days_in_month} ${t('days') || 'jours'}`
+                      ? `${consumptionForecast.days_elapsed}/${consumptionForecast.days_in_month}`
+                        + ` ${t('days')}`
                       : t('forecastEndOfMonth')}
                 </div>
               </div>
