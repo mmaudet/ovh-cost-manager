@@ -1,7 +1,5 @@
 import { describe, it, expect } from 'vitest';
 import { act } from '@testing-library/react';
-import { useQuery } from '@tanstack/react-query';
-import { fetchSummary } from '../../src/services/api.js';
 import { useCompareTab } from '../../src/tabs/useCompareTab.js';
 import { months } from '../fixtures/calendar.js';
 import { api } from '../support/api.js';
@@ -31,19 +29,6 @@ const resourceTypes = (byResourceType) => byResourceType
 const FIGURES = [
   'fetchSummary', 'fetchByService', 'fetchByProject', 'fetchByResourceType', 'fetchBackupStats',
 ];
-
-// The hook next to the summary query the shell runs for its selected month, with the same
-// key and API function: both share the query cache, as they do in the page. The API
-// stand-in answers them (setup.js).
-const useSummaryAndCompareTab = (props) => {
-  const { selectedMonth } = props;
-  const { data: summary } = useQuery({
-    queryKey: ['summary', selectedMonth?.from, selectedMonth?.to],
-    queryFn: () => fetchSummary(selectedMonth.from, selectedMonth.to),
-    enabled: !!selectedMonth,
-  });
-  return { summary, compareTab: useCompareTab(props) };
-};
 
 describe('useCompareTab', () => {
   describe('months A and B', () => {
@@ -168,7 +153,6 @@ describe('useCompareTab', () => {
     });
     expect(compared(result.current)).toEqual(['2026-08', '2026-09']);
     expect(result.current.compareDataA.total).toBe(1042);
-    // Also what the "vs previous month" KPI of the shell reads (#50)
     expect(result.current.compareDataB.total).toBe(1250.4);
     expect(services(result.current.byServiceA))
       .toEqual([['Compute', 690], ['Storage', 202], ['Other', 150]]);
@@ -207,22 +191,6 @@ describe('useCompareTab', () => {
     }
   });
 
-  // The page loads the summary of its selected month at start, under the key of month B's:
-  // the KPI compares the latest month with itself before the Compare tab opens (#50)
-  it('returns the summary of month B the page loads, whatever the tab', async () => {
-    const { result, rerender } = await renderTabHook(useSummaryAndCompareTab,
-      { ...monthsArrive, activeTab: 'overview' });
-    // The shell selects the latest month in the commit where months A and B get theirs
-    await rerender({ months, selectedMonth: september, activeTab: 'overview' });
-
-    // The page asked for September, the Compare tab would have asked for August too
-    expect(api.fetchSummary).toHaveBeenCalledWith('2026-09-01', '2026-09-30');
-    expect(api.fetchSummary).not.toHaveBeenCalledWith('2026-08-01', '2026-08-31');
-    expect(result.current.summary.total).toBe(1250.4);
-    expect(result.current.compareTab.compareDataB.total).toBe(1250.4);
-    expect(result.current.compareTab.compareDataA).toBeUndefined();
-  });
-
   it('follows the months A and B the user picks', async () => {
     const { result, queryClient } = await renderTabHook(useCompareTab, onCompare);
 
@@ -248,7 +216,6 @@ describe('useCompareTab', () => {
     await settle(queryClient);
 
     expect(compared(result.current)).toEqual(['2026-07', '2026-08']);
-    // The "vs previous month" KPI of the shell follows month B (#50)
     expect(result.current.compareDataB.total).toBe(1042);
     expect(services(result.current.byServiceB))
       .toEqual([['Compute', 690], ['Storage', 202], ['Other', 150]]);
@@ -290,7 +257,7 @@ describe('useCompareTab', () => {
 
     expect(compared(result.current)).toEqual(['2026-07', '2026-08']);
     expect(result.current.compareSort).toEqual({ column: 'diff', direction: 'desc' });
-    // The answers stay, and the KPI of the shell keeps reading month B (#50)
+    // The answers stay
     expect(result.current.compareDataA.total).toBe(980);
     expect(result.current.compareDataB.total).toBe(1042);
   });

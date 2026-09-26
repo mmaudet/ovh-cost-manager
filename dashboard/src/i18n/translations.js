@@ -29,6 +29,7 @@ export const translations = {
     activeProjects: 'Projets actifs',
     withConsumption: 'avec consommation',
     vsPreviousMonth: 'vs mois précédent',
+    vsPreviousMonthNotComputable: 'non calculable : mois précédent à 0 € ou moins',
     noPreviousData: 'Pas de données précédentes',
 
     // Budget
@@ -205,6 +206,7 @@ export const translations = {
     activeProjects: 'Active projects',
     withConsumption: 'with consumption',
     vsPreviousMonth: 'vs previous month',
+    vsPreviousMonthNotComputable: 'cannot be computed: previous month at €0 or below',
     noPreviousData: 'No previous data',
 
     // Budget

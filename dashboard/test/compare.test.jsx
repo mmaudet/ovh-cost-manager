@@ -47,16 +47,21 @@ const projectComparisons = () => screen
   .map((button) => texts(button)[0]);
 
 describe('Compare tab', () => {
-  it('loads the figures of month A when the tab opens, not before', async () => {
+  it('loads the figures of month A when the tab opens, but its summary (#50)', async () => {
     const figures = [
-      api.fetchSummary, api.fetchByService, api.fetchByProject,
+      api.fetchByService, api.fetchByProject,
       // The costs by resource type and the Veeam backups too (#32)
       api.fetchByResourceType, api.fetchBackupStats,
     ];
+    // The months whose summary the page asked for, by their first day, once per request
+    const summariesAskedFor = () => api.fetchSummary.mock.calls.map(([from]) => from).sort();
     const { user } = await renderDashboard();
     for (const fetchFigures of figures) {
       expect(fetchFigures).not.toHaveBeenCalledWith('2026-08-01', '2026-08-31');
     }
+    // The summary of August is there already, with September's: the page loads it at start,
+    // for the variation of September from the month before, under the key of month A's (#50)
+    expect(summariesAskedFor()).toEqual(['2026-08-01', '2026-09-01']);
     expect(api.fetchBackupStats).not.toHaveBeenCalled();
     expect(api.fetchInventoryServers).not.toHaveBeenCalled();
 
@@ -67,6 +72,8 @@ describe('Compare tab', () => {
     for (const fetchFigures of figures) {
       expect(fetchFigures).toHaveBeenCalledWith('2026-08-01', '2026-08-31');
     }
+    // Month A does not ask for its summary again (#50)
+    expect(summariesAskedFor()).toEqual(['2026-08-01', '2026-09-01']);
     expect(api.fetchBackupStats).toHaveBeenCalledWith('2026-09-01', '2026-09-30');
     // The dedicated servers of the inventory load with the tab (#35), the
     // rest of the inventory with the Infrastructure tab only, and the

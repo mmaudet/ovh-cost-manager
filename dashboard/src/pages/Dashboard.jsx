@@ -12,6 +12,8 @@ import Logo from '../components/Logo';
 import { formatCurrency, formatMonthLabel, yearMonthOf } from '../utils/format.js';
 import { parseSqliteDate } from '../utils/sqliteDate.js';
 import { generateMarkdownReport } from '../utils/markdownReport.js';
+import { shiftMonths } from '../utils/monthWindow.js';
+import { variationPercent } from '../utils/variation.js';
 import { useWebCloudTab } from '../tabs/useWebCloudTab.js';
 import { WebCloudTab, WebCloudTabModals } from '../tabs/WebCloudTab.jsx';
 import { useBackupTab } from '../tabs/useBackupTab.js';
@@ -82,6 +84,19 @@ export default function Dashboard() {
     enabled: !!selectedMonth
   });
 
+  // The month just before the selected one in the calendar, as the months list gives it:
+  // none when nothing was billed that month, as before the first billed month. The "vs
+  // previous month" KPI compares the selected month with its summary (#50), which shares the
+  // key of the Compare tab's month A: the same month when the page opens.
+  const previousMonth = selectedMonth
+    ? months.find((m) => m.from === shiftMonths(selectedMonth.from, -1))
+    : undefined;
+  const { data: previousSummary, isLoading: loadingPreviousSummary } = useQuery({
+    queryKey: ['summary', previousMonth?.from, previousMonth?.to],
+    queryFn: () => fetchSummary(previousMonth.from, previousMonth.to),
+    enabled: !!previousMonth,
+  });
+
   const { data: byService = [] } = useQuery({
     queryKey: ['byService', selectedMonth?.from, selectedMonth?.to],
     queryFn: () => fetchByService(selectedMonth.from, selectedMonth.to),
@@ -138,10 +153,6 @@ export default function Dashboard() {
   const overviewTab = useOverviewTab();
 
   const compareTab = useCompareTab({ months, selectedMonth, activeTab });
-  // The "vs previous month" KPI reads the summary of month B (#50). Its query only runs on
-  // the Compare tab, but month B defaults to the latest month, whose summary the page loads
-  // at start under the same key: the KPI reads it from page start.
-  const { compareDataB } = compareTab;
 
   const trendsTab = useTrendsTab({ months, selectedMonth, activeTab });
 
@@ -207,17 +218,18 @@ export default function Dashboard() {
     }
   }, [latestImport, queryClient]);
 
-  // Check if previous month exists
-  const previousMonthExists = selectedMonth && months.length > 1 &&
-    months.findIndex(m => m.value === selectedMonth.value) < months.length - 1;
+  // The oldest month of the list: there is no month before it to compare with
+  const isFirstBilledMonth = selectedMonth?.value === months[months.length - 1]?.value;
 
   // Calculations
   const total = summary?.total || 0;
-  const previousTotal = compareDataB?.total || 0;
-  const variation = previousMonthExists && previousTotal ? ((total - previousTotal) / previousTotal * 100).toFixed(1) : null;
+  // The "vs previous month" variation, from the month before (#50), with one decimal. Null
+  // when it cannot be computed, as in the Compare and Trends tabs (#65): from a month before
+  // at 0 € or less, or without a bill, so at 0 €.
+  const variation = variationPercent(previousSummary?.total ?? 0, total)?.toFixed(1) ?? null;
 
-  // Loading state
-  if (!selectedMonth || loadingSummary) {
+  // Loading state, until the KPI cards have both months they compare (#50)
+  if (!selectedMonth || loadingSummary || loadingPreviousSummary) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 flex items-center justify-center">
         <div className="text-center">
@@ -382,9 +394,17 @@ export default function Dashboard() {
               <div className={`flex items-center mt-2 text-sm ${Number(variation) > 0 ? 'text-red-500' : 'text-green-500'}`}>
                 {Number(variation) > 0 ? '+' : ''}{variation}% {t('vsPreviousMonth')}
               </div>
-            ) : (
+            ) : isFirstBilledMonth ? (
               <div className="flex items-center mt-2 text-sm text-gray-400">
                 {t('noPreviousData')}
+              </div>
+            ) : (
+              // "—", with a tooltip that says why, as in the Compare and Trends tabs (#65)
+              <div
+                className="flex items-center mt-2 text-sm text-gray-400"
+                title={t('vsPreviousMonthNotComputable')}
+              >
+                — {t('vsPreviousMonth')}
               </div>
             )}
           </div>

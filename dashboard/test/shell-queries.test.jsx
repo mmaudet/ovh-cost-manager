@@ -33,8 +33,10 @@ describe('query keys', () => {
       ['user'],
       ['months'],
       ['summary', undefined, undefined],
-      // Also the summary of month B of the Compare tab, which the KPI cards read (#50)
       ['summary', '2026-09-01', '2026-09-30'],
+      // And the summary of August, the month before, which the "vs previous month" KPI
+      // compares September with (#50)
+      ['summary', '2026-08-01', '2026-08-31'],
       ['byService', undefined, undefined],
       ['byService', '2026-09-01', '2026-09-30'],
       ['byProject', undefined, undefined],
@@ -47,8 +49,8 @@ describe('query keys', () => {
       ['consumptionCurrent'],
       ['consumptionForecast'],
       ['expiringServices'],
-      // The Compare tab's: month A, August. Month B, September, shares the shell's keys.
-      ['summary', '2026-08-01', '2026-08-31'],
+      // The Compare tab's: month A, August, whose summary shares the key of the shell's
+      // month before (#50). Month B, September, shares the shell's keys.
       ['byService', '2026-08-01', '2026-08-31'],
       ['byProject', '2026-08-01', '2026-08-31'],
       // And the costs by resource type and the Veeam backups of month A (#32): month B

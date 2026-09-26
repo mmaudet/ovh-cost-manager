@@ -55,8 +55,9 @@ describe('dashboard shell', () => {
       await selectMonth(user, 'Août 2026');
 
       expect(monthSelector()).toHaveDisplayValue('Août 2026');
+      // Compared with July, the month before (#50)
       expect(texts(cardOf('Coût total du mois')))
-        .toEqual(['Coût total du mois', '1 042,00€', '-16.7% vs mois précédent']);
+        .toEqual(['Coût total du mois', '1 042,00€', '+6.3% vs mois précédent']);
       expect(texts(cardOf('Cloud Total'))).toEqual(['Cloud Total', '702,00€', 'Public Cloud']);
       expect(texts(cardOf('Coût moyen / jour')))
         .toEqual(['Coût moyen / jour', '33,61€', 'Sur 30 jours']);
@@ -67,17 +68,18 @@ describe('dashboard shell', () => {
 
     it('shows the loading screen again while the summary of the new month loads', async () => {
       const { user } = await renderDashboard();
-      // Hold back the summary of August, and only that one
-      const releaseAugust = holdBack(api.fetchSummary,
-        (from, to) => from === '2026-08-01' && to === '2026-08-31');
+      // Hold back the summary of July, and only that one. Not August's: the page loads it at
+      // start, for the variation of September (#50)
+      const releaseJuly = holdBack(api.fetchSummary,
+        (from, to) => from === '2026-07-01' && to === '2026-07-31');
 
-      await user.selectOptions(monthSelector(), 'Août 2026');
+      await user.selectOptions(monthSelector(), 'Juillet 2026');
       expect(screen.getByText('Chargement des données...')).toBeInTheDocument();
 
-      releaseAugust();
+      releaseJuly();
       await settle();
       expect(texts(cardOf('Coût total du mois')))
-        .toEqual(['Coût total du mois', '1 042,00€', '-16.7% vs mois précédent']);
+        .toEqual(['Coût total du mois', '980,00€', 'Pas de données précédentes']);
     });
   });
 
@@ -85,9 +87,9 @@ describe('dashboard shell', () => {
     it("show the month's cost, Cloud total, daily average and active projects", async () => {
       await renderDashboard();
 
-      // The latest month is compared with itself (#50, see below)
+      // Compared with August, the month before (#50, see below)
       expect(texts(cardOf('Coût total du mois')))
-        .toEqual(['Coût total du mois', '1 250,40€', '0.0% vs mois précédent']);
+        .toEqual(['Coût total du mois', '1 250,40€', '+20.0% vs mois précédent']);
       expect(texts(cardOf('Cloud Total'))).toEqual(['Cloud Total', '830,40€', 'Public Cloud']);
       expect(texts(cardOf('Coût moyen / jour')))
         .toEqual(['Coût moyen / jour', '41,68€', 'Sur 30 jours']);
@@ -116,39 +118,100 @@ describe('dashboard shell', () => {
     });
   });
 
-  // The variation reads the summary of the Compare tab's month B, which is
-  // the latest month until the user picks another one there (#50).
-  describe('"vs previous month" variation', () => {
-    it('compares the selected month with the latest one, not with the month before', async () => {
+  // From the month just before the selected one in the calendar, whatever the Compare tab
+  // compares (#50)
+  describe('"vs previous month" variation (#50)', () => {
+    const totalCostCard = () => cardOf('Coût total du mois');
+    // What shows in place of a variation that cannot be computed, and its tooltip
+    const notComputable = '— vs mois précédent';
+    const whyNotComputable = 'non calculable : mois précédent à 0 € ou moins';
+
+    it('compares the latest month with the month before', async () => {
+      await renderDashboard();
+
+      // (1 250.40 - 1 042) / 1 042
+      expect(texts(totalCostCard())).toContain('+20.0% vs mois précédent');
+    });
+
+    it('compares an older month with the month before it, not with the latest', async () => {
       const { user } = await renderDashboard();
 
       await selectMonth(user, 'Août 2026');
 
-      // (1 042 - 1 250.40) / 1 250.40
-      expect(texts(cardOf('Coût total du mois'))).toContain('-16.7% vs mois précédent');
+      // (1 042 - 980) / 980
+      expect(texts(totalCostCard())).toContain('+6.3% vs mois précédent');
     });
 
-    it('shows no previous data for the oldest month', async () => {
+    it('ignores the months picked in the Compare tab', async () => {
+      const { user } = await renderDashboard();
+      await openTab(user, 'Comparaison');
+
+      // Month B, September until then, becomes July
+      await user.selectOptions(dropdown('Juillet 2026', 'Septembre 2026'), 'Juillet 2026');
+      await settle();
+
+      // Still from August, not from July
+      expect(texts(totalCostCard())).toContain('+20.0% vs mois précédent');
+    });
+
+    it('waits for the summary of the month before, rather than showing none', async () => {
+      const { user } = await renderDashboard();
+      // Hold back the summary of July, the month before August. August's is there already:
+      // the page loaded it for the variation of September.
+      const releaseJuly = holdBack(api.fetchSummary,
+        (from, to) => from === '2026-07-01' && to === '2026-07-31');
+
+      await user.selectOptions(monthSelector(), 'Août 2026');
+      expect(screen.getByText('Chargement des données...')).toBeInTheDocument();
+
+      releaseJuly();
+      await settle();
+      expect(texts(totalCostCard()))
+        .toEqual(['Coût total du mois', '1 042,00€', '+6.3% vs mois précédent']);
+    });
+
+    // As in the Compare and Trends tabs (#65): it would be infinite from 0 €, and of the
+    // wrong sign from credits larger than the costs
+    it.each([
+      ['at 0 €', 0],
+      ['whose credits exceed its costs', -120.5],
+    ])('shows none from a month before %s, and says why', async (_, total) => {
+      const { user } = await renderDashboard({
+        ...account,
+        summary: { ...account.summary, '2026-08': { ...account.summary['2026-08'], total } },
+      });
+
+      expect(texts(totalCostCard())).toEqual(['Coût total du mois', '1 250,40€', notComputable]);
+      expect(within(totalCostCard()).getByTitle(whyNotComputable))
+        .toHaveTextContent(notComputable);
+
+      await selectLanguage(user, 'en');
+
+      expect(within(cardOf('Total monthly cost'))
+        .getByTitle('cannot be computed: previous month at €0 or below'))
+        .toHaveTextContent('— vs previous month');
+    });
+
+    it('shows none from a month before without a bill, and says why', async () => {
+      // Nothing billed in August: the months list skips it
+      await renderDashboard({
+        ...account,
+        months: account.months.filter(({ value }) => value !== '2026-08'),
+        summary: { '2026-09': account.summary['2026-09'], '2026-07': account.summary['2026-07'] },
+      });
+
+      expect(texts(totalCostCard())).toEqual(['Coût total du mois', '1 250,40€', notComputable]);
+      expect(within(totalCostCard()).getByTitle(whyNotComputable))
+        .toHaveTextContent(notComputable);
+    });
+
+    it('shows no previous data for the first billed month', async () => {
       const { user } = await renderDashboard();
 
       await selectMonth(user, 'Juillet 2026');
 
-      expect(texts(cardOf('Coût total du mois')))
+      expect(texts(totalCostCard()))
         .toEqual(['Coût total du mois', '980,00€', 'Pas de données précédentes']);
-    });
-
-    it('follows the month B picked in the Compare tab', async () => {
-      const { user } = await renderDashboard();
-      await selectMonth(user, 'Août 2026');
-      await openTab(user, 'Comparaison');
-
-      // Month B shows the latest month, month A the one before
-      const monthB = dropdown('Juillet 2026', 'Septembre 2026');
-      await user.selectOptions(monthB, 'Juillet 2026');
-      await settle();
-
-      // (1 042 - 980) / 980
-      expect(texts(cardOf('Coût total du mois'))).toContain('+6.3% vs mois précédent');
     });
   });
 
@@ -576,9 +639,9 @@ describe('dashboard shell', () => {
 
       expect(screen.getByText('OVHcloud cost tracking dashboard')).toBeInTheDocument();
       expect(screen.getByRole('button', { name: /Resync/ })).toBeInTheDocument();
-      // The latest month, compared with itself (#50)
+      // The latest month, compared with August, the month before (#50)
       expect(texts(cardOf('Total monthly cost')))
-        .toEqual(['Total monthly cost', '1,250.40€', '0.0% vs previous month']);
+        .toEqual(['Total monthly cost', '1,250.40€', '+20.0% vs previous month']);
       expect(texts(cardOf('Daily average cost')))
         .toEqual(['Daily average cost', '41.68€', 'Over 30 days']);
       expect(screen.getByRole('button', { name: 'Overview' })).toBeInTheDocument();
@@ -595,7 +658,7 @@ describe('dashboard shell', () => {
       await selectLanguage(user, 'fr');
 
       expect(texts(cardOf('Coût total du mois')))
-        .toEqual(['Coût total du mois', '1 250,40€', '0.0% vs mois précédent']);
+        .toEqual(['Coût total du mois', '1 250,40€', '+20.0% vs mois précédent']);
       expect(screen.getByRole('button', { name: "Vue d'ensemble" })).toBeInTheDocument();
       // The months back in French (#33)
       expect(optionsOf(monthSelector())).toEqual(['Septembre 2026', 'Août 2026', 'Juillet 2026']);
