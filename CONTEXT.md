@@ -41,3 +41,8 @@ The cost of a bill line that names a single resource.
 A resource's share of an aggregated bill line that covers several resources, split pro
 rata or evenly between them.
 _Avoid_: allocated cost
+
+**Unallocated cost**:
+The cost of a Public Cloud project's instance bill lines whose instances are no longer
+in the inventory, typically deleted since they were billed.
+_Avoid_: unattributed cost
