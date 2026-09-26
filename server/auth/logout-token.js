@@ -81,18 +81,22 @@ function sessionsToEnd({ sid, sub }) {
 }
 
 /**
- * What tells a replay of a logout token: its jti, or without one, the SHA-256
- * of the compact token, which a replay repeats byte for byte.
+ * What tells a replay of a logout token: its issuer and its jti, or without a
+ * jti, the SHA-256 of its signed part, header and payload as sent. Not of the
+ * whole token: jose decodes the signature leniently, so that whitespace,
+ * padding or other unused bits in its last character give a token that
+ * verifies all the same, while the signed part cannot change.
  *
- * @param {{ jti: (string|undefined) }} claims - checked claims
+ * @param {{ iss: string, jti: (string|undefined) }} claims - verified claims
  * @param {string} logoutToken - the compact token, as posted
  * @returns {string}
  */
-function replayKey({ jti }, logoutToken) {
+function replayKey({ iss, jti }, logoutToken) {
   if (jti) {
-    return `jti:${jti}`;
+    return `jti:${JSON.stringify([iss, jti])}`;
   }
-  return `sha256:${crypto.createHash('sha256').update(logoutToken).digest('hex')}`;
+  const signedPart = logoutToken.slice(0, logoutToken.lastIndexOf('.'));
+  return `sha256:${crypto.createHash('sha256').update(signedPart).digest('hex')}`;
 }
 
 /**
@@ -107,26 +111,38 @@ function replayWindowEnd({ iat, exp }) {
   return (Math.min(iat + MAX_AGE_SECONDS, exp) + CLOCK_TOLERANCE_SECONDS) * 1000;
 }
 
+// The tokens a guard keeps at most, well above the sign-outs of a few
+// minutes: only valid tokens of the provider are kept
+const MAX_REMEMBERED_TOKENS = 10000;
+
 /**
  * Remembers the logout tokens accepted, by their replayKey, until the
  * verification refuses them anyway, so that a token replayed meanwhile is
  * refused: without a sid, a replay would end the sessions opened since the
- * sign-out.
+ * sign-out. A key is looked up in constant time. Keys are evicted from the
+ * oldest on, those expired, then the oldest while the guard is full, never
+ * by a scan of all: each key is evicted once.
  *
+ * @param {object} [options]
+ * @param {number} [options.maxSize] - the keys kept at most
  * @returns {{ firstUse: function(string, number, number=): boolean, size: function(): number }}
  */
-function createReplayGuard() {
+function createReplayGuard({ maxSize = MAX_REMEMBERED_TOKENS } = {}) {
+  // Key -> when its token is refused anyway, the oldest first
   const seen = new Map();
   return {
     // true for the first use of key; until: see replayWindowEnd
     firstUse(key, until, now = Date.now()) {
-      for (const [seenKey, end] of seen) {
-        if (end <= now) {
-          seen.delete(seenKey);
-        }
-      }
-      if (seen.has(key)) {
+      const end = seen.get(key);
+      if (end !== undefined && end > now) {
         return false;
+      }
+      seen.delete(key);
+      for (const [oldest, oldestEnd] of seen) {
+        if (oldestEnd > now && seen.size < maxSize) {
+          break;
+        }
+        seen.delete(oldest);
       }
       seen.set(key, until);
       return true;

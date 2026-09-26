@@ -140,21 +140,38 @@ describe('sessionsToEnd', () => {
 
 // What tells a replay: the token's jti, or without one, the token itself
 describe('replayKey', () => {
-  // A compact token, and its SHA-256 computed apart:
-  // printf %s "$TOKEN" | openssl dgst -sha256
-  const TOKEN = 'eyJhbGciOiJSUzI1NiJ9.eyJzaWQiOiJvcC1zZXNzaW9uLTEifQ.c2lnbmF0dXJl';
-  const DIGEST = 'f7bf78f64080b0c0062a675291ef8bc778867638902e6d96a9a5423e878d9b8c';
+  // A compact token, and the SHA-256 of its signed part, header and payload,
+  // computed apart:
+  // printf %s "${TOKEN%.*}" | openssl dgst -sha256
+  const HEADER = 'eyJhbGciOiJSUzI1NiJ9';
+  const PAYLOAD = 'eyJzaWQiOiJvcC1zZXNzaW9uLTEifQ';
+  // An RSA-2048 signature is 342 characters: its last one holds 4 unused bits
+  const SIGNATURE = `${'a'.repeat(341)}Q`;
+  const TOKEN = `${HEADER}.${PAYLOAD}.${SIGNATURE}`;
+  const DIGEST = '8ed382af453f504bef1523fee3d4c754390b259d426fe5cfa7476f20651e2e27';
 
-  test('is the jti, when the token has one', () => {
-    expect(replayKey({ jti: 'bWJq' }, TOKEN)).toBe('jti:bWJq');
+  test('is the issuer and the jti, when the token has one', () => {
+    expect(replayKey({ iss: 'https://sso.example.com', jti: 'bWJq' }, TOKEN))
+      .toBe('jti:["https://sso.example.com","bWJq"]');
   });
 
-  test('is the SHA-256 of the compact token, when it has no jti', () => {
-    expect(replayKey({ jti: undefined }, TOKEN)).toBe(`sha256:${DIGEST}`);
+  test('is the SHA-256 of the signed part, when the token has no jti', () => {
+    expect(replayKey({ iss: 'https://sso.example.com' }, TOKEN)).toBe(`sha256:${DIGEST}`);
+  });
+
+  // jose decodes base64url leniently: these signatures verify as the original
+  const signed = `${HEADER}.${PAYLOAD}`;
+  test.each([
+    ['a space in the signature', `${signed}.${SIGNATURE.slice(0, 10)} ${SIGNATURE.slice(10)}`],
+    ['a newline in the signature', `${signed}.${SIGNATURE.slice(0, 20)}\n${SIGNATURE.slice(20)}`],
+    ['other unused bits in its last character', `${signed}.${SIGNATURE.slice(0, -1)}R`],
+    ['== padding', `${TOKEN}==`],
+  ])('is the same with %s', (label, variant) => {
+    expect(replayKey({}, variant)).toBe(`sha256:${DIGEST}`);
   });
 
   test('tells apart two tokens without jti', () => {
-    expect(replayKey({}, TOKEN)).not.toBe(replayKey({}, `${TOKEN}x`));
+    expect(replayKey({}, TOKEN)).not.toBe(replayKey({}, `${HEADER}.${PAYLOAD}x.${SIGNATURE}`));
   });
 });
 
@@ -197,5 +214,31 @@ describe('createReplayGuard', () => {
     expect(guard.size()).toBe(2);
     guard.firstUse('jti-3', UNTIL + 60 * 1000, UNTIL);
     expect(guard.size()).toBe(2);
+  });
+
+  test('accepts again a key whose token is no longer valid', () => {
+    const guard = createReplayGuard();
+    guard.firstUse('jti-1', UNTIL, NOW);
+    expect(guard.firstUse('jti-1', UNTIL + 60 * 1000, UNTIL)).toBe(true);
+  });
+
+  test('keeps no more keys than its bound, evicting the oldest', () => {
+    const guard = createReplayGuard({ maxSize: 3 });
+    for (const key of ['k1', 'k2', 'k3', 'k4', 'k5']) {
+      guard.firstUse(key, UNTIL, NOW);
+    }
+    expect(guard.size()).toBe(3);
+    expect(guard.firstUse('k5', UNTIL, NOW)).toBe(false);
+    expect(guard.firstUse('k1', UNTIL, NOW)).toBe(true);
+  });
+
+  // No scan of the whole cache: eviction stops at the oldest key still valid,
+  // so that each key is evicted once, in constant time on average
+  test('evicts expired keys from the oldest on, and stops at a valid one', () => {
+    const guard = createReplayGuard();
+    guard.firstUse('valid-longer', UNTIL + 60 * 1000, NOW);
+    guard.firstUse('expired-behind', NOW + 1000, NOW);
+    guard.firstUse('new', UNTIL, NOW + 2000);
+    expect(guard.size()).toBe(3);
   });
 });

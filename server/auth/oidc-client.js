@@ -150,8 +150,8 @@ async function verifyLogoutToken(logoutToken) {
   const claims = checkLogoutTokenClaims(payload);
 
   // Last, once the token is known valid, so that no forged token can use up
-  // a key: its jti, or without one, the SHA-256 of the token
-  const key = replayKey(claims, logoutToken);
+  // a key: its issuer and jti, or without a jti, the SHA-256 of its signed part
+  const key = replayKey({ iss: payload.iss, jti: claims.jti }, logoutToken);
   if (!replayGuard.firstUse(key, replayWindowEnd(payload))) {
     throw new Error(`replay of the token ${key}`);
   }

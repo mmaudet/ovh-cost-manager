@@ -279,6 +279,28 @@ describe('back-channel logout', () => {
     expect(ocm.output()).toMatch(/invalid logout token: replay of the token sha256:/);
   });
 
+  // jose decodes the signature leniently: these variants verify as the token
+  test.each([
+    ['a space in the signature', ([h, p, s]) => `${h}.${p}.${s.slice(0, 10)} ${s.slice(10)}`],
+    ['a newline in the signature', ([h, p, s]) => `${h}.${p}.${s.slice(0, 20)}\n${s.slice(20)}`],
+    ['other unused bits in its last character', ([h, p, s]) => {
+      const abc = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
+      const last = abc.indexOf(s[s.length - 1]);
+      return `${h}.${p}.${s.slice(0, -1)}${abc[(last & 0b110000) | ((last + 1) & 0b1111)]}`;
+    }],
+    ['== padding', (parts) => `${parts.join('.')}==`],
+  ])('refuses a token without jti replayed with %s', async (label, reencode) => {
+    // A user for each case: two such tokens of one second would be the same
+    const user = `ivan, ${label}`;
+    const token = provider.logoutToken({ sub: user, jti: undefined });
+    await signedIn(user);
+    expect((await logout(token)).status).toBe(200);
+
+    const later = await signedIn(user);
+    expect((await logout(reencode(token.split('.')))).status).toBe(400);
+    expect(await isSignedIn(later)).toBe(true);
+  });
+
   test.each([
     ['without exp', { exp: undefined }, /"exp"/],
     ['for another client', { aud: 'another-client' }, /"aud"/],
