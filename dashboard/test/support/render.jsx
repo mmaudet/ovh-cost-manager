@@ -138,13 +138,19 @@ export async function selectLanguage(user, code) {
 
 const normalize = (text) => text.replace(/\s+/g, ' ').trim();
 
+// A closed dropdown shows the option it holds, not the others
+const shownByDropdowns = (node) => (node.parentElement.closest('option')?.selected === false
+  ? NodeFilter.FILTER_REJECT
+  : NodeFilter.FILTER_ACCEPT);
+
 // The texts of an element as a user reads them: the text of each element in
-// it, in order. Whitespace is normalized, so the narrow no-break space that
-// separates thousands in French amounts reads as a plain space.
+// it, in order, a dropdown reading as the option it shows. Whitespace is
+// normalized, so the narrow no-break space that separates thousands in
+// French amounts reads as a plain space.
 export function texts(element) {
   const pieces = [];
   let parent = null;
-  const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+  const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT, shownByDropdowns);
   for (let node = walker.nextNode(); node; node = walker.nextNode()) {
     if (node.parentElement === parent) {
       pieces[pieces.length - 1] += node.textContent;
@@ -162,6 +168,31 @@ export function rowsOf(table) {
     [...row.cells].map((cell) => normalize(cell.textContent)));
 }
 
+// The rows of a table as lists of the texts they show. Unlike rowsOf(), a
+// cell that shows several texts, like a name and its badge, gives each apart,
+// and an empty cell gives none.
+export function rowTextsOf(table) {
+  return [...table.querySelectorAll('tr')].map((row) => texts(row));
+}
+
+// Sorts a table on a column, as the user does: with a click on its header
+export async function sortTable(user, table, column) {
+  await user.click(within(table).getByRole('columnheader', { name: column }));
+}
+
+// The header of a table: the label of each column, with its sort mark
+export function headerOf(table) {
+  return rowsOf(table)[0];
+}
+
+// The first cell of each row of a table, header and footer left out: the
+// order the rows are sorted in
+export function firstColumnOf(table) {
+  return [...table.tBodies]
+    .flatMap((body) => [...body.rows])
+    .map((row) => normalize(row.cells[0].textContent));
+}
+
 // The card or panel that shows a label, or holds an element: the page draws
 // them as white blocks with rounded corners.
 export function cardOf(labelOrElement) {
@@ -174,6 +205,28 @@ export function cardOf(labelOrElement) {
 // The row of cards that holds the card showing a label
 export function cardRowOf(label) {
   return cardOf(label).parentElement;
+}
+
+// The panel a heading heads within a card: the heading with its actions, and
+// what shows under it, like the buckets of a Public Cloud project
+export function panelOf(heading) {
+  return heading.parentElement;
+}
+
+// The accordion a button shows or hides: the button, and what shows under it
+// once open, like a comparison of the Compare tab
+export function accordionOf(toggle) {
+  return toggle.parentElement;
+}
+
+// The Public Cloud projects, each showing its detail under it on a click
+export function cloudProjects() {
+  return cardOf(screen.getByRole('heading', { name: /^(Projets Cloud|Cloud Projects)$/ }));
+}
+
+// The row of a Public Cloud project, found by its name
+export function cloudProjectRow(name) {
+  return within(cloudProjects()).getByRole('row', { name: new RegExp(`^${name}`) });
 }
 
 // A badge of the header: a count and its label
