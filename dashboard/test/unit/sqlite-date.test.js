@@ -20,7 +20,7 @@ describe('parseSqliteDate', () => {
       .toBe('15/01/2026 11:00:00');
   });
 
-  it("moves a timestamp of late New Year's Eve to the next year", () => {
+  it('moves a timestamp of late New Year\'s Eve to the next year', () => {
     expect(parseSqliteDate('2025-12-31 23:30:00').toLocaleString('fr-FR'))
       .toBe('01/01/2026 00:30:00');
   });
