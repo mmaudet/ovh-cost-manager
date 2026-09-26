@@ -296,8 +296,9 @@ describe('Overview tab', () => {
       await renderDashboard();
 
       // 1 250.40 / 50 000
-      expect(texts(budget()))
-        .toEqual(['Consommation du budget', '3% utilisé', 'Consommé: 1 250,40€', 'Budget:', '€']);
+      expect(texts(budget())).toEqual([
+        'Consommation du budget', '3% utilisé', 'Consommé: 1 250,40€', 'Budget:', '€',
+      ]);
       expect(budgetInput()).toHaveValue(50000);
     });
 
@@ -316,8 +317,9 @@ describe('Overview tab', () => {
       await typeBudget(user, '800');
 
       // 1 250.40 / 800
-      expect(texts(budget()))
-        .toEqual(['Consommation du budget', '156% utilisé', 'Consommé: 1 250,40€', 'Budget:', '€']);
+      expect(texts(budget())).toEqual([
+        'Consommation du budget', '156% utilisé', 'Consommé: 1 250,40€', 'Budget:', '€',
+      ]);
       // The forecast of 862.18 goes over it
       expect(texts(forecastCard()))
         .toEqual(['Prévision fin de mois', 'septembre 2026', '862,18€', '> Budget!']);

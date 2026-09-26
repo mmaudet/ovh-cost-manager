@@ -100,7 +100,7 @@ const savingsPlanRows = [
 ];
 
 describe('Public Cloud tab', () => {
-  it('loads the projects and the Public Cloud figures when the tab opens, not before', async () => {
+  it('loads its projects and figures when the tab opens, not before', async () => {
     const { user } = await renderDashboard();
     expect(api.fetchProjectsEnriched).not.toHaveBeenCalled();
     expect(api.fetchPublicCloudStats).not.toHaveBeenCalled();

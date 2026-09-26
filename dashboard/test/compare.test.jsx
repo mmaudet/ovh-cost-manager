@@ -302,7 +302,7 @@ describe('Compare tab', () => {
       ]);
     });
 
-    it('list the dedicated servers only once the Infrastructure tab was opened (#35)', async () => {
+    it('list dedicated servers only once the Infrastructure tab was opened (#35)', async () => {
       const { user } = await renderDashboard();
       await openTab(user, 'Comparaison');
       await openComparison(user, INFRASTRUCTURE);

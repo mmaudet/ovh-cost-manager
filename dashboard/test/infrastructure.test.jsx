@@ -91,7 +91,7 @@ describe('Infrastructure tab', () => {
       ]);
     });
 
-    it('open the bill lines of their resource type, and close them on a second click', async () => {
+    it('open the bill lines of their resource type, until a second click', async () => {
       const { user } = await renderDashboard();
       await openTab(user, 'Infrastructure');
 
@@ -330,7 +330,8 @@ describe('Infrastructure tab', () => {
     ]);
   });
 
-  it('shows only its cards without inventory, and with only Public Cloud and domains', async () => {
+  it('shows only its cards with nothing of its own billed or in the inventory', async () => {
+    // Only Public Cloud and domains billed: they have tabs of their own
     const publicAndWebCloud = account.byResourceType['2026-09']
       .filter((type) => ['cloud_project', 'domain'].includes(type.resource_type));
     const { user } = await renderDashboard({
