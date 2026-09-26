@@ -56,7 +56,7 @@ export const fetchMonthlyTrend = async (months, end) => {
 
 export const fetchMonthlyTrendByCategory = async (months, end) => {
   const { data } = await api.get('/analysis/monthly-trend-by-category', {
-    params: { months, end }
+    params: { months, end },
   });
   return data;
 };

@@ -30,7 +30,7 @@ function trendWindow(endMonth, months) {
   const firstMonth = String(first.getUTCMonth() + 1).padStart(2, '0');
   return {
     from: `${first.getUTCFullYear()}-${firstMonth}-01`,
-    to: monthBounds(endMonth).to
+    to: monthBounds(endMonth).to,
   };
 }
 

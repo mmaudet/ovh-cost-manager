@@ -28,13 +28,13 @@ const useTrendsTab = ({ months, selectedMonth, activeTab }) => {
   const { data: monthlyTrend = [] } = useQuery({
     queryKey: ['monthlyTrend', trendPeriod, endMonth],
     queryFn: () => fetchMonthlyTrend(trendPeriod, endMonth),
-    enabled: !!endMonth
+    enabled: !!endMonth,
   });
 
   const { data: trendByCategory = { categories: [], data: [] } } = useQuery({
     queryKey: ['monthlyTrendByCategory', trendPeriod, endMonth],
     queryFn: () => fetchMonthlyTrendByCategory(trendPeriod, endMonth),
-    enabled: !!endMonth
+    enabled: !!endMonth,
   });
   // Categories hidden from the by-category chart (toggled via the legend).
   const [hiddenCategories, setHiddenCategories] = useState(() => new Set());
@@ -49,7 +49,7 @@ const useTrendsTab = ({ months, selectedMonth, activeTab }) => {
   const { data: gpuTrend } = useQuery({
     queryKey: ['gpuTrend', gpuTrendWindow?.from, gpuTrendWindow?.to],
     queryFn: () => fetchGpuSummary(gpuTrendWindow.from, gpuTrendWindow.to),
-    enabled: !!gpuTrendWindow && activeTab === 'trends'
+    enabled: !!gpuTrendWindow && activeTab === 'trends',
   });
 
   return {

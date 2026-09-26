@@ -17,16 +17,16 @@ describe('monthly trend queries', () => {
   const bill = (id, date, cloud, server = 0) => {
     db.bills.upsert({
       id, date, price_without_tax: cloud + server, price_with_tax: (cloud + server) * 1.2,
-      tax: (cloud + server) * 0.2, currency: 'EUR', pdf_url: null, html_url: null
+      tax: (cloud + server) * 0.2, currency: 'EUR', pdf_url: null, html_url: null,
     });
     const line = (suffix, price, resourceType) => ({
       id: `${id}-${suffix}`, bill_id: id, project_id: null, domain: `${suffix}.example`,
       description: `${suffix} line`, quantity: 1, unit_price: price, total_price: price,
-      service_type: 'Other', resource_type: resourceType
+      service_type: 'Other', resource_type: resourceType,
     });
     db.details.insertMany([
       line('cloud', cloud, 'cloud_project'),
-      ...(server ? [line('server', server, 'dedicated_server')] : [])
+      ...(server ? [line('server', server, 'dedicated_server')] : []),
     ]);
   };
 
@@ -53,7 +53,7 @@ describe('monthly trend queries', () => {
     expect(db.analysis.monthlyTrend('2026-07-01', '2026-09-30')).toEqual([
       { month: '2026-07', total: 20 },
       { month: '2026-08', total: 35 },
-      { month: '2026-09', total: 40 }
+      { month: '2026-09', total: 40 },
     ]);
   });
 
@@ -66,7 +66,7 @@ describe('monthly trend queries', () => {
       ['2026-07', 'cloud_project', 20],
       ['2026-08', 'cloud_project', 30],
       ['2026-08', 'dedicated_server', 5],
-      ['2026-09', 'cloud_project', 40]
+      ['2026-09', 'cloud_project', 40],
     ]);
   });
 
