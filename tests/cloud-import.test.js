@@ -137,34 +137,36 @@ describe('volume and snapshot inventory import', () => {
 });
 
 describe('project consumption import', () => {
-  // What usage/current answers for a project that ran one instance, billed by the hour,
-  // over a period that OVH gives with its UTC offset. Without a period, the import dates
-  // the usage by the UTC clock.
-  const usageOfInstance = (flavor, totalPrice, period) => ({
-    period,
-    hourlyUsage: {
-      instance: [{
-        reference: flavor,
-        region: 'GRA11',
-        details: [{ instanceId: 'inst-1', quantity: { value: 100, unit: 'Hour' }, totalPrice }],
-      }],
-    },
+  // The hourly resources that usage/current details for a project that ran one instance
+  const oneInstance = (flavor, totalPrice) => ({
+    instance: [{
+      reference: flavor,
+      region: 'GRA11',
+      details: [{ instanceId: 'inst-1', quantity: { value: 100, unit: 'Hour' }, totalPrice }],
+    }],
   });
 
-  async function importUsageAt(instant, usage) {
+  // Imports what usage/current answers at `instant`: the hourly resources used over a
+  // period, which OVH gives with its UTC offset, or over none
+  async function importUsageAt(instant, period, hourlyUsage) {
     jest.setSystemTime(new Date(instant));
-    routes.set(`${BASE}/usage/current`, ok(usage));
+    routes.set(`${BASE}/usage/current`, ok({ period, hourlyUsage }));
     await importProject();
   }
-  const importUsageOn = (day, usage) => importUsageAt(`${day}T10:00:00Z`, usage);
+
+  // Imports on `day`, at noon in Paris, the usage of one instance since the 1st of the
+  // month, over the period that OVH gives it
+  const importUsageOn = (day, flavor, totalPrice) => importUsageAt(`${day}T10:00:00Z`, {
+    from: `${day.slice(0, 8)}01T00:00:00+02:00`, to: `${day}T12:00:00+02:00`,
+  }, oneInstance(flavor, totalPrice));
 
   // The project's consumption as [cloud resource kind, resource, cost]
   const consumption = (from, to) => db.cloudDetails.getConsumptionByProject(PROJECT, from, to)
     .map(c => [c.resource_type, c.resource_name, c.total_price]);
 
   test('keeps the consumption of each month it imports', async () => {
-    await importUsageOn('2026-08-28', usageOfInstance('b2-7', 30.5));
-    await importUsageOn('2026-09-15', usageOfInstance('b2-15', 12.25));
+    await importUsageOn('2026-08-28', 'b2-7', 30.5);
+    await importUsageOn('2026-09-15', 'b2-15', 12.25);
 
     // Read by month, as the Compare tab does
     expect(consumption('2026-08-01', '2026-08-31')).toEqual([['instance', 'b2-7', 30.5]]);
@@ -173,12 +175,12 @@ describe('project consumption import', () => {
 
   // At half past midnight in Paris on 1 September, the UTC clock still reads 31 August
   test('dates the consumption by the period that OVH reports, not by the UTC clock', async () => {
-    await importUsageAt('2026-08-31T21:30:00Z', usageOfInstance('b2-7', 30.5, {
+    await importUsageAt('2026-08-31T21:30:00Z', {
       from: '2026-08-01T00:00:00+02:00', to: '2026-08-31T23:30:00+02:00',
-    }));
-    await importUsageAt('2026-08-31T22:30:00Z', usageOfInstance('b2-15', 0.25, {
+    }, oneInstance('b2-7', 30.5));
+    await importUsageAt('2026-08-31T22:30:00Z', {
       from: '2026-09-01T00:00:00+02:00', to: '2026-09-01T00:30:00+02:00',
-    }));
+    }, oneInstance('b2-15', 0.25));
 
     expect(consumption('2026-08-01', '2026-08-31')).toEqual([['instance', 'b2-7', 30.5]]);
     expect(consumption('2026-09-01', '2026-09-30')).toEqual([['instance', 'b2-15', 0.25]]);
@@ -186,41 +188,42 @@ describe('project consumption import', () => {
 
   // The Compare tab reads a month from its first day to its last
   test('keeps in its month a period that ends on the first day of the next one', async () => {
-    await importUsageAt('2026-08-31T22:30:00Z', usageOfInstance('b2-7', 31, {
+    await importUsageAt('2026-08-31T22:30:00Z', {
       from: '2026-08-01T00:00:00+02:00', to: '2026-09-01T00:00:00+02:00',
-    }));
+    }, oneInstance('b2-7', 31));
 
     expect(consumption('2026-08-01', '2026-08-31')).toEqual([['instance', 'b2-7', 31]]);
   });
 
   test('dates the consumption by the UTC clock when OVH reports no period', async () => {
-    await importUsageAt('2026-08-31T22:30:00Z', usageOfInstance('b2-7', 30.5));
+    await importUsageAt('2026-08-31T22:30:00Z', undefined, oneInstance('b2-7', 30.5));
 
     expect(consumption('2026-08-01', '2026-08-31')).toEqual([['instance', 'b2-7', 30.5]]);
+    expect(db.cloudDetails.getConsumptionSummary())
+      .toMatchObject({ period_start: '2026-08-01', period_end: '2026-08-31' });
   });
 
   test('replaces the consumption of a month it imports again', async () => {
-    await importUsageOn('2026-08-28', usageOfInstance('b2-7', 30.5));
-    await importUsageOn('2026-09-10', usageOfInstance('b2-15', 6));
-    await importUsageOn('2026-09-15', usageOfInstance('b2-15', 12.25));
+    await importUsageOn('2026-08-28', 'b2-7', 30.5);
+    await importUsageOn('2026-09-10', 'b2-15', 6);
+    await importUsageOn('2026-09-15', 'b2-15', 12.25);
 
     expect(consumption('2026-08-01', '2026-08-31')).toEqual([['instance', 'b2-7', 30.5]]);
     expect(consumption('2026-09-01', '2026-09-30')).toEqual([['instance', 'b2-15', 12.25]]);
   });
 
-  // The Public Cloud tab reads it without a period: that of the current month, the only
-  // one the import used to keep
-  test('reads the latest month imported without a period', async () => {
-    await importUsageOn('2026-08-28', usageOfInstance('b2-7', 30.5));
-    await importUsageOn('2026-09-15', usageOfInstance('b2-15', 12.25));
+  // The Public Cloud tab asks for no month: it shows the current consumption
+  test('reads the latest month imported when no month is asked for', async () => {
+    await importUsageOn('2026-08-28', 'b2-7', 30.5);
+    await importUsageOn('2026-09-15', 'b2-15', 12.25);
 
     expect(consumption()).toEqual([['instance', 'b2-15', 12.25]]);
   });
 
   // The consumption KPIs fall back on it when /me/consumption has nothing
   test('sums the latest month imported in the consumption summary', async () => {
-    await importUsageOn('2026-08-28', usageOfInstance('b2-7', 30.5));
-    await importUsageOn('2026-09-15', usageOfInstance('b2-15', 12.25));
+    await importUsageOn('2026-08-28', 'b2-7', 30.5);
+    await importUsageOn('2026-09-15', 'b2-15', 12.25);
 
     expect(db.cloudDetails.getConsumptionSummary()).toEqual({
       period_start: '2026-09-01', period_end: '2026-09-15', total: 12.25, project_count: 1,
@@ -228,8 +231,8 @@ describe('project consumption import', () => {
   });
 
   test('splits the latest month imported by cloud resource kind', async () => {
-    await importUsageOn('2026-08-28', usageOfInstance('b2-7', 30.5));
-    await importUsageOn('2026-09-15', usageOfInstance('b2-15', 12.25));
+    await importUsageOn('2026-08-28', 'b2-7', 30.5);
+    await importUsageOn('2026-09-15', 'b2-15', 12.25);
 
     expect(db.cloudDetails.getConsumptionByResourceType(PROJECT))
       .toEqual([{ resource_type: 'instance', total: 12.25, count: 1 }]);
@@ -246,8 +249,8 @@ describe('project consumption import', () => {
       description: 'Consommation des instances l4-90', quantity: 1, unit_price: 100,
       total_price: 100, service_type: 'AI/ML',
     });
-    await importUsageOn('2026-08-28', usageOfInstance('l40s-180', 30.5));
-    await importUsageOn('2026-09-15', usageOfInstance('l4-90', 12.25));
+    await importUsageOn('2026-08-28', 'l40s-180', 30.5);
+    await importUsageOn('2026-09-15', 'l4-90', 12.25);
 
     const { byProject } = db.cloudDetails.getGpuSummary('2026-09-01', '2026-09-30');
     expect(byProject.map(p => [p.project_id, p.gpu_flavors])).toEqual([[PROJECT, 'l4-90']]);
@@ -259,11 +262,11 @@ describe('project consumption import', () => {
     const quota = (region) => ({ region, instance: { maxCores: 20, usedCores: 2 } });
     routes.set(`${BASE}/instance`, ok([instance('inst-1'), instance('inst-2')]));
     routes.set(`${BASE}/quota`, ok([quota('GRA11')]));
-    await importUsageOn('2026-08-28', usageOfInstance('b2-7', 30.5));
+    await importUsageOn('2026-08-28', 'b2-7', 30.5);
 
     routes.set(`${BASE}/instance`, ok([instance('inst-2')]));
     routes.set(`${BASE}/quota`, ok([quota('SBG5')]));
-    await importUsageOn('2026-09-15', usageOfInstance('b2-15', 12.25));
+    await importUsageOn('2026-09-15', 'b2-15', 12.25);
 
     expect(db.cloudDetails.getInstancesByProject(PROJECT).map(i => i.id)).toEqual(['inst-2']);
     expect(db.cloudDetails.getQuotasByProject(PROJECT).map(q => q.region)).toEqual(['SBG5']);
