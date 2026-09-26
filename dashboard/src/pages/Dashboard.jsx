@@ -107,7 +107,8 @@ export default function Dashboard() {
     queryFn: fetchMonths
   });
 
-  // Set default months when data loads
+  // Set the default month when data loads: the latest one. useCompareTab sets months A
+  // and B on the same condition, in the same commit
   useEffect(() => {
     if (months.length > 0 && !selectedMonth) {
       setSelectedMonth(months[0]);
@@ -136,8 +137,9 @@ export default function Dashboard() {
   const trendsTab = useTrendsTab({ months, activeTab });
 
   const compareTab = useCompareTab({ months, selectedMonth, activeTab });
-  // The "vs previous month" KPI reads the summary of month B, which only loads on the
-  // Compare tab (#50)
+  // The "vs previous month" KPI reads the summary of month B (#50). Its query only runs on
+  // the Compare tab, but month B defaults to the latest month, whose summary the page loads
+  // at start under the same key: the KPI reads it from page start.
   const { compareDataB } = compareTab;
 
   const { data: importStatus } = useQuery({
@@ -199,8 +201,8 @@ export default function Dashboard() {
   const infrastructureTab = useInfrastructureTab({
     selectedMonth, activeTab, selectedResourceType,
   });
-  // The Compare markup reads the servers inventory too, which only loads on the
-  // Infrastructure tab (#35)
+  // The Compare tab lists the dedicated servers too: the shell passes them on, though they
+  // only load on the Infrastructure tab (#35)
   const { inventoryServers } = infrastructureTab;
 
   const { data: expiringServices = [] } = useQuery({

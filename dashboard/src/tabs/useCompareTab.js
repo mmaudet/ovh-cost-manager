@@ -3,7 +3,9 @@
 //
 // Months A and B get their defaults when the months list loads, on the same condition as
 // the shell's selected month, so in the same commit. The shell's "vs previous month" KPI
-// reads the summary of month B this hook returns, which only loads on the Compare tab (#50).
+// reads the summary of month B this hook returns (#50). Its query only runs on the Compare
+// tab, but month B defaults to the latest month, whose summary the page loads at start
+// under the same key: the KPI reads it from page start.
 
 import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
