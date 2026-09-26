@@ -14,7 +14,10 @@ sections were written afterwards from the git history.
 
 ## 2.3.1 - 2026-09-26
 
-<!-- Upgrade notes and highlights of this release, if any. -->
+Security release. It updates the production dependencies that had known
+vulnerabilities (express, express-rate-limit, axios, lodash) and removes uuid.
+No configuration change is needed: pull the new image and recreate the
+container.
 
 ### Security
 * security: update runtime dependencies with known vulnerabilities by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/28
