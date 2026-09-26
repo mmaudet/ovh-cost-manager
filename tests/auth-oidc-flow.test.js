@@ -84,6 +84,45 @@ describe('sign-in', () => {
   });
 });
 
+// A sign-in the provider refuses, or whose answer fails a check, gets a 400
+// with a short message, the details in the log only
+describe('a failed sign-in', () => {
+  async function expectRefused(res, detail) {
+    expect(res.status).toBe(400);
+    expect(res.headers.get('content-type')).toMatch(/^text\/plain/);
+    expect(await res.text()).toBe('Sign-in failed, please sign in again.');
+    expect(ocm.output()).toMatch(detail);
+  }
+
+  test('answers 400 to a callback replayed with a copy of the sign-in cookie', async () => {
+    provider.user = 'alice';
+    const browser = createBrowser(ocm.url);
+    const callbackUrl = await startSignIn(browser);
+    const copy = createBrowser(ocm.url);
+    for (const [name, value] of browser.cookies) {
+      copy.cookies.set(name, value);
+    }
+    expect((await browser.fetch(callbackUrl)).status).toBe(302);
+
+    // The provider refuses the code it already exchanged
+    await expectRefused(await copy.fetch(callbackUrl), /invalid_grant/);
+    expect(copy.cookies.has('ocm.sid')).toBe(false);
+  });
+
+  test('answers 400 to a consent the user denied', async () => {
+    provider.next.deny = true;
+    const browser = createBrowser(ocm.url);
+    await expectRefused(await browser.fetch(await startSignIn(browser)), /access_denied/);
+  });
+
+  test('answers 400 to an ID token that holds another nonce', async () => {
+    provider.next.wrongNonce = true;
+    const browser = createBrowser(ocm.url);
+    await expectRefused(await browser.fetch(await startSignIn(browser)), /nonce/);
+    expect(browser.cookies.has('ocm.sid')).toBe(false);
+  });
+});
+
 describe('back-channel logout', () => {
   const logout = (logoutToken) => fetch(`${ocm.url}/logout/backchannel`, {
     method: 'POST',

@@ -23,16 +23,17 @@ const { sessionsToEnd } = require('./logout-token');
 
 const router = express.Router();
 
+// What a failed sign-in answers: the details go to the log only
+const SIGN_IN_REFUSED = 'Sign-in failed, please sign in again.';
+const SIGN_IN_FAILED = 'Sign-in failed.';
+
+// The routes run once the provider is discovered: awaitDiscovery answers 503
+// until then
 function setup(config) {
   const authConfig = config.auth;
 
   // GET /auth/login - Initiate OIDC flow
   router.get('/login', async (req, res) => {
-    const oidcConfig = oidcClient.getConfig();
-    if (!oidcConfig) {
-      return res.status(503).json({ error: 'OIDC not configured' });
-    }
-
     try {
       const state = randomState();
       const nonce = randomNonce();
@@ -52,25 +53,21 @@ function setup(config) {
       const authUrl = oidcClient.buildAuthUrl(state, nonce, codeChallenge);
       res.redirect(authUrl.href);
     } catch (err) {
-      console.error('OIDC login error:', err.message);
-      res.status(500).send('Authentication failed');
+      console.error('OIDC login error:', err);
+      res.status(500).type('text/plain').send(SIGN_IN_FAILED);
     }
   });
 
   // GET /auth/callback - Handle OIDC callback
   router.get('/callback', async (req, res) => {
-    const oidcConfig = oidcClient.getConfig();
-    if (!oidcConfig) {
-      return res.status(503).json({ error: 'OIDC not configured' });
-    }
-
     // The sign-in that this browser started, when the state is its own: a
     // callback URL opened in another browser is refused. The cookie serves once
     const state = req.query.state;
     const pending = readLoginState(req.cookies?.[LOGIN_COOKIE], state, authConfig.session.secret);
     res.clearCookie(LOGIN_COOKIE, loginCookieOptions(req, authConfig));
     if (!pending) {
-      return res.status(400).send('Invalid or expired sign-in, please sign in again');
+      console.warn('OIDC callback: no valid sign-in cookie for its state');
+      return res.status(400).type('text/plain').send(SIGN_IN_REFUSED);
     }
 
     try {
@@ -112,9 +109,13 @@ function setup(config) {
 
       res.redirect(pending.returnTo);
     } catch (err) {
-      console.error('OIDC callback error:', err.message);
-      console.error('OIDC callback error details:', err);
-      res.status(500).send('Authentication failed: ' + err.message);
+      // Refused by the provider, or its answer failed a check, as for a
+      // replayed callback, a denied consent or another nonce: the user can
+      // sign in again. Anything else failed on the server's side
+      const refused = oidcClient.isRefusedSignIn(err);
+      console.error(`OIDC callback: sign-in ${refused ? 'refused' : 'failed'}:`, err);
+      res.status(refused ? 400 : 500).type('text/plain')
+        .send(refused ? SIGN_IN_REFUSED : SIGN_IN_FAILED);
     }
   });
 

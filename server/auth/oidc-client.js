@@ -7,7 +7,11 @@ const {
   authorizationCodeGrant,
   fetchUserInfo,
   buildEndSessionUrl,
-  allowInsecureRequests
+  allowInsecureRequests,
+  ClientError,
+  ResponseBodyError,
+  AuthorizationResponseError,
+  WWWAuthenticateChallengeError,
 } = require('openid-client');
 // openid-client v6 validates no logout token: jose, the JOSE library it is
 // built on, verifies them
@@ -76,10 +80,26 @@ async function handleCallback(currentUrl, expectedState, expectedNonce, pkceCode
     pkceCodeVerifier,
     expectedState,
     expectedNonce,
-    idTokenExpected: true
+    idTokenExpected: true,
   });
 
   return tokens;
+}
+
+/**
+ * Whether a sign-in failed on the provider's side, not the server's: the
+ * provider refused the code, as for a replayed callback, or the consent, or
+ * its answer failed a check, as an ID token with another nonce. The user can
+ * sign in again.
+ *
+ * @param {Error} err - what the callback's exchange threw
+ * @returns {boolean}
+ */
+function isRefusedSignIn(err) {
+  return err instanceof ClientError
+    || err instanceof ResponseBodyError
+    || err instanceof AuthorizationResponseError
+    || err instanceof WWWAuthenticateChallengeError;
 }
 
 async function getUserInfo(accessToken, expectedSub) {
@@ -144,5 +164,6 @@ module.exports = {
   getEndSessionUrl,
   getConfig,
   getServerMetadata,
-  verifyLogoutToken
+  verifyLogoutToken,
+  isRefusedSignIn,
 };
