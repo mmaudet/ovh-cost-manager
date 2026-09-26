@@ -9,6 +9,9 @@ const {
   BACKCHANNEL_LOGOUT_EVENT,
   logoutTokenVerifyOptions,
   checkLogoutTokenClaims,
+  sessionsToEnd,
+  replayWindowEnd,
+  createReplayGuard,
 } = require('../server/auth/logout-token');
 
 describe('logoutTokenVerifyOptions', () => {
@@ -38,9 +41,11 @@ describe('logoutTokenVerifyOptions', () => {
     expect(logoutTokenVerifyOptions(withNone, 'ocm').algorithms).toEqual(['RS256']);
   });
 
-  test('requires iat, no more than 5 minutes ago, with 30 s of clock skew', () => {
+  // exp and jti are required by the specification: exp bounds the token's
+  // life, jti lets a replay be told apart
+  test('requires iat, exp and jti, iat no more than 5 minutes ago, 30 s of skew', () => {
     const options = logoutTokenVerifyOptions(metadata, 'ocm');
-    expect(options.requiredClaims).toEqual(['iat']);
+    expect(options.requiredClaims).toEqual(['iat', 'exp', 'jti']);
     expect(options.maxTokenAge).toBe(300);
     expect(options.clockTolerance).toBe(30);
   });
@@ -51,6 +56,7 @@ describe('checkLogoutTokenClaims', () => {
     iss: 'https://sso.example.com',
     aud: 'ocm-dashboard',
     iat: 1790000000,
+    exp: 1790000120,
     jti: 'bWJq',
     sid: '08a5019c-17e1-4977-8f42-65a12843ea02',
     sub: 'alice',
@@ -61,10 +67,11 @@ describe('checkLogoutTokenClaims', () => {
     expect(BACKCHANNEL_LOGOUT_EVENT).toBe('http://schemas.openid.net/event/backchannel-logout');
   });
 
-  test('returns the sid and the sub', () => {
+  test('returns the sid, the sub and the jti', () => {
     expect(checkLogoutTokenClaims(claims)).toEqual({
       sid: '08a5019c-17e1-4977-8f42-65a12843ea02',
       sub: 'alice',
+      jti: 'bWJq',
     });
   });
 
@@ -73,12 +80,13 @@ describe('checkLogoutTokenClaims', () => {
     expect(checkLogoutTokenClaims(sidOnly)).toEqual({
       sid: '08a5019c-17e1-4977-8f42-65a12843ea02',
       sub: undefined,
+      jti: 'bWJq',
     });
   });
 
   test('accepts a token with a sub only', () => {
     const { sid: _, ...subOnly } = claims;
-    expect(checkLogoutTokenClaims(subOnly)).toEqual({ sid: undefined, sub: 'alice' });
+    expect(checkLogoutTokenClaims(subOnly)).toEqual({ sid: undefined, sub: 'alice', jti: 'bWJq' });
   });
 
   test.each([
@@ -94,6 +102,9 @@ describe('checkLogoutTokenClaims', () => {
     ['neither sid nor sub', { sid: undefined, sub: undefined }],
     ['an empty sid and no sub', { sid: '', sub: undefined }],
     ['a sid that is not a string and no sub', { sid: 42, sub: undefined }],
+    ['no jti', { jti: undefined }],
+    ['an empty jti', { jti: '' }],
+    ['a jti that is not a string', { jti: 7 }],
   ])('refuses a token with %s', (label, change) => {
     const token = { ...claims, ...change };
     for (const [name, value] of Object.entries(change)) {
@@ -102,5 +113,59 @@ describe('checkLogoutTokenClaims', () => {
       }
     }
     expect(() => checkLogoutTokenClaims(token)).toThrow();
+  });
+});
+
+// A sid names one session at the provider: only the dashboard's sessions of
+// that one end, even when none matches. Without sid, every session of the sub
+describe('sessionsToEnd', () => {
+  test('ends the sessions of the sid only, when the token has one', () => {
+    expect(sessionsToEnd({ sid: 'op-session-1', sub: 'alice' })).toEqual({ sid: 'op-session-1' });
+  });
+
+  test('ends every session of the sub, when the token has no sid', () => {
+    expect(sessionsToEnd({ sid: undefined, sub: 'alice' })).toEqual({ sub: 'alice' });
+  });
+});
+
+describe('replayWindowEnd', () => {
+  // Refused anyway once iat is 5 minutes old, or at exp, with 30 s of skew
+  test('ends 5 minutes after iat, with the skew, when exp is later', () => {
+    expect(replayWindowEnd({ iat: 1790000000, exp: 1790003600 })).toBe((1790000300 + 30) * 1000);
+  });
+
+  test('ends at exp, with the skew, when exp comes first', () => {
+    expect(replayWindowEnd({ iat: 1790000000, exp: 1790000120 })).toBe((1790000120 + 30) * 1000);
+  });
+});
+
+describe('createReplayGuard', () => {
+  const NOW = 1790000000 * 1000;
+  const UNTIL = NOW + 60 * 1000;
+
+  test('accepts the first use of a jti', () => {
+    expect(createReplayGuard().firstUse('jti-1', UNTIL, NOW)).toBe(true);
+  });
+
+  test('refuses the same jti again while the token is valid', () => {
+    const guard = createReplayGuard();
+    guard.firstUse('jti-1', UNTIL, NOW);
+    expect(guard.firstUse('jti-1', UNTIL, NOW + 59 * 1000)).toBe(false);
+  });
+
+  test('accepts another jti', () => {
+    const guard = createReplayGuard();
+    guard.firstUse('jti-1', UNTIL, NOW);
+    expect(guard.firstUse('jti-2', UNTIL, NOW)).toBe(true);
+  });
+
+  // The verification refuses the token by then: its jti need not be kept
+  test('forgets a jti once its token is no longer valid', () => {
+    const guard = createReplayGuard();
+    guard.firstUse('jti-1', UNTIL, NOW);
+    guard.firstUse('jti-2', UNTIL + 60 * 1000, NOW);
+    expect(guard.size()).toBe(2);
+    guard.firstUse('jti-3', UNTIL + 60 * 1000, UNTIL);
+    expect(guard.size()).toBe(2);
   });
 });

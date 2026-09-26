@@ -12,7 +12,12 @@ const {
 // openid-client v6 validates no logout token: jose, the JOSE library it is
 // built on, verifies them
 const { createRemoteJWKSet, jwtVerify } = require('jose');
-const { logoutTokenVerifyOptions, checkLogoutTokenClaims } = require('./logout-token');
+const {
+  logoutTokenVerifyOptions,
+  checkLogoutTokenClaims,
+  replayWindowEnd,
+  createReplayGuard,
+} = require('./logout-token');
 const {
   authorizationParameters,
   endSessionParameters,
@@ -24,6 +29,8 @@ let config = null;
 let authConfig = null;
 // The provider's signing keys, fetched from its jwks_uri when a token needs them
 let jwks = null;
+// The logout tokens accepted, by jti, until they expire
+const replayGuard = createReplayGuard();
 
 async function initialize(appConfig) {
   authConfig = appConfig.auth;
@@ -112,15 +119,21 @@ async function verifyLogoutToken(logoutToken) {
 
   // jwtVerify checks the signature against the provider's JWKS, with an
   // algorithm of its ID tokens, the issuer, the audience (our client id), iat
-  // (5 minutes old at most) and exp when present; then the claims of a logout
-  // token: the back-channel logout event, a sid or a sub, and no nonce
+  // (5 minutes old at most), exp and jti; then the claims of a logout token:
+  // the back-channel logout event, a sid or a sub, and no nonce
   const { payload } = await jwtVerify(
     logoutToken,
     jwks,
     logoutTokenVerifyOptions(config.serverMetadata(), authConfig.provider.clientId)
   );
+  const claims = checkLogoutTokenClaims(payload);
 
-  return checkLogoutTokenClaims(payload);
+  // Last, once the token is known valid, so that no forged token can use up
+  // a jti
+  if (!replayGuard.firstUse(claims.jti, replayWindowEnd(payload))) {
+    throw new Error(`replay of the token ${claims.jti}`);
+  }
+  return claims;
 }
 
 module.exports = {

@@ -19,6 +19,7 @@ const {
   readLoginState,
   loginCookieOptions,
 } = require('./login-state');
+const { sessionsToEnd } = require('./logout-token');
 
 const router = express.Router();
 
@@ -170,19 +171,14 @@ async function backChannelLogout(req, res, config) {
   }
 
   try {
-    let deleted = 0;
-
-    // Prefer sid-based logout (more specific - single session)
-    if (claims.sid) {
-      deleted = sessionStore.deleteByOidcSid(claims.sid);
-      console.log(`Back-channel logout: deleted ${deleted} session(s) for sid=${claims.sid}`);
-    }
-
-    // If no sessions found by sid, or no sid provided, try sub (all user sessions)
-    if (deleted === 0 && claims.sub) {
-      deleted = sessionStore.deleteByUserId(claims.sub);
-      console.log(`Back-channel logout: deleted ${deleted} session(s) for sub=${claims.sub}`);
-    }
+    // The sessions of the sid only, even when none matches; without sid,
+    // every session of the sub
+    const target = sessionsToEnd(claims);
+    const deleted = target.sid
+      ? sessionStore.deleteByOidcSid(target.sid)
+      : sessionStore.deleteByUserId(target.sub);
+    const [by, value] = Object.entries(target)[0];
+    console.log(`Back-channel logout: deleted ${deleted} session(s) for ${by}=${value}`);
 
     // Return 200 OK per spec (even if no sessions deleted)
     res.status(200).send('OK');
