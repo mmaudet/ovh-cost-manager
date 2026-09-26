@@ -23,8 +23,9 @@ describe('query keys', () => {
   it('caches every query of the shell and of the tab hooks under its key', async () => {
     const { allKeys } = await renderDashboard();
 
-    // Open on the Overview of September 2026. The queries of a month first ran without one,
-    // on the first render, before the months list loaded: they wait for a month, and stay.
+    // Open on the Overview of September 2026. On the first render, before the months list
+    // loaded, the queries of a month were built without one: disabled, they never ran. They
+    // stay in the cache only because the tests' client keeps every query (gcTime: Infinity).
     expect(sorted(allKeys())).toEqual(sorted([
       // The shell's, which load at page start: the header, the KPI cards, the footer and
       // several tabs read them
