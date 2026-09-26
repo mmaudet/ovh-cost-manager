@@ -20,7 +20,9 @@ and reaches the tab with its setter: the Infrastructure tab opens the bill lines
 resource type, which the Overview's link and the tab bar close (#56). When a tab reads
 data that another tab's hook owns, that hook returns it and the shell passes it on, so
 that the query keeps a single owner and its loading condition: the Compare tab lists the
-dedicated servers that the Infrastructure hook loads, only on its own tab (#35).
+dedicated servers that the Infrastructure hook loads, only on its own tab (#35). The shell
+itself reads a tab hook's result the same way: the "vs previous month" KPI reads the
+summary of month B from what the Compare hook returns (#50).
 
 A tab module may also export pieces that the shell renders in place, outside the tab, so
 that the page's markup stays as it is: the Trends period selector (`TrendsPeriodSelector`),
