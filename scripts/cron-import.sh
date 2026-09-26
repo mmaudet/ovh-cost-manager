@@ -13,6 +13,10 @@
 
 set -e
 
+# The choice of the first import, shared with its test
+# shellcheck source-path=SCRIPTDIR source=import-decision.sh disable=SC1091
+. /app/scripts/import-decision.sh
+
 INTERVAL="${IMPORT_INTERVAL:-86400}"
 FLAGS="${IMPORT_FLAGS:---all}"
 ENABLED="${IMPORT_ENABLED:-true}"
@@ -27,40 +31,6 @@ run_import() {
   # shellcheck disable=SC2086
   node /app/data/import.js "$1" $FLAGS 2>&1 | while read -r line; do log "$line"; done
 }
-
-# Print the number of bills, read from the database itself: the API needs a
-# login once authentication is on. Fail on anything but a number.
-count_bills() {
-  count=$(node /app/data/count-bills.js) || return 1
-  case "$count" in
-    '' | *[!0-9]*) return 1 ;;
-  esac
-  echo "$count"
-}
-
-# The import at start: full on a database without bills, none when it has
-# some. When the count fails, differential: it does not clear the database,
-# and on an empty one it imports every bill all the same. With --all, it
-# still refreshes the current month's consumption and the cloud tables, as
-# every periodic run does.
-first_import() {
-  if ! BILL_COUNT=$(count_bills); then
-    log "Could not count the bills in the database — running differential import"
-    run_import --diff
-    log "Differential import completed"
-  elif [ "$BILL_COUNT" -eq 0 ]; then
-    log "No existing data found — running full import"
-    run_import --full
-    log "Full import completed"
-  else
-    log "Existing data found ($BILL_COUNT bills) — skipping initial import"
-  fi
-}
-
-# The tests source this file for its functions only
-if [ "${CRON_IMPORT_SOURCED:-}" = 1 ]; then
-  return 0
-fi
 
 if [ "$ENABLED" = "false" ]; then
   log "Automatic imports disabled (IMPORT_ENABLED=false)"
@@ -77,7 +47,26 @@ until wget -q --spider http://localhost:3001/api/health 2>/dev/null; do
 done
 log "Server is ready"
 
-first_import
+# Count the bills in the database itself: the API needs a login once
+# authentication is on. import-decision.sh picks the first import from it.
+COUNT_STATUS=0
+BILL_COUNT=$(node /app/data/count-bills.js) || COUNT_STATUS=$?
+
+case "$(first_import_mode "$COUNT_STATUS" "$BILL_COUNT")" in
+  full)
+    log "No existing data found — running full import"
+    run_import --full
+    log "Full import completed"
+    ;;
+  none)
+    log "Existing data found ($BILL_COUNT bills) — skipping initial import"
+    ;;
+  *)
+    log "Could not count the bills in the database — running differential import"
+    run_import --diff
+    log "Differential import completed"
+    ;;
+esac
 
 # Periodic differential imports
 while true; do
