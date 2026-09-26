@@ -2,17 +2,17 @@ import { useState, useEffect, useRef, Fragment } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  PieChart, Pie, Cell, LineChart, Line, Legend
+  PieChart, Pie, Cell, Legend
 } from 'recharts';
 import {
   fetchMonths, fetchSummary, fetchByProject, fetchByService,
-  fetchMonthlyTrend, fetchImportStatus, fetchConfig, fetchUser,
+  fetchImportStatus, fetchConfig, fetchUser,
   fetchConsumptionCurrent, fetchConsumptionForecast,
   fetchInventoryServers,
   fetchInventoryVps, fetchInventoryStorage, fetchExpiringServices,
   fetchByResourceType, fetchResourceTypeDetails, fetchProjectsEnriched, fetchProjectConsumption,
   fetchProjectInstances, fetchProjectQuotas, fetchGpuSummary, fetchPublicCloudStats,
-  fetchProjectBuckets, fetchProjectInstanceTotal, triggerImport, fetchMonthlyTrendByCategory,
+  fetchProjectBuckets, fetchProjectInstanceTotal, triggerImport,
   fetchProjectVolumes, fetchProjectSnapshots, fetchProjectSavingsPlans
 } from '../services/api';
 import { useLanguage } from '../hooks/useLanguage.jsx';
@@ -30,14 +30,15 @@ import {
 import { ServersTable, serverCsvColumns } from '../components/ServersTable.jsx';
 import { SortIcon } from '../components/SortIcon.jsx';
 import { downloadCSV } from '../utils/csv.js';
-import { formatCurrency, formatYearMonth } from '../utils/format.js';
-import { PERIOD_OPTIONS, monthsSince } from '../utils/trendPeriods.js';
+import { formatCurrency } from '../utils/format.js';
 import { parseSqliteDate } from '../utils/sqliteDate.js';
 import { generateMarkdownReport } from '../utils/markdownReport.js';
 import { useWebCloudTab } from '../tabs/useWebCloudTab.js';
 import { WebCloudTab, WebCloudTabModals } from '../tabs/WebCloudTab.jsx';
 import { useBackupTab } from '../tabs/useBackupTab.js';
 import { BackupTab } from '../tabs/BackupTab.jsx';
+import { useTrendsTab } from '../tabs/useTrendsTab.js';
+import { TrendsTab, TrendsPeriodSelector } from '../tabs/TrendsTab.jsx';
 import ProjectProductComparison from './ProjectProductComparison.jsx';
 
 // Translation keys for the import_log type and status values
@@ -67,7 +68,6 @@ export default function Dashboard() {
   const [compareMonthB, setCompareMonthB] = useState(null);
   const [activeTab, setActiveTab] = useState('overview');
   const [budget, setBudget] = useState(50000); // Default budget
-  const [trendPeriod, setTrendPeriod] = useState(6); // Months for trend
   const [projectSort, setProjectSort] = useState({ column: 'total', direction: 'desc' });
   const [compareSort, setCompareSort] = useState({ column: 'totalA', direction: 'desc' });
   const [syncWarningDismissed, setSyncWarningDismissed] = useState(false);
@@ -181,19 +181,6 @@ export default function Dashboard() {
     queryFn: fetchMonths
   });
 
-  // Trend periods available given how far back the data goes. Offer every
-  // predefined step up to (and including) the first one that covers all data.
-  const maxMonths = months.length > 0 ? monthsSince(months[months.length - 1].value) : 0;
-  const availablePeriods = (() => {
-    const out = [];
-    for (const opt of PERIOD_OPTIONS) {
-      out.push(opt);
-      if (opt.months >= maxMonths) break;
-    }
-    return out.length > 0 ? out : [PERIOD_OPTIONS[0]];
-  })();
-  const currentPeriodLabel = (PERIOD_OPTIONS.find(o => o.months === trendPeriod) || {}).key;
-
   // Set default months when data loads
   useEffect(() => {
     if (months.length > 0 && !selectedMonth) {
@@ -208,11 +195,7 @@ export default function Dashboard() {
         setCompareMonthB(months[0]);
       }
     }
-    // Adjust trend period if it is no longer one of the available options
-    if (months.length > 0 && !availablePeriods.some(o => o.months === trendPeriod)) {
-      setTrendPeriod(availablePeriods[availablePeriods.length - 1].months);
-    }
-  }, [months, selectedMonth, trendPeriod]);
+  }, [months, selectedMonth]);
 
   // Fetch data for selected month
   const { data: summary, isLoading: loadingSummary } = useQuery({
@@ -233,22 +216,7 @@ export default function Dashboard() {
     enabled: !!selectedMonth
   });
 
-  const { data: monthlyTrend = [] } = useQuery({
-    queryKey: ['monthlyTrend', trendPeriod],
-    queryFn: () => fetchMonthlyTrend(trendPeriod)
-  });
-
-  const { data: trendByCategory = { categories: [], data: [] } } = useQuery({
-    queryKey: ['monthlyTrendByCategory', trendPeriod],
-    queryFn: () => fetchMonthlyTrendByCategory(trendPeriod)
-  });
-  // Categories hidden from the by-category chart (toggled via the legend).
-  const [hiddenCategories, setHiddenCategories] = useState(() => new Set());
-  const toggleCategory = (key) => setHiddenCategories(prev => {
-    const next = new Set(prev);
-    next.has(key) ? next.delete(key) : next.add(key);
-    return next;
-  });
+  const trendsTab = useTrendsTab({ months, activeTab });
 
   // Comparison data
   const { data: compareDataA } = useQuery({
@@ -446,13 +414,6 @@ export default function Dashboard() {
     queryKey: ['gpuSummary', selectedMonth?.from, selectedMonth?.to],
     queryFn: () => fetchGpuSummary(selectedMonth.from, selectedMonth.to),
     enabled: !!selectedMonth
-  });
-
-  // GPU cost trend — all-time (for trends tab)
-  const { data: gpuTrend } = useQuery({
-    queryKey: ['gpuTrend'],
-    queryFn: () => fetchGpuSummary(),
-    enabled: activeTab === 'trends'
   });
 
   // Public Cloud stats (Kubernetes, S3, Registry, etc.)
@@ -771,18 +732,7 @@ export default function Dashboard() {
             ))}
           </div>
           {activeTab === 'trends' && (
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-gray-600">{t('period')}:</span>
-              <select
-                value={trendPeriod}
-                onChange={(e) => setTrendPeriod(Number(e.target.value))}
-                className="px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm shadow-sm cursor-pointer"
-              >
-                {availablePeriods.map(opt => (
-                  <option key={opt.months} value={opt.months}>{t(opt.key)}</option>
-                ))}
-              </select>
-            </div>
+            <TrendsPeriodSelector {...trendsTab} t={t} />
           )}
         </div>
 
@@ -1418,155 +1368,7 @@ export default function Dashboard() {
 
         {/* Tab Content - Trends */}
         {activeTab === 'trends' && (
-          <div className="space-y-6">
-            <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
-              <h3 className="font-semibold text-gray-900 mb-4">{t('costEvolutionOver')} {t(currentPeriodLabel)}</h3>
-              {monthlyTrend.length > 0 ? (
-                <div className="h-72">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={monthlyTrend}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="yearMonth" tickFormatter={(ym) => formatYearMonth(ym, language)} />
-                      <YAxis tickFormatter={(v) => `${v}€`} />
-                      <Tooltip labelFormatter={(ym) => formatYearMonth(ym, language)} formatter={(v) => `${fmt(v)}€`} />
-                      <Line
-                        type="monotone"
-                        dataKey="cost"
-                        stroke="#3b82f6"
-                        strokeWidth={3}
-                        dot={{ fill: '#3b82f6', r: 6, strokeWidth: 2, stroke: '#fff' }}
-                        activeDot={{ r: 8 }}
-                      />
-                    </LineChart>
-                  </ResponsiveContainer>
-                </div>
-              ) : (
-                <div className="h-72 flex items-center justify-center text-gray-400">
-                  <p>{t('noDataAvailable')}</p>
-                </div>
-              )}
-            </div>
-
-            {/* Cost trend by category */}
-            <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
-              <h3 className="font-semibold text-gray-900 mb-4">{t('trendByCategory')}</h3>
-              {trendByCategory.data.length > 0 && trendByCategory.categories.length > 0 ? (
-                <>
-                  {/* Clickable legend: toggle categories to hide/show (Y axis rescales) */}
-                  <div className="flex flex-wrap gap-2 mb-4">
-                    {trendByCategory.categories.map((c) => {
-                      const hidden = hiddenCategories.has(c.key);
-                      return (
-                        <button
-                          key={c.key}
-                          onClick={() => toggleCategory(c.key)}
-                          className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border transition-colors cursor-pointer ${
-                            hidden ? 'bg-gray-50 text-gray-400 border-gray-200' : 'bg-white text-gray-700 border-gray-300'
-                          }`}
-                        >
-                          <span
-                            className="inline-block w-3 h-3 rounded-full"
-                            style={{ backgroundColor: hidden ? '#d1d5db' : c.color }}
-                          />
-                          {c.label}
-                        </button>
-                      );
-                    })}
-                  </div>
-                  <div className="h-96">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <LineChart data={trendByCategory.data}>
-                        <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis dataKey="yearMonth" tickFormatter={(ym) => formatYearMonth(ym, language)} />
-                        <YAxis tickFormatter={(v) => `${v}€`} />
-                        <Tooltip
-                          labelFormatter={(ym) => formatYearMonth(ym, language)}
-                          formatter={(v, name) => [`${fmt(v)}€`, name]}
-                        />
-                        {trendByCategory.categories
-                          .filter((c) => !hiddenCategories.has(c.key))
-                          .map((c) => (
-                            <Line
-                              key={c.key}
-                              type="monotone"
-                              dataKey={c.key}
-                              name={c.label}
-                              stroke={c.color}
-                              strokeWidth={2}
-                              dot={false}
-                              activeDot={{ r: 5 }}
-                            />
-                          ))}
-                      </LineChart>
-                    </ResponsiveContainer>
-                  </div>
-                </>
-              ) : (
-                <div className="h-72 flex items-center justify-center text-gray-400">
-                  <p>{t('noDataAvailable')}</p>
-                </div>
-              )}
-            </div>
-
-            {/* GPU Cost Trend */}
-            {gpuTrend?.monthlyTrend && gpuTrend.monthlyTrend.length > 1 && (
-              <div className="bg-white rounded-xl p-5 shadow-sm border-2 border-purple-300">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="font-semibold text-gray-900">
-                    {language === 'en' ? 'GPU cost evolution' : 'Évolution des coûts GPU'}
-                  </h3>
-                  <span className="text-lg font-bold text-purple-700">
-                    {language === 'en' ? 'Total' : 'Total'}: {fmt(gpuTrend.total)}€
-                  </span>
-                </div>
-                <div className="h-64">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={gpuTrend.monthlyTrend}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="month" tick={{ fontSize: 10 }} />
-                      <YAxis tickFormatter={(v) => `${v}€`} />
-                      <Tooltip formatter={(v) => `${fmt(v)}€`} />
-                      <Bar dataKey="total" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-              </div>
-            )}
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className={`bg-white rounded-xl p-5 shadow-sm border border-gray-100 ${monthlyTrend.length === 0 ? 'opacity-50' : ''}`}>
-                <span className="text-gray-500 text-sm">{t('periodGrowth')}</span>
-                <div className={`text-3xl font-bold mt-2 ${monthlyTrend.length > 1 ? (((monthlyTrend[monthlyTrend.length - 1]?.cost - monthlyTrend[0]?.cost) / monthlyTrend[0]?.cost) > 0 ? 'text-red-600' : 'text-green-600') : 'text-gray-400'}`}>
-                  {monthlyTrend.length > 1
-                    ? `${(((monthlyTrend[monthlyTrend.length - 1]?.cost - monthlyTrend[0]?.cost) / monthlyTrend[0]?.cost) * 100) > 0 ? '+' : ''}${(((monthlyTrend[monthlyTrend.length - 1]?.cost - monthlyTrend[0]?.cost) / monthlyTrend[0]?.cost) * 100).toFixed(1)}%`
-                    : 'N/A'}
-                </div>
-                <p className="text-sm text-gray-500 mt-1">{t('overPeriod')} {t(currentPeriodLabel)}</p>
-              </div>
-              <div className={`bg-white rounded-xl p-5 shadow-sm border border-gray-100 ${monthlyTrend.length === 0 ? 'opacity-50' : ''}`}>
-                <span className="text-gray-500 text-sm">{t('mostExpensiveMonth')}</span>
-                <div className={`text-3xl font-bold mt-2 ${monthlyTrend.length > 0 ? 'text-red-600' : 'text-gray-400'}`}>
-                  {monthlyTrend.length > 0
-                    ? formatYearMonth(monthlyTrend.reduce((max, m) => m.cost > max.cost ? m : max, monthlyTrend[0]).yearMonth, language)
-                    : 'N/A'}
-                </div>
-                <p className="text-sm text-gray-500 mt-1">
-                  {monthlyTrend.length > 0
-                    ? `${fmt(Math.max(...monthlyTrend.map(m => m.cost)))}€`
-                    : ''}
-                </p>
-              </div>
-              <div className={`bg-white rounded-xl p-5 shadow-sm border border-gray-100 ${monthlyTrend.length === 0 ? 'opacity-50' : ''}`}>
-                <span className="text-gray-500 text-sm">{t('annualProjection')}</span>
-                <div className={`text-3xl font-bold mt-2 ${monthlyTrend.length > 0 ? 'text-blue-600' : 'text-gray-400'}`}>
-                  {monthlyTrend.length > 0
-                    ? `~${fmt((monthlyTrend[monthlyTrend.length - 1]?.cost || 0) * 12)}€`
-                    : 'N/A'}
-                </div>
-                <p className="text-sm text-gray-500 mt-1">{t('basedOnLastMonth')}</p>
-              </div>
-            </div>
-          </div>
+          <TrendsTab {...trendsTab} language={language} t={t} fmt={fmt} />
         )}
 
         {/* Tab Content - Web Cloud */}

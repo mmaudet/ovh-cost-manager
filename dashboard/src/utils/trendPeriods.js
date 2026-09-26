@@ -22,4 +22,15 @@ const monthsSince = (yearMonth) => {
   return (now.getFullYear() - y) * 12 + (now.getMonth() + 1 - m) + 1;
 };
 
-export { PERIOD_OPTIONS, monthsSince };
+// Trend periods available given how far back the data goes. Offer every
+// predefined step up to (and including) the first one that covers all data.
+const availablePeriodsFor = (maxMonths) => {
+  const out = [];
+  for (const opt of PERIOD_OPTIONS) {
+    out.push(opt);
+    if (opt.months >= maxMonths) break;
+  }
+  return out.length > 0 ? out : [PERIOD_OPTIONS[0]];
+};
+
+export { PERIOD_OPTIONS, monthsSince, availablePeriodsFor };

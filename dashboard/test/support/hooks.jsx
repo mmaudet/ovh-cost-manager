@@ -16,8 +16,9 @@ export const TAB_IDS = [
 
 // Calls useTab(props), the API answering from the dataset, and waits until the hook holds
 // every answer it asked for. Returns its result, the query client that holds the answers,
-// and rerender(props), which calls it again with other props, as the shell does when its
-// state changes, and waits the same way.
+// keysOf(name), the keys that client caches the answers of a query under, and
+// rerender(props), which calls it again with other props, as the shell does when its state
+// changes, and waits the same way.
 export async function renderTabHook(useTab, props, data = account) {
   serve(data);
   const queryClient = createQueryClient();
@@ -31,6 +32,10 @@ export async function renderTabHook(useTab, props, data = account) {
   return {
     result,
     queryClient,
+    // The cache is the page's: each period keeps its own answers there, and the end of an
+    // import invalidates them by the name of their query
+    keysOf: (name) => queryClient.getQueriesData({ queryKey: [name] })
+      .map(([queryKey]) => queryKey),
     async rerender(nextProps) {
       rerender(nextProps);
       await settle(queryClient);
