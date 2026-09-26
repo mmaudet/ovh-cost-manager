@@ -103,7 +103,7 @@ export async function captureDashboard(browser, { url, clock, languages, months,
       await context.clock.setFixedTime(clock);
       const page = await context.newPage();
       const walker = new Walker(page, { url, language, openingMonth, projects, capture });
-      await page.route('**/api/**', (route) => walker.answerInTurn(route));
+      await page.route('**/*', (route) => walker.handle(route));
       for (const month of months) {
         await walker.captureMonth(month);
         onProgress?.(`${language} ${month}`, Object.keys(capture.sections).length);
@@ -157,6 +157,7 @@ class Walker {
 
   async captureMonth(month) {
     const prefix = `${this.language}/${month}`;
+    this.prefix = prefix;
     this.errors = [];
     try {
       await this.open(month);
@@ -188,6 +189,22 @@ class Walker {
     }
     // Sorted and deduplicated: which errors occurred, not when
     if (this.errors.length) this.capture.add(`${prefix}/errors`, [...new Set(this.errors)].sort().join('\n'));
+  }
+
+  /** Every request of the page: writes are refused, API calls answered in turn. */
+  handle(route) {
+    const request = route.request();
+    const { pathname, search } = new URL(request.url());
+    if (request.method() !== 'GET') {
+      // The comparison only reads: a resync would call the OVH API, and older commits
+      // ignore IMPORT_ENABLED=false, so the page's writes stop here, whatever the code
+      const written = `${request.method()} ${pathname}${search}`;
+      this.capture.add(`${this.prefix ?? this.language}/refused:${written}`,
+        [`refused ${written}`, request.postData() ?? ''].join('\n').trim());
+      return route.abort('blockedbyclient');
+    }
+    if (pathname.startsWith('/api/')) return this.answerInTurn(route);
+    return route.continue();
   }
 
   /** Queues an API call of the page, see RESPONSE_GAP. */

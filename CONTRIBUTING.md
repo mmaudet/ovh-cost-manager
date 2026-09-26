@@ -130,7 +130,10 @@ script:
 - builds the base in a temporary git worktree (`npm ci`, native binaries of
   better-sqlite3 and esbuild, `npm run build`), and the working tree in place;
 - serves each side with imports turned off (`IMPORT_ENABLED=false`), without
-  authentication or rate limiting: nothing calls the OVH API;
+  authentication or rate limiting, and lets the page read only: any other
+  request, such as a resync, is refused and recorded as a section of its own.
+  Nothing calls the OVH API, even with older commits that ignore
+  `IMPORT_ENABLED`;
 - opens both in Google Chrome, or in Playwright's Chromium if Chrome is missing
   (`npx playwright install chromium`), with the clock frozen at the date of the
   latest bill (`--clock`) and the page in French (`--lang en` or `--lang both`);
