@@ -85,26 +85,55 @@ afterEach(() => {
 });
 
 describe('VPS inventory import', () => {
+  // The image installed on the VPS, as images/current describes it
+  const currentImage = (imageName) => ok({ id: 'image-debian-12', name: imageName });
+  // The distribution route, which OVH removes on 15 October 2026
+  const distribution = (fields) => ok({ id: 1, bitFormat: 64, locale: 'en', ...fields });
+  const removed = fail(404, 'The requested object (serviceName) does not exist');
+
   test('stores the operating system of a VPS, and its disk size apart', async () => {
-    mockRoutes.set(`/vps/${VPS}/distribution`, ok({
-      id: 1, name: 'Debian 12', distribution: 'debian12', bitFormat: 64, locale: 'en',
-    }));
+    mockRoutes.set(`/vps/${VPS}/images/current`, currentImage('Debian 12'));
+    mockRoutes.set(`/vps/${VPS}/distribution`, removed);
 
     await importInventory();
 
     expect(storedVps()).toEqual([['Debian 12', 40]]);
   });
 
-  test('stores the distribution of a VPS when it has no name', async () => {
-    mockRoutes.set(`/vps/${VPS}/distribution`, ok({ id: 1, distribution: 'debian12' }));
+  // The two answer different names here, to tell which one is read
+  test('reads the operating system from the current image first', async () => {
+    mockRoutes.set(`/vps/${VPS}/images/current`, currentImage('Debian 12'));
+    mockRoutes.set(`/vps/${VPS}/distribution`, distribution({ name: 'Debian 11' }));
+
+    await importInventory();
+
+    expect(storedVps()).toEqual([['Debian 12', 40]]);
+  });
+
+  test.each([
+    ['cannot be read', fail(403, 'This call has not been granted')],
+    ['names none', ok({ id: 'image-debian-12' })],
+  ])('falls back on the distribution when the current image %s', async (_, image) => {
+    mockRoutes.set(`/vps/${VPS}/images/current`, image);
+    mockRoutes.set(`/vps/${VPS}/distribution`, distribution({ name: 'Debian 12' }));
+
+    await importInventory();
+
+    expect(storedVps()).toEqual([['Debian 12', 40]]);
+  });
+
+  test('falls back on the distribution field when the distribution has no name', async () => {
+    mockRoutes.set(`/vps/${VPS}/images/current`, removed);
+    mockRoutes.set(`/vps/${VPS}/distribution`, distribution({ distribution: 'debian12' }));
 
     await importInventory();
 
     expect(storedVps()).toEqual([['debian12', 40]]);
   });
 
-  test('leaves the operating system empty when the distribution call fails', async () => {
-    mockRoutes.set(`/vps/${VPS}/distribution`, fail(403, 'This call has not been granted'));
+  test('leaves the operating system empty when both calls fail', async () => {
+    mockRoutes.set(`/vps/${VPS}/images/current`, fail(403, 'This call has not been granted'));
+    mockRoutes.set(`/vps/${VPS}/distribution`, removed);
 
     await importInventory();
 
@@ -113,9 +142,11 @@ describe('VPS inventory import', () => {
 
   // The ovh client answers null for an empty body
   test.each([
-    ['names none', { id: 1, bitFormat: 64 }],
-    ['is empty', null],
-  ])('leaves the operating system empty when the distribution %s', async (_, answer) => {
+    ['name none', { id: 1, bitFormat: 64 }],
+    ['are empty', null],
+  ])('leaves the operating system empty when the current image and the distribution %s',
+    async (_, answer) => {
+    mockRoutes.set(`/vps/${VPS}/images/current`, ok(answer));
     mockRoutes.set(`/vps/${VPS}/distribution`, ok(answer));
 
     await importInventory();

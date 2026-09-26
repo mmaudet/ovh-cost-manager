@@ -595,12 +595,20 @@ async function importInventory(projectMap) {
         ips = await ovh.requestPromised('GET', `/vps/${name}/ips`);
       } catch (e) { /* optional */ }
 
-      // The operating system. The OVH API schema marks this route deprecated, to be removed
-      // on 2026-10-15 in favour of /vps/{serviceName}/images/current, in beta
-      let distribution = {};
+      // The operating system: the name of the image installed on the VPS
+      // (images/current, in beta), or else that of its distribution. The OVH API schema
+      // marks the distribution route deprecated, and removes it on 2026-10-15.
+      let osName = '';
       try {
-        distribution = await ovh.requestPromised('GET', `/vps/${name}/distribution`);
+        const image = await ovh.requestPromised('GET', `/vps/${name}/images/current`);
+        osName = image?.name || '';
       } catch (e) { /* optional */ }
+      if (!osName) {
+        try {
+          const distribution = await ovh.requestPromised('GET', `/vps/${name}/distribution`);
+          osName = distribution?.name || distribution?.distribution || '';
+        } catch (e) { /* optional */ }
+      }
 
       db.inventory.upsertVps({
         id: name,
@@ -608,7 +616,7 @@ async function importInventory(projectMap) {
         model: info.model?.name || '',
         zone: info.zone || '',
         state: info.state || '',
-        os: distribution?.name || distribution?.distribution || '',
+        os: osName,
         vcpus: info.model?.vcore || 0,
         ram_mb: info.model?.memory || 0,
         disk_gb: info.model?.disk || 0,
