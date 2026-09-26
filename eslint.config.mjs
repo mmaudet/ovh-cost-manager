@@ -36,6 +36,7 @@ export default [
   },
   {
     files: ['scripts/**/*.mjs'],
+    ignores: ['scripts/compare-dashboard/in-page.mjs'],
     languageOptions: {
       ecmaVersion: 'latest',
       sourceType: 'module',
@@ -44,8 +45,13 @@ export default [
     rules,
   },
   {
-    // Run inside the dashboard page by Playwright
+    // Run inside the dashboard page by Playwright: browser globals only
     files: ['scripts/compare-dashboard/in-page.mjs'],
-    languageOptions: { globals: globals.browser },
+    languageOptions: {
+      ecmaVersion: 'latest',
+      sourceType: 'module',
+      globals: globals.browser,
+    },
+    rules,
   },
 ];
