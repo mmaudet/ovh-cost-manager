@@ -56,11 +56,19 @@ function create(userId, userInfo, tokens, oidcSid, maxAge) {
   return sid;
 }
 
+// The current time in the format of expires_at, toISOString's, so that their
+// text order is their time order. Against datetime('now'), 'YYYY-MM-DD HH:MM:SS',
+// every expires_at of the same day sorted after ('T' comes after ' '), which
+// kept an expired session valid until the end of its UTC day.
+function now() {
+  return new Date().toISOString();
+}
+
 function get(sid) {
   const row = db.prepare(`
     SELECT * FROM sessions
-    WHERE sid = ? AND expires_at > datetime('now')
-  `).get(sid);
+    WHERE sid = ? AND expires_at > ?
+  `).get(sid, now());
 
   if (row) {
     row.user_info = JSON.parse(row.user_info);
@@ -85,7 +93,7 @@ function deleteByOidcSid(oidcSid) {
 }
 
 function cleanup() {
-  return db.prepare("DELETE FROM sessions WHERE expires_at <= datetime('now')").run();
+  return db.prepare('DELETE FROM sessions WHERE expires_at <= ?').run(now());
 }
 
 module.exports = {
