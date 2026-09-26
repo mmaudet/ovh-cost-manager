@@ -14,6 +14,7 @@ const { monthBounds } = require('../data/months');
 // Import auth module
 const auth = require('./auth');
 const { createOriginCheck } = require('./cors');
+const { createHostCheck } = require('./hosts');
 const { trendWindowFromQuery } = require('./months');
 
 // Load configuration
@@ -98,6 +99,37 @@ function getRateLimitConfig() {
 const app = express();
 const PORT = process.env.PORT || 3001;
 const rateLimitConfig = getRateLimitConfig();
+
+// Host check, against DNS rebinding (#78): on only when ALLOWED_HOSTS is set
+const isAllowedHost = createHostCheck({
+  allowedHosts: process.env.ALLOWED_HOSTS
+    ? process.env.ALLOWED_HOSTS.split(',')
+    : config.allowedHosts || [],
+  trustProxy: rateLimitConfig.trustProxy,
+});
+
+// Each blocked host is logged once, and only the first hundred: any client can
+// send any number of them
+const MAX_LOGGED_HOSTS = 100;
+const loggedHosts = new Set();
+
+function hostCheck(req, res, next) {
+  const host = req.headers.host;
+  const forwardedHost = req.headers['x-forwarded-host'];
+  if (isAllowedHost(host, forwardedHost)) {
+    return next();
+  }
+  // The header the check read
+  const blockedHost = rateLimitConfig.trustProxy && forwardedHost ? forwardedHost : host;
+  if (!loggedHosts.has(blockedHost) && loggedHosts.size < MAX_LOGGED_HOSTS) {
+    loggedHosts.add(blockedHost);
+    console.warn(`Host check: Blocked request for host: ${blockedHost}`);
+    if (loggedHosts.size === MAX_LOGGED_HOSTS) {
+      console.warn('Host check: Further blocked hosts are not logged');
+    }
+  }
+  return res.status(421).json({ error: 'Host not allowed' });
+}
 
 // CORS configuration - restrict to allowed origins and the request's own
 const isAllowedOrigin = createOriginCheck({
@@ -217,7 +249,9 @@ if (rateLimitConfig.trustProxy) {
   app.set('trust proxy', 1);
 }
 
-// Middleware
+// Middleware. The Host check comes first, so that a host that is not allowed
+// gets no route, no static file and no CORS answer.
+app.use(hostCheck);
 app.use(cors(corsOptionsDelegate));
 app.use(express.json());
 app.use(cookieParser());
