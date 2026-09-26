@@ -23,6 +23,14 @@ const compared = ({ compareMonthA, compareMonthB }) => [compareMonthA.value, com
 const services = (byService) => byService.map(({ name, value }) => [name, value]);
 // The projects of a month, as [name, cost]
 const projects = (byProject) => byProject.map(({ projectName, total }) => [projectName, total]);
+// The costs by resource type of a month, as [resource type, cost]
+const resourceTypes = (byResourceType) => byResourceType
+  .map(({ resource_type, value }) => [resource_type, value]);
+// What the hook requests for each of months A and B: the costs by resource type and the
+// Veeam backups too, for the infrastructure, backup and Private Cloud comparisons (#32)
+const FIGURES = [
+  'fetchSummary', 'fetchByService', 'fetchByProject', 'fetchByResourceType', 'fetchBackupStats',
+];
 
 // The hook next to the summary query the shell runs for its selected month, with the same
 // key and API function: both share the query cache, as they do in the page. The API
@@ -87,9 +95,10 @@ describe('useCompareTab', () => {
     async (activeTab) => {
       const { result } = await renderTabHook(useCompareTab, { ...monthsArrive, activeTab });
 
-      expect(api.fetchSummary).not.toHaveBeenCalled();
-      expect(api.fetchByService).not.toHaveBeenCalled();
-      expect(api.fetchByProject).not.toHaveBeenCalled();
+      // Nor the costs by resource type and the Veeam backups (#32)
+      for (const name of FIGURES) {
+        expect(api[name], name).not.toHaveBeenCalled();
+      }
       // Months A and B are set whatever the tab
       expect(compared(result.current)).toEqual(['2026-08', '2026-09']);
       expect(result.current.compareDataA).toBeUndefined();
@@ -98,6 +107,10 @@ describe('useCompareTab', () => {
       expect(result.current.byServiceB).toEqual([]);
       expect(result.current.byProjectA).toEqual([]);
       expect(result.current.byProjectB).toEqual([]);
+      expect(result.current.byResourceTypeA).toEqual([]);
+      expect(result.current.byResourceTypeB).toEqual([]);
+      expect(result.current.backupStatsA).toBeUndefined();
+      expect(result.current.backupStatsB).toBeUndefined();
     },
   );
 
@@ -105,11 +118,13 @@ describe('useCompareTab', () => {
     const { queryClient } = await renderTabHook(useCompareTab,
       { months: [], selectedMonth: null, activeTab: 'compare' });
 
-    expect(api.fetchSummary).not.toHaveBeenCalled();
-    expect(api.fetchByService).not.toHaveBeenCalled();
-    expect(api.fetchByProject).not.toHaveBeenCalled();
+    // Nor the costs by resource type and the Veeam backups (#32)
+    for (const name of FIGURES) {
+      expect(api[name], name).not.toHaveBeenCalled();
+    }
     // The queries wait for months A and B, rather than failing for the lack of them
-    for (const name of ['summary', 'byService', 'byProject']) {
+    const names = ['summary', 'byService', 'byProject', 'byResourceType', 'backupStats'];
+    for (const name of names) {
       expect(queryClient.getQueryState([name, undefined, undefined]), name)
         .toMatchObject(WAITING);
     }
@@ -121,9 +136,10 @@ describe('useCompareTab', () => {
 
     await rerender({ months, selectedMonth: september, activeTab: 'compare' });
 
-    for (const fetchFigures of [api.fetchSummary, api.fetchByService, api.fetchByProject]) {
-      expect(fetchFigures).toHaveBeenCalledWith('2026-08-01', '2026-08-31');
-      expect(fetchFigures).toHaveBeenCalledWith('2026-09-01', '2026-09-30');
+    // Their costs by resource type and their Veeam backups too (#32)
+    for (const name of FIGURES) {
+      expect(api[name], name).toHaveBeenCalledWith('2026-08-01', '2026-08-31');
+      expect(api[name], name).toHaveBeenCalledWith('2026-09-01', '2026-09-30');
     }
   });
 
@@ -144,6 +160,11 @@ describe('useCompareTab', () => {
       byServiceB: expect.any(Array),
       byProjectA: expect.any(Array),
       byProjectB: expect.any(Array),
+      // For the infrastructure, backup and Private Cloud comparisons (#32)
+      byResourceTypeA: expect.any(Array),
+      byResourceTypeB: expect.any(Array),
+      backupStatsA: expect.any(Object),
+      backupStatsB: expect.any(Object),
     });
     expect(compared(result.current)).toEqual(['2026-08', '2026-09']);
     expect(result.current.compareDataA.total).toBe(1042);
@@ -156,15 +177,28 @@ describe('useCompareTab', () => {
     expect(projects(result.current.byProjectA)).toEqual([['Production', 512], ['Staging', 190]]);
     expect(projects(result.current.byProjectB))
       .toEqual([['Production', 610.4], ['Staging', 220]]);
+    expect(resourceTypes(result.current.byResourceTypeA)).toEqual([
+      ['cloud_project', 702], ['dedicated_server', 270], ['backup', 40], ['domain', 30],
+    ]);
+    expect(resourceTypes(result.current.byResourceTypeB)).toEqual([
+      ['cloud_project', 830.4], ['dedicated_server', 270], ['backup', 90], ['domain', 35],
+      ['license', 25],
+    ]);
+    expect(result.current.backupStatsA)
+      .toEqual({ vms: { count: 2, total: 40 }, enterprise: { count: 0, total: 0 } });
+    expect(result.current.backupStatsB)
+      .toEqual({ vms: { count: 3, total: 90 }, enterprise: { count: 1, total: 25 } });
   });
 
   it('caches each answer under the name of its query and its month', async () => {
     const { keysOf } = await renderTabHook(useCompareTab, onCompare);
 
     // The key the queries waited under before months A and B, then those of August and
-    // September: the keys of the summary, service types and projects the page loads for
-    // its selected month
-    for (const name of ['summary', 'byService', 'byProject']) {
+    // September: the keys of the summary, service types, projects and costs by resource
+    // type the page loads for its selected month, and of the Veeam backups the Backup tab
+    // loads for it (#32)
+    const names = ['summary', 'byService', 'byProject', 'byResourceType', 'backupStats'];
+    for (const name of names) {
       expect(keysOf(name)).toEqual([
         [name, undefined, undefined],
         [name, '2026-08-01', '2026-08-31'],
@@ -195,14 +229,20 @@ describe('useCompareTab', () => {
     act(() => result.current.setCompareMonthA(july));
     await settle(queryClient);
 
-    for (const fetchFigures of [api.fetchSummary, api.fetchByService, api.fetchByProject]) {
-      expect(fetchFigures).toHaveBeenCalledWith('2026-07-01', '2026-07-31');
+    // Their costs by resource type and their Veeam backups too (#32)
+    for (const name of FIGURES) {
+      expect(api[name], name).toHaveBeenCalledWith('2026-07-01', '2026-07-31');
     }
     expect(compared(result.current)).toEqual(['2026-07', '2026-09']);
     expect(result.current.compareDataA.total).toBe(980);
     expect(services(result.current.byServiceA))
       .toEqual([['Compute', 650], ['Other', 200], ['Storage', 130]]);
     expect(projects(result.current.byProjectA)).toEqual([['Production', 680]]);
+    expect(resourceTypes(result.current.byResourceTypeA))
+      .toEqual([['cloud_project', 680], ['dedicated_server', 270], ['domain', 30]]);
+    // Nothing backed up in July: what the server answers then
+    expect(result.current.backupStatsA)
+      .toEqual({ vms: { count: 0, total: 0 }, enterprise: { count: 0, total: 0 } });
 
     act(() => result.current.setCompareMonthB(august));
     await settle(queryClient);
@@ -213,6 +253,11 @@ describe('useCompareTab', () => {
     expect(services(result.current.byServiceB))
       .toEqual([['Compute', 690], ['Storage', 202], ['Other', 150]]);
     expect(projects(result.current.byProjectB)).toEqual([['Production', 512], ['Staging', 190]]);
+    expect(resourceTypes(result.current.byResourceTypeB)).toEqual([
+      ['cloud_project', 702], ['dedicated_server', 270], ['backup', 40], ['domain', 30],
+    ]);
+    expect(result.current.backupStatsB)
+      .toEqual({ vms: { count: 2, total: 40 }, enterprise: { count: 0, total: 0 } });
   });
 
   it('sorts on a new column most expensive first, then each way in turn', async () => {

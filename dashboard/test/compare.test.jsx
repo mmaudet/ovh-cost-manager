@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { screen, within } from '@testing-library/react';
-import { account, threeBilledProjects } from './fixtures/account.js';
+import { account, everyResourceType, threeBilledProjects } from './fixtures/account.js';
 import { months } from './fixtures/calendar.js';
 import { api } from './support/api.js';
 import {
@@ -48,19 +48,25 @@ const projectComparisons = () => screen
 
 describe('Compare tab', () => {
   it('loads the figures of month A when the tab opens, not before', async () => {
-    const figures = [api.fetchSummary, api.fetchByService, api.fetchByProject];
+    const figures = [
+      api.fetchSummary, api.fetchByService, api.fetchByProject,
+      // The costs by resource type and the Veeam backups too (#32)
+      api.fetchByResourceType, api.fetchBackupStats,
+    ];
     const { user } = await renderDashboard();
     for (const fetchFigures of figures) {
       expect(fetchFigures).not.toHaveBeenCalledWith('2026-08-01', '2026-08-31');
     }
+    expect(api.fetchBackupStats).not.toHaveBeenCalled();
 
     await openTab(user, 'Comparaison');
 
     // Month B, the latest month, is the one the page opens on: its figures
-    // are there already
+    // are there already, all but its Veeam backups (#32)
     for (const fetchFigures of figures) {
       expect(fetchFigures).toHaveBeenCalledWith('2026-08-01', '2026-08-31');
     }
+    expect(api.fetchBackupStats).toHaveBeenCalledWith('2026-09-01', '2026-09-30');
     // The consumption of a project waits until its comparison opens, and the
     // dedicated servers until the Infrastructure tab opens (#35)
     expect(api.fetchProjectConsumption).not.toHaveBeenCalled();
@@ -262,8 +268,10 @@ describe('Compare tab', () => {
     });
   });
 
+  // The costs of each resource type are those of the costs by resource type
+  // of months A and B, and the backups those of their Veeam backups (#32)
   describe('infrastructure, backup and Private Cloud comparisons', () => {
-    it('show nothing billed, whatever months A and B cost (#32)', async () => {
+    it('compare the costs of each resource type in months A and B (#32)', async () => {
       const { user } = await renderDashboard();
       await openTab(user, 'Comparaison');
       // Closed from the start
@@ -275,25 +283,27 @@ describe('Compare tab', () => {
       await openComparison(user, BACKUP);
       await openComparison(user, PRIVATE_CLOUD);
 
-      // August and September were each billed 270 € of dedicated servers, and
-      // 40 € then 90 € of backups (see the costs by resource type of the
-      // account). The rows look them up by a key, and count them, in the
-      // service type breakdown, whose answer has neither: all read 0 (#32).
-      expect(rowsOf(comparisonTable(INFRASTRUCTURE))).toEqual([
+      // August and September were each billed 270 € of dedicated servers,
+      // and 30 € then 35 € of domains: nothing else these rows list (#32).
+      // A variation from 0 € shows nothing, and an empty cell gives no text.
+      expect(rowTextsOf(comparisonTable(INFRASTRUCTURE))).toEqual([
         ['Type', 'Août 2026', 'Septembre 2026', 'Variation'],
-        ['Liste des Serveurs dédiés présents au 15/09/2026', '0,00€', '0,00€', ''],
-        ['VPS', '0,00€', '0,00€', ''],
-        ['Stockage', '0,00€', '0,00€', ''],
-        ['Load Balancer', '0,00€', '0,00€', ''],
-        ['Adresses IP', '0,00€', '0,00€', ''],
-        ['Noms de domaine', '0,00€', '0,00€', ''],
-        ['Hôtes Private Cloud', '0,00€', '0,00€', ''],
-        ['Datastores Private Cloud', '0,00€', '0,00€', ''],
+        ['Liste des Serveurs dédiés présents au 15/09/2026', '270,00€', '270,00€', '0.0%'],
+        ['VPS', '0,00€', '0,00€'],
+        ['Stockage', '0,00€', '0,00€'],
+        ['Load Balancer', '0,00€', '0,00€'],
+        ['Adresses IP', '0,00€', '0,00€'],
+        // (35 - 30) / 30
+        ['Noms de domaine', '30,00€', '35,00€', '+16.7%'],
+        ['Hôtes Private Cloud', '0,00€', '0,00€'],
+        ['Datastores Private Cloud', '0,00€', '0,00€'],
       ]);
+      // 2 Veeam VMs backed up for 40 € in August, 3 for 90 € in September,
+      // and an Enterprise licence of 25 € in September only (#32)
       expect(rowsOf(comparisonTable(BACKUP))).toEqual([
         ['Catégorie', 'Août 2026', 'Septembre 2026', 'Variation'],
-        ['VMs Veeam Backup', '0 / 0,00€', '0 / 0,00€', ''],
-        ['Licence Veeam Enterprise', '0 / 0,00€', '0 / 0,00€', ''],
+        ['VMs Veeam Backup', '2 / 40,00€', '3 / 90,00€', '+125.0%'],
+        ['Licence Veeam Enterprise', '0 / 0,00€', '1 / 25,00€', ''],
       ]);
       expect(rowsOf(comparisonTable(PRIVATE_CLOUD))).toEqual([
         ['Type', 'Août 2026', 'Septembre 2026', 'Variation'],
@@ -302,12 +312,53 @@ describe('Compare tab', () => {
       ]);
     });
 
+    it('follow the months the user picks, for every resource type (#32)', async () => {
+      const { user } = await renderDashboard({ ...account, ...everyResourceType });
+      await openTab(user, 'Comparaison');
+      await pickMonth(user, 'Septembre 2026', 'Juillet 2026');
+      await pickMonth(user, 'Août 2026', 'Septembre 2026');
+
+      await openComparison(user, INFRASTRUCTURE);
+      await openComparison(user, BACKUP);
+      await openComparison(user, PRIVATE_CLOUD);
+
+      // Month A, September, was billed for every resource type these rows
+      // list; month B, July, for dedicated servers and domains only, and
+      // backed nothing up (#32)
+      expect(api.fetchByResourceType).toHaveBeenCalledWith('2026-07-01', '2026-07-31');
+      expect(api.fetchBackupStats).toHaveBeenCalledWith('2026-07-01', '2026-07-31');
+      expect(rowTextsOf(comparisonTable(INFRASTRUCTURE))).toEqual([
+        ['Type', 'Septembre 2026', 'Juillet 2026', 'Variation'],
+        ['Liste des Serveurs dédiés présents au 15/09/2026', '270,00€', '270,00€', '0.0%'],
+        ['VPS', '11,99€', '0,00€', '-100.0%'],
+        ['Stockage', '64,80€', '0,00€', '-100.0%'],
+        ['Load Balancer', '18,00€', '0,00€', '-100.0%'],
+        ['Adresses IP', '6,00€', '0,00€', '-100.0%'],
+        // (30 - 35) / 35
+        ['Noms de domaine', '35,00€', '30,00€', '-14.3%'],
+        ['Hôtes Private Cloud', '1 450,00€', '0,00€', '-100.0%'],
+        ['Datastores Private Cloud', '380,00€', '0,00€', '-100.0%'],
+      ]);
+      expect(rowsOf(comparisonTable(BACKUP))).toEqual([
+        ['Catégorie', 'Septembre 2026', 'Juillet 2026', 'Variation'],
+        ['VMs Veeam Backup', '3 / 90,00€', '0 / 0,00€', '-100.0%'],
+        ['Licence Veeam Enterprise', '1 / 25,00€', '0 / 0,00€', '-100.0%'],
+      ]);
+      expect(rowsOf(comparisonTable(PRIVATE_CLOUD))).toEqual([
+        ['Type', 'Septembre 2026', 'Juillet 2026', 'Variation'],
+        ['Hôtes Private Cloud', '1 450,00€', '0,00€', '-100.0%'],
+        ['Datastores Private Cloud', '380,00€', '0,00€', '-100.0%'],
+      ]);
+    });
+
     it('list dedicated servers only once the Infrastructure tab was opened (#35)', async () => {
       const { user } = await renderDashboard();
       await openTab(user, 'Comparaison');
       await openComparison(user, INFRASTRUCTURE);
-      expect(rowTextsOf(comparisonTable(INFRASTRUCTURE))[1])
-        .toEqual(['Liste des Serveurs dédiés présents au 15/09/2026', '0,00€', '0,00€']);
+      // The costs of months A and B (#32)
+      expect(rowTextsOf(comparisonTable(INFRASTRUCTURE))[1]).toEqual([
+        'Liste des Serveurs dédiés présents au 15/09/2026', '270,00€', '270,00€', '0.0%',
+      ]);
 
       await openTab(user, 'Infrastructure');
       await openTab(user, 'Comparaison');
@@ -317,11 +368,12 @@ describe('Compare tab', () => {
 
       await openComparison(user, INFRASTRUCTURE);
 
-      // The servers the Infrastructure tab loaded, the costs still 0 (#32)
+      // The servers the Infrastructure tab loaded, and the costs of months A
+      // and B (#32)
       expect(rowTextsOf(comparisonTable(INFRASTRUCTURE))[1]).toEqual([
         'Liste des Serveurs dédiés présents au 15/09/2026',
         'backup-server', 'ns3000002.ip-198-51-100.eu',
-        '0,00€', '0,00€',
+        '270,00€', '270,00€', '0.0%',
       ]);
     });
   });
@@ -423,10 +475,11 @@ describe('Compare tab', () => {
       'VPS', 'Storage', 'Load Balancer', 'IP Addresses', 'Domains',
       'Private Cloud Hosts', 'Private Cloud Datastores',
     ]);
+    // The Veeam backups of months A and B (#32)
     expect(rowsOf(comparisonTable(/^Backup Comparison/))).toEqual([
       ['Category', 'Août 2026', 'Septembre 2026', 'Variation'],
-      ['Veeam Backup VMs', '0 / 0.00€', '0 / 0.00€', ''],
-      ['Veeam Enterprise License', '0 / 0.00€', '0 / 0.00€', ''],
+      ['Veeam Backup VMs', '2 / 40.00€', '3 / 90.00€', '+125.0%'],
+      ['Veeam Enterprise License', '0 / 0.00€', '1 / 25.00€', ''],
     ]);
     expect(rowsOf(comparisonTable(/^Private Cloud Comparison/)).map(([type]) => type))
       .toEqual(['Type', 'Private Cloud Hosts', 'Private Cloud Datastores']);

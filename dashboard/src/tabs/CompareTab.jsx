@@ -13,6 +13,7 @@ const CompareTab = ({
   compareMonthA, setCompareMonthA, compareMonthB, setCompareMonthB,
   compareSort, handleCompareSort,
   compareDataA, compareDataB, byServiceA, byServiceB, byProjectA, byProjectB,
+  byResourceTypeA, byResourceTypeB, backupStatsA, backupStatsB,
   language, t, fmt, months, inventoryServers,
 }) => {
   // Merge and sort comparison data
@@ -212,8 +213,9 @@ const CompareTab = ({
               { key: 'private_cloud_host', label: language === 'en' ? 'Private Cloud Hosts' : 'Hôtes Private Cloud' },
               { key: 'private_cloud_datastore', label: language === 'en' ? 'Private Cloud Datastores' : 'Datastores Private Cloud' },
             ].map(row => {
-              const a = byServiceA.find(s => s.key === row.key) || {};
-              const b = byServiceB.find(s => s.key === row.key) || {};
+              // The costs of the row's resource type in months A and B (#32)
+              const a = byResourceTypeA.find(r => r.resource_type === row.key) || {};
+              const b = byResourceTypeB.find(r => r.resource_type === row.key) || {};
               const valA = a.value || 0;
               const valB = b.value || 0;
               const diff = valA ? ((valB - valA) / valA * 100) : null;
@@ -252,22 +254,24 @@ const CompareTab = ({
             </tr>
           </thead>
           <tbody>
+            {/* The number and the cost of the Veeam VMs and Enterprise licences of months A
+                and B, as the Backup tab shows them for the selected month (#32) */}
             {[
               {
                 key: 'backup_vms',
                 label: language === 'en' ? 'Veeam Backup VMs' : 'VMs Veeam Backup',
-                getA: () => (byServiceA.find(s => s.key === 'backup')?.count || 0),
-                getB: () => (byServiceB.find(s => s.key === 'backup')?.count || 0),
-                getValA: () => (byServiceA.find(s => s.key === 'backup')?.value || 0),
-                getValB: () => (byServiceB.find(s => s.key === 'backup')?.value || 0),
+                getA: () => (backupStatsA?.vms?.count || 0),
+                getB: () => (backupStatsB?.vms?.count || 0),
+                getValA: () => (backupStatsA?.vms?.total || 0),
+                getValB: () => (backupStatsB?.vms?.total || 0),
               },
               {
                 key: 'backup_enterprise',
                 label: language === 'en' ? 'Veeam Enterprise License' : 'Licence Veeam Enterprise',
-                getA: () => (byServiceA.find(s => s.key === 'backup_enterprise')?.count || 0),
-                getB: () => (byServiceB.find(s => s.key === 'backup_enterprise')?.count || 0),
-                getValA: () => (byServiceA.find(s => s.key === 'backup_enterprise')?.value || 0),
-                getValB: () => (byServiceB.find(s => s.key === 'backup_enterprise')?.value || 0),
+                getA: () => (backupStatsA?.enterprise?.count || 0),
+                getB: () => (backupStatsB?.enterprise?.count || 0),
+                getValA: () => (backupStatsA?.enterprise?.total || 0),
+                getValB: () => (backupStatsB?.enterprise?.total || 0),
               },
             ].map(row => {
               const countA = row.getA();
@@ -311,8 +315,9 @@ const CompareTab = ({
               { key: 'private_cloud_host', label: language === 'en' ? 'Private Cloud Hosts' : 'Hôtes Private Cloud' },
               { key: 'private_cloud_datastore', label: language === 'en' ? 'Private Cloud Datastores' : 'Datastores Private Cloud' },
             ].map(row => {
-              const a = byServiceA.find(s => s.key === row.key) || {};
-              const b = byServiceB.find(s => s.key === row.key) || {};
+              // The costs of the row's resource type in months A and B (#32)
+              const a = byResourceTypeA.find(r => r.resource_type === row.key) || {};
+              const b = byResourceTypeB.find(r => r.resource_type === row.key) || {};
               const valA = a.value || 0;
               const valB = b.value || 0;
               const diff = valA ? ((valB - valA) / valA * 100) : null;
