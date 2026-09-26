@@ -296,26 +296,7 @@ async function initializeServer() {
     }
   } else {
     // Without OIDC: header-based SSO (LemonLDAP headers via reverse proxy)
-    const AUTH_REQUIRED = process.env.AUTH_REQUIRED === 'true';
-    app.use((req, res, next) => {
-      const authUser = req.headers['auth-user'];
-      const authMail = req.headers['auth-mail'];
-      const authCn = req.headers['auth-cn'];
-
-      req.user = authUser ? {
-        id: authUser,
-        email: authMail || null,
-        name: authCn || authUser
-      } : null;
-
-      if (AUTH_REQUIRED && !authUser && req.path !== '/api/health') {
-        if (req.path.startsWith('/api/')) {
-          return res.status(401).json({ error: 'Authentication required' });
-        }
-      }
-
-      next();
-    });
+    auth.mountHeaderMode(app, { required: process.env.AUTH_REQUIRED === 'true' });
   }
 
   // Logging middleware (inside async to run after auth middleware)

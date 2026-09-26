@@ -12,6 +12,7 @@ const routes = require('./routes');
 const { createAuthMiddleware } = require('./middleware');
 const { buildAuthConfig, missingSettings } = require('./config');
 const { discoveryRetryDelay, createDiscoveryGate } = require('./discovery');
+const { mountHeaderMode } = require('./header-mode');
 
 /**
  * Initialize OIDC authentication. When it is enabled, the server never falls
@@ -74,6 +75,7 @@ module.exports = {
   buildAuthConfig,
   initialize,
   awaitDiscovery,
+  mountHeaderMode,
   createAuthMiddleware,
   setupRoutes: routes.setup,
   backChannelLogout: routes.backChannelLogout,
