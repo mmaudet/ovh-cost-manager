@@ -174,20 +174,6 @@ export const translations = {
     gpuInstances: 'Instances GPU',
     gpuFlavors: 'Types GPU',
     noGpuData: 'Aucune donnée GPU',
-
-    // Months
-    january: 'Janvier',
-    february: 'Février',
-    march: 'Mars',
-    april: 'Avril',
-    may: 'Mai',
-    june: 'Juin',
-    july: 'Juillet',
-    august: 'Août',
-    september: 'Septembre',
-    october: 'Octobre',
-    november: 'Novembre',
-    december: 'Décembre'
   },
   en: {
     // Header
@@ -364,19 +350,5 @@ export const translations = {
     gpuInstances: 'GPU Instances',
     gpuFlavors: 'GPU types',
     noGpuData: 'No GPU data',
-
-    // Months
-    january: 'January',
-    february: 'February',
-    march: 'March',
-    april: 'April',
-    may: 'May',
-    june: 'June',
-    july: 'July',
-    august: 'August',
-    september: 'September',
-    october: 'October',
-    november: 'November',
-    december: 'December'
   }
 };
