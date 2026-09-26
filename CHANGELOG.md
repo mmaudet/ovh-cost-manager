@@ -12,6 +12,30 @@ sections were written afterwards from the git history.
 
 <!-- scripts/release.sh inserts each new version above the first version heading. -->
 
+## 2.3.0 - 2026-09-26
+
+<!-- Upgrade notes and highlights of this release, if any. -->
+
+### New features
+* Trends: month i18n, cost-by-category chart, manual resync by @guillaume-gambs in https://github.com/mmaudet/ovh-cost-manager/pull/10
+* Object Storage inventory and per-resource cost across Public Cloud by @guillaume-gambs in https://github.com/mmaudet/ovh-cost-manager/pull/12
+* Web Cloud tab: domains, DNS zones, hosting, email by @guillaume-gambs in https://github.com/mmaudet/ovh-cost-manager/pull/13
+### Bug fixes
+* Fix BILL_COUNT check by @albundy83 in https://github.com/mmaudet/ovh-cost-manager/pull/7
+* Fix for missing v in the version on docker hub by @albundy83 in https://github.com/mmaudet/ovh-cost-manager/pull/8
+* Fixes: dead code, Cloud Disk Array classification, health rate-limit, DB volume shadowing by @guillaume-gambs in https://github.com/mmaudet/ovh-cost-manager/pull/9
+* Pre-release fixes: OVH 5xx retries, month bounds, CI by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/14
+### Maintenance
+* chore/docs: rewrite CLAUDE.md, untrack credentials.json template by @guillaume-gambs in https://github.com/mmaudet/ovh-cost-manager/pull/11
+* Move to Node 24 (Docker image and CI) by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/15
+* Changelog, release notes by category and Dependabot by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/16
+
+### New contributors
+* @guillaume-gambs made their first contribution in https://github.com/mmaudet/ovh-cost-manager/pull/11
+* @mmaudet made their first contribution in https://github.com/mmaudet/ovh-cost-manager/pull/14
+
+**Full Changelog**: https://github.com/mmaudet/ovh-cost-manager/compare/v2.2.2...v2.3.0
+
 ## 2.2.2 - 2026-03-02
 
 ### Bug fixes
