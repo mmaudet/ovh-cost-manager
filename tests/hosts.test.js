@@ -444,6 +444,17 @@ describe('createHostCheckMiddleware', () => {
     ]);
   });
 
+  // A Host header may hold kilobytes: the log keeps the length of the longest
+  // domain name
+  test('cuts a long blocked host to 253 characters in the log', () => {
+    const logger = makeLogger();
+    const hostCheck = createHostCheckMiddleware(settings, logger);
+    run(hostCheck, { host: `${'a'.repeat(300)}.example` });
+    expect(logger.warn.mock.calls).toEqual([
+      [`Host check: Blocked request with Host: ${'a'.repeat(250)}...`],
+    ]);
+  });
+
   test('logs the requests without a well-formed host once, as invalid', () => {
     const logger = makeLogger();
     const hostCheck = createHostCheckMiddleware(settings, logger);

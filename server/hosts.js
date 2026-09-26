@@ -30,6 +30,9 @@ const PROXY_HEADERS = [
 // an hour, as any client can send any number of them. It counts the others.
 const LOG_PERIOD_MS = 60 * 60 * 1000;
 const MAX_LOGGED_HOSTS = 100;
+// A Host header may hold kilobytes: the log keeps the length of the longest
+// domain name
+const MAX_LOGGED_HOST_LENGTH = 253;
 
 /**
  * Reads ALLOWED_HOSTS, or allowedHosts in config.json: a comma-separated
@@ -161,7 +164,10 @@ function createHostCheckMiddleware(settings, logger = console) {
       unlogged += 1;
     } else {
       loggedHosts.add(host);
-      logger.warn(`Host check: Blocked request with ${result.header}: ${host}`);
+      const shown = host.length > MAX_LOGGED_HOST_LENGTH
+        ? `${host.slice(0, MAX_LOGGED_HOST_LENGTH - 3)}...`
+        : host;
+      logger.warn(`Host check: Blocked request with ${result.header}: ${shown}`);
     }
     return res.status(421).json({ error: 'Host not allowed' });
   };
