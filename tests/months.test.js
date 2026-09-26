@@ -89,7 +89,27 @@ describe('trendWindowFromQuery', () => {
   test('covers 6 months when the query names no number of months', () => {
     expect(windowOf({ end: '2026-09' }))
       .toEqual({ valid: true, from: '2026-04-01', to: '2026-09-30' });
+    expect(windowOf({ months: '', end: '2026-09' }))
+      .toEqual({ valid: true, from: '2026-04-01', to: '2026-09-30' });
   });
+
+  // Up to the longest period that the Trends tab offers, 20 years
+  test('covers from 1 to 240 months', () => {
+    expect(windowOf({ months: '1', end: '2026-09' }))
+      .toEqual({ valid: true, from: '2026-09-01', to: '2026-09-30' });
+    expect(windowOf({ months: '240', end: '2026-09' }))
+      .toEqual({ valid: true, from: '2006-10-01', to: '2026-09-30' });
+  });
+
+  test.each(['-3', '0', '241', '100000000', '1.5', '6m', 'six'])(
+    'refuses %s months',
+    (months) => {
+      expect(windowOf({ months, end: '2026-09' })).toEqual({
+        valid: false,
+        error: `Invalid 'months' value: ${months}. Expected an integer from 1 to 240`,
+      });
+    }
+  );
 
   // Where the bills end, as the dashboard's latest month, whatever the date today
   test('ends on the month of the latest bill when the query names no end month', () => {

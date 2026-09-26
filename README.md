@@ -495,9 +495,10 @@ For production with SSO:
 | `GET /api/analysis/daily-trend?from=&to=`                 | Daily cost trend                              |
 | `GET /api/analysis/monthly-trend?months=6&end=YYYY-MM`    | Monthly cost trend, `months` ending on `end`  |
 
-The monthly trend covers `months` calendar months, 6 by default, that end on
-the `end` month, that one included: `?months=3&end=2026-09` covers July to
-September 2026. Without `end`, it ends on the month of the latest bill.
+The monthly trend covers `months` calendar months, from 1 to 240, 6 by
+default, that end on the `end` month, that one included: `?months=3&end=2026-09`
+covers July to September 2026. Without `end`, it ends on the month of the
+latest bill.
 
 ### Consumption & Account
 
