@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { screen, within } from '@testing-library/react';
 import { account } from './fixtures/account.js';
-import { api } from './support/api.js';
+import { api, holdBack } from './support/api.js';
 import {
   cardOf,
   cardRowOf,
@@ -117,15 +117,7 @@ describe('Backup tab', () => {
     it('totals the VMs of the costs by resource type while they load (#64)', async () => {
       const { user } = await renderDashboard();
       // Hold back the backup statistics
-      const answer = api.fetchBackupStats.getMockImplementation();
-      let release;
-      const heldBack = new Promise((resolve) => {
-        release = resolve;
-      });
-      api.fetchBackupStats.mockImplementation(async (...args) => {
-        await heldBack;
-        return answer(...args);
-      });
+      const release = holdBack(api.fetchBackupStats);
 
       await user.click(screen.getByRole('button', { name: 'Backup' }));
 

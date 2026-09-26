@@ -126,3 +126,19 @@ export function serve(data) {
     api[name].mockImplementation(async (...args) => answer(data, ...args));
   }
 }
+
+// Holds back the answers of a function, or only those to the calls that picks()
+// picks by their arguments, as a slow server would, until release() is called.
+// Returns release.
+export function holdBack(fn, picks = () => true) {
+  const answer = fn.getMockImplementation();
+  let release;
+  const released = new Promise((resolve) => {
+    release = resolve;
+  });
+  fn.mockImplementation(async (...args) => {
+    if (picks(...args)) await released;
+    return answer(...args);
+  });
+  return release;
+}

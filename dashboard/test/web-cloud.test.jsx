@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { screen, within } from '@testing-library/react';
 import { account } from './fixtures/account.js';
-import { api } from './support/api.js';
+import { api, holdBack } from './support/api.js';
 import { captureFileDownloads } from './support/downloads.js';
 import {
   backdropOf,
@@ -224,15 +224,7 @@ describe('Web Cloud tab', () => {
   ])('shows that it is loading until its %s arrive (#62)', async (_, request) => {
     const { user } = await renderDashboard();
     // Hold back one of its two answers
-    const answer = api[request].getMockImplementation();
-    let release;
-    const heldBack = new Promise((resolve) => {
-      release = resolve;
-    });
-    api[request].mockImplementation(async (...args) => {
-      await heldBack;
-      return answer(...args);
-    });
+    const release = holdBack(api[request]);
 
     await user.click(screen.getByRole('button', { name: 'Web Cloud' }));
 

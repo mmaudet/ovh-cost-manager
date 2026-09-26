@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { screen, within } from '@testing-library/react';
 import { account } from './fixtures/account.js';
-import { api, serve } from './support/api.js';
+import { api, holdBack, serve } from './support/api.js';
 import { captureFileDownloads } from './support/downloads.js';
 import {
   cardOf,
@@ -68,15 +68,8 @@ describe('dashboard shell', () => {
     it('shows the loading screen again while the summary of the new month loads', async () => {
       const { user } = await renderDashboard();
       // Hold back the summary of August, and only that one
-      const answerSummary = api.fetchSummary.getMockImplementation();
-      let releaseAugust;
-      const august = new Promise((resolve) => {
-        releaseAugust = resolve;
-      });
-      api.fetchSummary.mockImplementation(async (from, to) => {
-        if (from === '2026-08-01' && to === '2026-08-31') await august;
-        return answerSummary(from, to);
-      });
+      const releaseAugust = holdBack(api.fetchSummary,
+        (from, to) => from === '2026-08-01' && to === '2026-08-31');
 
       await user.selectOptions(monthSelector(), 'Août 2026');
       expect(screen.getByText('Chargement des données...')).toBeInTheDocument();
