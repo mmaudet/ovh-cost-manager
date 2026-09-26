@@ -53,6 +53,8 @@ services:
       # from the application code under /app/data (which ships in the image).
       - DATA_DIR=/data
       - TRUST_PROXY=true
+      # Hosts the server answers, against DNS rebinding; empty: any host
+      - ALLOWED_HOSTS=${ALLOWED_HOSTS:-}
       # OIDC Configuration
       - OIDC_ENABLED=true
       - OIDC_ISSUER=http://auth.${SSO_DOMAIN:-localhost}

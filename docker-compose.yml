@@ -25,6 +25,8 @@ services:
     environment:
       - NODE_ENV=production
       - AUTH_REQUIRED=${AUTH_REQUIRED:-false}
+      # Hosts the server answers, against DNS rebinding; empty: any host
+      - ALLOWED_HOSTS=${ALLOWED_HOSTS:-}
       - PORT=3001
       # Database lives in a dedicated dir mounted as a volume, kept separate
       # from the application code under /app/data (which ships in the image).

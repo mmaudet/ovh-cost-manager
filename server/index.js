@@ -14,6 +14,7 @@ const { monthBounds } = require('../data/months');
 // Import auth module
 const auth = require('./auth');
 const { createOriginCheck } = require('./cors');
+const { createHostCheckMiddleware } = require('./hosts');
 const { trendWindowFromQuery } = require('./months');
 
 // Load configuration
@@ -98,6 +99,13 @@ function getRateLimitConfig() {
 const app = express();
 const PORT = process.env.PORT || 3001;
 const rateLimitConfig = getRateLimitConfig();
+
+// Host check, against DNS rebinding (#78): none unless ALLOWED_HOSTS is set
+const hostCheck = createHostCheckMiddleware({
+  // A comma-separated string, or in config.json an array too
+  allowedHosts: process.env.ALLOWED_HOSTS || config.allowedHosts,
+  trustProxy: rateLimitConfig.trustProxy,
+});
 
 // CORS configuration - restrict to allowed origins and the request's own
 const isAllowedOrigin = createOriginCheck({
@@ -217,7 +225,11 @@ if (rateLimitConfig.trustProxy) {
   app.set('trust proxy', 1);
 }
 
-// Middleware
+// Middleware. The Host check comes first, so that a host that is not allowed
+// gets no route, no static file and no CORS answer.
+if (hostCheck) {
+  app.use(hostCheck);
+}
 app.use(cors(corsOptionsDelegate));
 app.use(express.json());
 app.use(cookieParser());

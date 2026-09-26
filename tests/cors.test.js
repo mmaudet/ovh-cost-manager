@@ -53,6 +53,11 @@ describe('createOriginCheck', () => {
     expect(production('http://undefined', {})).toBe(false);
   });
 
+  // As the Host check reads it: URL alone would read the host after the user
+  test('rejects an origin when the request\'s Host is malformed', () => {
+    expect(production('http://ocm.example.com', { host: 'user@ocm.example.com' })).toBe(false);
+  });
+
   // 'ocm.example.com:3001' parses, but as the scheme 'ocm.example.com:' without a host
   test.each(['ocm.example.com', 'ocm.example.com:3001', 'null'])(
     'rejects the malformed Origin %s without throwing',
@@ -117,11 +122,20 @@ describe('createOriginCheck', () => {
         .toBe(true);
     });
 
-    test('reads the first host of an X-Forwarded-Host list', () => {
+    // As the Host check reads it: the last host is the one the nearest proxy
+    // set or appended, where a client may have sent the others
+    test('reads the last host of an X-Forwarded-Host list', () => {
       expect(behindTrustedProxy(origin, {
         ...proxied,
-        forwardedHost: 'ocm.example.com, ocm.internal',
+        forwardedHost: 'ocm.internal, ocm.example.com',
       })).toBe(true);
+    });
+
+    test('does not take the first host of a list, which a client may send, as its own', () => {
+      expect(behindTrustedProxy('https://evil.example', {
+        ...proxied,
+        forwardedHost: 'evil.example, ocm.example.com',
+      })).toBe(false);
     });
 
     test('rejects the origin when the trusted proxy sends no X-Forwarded-Host', () => {

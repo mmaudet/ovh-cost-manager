@@ -68,7 +68,7 @@ Open http://localhost:3001
 | `OCM_PORT`                  | Host port mapping                    | `3001`            |
 | `AUTH_REQUIRED`             | Require authentication headers       | `false`           |
 | `NODE_ENV`                  | Node environment                     | `production`      |
-| `TRUST_PROXY`               | Trust X-Forwarded-For headers (required for K8s/reverse proxy), and X-Forwarded-Host and X-Forwarded-Proto for the CORS check | `false` |
+| `TRUST_PROXY`               | Trust X-Forwarded-For headers (required for K8s/reverse proxy), X-Forwarded-Host for the CORS check and `ALLOWED_HOSTS`, and X-Forwarded-Proto for the CORS check | `false` |
 | `RATE_LIMIT_ENABLED`        | Enable rate limiting                 | `true`            |
 | `RATE_LIMIT_API_MAX`        | Max API requests per IP per window   | `100`             |
 | `RATE_LIMIT_API_WINDOW_MS`  | API rate limit window in ms          | `900000` (15 min) |
@@ -78,13 +78,28 @@ Open http://localhost:3001
 | `IMPORT_INTERVAL`           | Seconds between imports              | `86400` (24h)     |
 | `IMPORT_FLAGS`              | Extra flags for import script        | `--all`           |
 | `ALLOWED_ORIGINS`           | Comma-separated CORS allowed origins, only for other sites (see below) | (empty) |
+| `ALLOWED_HOSTS`             | Comma-separated host names, each with an optional port, that the server answers, against DNS rebinding (see below) | (empty: any host) |
 
-**The dashboard's own origin** is always accepted, so `ALLOWED_ORIGINS` only lists the other sites that call the API. The server compares the origin's host, without case or default port, with the request's `Host`, and with `TRUST_PROXY=true` with the first `X-Forwarded-Host` too. Limits:
+**The dashboard's own origin** is always accepted, so `ALLOWED_ORIGINS` only lists the other sites that call the API. The server compares the origin's host, without case or default port, with the request's `Host`, and with `TRUST_PROXY=true` with the last `X-Forwarded-Host` too, the one the nearest proxy set or appended, as `ALLOWED_HOSTS` reads it. Limits:
 
-- A proxy that rewrites `Host` without sending `X-Forwarded-Host` (nginx sends none by default), or that sends it without the public port, still needs the dashboard's URL in `ALLOWED_ORIGINS`, or `proxy_set_header X-Forwarded-Host $http_host;` with `TRUST_PROXY=true`.
+- A proxy that rewrites `Host` without sending `X-Forwarded-Host` (nginx sends none by default), or that sends it without the public port, still needs the dashboard's URL in `ALLOWED_ORIGINS`, or `proxy_set_header X-Forwarded-Host $http_host;` with `TRUST_PROXY=true`. So does a chain of proxies that each append the `Host` they received to `X-Forwarded-Host`.
 - The scheme is only compared when `TRUST_PROXY=true` makes it known, through `X-Forwarded-Proto`. Otherwise an `http://` page passes for an `https://` dashboard on the same host, so that the dashboard does not go blank behind a TLS-terminating proxy.
 
 The SSO stack of `docker-compose.sso.yml` needs no `ALLOWED_ORIGINS`: its LemonLDAP-NG relay passes `Host` with its default port (`ocm.example.com:80`), a port the comparison ignores, and sends neither `X-Forwarded-Host` nor `X-Forwarded-Proto`, so hosts alone are compared, with or without `TRUST_PROXY`.
+
+**`ALLOWED_HOSTS`** protects a deployment without authentication that browsers can reach, such as a local instance or a LAN, against DNS rebinding: a page on another domain points that domain at the server's address, and the browser then lets that page call the API with same-origin requests, which CORS cannot restrict. Deployments with OIDC authentication, or behind a proxy that routes by host name, are not exposed in practice. When it is set, or `allowedHosts` in `config.json` (an array, or a comma-separated string), the server answers only the requests whose hosts it lists, and any other with a 421 Misdirected Request. Unset, it answers any host, as before. For a dashboard at `https://ocm.example.com` and at `http://ocm.lan:3001`:
+
+```bash
+ALLOWED_HOSTS=ocm.example.com,ocm.lan:3001
+```
+
+- Hosts compare without case or default port: give the port only when it is neither 80 nor 443. At startup, the server logs the hosts it allows, and warns about each entry that is not a host name, such as a URL, which it ignores.
+- `Host` is always checked. `localhost`, `127.0.0.1` and `[::1]` pass on any port, but on direct requests only, which carry none of the headers a proxy adds (`X-Forwarded-For`, `X-Forwarded-Host`, `Forwarded`, `X-Real-IP`, `X-Forwarded-Proto`, `X-Forwarded-Port`, `Via`), as the Docker healthcheck and the import cron make them.
+- Behind a proxy that rewrites `Host` to its upstream, such as the container's name, list that upstream too. It then passes for every request, so the protection rests on `X-Forwarded-Host` (next point); better, have the proxy keep `Host`, as `proxy_set_header Host $host;` does with nginx.
+- nginx's default configuration on the same machine, a bare `proxy_pass http://127.0.0.1:3001;`, sends `Host: 127.0.0.1:3001` and none of the headers above: its requests look direct, and they all pass. Behind a local nginx, have it keep `Host`, or have it set `X-Forwarded-Host`, with `TRUST_PROXY=true`, and list the upstream host name, `127.0.0.1:3001`.
+- With `TRUST_PROXY=true`, the last `X-Forwarded-Host`, the one the nearest proxy set or appended, must be listed too, and the loopback names never pass there. The proxy must set or overwrite that header, as nginx does with `proxy_set_header X-Forwarded-Host $http_host;`: one that passes the client's on lets a page choose it. And if the server can be reached without the proxy, `TRUST_PROXY` lets any client forge it.
+- Other callers need an allowed host too. Kubernetes probes send the pod's IP address: give them a `Host: localhost` header in `httpHeaders`. A back-channel logout from the identity provider to `http://ocm:3001` needs `ocm:3001` listed.
+- The log names each blocked host once an hour, for up to 100 hosts an hour, then says how many blocked requests it left out.
 
 ### Customization
 
