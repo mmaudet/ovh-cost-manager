@@ -579,13 +579,20 @@ async function importInventory(projectMap) {
         ips = await ovh.requestPromised('GET', `/vps/${name}/ips`);
       } catch (e) { /* optional */ }
 
+      // The operating system. The OVH API schema marks this route deprecated, to be removed
+      // on 2026-10-15 in favour of /vps/{serviceName}/images/current, in beta
+      let distribution = {};
+      try {
+        distribution = await ovh.requestPromised('GET', `/vps/${name}/distribution`);
+      } catch (e) { /* optional */ }
+
       db.inventory.upsertVps({
         id: name,
         display_name: info.displayName || info.name || name,
         model: info.model?.name || '',
         zone: info.zone || '',
         state: info.state || '',
-        os: info.model?.disk || '',
+        os: distribution?.name || distribution?.distribution || '',
         vcpus: info.model?.vcore || 0,
         ram_mb: info.model?.memory || 0,
         disk_gb: info.model?.disk || 0,
@@ -1196,4 +1203,4 @@ if (require.main === module) {
   runImport(params);
 }
 
-module.exports = { importCloudDetails };
+module.exports = { importCloudDetails, importInventory };
