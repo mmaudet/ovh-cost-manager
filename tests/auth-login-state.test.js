@@ -8,7 +8,7 @@ const {
   LOGIN_MAX_AGE_MS,
   encodeLoginState,
   readLoginState,
-  loginCookieOptions,
+  loginCookie,
 } = require('../server/auth/login-state');
 const { signValue } = require('../server/auth/session-cookie');
 
@@ -74,22 +74,53 @@ describe('readLoginState', () => {
   });
 });
 
-describe('loginCookieOptions', () => {
+// One cookie per state, so that two sign-ins in one browser clear only their
+// own. SameSite=Lax: the browser sends it with the provider's redirect back, a
+// top-level GET, but not with requests other sites make
+describe('loginCookie', () => {
+  const STATE = 'Wv9qS3KxI0bM1a2c-_Zz8Y7x6W5v4U3t2S1r0Q9p8O7';
+  const overHttp = { secure: false };
+  const overHttps = { secure: true };
   const auth = { baseUrl: 'http://ocm.example.com', session: { secure: 'auto' } };
 
-  // SameSite=Lax: the browser sends it with the provider's redirect back, a
-  // top-level GET, but not with requests other sites make
-  test('keeps the cookie HttpOnly and SameSite=Lax, on /auth only', () => {
-    expect(loginCookieOptions({ secure: false }, auth)).toEqual({
-      httpOnly: true,
-      secure: false,
-      sameSite: 'lax',
-      path: '/auth',
+  test('is named after the state, HttpOnly and SameSite=Lax, on /auth, over HTTP', () => {
+    expect(loginCookie(overHttp, auth, STATE)).toEqual({
+      name: `ocm.login.${STATE}`,
+      options: { httpOnly: true, secure: false, sameSite: 'lax', path: '/auth' },
     });
   });
 
-  test('sets Secure as for the session cookie', () => {
-    expect(loginCookieOptions({ secure: true }, auth).secure).toBe(true);
+  // __Host-: browsers accept it from this host only, over HTTPS, with Path=/
+  // and no Domain, so that no sibling host nor HTTP page can set one
+  test('takes the __Host- prefix over HTTPS, which requires Secure and Path=/', () => {
+    expect(loginCookie(overHttps, auth, STATE)).toEqual({
+      name: `__Host-ocm.login.${STATE}`,
+      options: { httpOnly: true, secure: true, sameSite: 'lax', path: '/' },
+    });
+  });
+
+  test('takes the __Host- prefix when the base URL is https', () => {
+    const httpsBase = { ...auth, baseUrl: 'https://ocm.example.com' };
+    expect(loginCookie(overHttp, httpsBase, STATE).name).toBe(`__Host-ocm.login.${STATE}`);
+  });
+
+  test('keeps a plain name when COOKIE_SECURE=false leaves out Secure', () => {
+    const notSecure = { ...auth, session: { secure: false } };
+    expect(loginCookie(overHttps, notSecure, STATE)).toMatchObject({
+      name: `ocm.login.${STATE}`,
+      options: { secure: false, path: '/auth' },
+    });
+  });
+
+  test.each([
+    ['no state', undefined],
+    ['an empty state', ''],
+    ['a repeated state parameter', [STATE, STATE]],
+    ['a state with a semicolon', 'a;b'],
+    ['a state with an equals sign', 'a=b'],
+    ['a state too long for a sign-in', 'x'.repeat(129)],
+  ])('is none for %s', (label, state) => {
+    expect(loginCookie(overHttp, auth, state)).toBeNull();
   });
 
   test('gives the cookie 10 minutes', () => {

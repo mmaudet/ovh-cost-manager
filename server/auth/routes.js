@@ -13,11 +13,10 @@ const sessionStore = require('./session-store');
 const { safeReturnTo } = require('./return-to');
 const { sessionCookieOptions, signValue, unsignValue } = require('./session-cookie');
 const {
-  LOGIN_COOKIE,
   LOGIN_MAX_AGE_MS,
   encodeLoginState,
   readLoginState,
-  loginCookieOptions,
+  loginCookie,
 } = require('./login-state');
 const { sessionsToEnd } = require('./logout-token');
 
@@ -42,11 +41,12 @@ function setup(config) {
       const codeChallenge = await calculatePKCECodeChallenge(codeVerifier);
 
       // Bind the sign-in to this browser: the callback accepts its state only
-      // with this cookie. returnTo: a path of this site only, or the callback
-      // would redirect to any site
+      // with the cookie of that state. returnTo: a path of this site only, or
+      // the callback would redirect to any site
       const pending = { state, nonce, codeVerifier, returnTo: safeReturnTo(req.query.returnTo) };
-      res.cookie(LOGIN_COOKIE, encodeLoginState(pending, authConfig.session.secret), {
-        ...loginCookieOptions(req, authConfig),
+      const cookie = loginCookie(req, authConfig, state);
+      res.cookie(cookie.name, encodeLoginState(pending, authConfig.session.secret), {
+        ...cookie.options,
         maxAge: LOGIN_MAX_AGE_MS,
       });
 
@@ -60,15 +60,18 @@ function setup(config) {
 
   // GET /auth/callback - Handle OIDC callback
   router.get('/callback', async (req, res) => {
-    // The sign-in that this browser started, when the state is its own: a
-    // callback URL opened in another browser is refused. The cookie serves once
+    // The sign-in that this browser started, from the cookie of the state: a
+    // callback URL opened in another browser is refused
     const state = req.query.state;
-    const pending = readLoginState(req.cookies?.[LOGIN_COOKIE], state, authConfig.session.secret);
-    res.clearCookie(LOGIN_COOKIE, loginCookieOptions(req, authConfig));
+    const cookie = loginCookie(req, authConfig, state);
+    const pending = cookie
+      && readLoginState(req.cookies?.[cookie.name], state, authConfig.session.secret);
     if (!pending) {
       console.warn('OIDC callback: no valid sign-in cookie for its state');
       return res.status(400).type('text/plain').send(SIGN_IN_REFUSED);
     }
+    // The cookie serves once; the other sign-ins in progress keep theirs
+    res.clearCookie(cookie.name, cookie.options);
 
     try {
       // Build current URL for callback validation

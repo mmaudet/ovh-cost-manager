@@ -1,16 +1,19 @@
 /**
  * A sign-in in progress, bound to the browser that started it. /auth/login
- * sets a short-lived login cookie, signed with SESSION_SECRET, that holds the
- * state, the nonce and the PKCE code_verifier of its authorization request,
- * and where to go back after. The callback accepts a state only with the
- * cookie that holds it: a callback URL opened in another browser, as in a
+ * sets a short-lived sign-in cookie, signed with SESSION_SECRET, that holds
+ * the state, the nonce and the PKCE code_verifier of its authorization
+ * request, and where to go back after. The callback accepts a state only with
+ * the cookie that holds it: a callback URL opened in another browser, as in a
  * login CSRF, is refused.
  */
 const { signValue, unsignValue, sessionCookieOptions } = require('./session-cookie');
 
-const LOGIN_COOKIE = 'ocm.login';
+const LOGIN_COOKIE_PREFIX = 'ocm.login.';
 // Long enough to sign in at the provider, short enough not to be reused
 const LOGIN_MAX_AGE_MS = 10 * 60 * 1000;
+// A state as openid-client's randomState writes it, base64url, so that it can
+// name a cookie
+const STATE_FORMAT = /^[\w-]{1,128}$/;
 
 /**
  * The value of the login cookie: the sign-in and its expiry, as base64url
@@ -63,23 +66,35 @@ function readLoginState(cookie, state, secret, now = Date.now()) {
 }
 
 /**
- * The options of the login cookie, for res.cookie, with maxAge
- * LOGIN_MAX_AGE_MS, and res.clearCookie: those of the session cookie,
- * HttpOnly and SameSite=Lax, so that the provider's redirect back, a top-level
- * GET, carries it, but only on /auth.
+ * The sign-in cookie of a state: its name, and its options for res.cookie,
+ * with maxAge LOGIN_MAX_AGE_MS, and res.clearCookie. One cookie per state, so
+ * that two sign-ins in one browser clear only their own. The flags are those
+ * of the session cookie: HttpOnly, and SameSite=Lax, so that the provider's
+ * redirect back, a top-level GET, carries it. When it is Secure, as over
+ * HTTPS, the __Host- prefix makes browsers accept it only from this host,
+ * with Path=/ and no Domain: neither a sibling host nor an HTTP page can set
+ * one of their choice. Otherwise, as in the HTTP demo stack, a plain name,
+ * on /auth only.
  *
  * @param {object} req - the request
  * @param {object} auth - the auth settings
- * @returns {object}
+ * @param {*} state - the state of the sign-in, whatever its type
+ * @returns {{ name: string, options: object }|null} null for a state that no
+ *   sign-in has
  */
-function loginCookieOptions(req, auth) {
-  return { ...sessionCookieOptions(req, auth), path: '/auth' };
+function loginCookie(req, auth, state) {
+  if (typeof state !== 'string' || !STATE_FORMAT.test(state)) {
+    return null;
+  }
+  const options = sessionCookieOptions(req, auth);
+  return options.secure
+    ? { name: `__Host-${LOGIN_COOKIE_PREFIX}${state}`, options: { ...options, path: '/' } }
+    : { name: `${LOGIN_COOKIE_PREFIX}${state}`, options: { ...options, path: '/auth' } };
 }
 
 module.exports = {
-  LOGIN_COOKIE,
   LOGIN_MAX_AGE_MS,
   encodeLoginState,
   readLoginState,
-  loginCookieOptions,
+  loginCookie,
 };

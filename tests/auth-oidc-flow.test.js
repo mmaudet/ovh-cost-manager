@@ -13,16 +13,19 @@ const SESSION_SECRET = '0123456789abcdef0123456789abcdef';
 let provider;
 let ocm;
 
+// The server's environment, for the provider, at url
+const oidcEnv = (url) => ({
+  OIDC_ENABLED: 'true',
+  OIDC_ISSUER: provider.issuer,
+  OIDC_CLIENT_ID: provider.clientId,
+  OIDC_CLIENT_SECRET: provider.clientSecret,
+  OIDC_BASE_URL: url,
+  SESSION_SECRET,
+});
+
 beforeAll(async () => {
   provider = await startFakeProvider();
-  ocm = await startOcm((url) => ({
-    OIDC_ENABLED: 'true',
-    OIDC_ISSUER: provider.issuer,
-    OIDC_CLIENT_ID: provider.clientId,
-    OIDC_CLIENT_SECRET: provider.clientSecret,
-    OIDC_BASE_URL: url,
-    SESSION_SECRET,
-  }));
+  ocm = await startOcm(oidcEnv);
 }, 30000);
 
 afterAll(async () => {
@@ -81,6 +84,50 @@ describe('sign-in', () => {
     const other = createBrowser(ocm.url);
     await startSignIn(other);
     expect((await other.fetch(callbackUrl)).status).toBe(400);
+  });
+
+  test('lets two sign-ins run in parallel in one browser, each with its cookie', async () => {
+    provider.user = 'alice';
+    const browser = createBrowser(ocm.url);
+    const signInCookies = () => [...browser.cookies.keys()]
+      .filter((name) => name.startsWith('ocm.login.'));
+    const first = await startSignIn(browser);
+    const second = await startSignIn(browser);
+    expect(signInCookies()).toHaveLength(2);
+
+    expect((await browser.fetch(second)).status).toBe(302);
+    // The second callback cleared its own cookie only
+    expect(signInCookies()).toHaveLength(1);
+    expect((await browser.fetch(first)).status).toBe(302);
+    expect(signInCookies()).toHaveLength(0);
+  });
+});
+
+describe('sign-in over HTTPS through a trusted proxy', () => {
+  const https = { headers: { 'X-Forwarded-Proto': 'https' } };
+  let proxied;
+
+  beforeAll(async () => {
+    proxied = await startOcm((url) => ({ ...oidcEnv(url), TRUST_PROXY: 'true' }));
+  }, 30000);
+
+  afterAll(() => proxied?.stop());
+
+  test('keeps the sign-in in a __Host- cookie, Secure, on Path=/', async () => {
+    provider.user = 'alice';
+    const browser = createBrowser(proxied.url);
+    const login = await browser.fetch('/auth/login', https);
+    const [cookie] = login.headers.getSetCookie();
+    expect(cookie).toMatch(/^__Host-ocm\.login\.[\w-]+=/);
+    expect(cookie).toMatch(/; Path=\/;/);
+    expect(cookie).toMatch(/; Secure/);
+    expect(cookie).toMatch(/; HttpOnly/);
+    expect(cookie).toMatch(/; SameSite=Lax/);
+
+    const authorization = await browser.fetch(login.headers.get('location'));
+    const callback = await browser.fetch(authorization.headers.get('location'), https);
+    expect(callback.status).toBe(302);
+    expect(browser.cookies.has('ocm.sid')).toBe(true);
   });
 });
 
