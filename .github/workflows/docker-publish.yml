@@ -76,33 +76,39 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      # The release body is the CHANGELOG.md section of this version (written by
+      # scripts/release.sh), followed by the Docker image. Without a section,
+      # GitHub generates the notes from the labels of the merged pull requests.
+      - name: Write the release notes
+        id: notes
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          awk -v heading="## ${version} " '
+            index($0, heading) == 1 { found = 1; next }
+            found && /^## / { exit }
+            found { print }
+          ' CHANGELOG.md | sed -e '/./,$!d' > notes.md
+          if [ -s notes.md ]; then
+            echo "from_changelog=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "No CHANGELOG.md section for ${version}: GitHub generates the notes"
+            echo "from_changelog=false" >> "$GITHUB_OUTPUT"
+          fi
+          cat >> notes.md <<'EOF'
+
+          ## Docker image
+
+          ```bash
+          docker pull mmaudet/ovh-cost-manager:${{ github.ref_name }}
+          ```
+
+          See [Docker Deployment](https://github.com/mmaudet/ovh-cost-manager/blob/${{ github.ref_name }}/README.md#docker-deployment) to run it.
+          EOF
+
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v3
         if: startsWith(github.ref, 'refs/tags/')
         with:
-          generate_release_notes: true
-          body: |
-            ## Docker Image
-
-            ```bash
-            docker pull mmaudet/ovh-cost-manager:${{ github.ref_name }}
-            ```
-
-            ## Quick Start
-
-            ```bash
-            # Download docker-compose.yml
-            curl -O https://raw.githubusercontent.com/mmaudet/ovh-cost-manager/${{ github.ref_name }}/docker-compose.yml
-
-            # Create config file
-            cp config.example.json config.json
-            # Edit config.json with your OVH API credentials
-
-            # Start the container
-            docker-compose up -d
-
-            # Import billing data
-            docker exec ovh-cost-manager node data/import.js --from 2025-01-01 --to 2025-12-31
-            ```
-
-            Access the dashboard at http://localhost:3001
+          body_path: notes.md
+          generate_release_notes: ${{ steps.notes.outputs.from_changelog != 'true' }}

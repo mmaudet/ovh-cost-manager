@@ -32,6 +32,7 @@
     "build": "npm run build --workspace=dashboard",
     "start": "npm run dev:server",
     "lint": "eslint dashboard/src server data cli tests",
+    "release": "bash scripts/release.sh",
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage"
