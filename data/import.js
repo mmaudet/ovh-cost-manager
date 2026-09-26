@@ -13,6 +13,7 @@
 
 const path = require('path');
 const os = require('os');
+const util = require('util');
 const Jsonfile = require('jsonfile');
 const db = require('./db');
 const { classifyService, classifyResourceTypeFromDomain } = require('./classify');
@@ -94,6 +95,19 @@ async function withRetry(fn, retries = MAX_RETRIES, backoff = INITIAL_BACKOFF_MS
   }
 }
 
+// Why a call failed, whatever it rejected with: the ovh client rejects with a plain object,
+// { error: HTTP status, message }, other code with an Error or a string
+function describeError(err) {
+  if (err === null || typeof err !== 'object') return String(err);
+  const reason = [err.statusCode ?? err.error, err.message]
+    .filter(part => part !== undefined && part !== null && part !== '')
+    .join(' ');
+  return reason || util.inspect(err, { breakLength: Infinity });
+}
+
+// The items that runInBatches skipped after an error, for the summary of the import
+let failedItems = 0;
+
 // Helper to run promises in parallel batches with retry and error logging
 async function runInBatches(items, asyncFn, batchSize = BATCH_SIZE) {
   const results = [];
@@ -101,7 +115,9 @@ async function runInBatches(items, asyncFn, batchSize = BATCH_SIZE) {
   for (const chunk of chunks) {
     const batchResults = await Promise.all(chunk.map(item =>
       withRetry(() => asyncFn(item)).catch(err => {
-        console.error(`  [batch] Error processing item ${JSON.stringify(item).substring(0, 80)}: ${err.message || err}`);
+        failedItems += 1;
+        const label = JSON.stringify(item).substring(0, 80);
+        console.error(`  [batch] Error processing item ${label}: ${describeError(err)}`);
         return { error: err };
       })
     ));
@@ -1021,6 +1037,7 @@ async function importCloudDetails(projectIds) {
 // Main import function
 async function runImport(params) {
   const stats = { bills: 0, details: 0, projects: 0 };
+  failedItems = 0;
 
   // Determine import type and dates
   let importType = 'period';
@@ -1186,6 +1203,7 @@ async function runImport(params) {
     console.log(`Projects: ${stats.projects}`);
     console.log(`Bills: ${stats.bills}`);
     console.log(`Details: ${stats.details}`);
+    console.log(`Failed items: ${failedItems}`);
 
   } catch (err) {
     db.importLog.fail(importId, err.message);
@@ -1203,4 +1221,4 @@ if (require.main === module) {
   runImport(params);
 }
 
-module.exports = { importCloudDetails, importInventory };
+module.exports = { importCloudDetails, importInventory, runImport };
