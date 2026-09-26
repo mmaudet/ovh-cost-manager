@@ -74,6 +74,16 @@ function chunkArray(array, size) {
   return chunks;
 }
 
+// Why a call failed, whatever it rejected with: the ovh client rejects with a plain object,
+// { error: HTTP status, message }, other code with an Error or a string
+function describeError(err) {
+  if (err === null || typeof err !== 'object') return String(err);
+  const reason = [err.statusCode ?? err.error, err.message]
+    .filter(part => part !== undefined && part !== null && part !== '')
+    .join(' ');
+  return reason || util.inspect(err, { breakLength: Infinity });
+}
+
 // Retry a single async operation with exponential backoff
 async function withRetry(fn, retries = MAX_RETRIES, backoff = INITIAL_BACKOFF_MS) {
   for (let attempt = 0; attempt <= retries; attempt++) {
@@ -86,7 +96,8 @@ async function withRetry(fn, retries = MAX_RETRIES, backoff = INITIAL_BACKOFF_MS
       const isRetryable = isRateLimited || status >= 500;
       if (attempt < retries && isRetryable) {
         const delay = isRateLimited ? backoff * 2 : backoff;
-        console.warn(`  [retry ${attempt + 1}/${retries}] ${err.message || err} — waiting ${delay}ms`);
+        const reason = describeError(err);
+        console.warn(`  [retry ${attempt + 1}/${retries}] ${reason} — waiting ${delay}ms`);
         await new Promise(resolve => setTimeout(resolve, delay));
         backoff *= 2;
       } else {
@@ -94,16 +105,6 @@ async function withRetry(fn, retries = MAX_RETRIES, backoff = INITIAL_BACKOFF_MS
       }
     }
   }
-}
-
-// Why a call failed, whatever it rejected with: the ovh client rejects with a plain object,
-// { error: HTTP status, message }, other code with an Error or a string
-function describeError(err) {
-  if (err === null || typeof err !== 'object') return String(err);
-  const reason = [err.statusCode ?? err.error, err.message]
-    .filter(part => part !== undefined && part !== null && part !== '')
-    .join(' ');
-  return reason || util.inspect(err, { breakLength: Infinity });
 }
 
 // The items that runInBatches skipped after an error, for the summary of the import

@@ -155,6 +155,25 @@ describe('an item that the import fails to fetch', () => {
   });
 });
 
+describe('a call that the import retries', () => {
+  // A rate limit waits twice as long as a server error
+  test.each([
+    ['a rate limit', { error: 429, message: 'Too many requests' },
+      '  [retry 1/3] 429 Too many requests — waiting 2000ms'],
+    ['a server error without a message', { error: 503, message: null },
+      '  [retry 1/3] 503 — waiting 1000ms'],
+  ])('is logged with the reason of %s', async (_, error, line) => {
+    const answer = mockRoutes.get('/me/bill/FR1/details/D2');
+    let calls = 0;
+    mockRoutes.set('/me/bill/FR1/details/D2',
+      () => (++calls === 1 ? Promise.reject(error) : answer()));
+
+    await importSeptember();
+
+    expect(console.warn).toHaveBeenCalledWith(line);
+  });
+});
+
 describe('an import where every call succeeds', () => {
   test('says that no item failed', async () => {
     await importSeptember();
