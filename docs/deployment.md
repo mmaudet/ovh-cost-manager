@@ -554,6 +554,8 @@ environment:
 2. Set `OIDC_BASE_URL` to `https://ocm.<domain>`, and the redirect and post-logout redirect URIs of the relying party to match (see [demo/README.md](../demo/README.md#using-another-domain)). With `COOKIE_SECURE=auto`, the session and sign-in cookies then become `Secure`, with the `__Host-` prefix, because `OIDC_BASE_URL` is `https` (see [OIDC settings](#oidc-settings)).
 3. Have the terminator send `X-Forwarded-Proto: https`. The relay passes it on, and the CORS check then refuses `http://` pages, which otherwise pass for the dashboard (see [Environment Variables](#environment-variables)).
 
+Rate limiting then counts every user at the terminator's address: OCM trusts one proxy, the relay, whose client is the terminator. Raise `RATE_LIMIT_API_MAX` to what all users need together, or set `RATE_LIMIT_ENABLED=false` (see [Rate Limiting for Kubernetes/Reverse Proxy](#rate-limiting-for-kubernetesreverse-proxy)).
+
 The provider's side is not covered. LemonLDAP-NG's portal stays at `http://auth.<domain>`, where the compose file sets it (`PORTAL`), and OCM reaches `OIDC_ISSUER` inside the Docker network, where `auth.<domain>` is an alias of the `lemonldap` container: an `https://` issuer needs the provider reachable over TLS there too, which the compose file does not set up.
 
 ### High Availability
