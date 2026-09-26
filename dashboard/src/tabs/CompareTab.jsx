@@ -7,6 +7,18 @@ import ProjectProductComparison from '../components/ProjectProductComparison.jsx
 import { Variation } from '../components/Variation.jsx';
 import { projectComparisonRows } from '../utils/projectComparison.js';
 
+// The cost of a resource type in a month, from its costs by resource type (#32)
+const costOfType = (byResourceType, type) => (
+  byResourceType.find(r => r.resource_type === type)?.value || 0
+);
+
+// The Veeam VMs or Enterprise licences of a month, from its backups (#32): their number and
+// their cost
+const backupsOf = (backupStats, kind) => ({
+  count: backupStats?.[kind]?.count || 0,
+  total: backupStats?.[kind]?.total || 0,
+});
+
 // The Compare tab, which the shell renders while it is active: what useCompareTab() returns,
 // with the shell's language, translations (t), amount format (fmt) and months list, and the
 // dedicated servers of the inventory, which the Infrastructure hook loads, on its own tab
@@ -51,6 +63,35 @@ const CompareTab = ({
       moisB: matchB?.value || 0
     };
   });
+
+  // The rows of the Private Cloud comparison, which the infrastructure comparison ends with
+  const privateCloudTypes = [
+    {
+      key: 'private_cloud_host',
+      label: language === 'en' ? 'Private Cloud Hosts' : 'Hôtes Private Cloud',
+    },
+    {
+      key: 'private_cloud_datastore',
+      label: language === 'en' ? 'Private Cloud Datastores' : 'Datastores Private Cloud',
+    },
+  ];
+
+  // A row of the infrastructure or Private Cloud comparison: the cost of a resource type in
+  // months A and B (#32), and what shows under its label, if anything
+  const resourceTypeRow = ({ key, label, details }) => {
+    const valA = costOfType(byResourceTypeA, key);
+    const valB = costOfType(byResourceTypeB, key);
+    return (
+      <tr key={key} className="border-b hover:bg-gray-50 transition-colors">
+        <td className="p-3 font-medium">{label}{details}</td>
+        <td className="p-3 text-right font-medium">{fmt(valA)}€</td>
+        <td className="p-3 text-right text-gray-500">{fmt(valB)}€</td>
+        <td className="p-3 text-right">
+          <Variation from={valA} to={valB} t={t} />
+        </td>
+      </tr>
+    );
+  };
 
   return (
     <div className="space-y-6">
@@ -188,41 +229,21 @@ const CompareTab = ({
               { key: 'dedicated_server', label: language === 'en'
                 ? `List of Dedicated Servers present on ${new Date().toLocaleDateString('en-GB')}`
                 : `Liste des Serveurs dédiés présents au ${new Date().toLocaleDateString('fr-FR')}`,
-                renderNames: () => (
+                details: inventoryServers.length > 0 && (
                   <ul className="text-xs text-gray-500 mt-1">
                     {inventoryServers.map(srv => (
                       <li key={srv.id}>{srv.display_name || srv.id}</li>
                     ))}
                   </ul>
-                )
+                ),
               },
               { key: 'vps', label: 'VPS' },
               { key: 'storage', label: language === 'en' ? 'Storage' : 'Stockage' },
               { key: 'load_balancer', label: language === 'en' ? 'Load Balancer' : 'Load Balancer' },
               { key: 'ip_service', label: language === 'en' ? 'IP Addresses' : 'Adresses IP' },
               { key: 'domain', label: language === 'en' ? 'Domains' : 'Noms de domaine' },
-              { key: 'private_cloud_host', label: language === 'en' ? 'Private Cloud Hosts' : 'Hôtes Private Cloud' },
-              { key: 'private_cloud_datastore', label: language === 'en' ? 'Private Cloud Datastores' : 'Datastores Private Cloud' },
-            ].map(row => {
-              // The costs of the row's resource type in months A and B (#32)
-              const a = byResourceTypeA.find(r => r.resource_type === row.key) || {};
-              const b = byResourceTypeB.find(r => r.resource_type === row.key) || {};
-              const valA = a.value || 0;
-              const valB = b.value || 0;
-              return (
-                <tr key={row.key} className="border-b hover:bg-gray-50 transition-colors">
-                  <td className="p-3 font-medium">
-                    {row.label}
-                    {row.key === 'dedicated_server' && row.renderNames && inventoryServers.length > 0 && row.renderNames()}
-                  </td>
-                  <td className="p-3 text-right font-medium">{fmt(valA)}€</td>
-                  <td className="p-3 text-right text-gray-500">{fmt(valB)}€</td>
-                  <td className="p-3 text-right">
-                    <Variation from={valA} to={valB} t={t} />
-                  </td>
-                </tr>
-              );
-            })}
+              ...privateCloudTypes,
+            ].map(resourceTypeRow)}
           </tbody>
         </table>
       </Accordion>
@@ -245,32 +266,24 @@ const CompareTab = ({
             {[
               {
                 key: 'backup_vms',
+                kind: 'vms',
                 label: language === 'en' ? 'Veeam Backup VMs' : 'VMs Veeam Backup',
-                getA: () => (backupStatsA?.vms?.count || 0),
-                getB: () => (backupStatsB?.vms?.count || 0),
-                getValA: () => (backupStatsA?.vms?.total || 0),
-                getValB: () => (backupStatsB?.vms?.total || 0),
               },
               {
                 key: 'backup_enterprise',
+                kind: 'enterprise',
                 label: language === 'en' ? 'Veeam Enterprise License' : 'Licence Veeam Enterprise',
-                getA: () => (backupStatsA?.enterprise?.count || 0),
-                getB: () => (backupStatsB?.enterprise?.count || 0),
-                getValA: () => (backupStatsA?.enterprise?.total || 0),
-                getValB: () => (backupStatsB?.enterprise?.total || 0),
               },
             ].map(row => {
-              const countA = row.getA();
-              const countB = row.getB();
-              const valA = row.getValA();
-              const valB = row.getValB();
+              const a = backupsOf(backupStatsA, row.kind);
+              const b = backupsOf(backupStatsB, row.kind);
               return (
                 <tr key={row.key} className="border-b hover:bg-gray-50 transition-colors">
                   <td className="p-3 font-medium">{row.label}</td>
-                  <td className="p-3 text-right font-medium">{countA} / {fmt(valA)}€</td>
-                  <td className="p-3 text-right text-gray-500">{countB} / {fmt(valB)}€</td>
+                  <td className="p-3 text-right font-medium">{a.count} / {fmt(a.total)}€</td>
+                  <td className="p-3 text-right text-gray-500">{b.count} / {fmt(b.total)}€</td>
                   <td className="p-3 text-right">
-                    <Variation from={valA} to={valB} t={t} />
+                    <Variation from={a.total} to={b.total} t={t} />
                   </td>
                 </tr>
               );
@@ -292,26 +305,7 @@ const CompareTab = ({
             </tr>
           </thead>
           <tbody>
-            {[
-              { key: 'private_cloud_host', label: language === 'en' ? 'Private Cloud Hosts' : 'Hôtes Private Cloud' },
-              { key: 'private_cloud_datastore', label: language === 'en' ? 'Private Cloud Datastores' : 'Datastores Private Cloud' },
-            ].map(row => {
-              // The costs of the row's resource type in months A and B (#32)
-              const a = byResourceTypeA.find(r => r.resource_type === row.key) || {};
-              const b = byResourceTypeB.find(r => r.resource_type === row.key) || {};
-              const valA = a.value || 0;
-              const valB = b.value || 0;
-              return (
-                <tr key={row.key} className="border-b hover:bg-gray-50 transition-colors">
-                  <td className="p-3 font-medium">{row.label}</td>
-                  <td className="p-3 text-right font-medium">{fmt(valA)}€</td>
-                  <td className="p-3 text-right text-gray-500">{fmt(valB)}€</td>
-                  <td className="p-3 text-right">
-                    <Variation from={valA} to={valB} t={t} />
-                  </td>
-                </tr>
-              );
-            })}
+            {privateCloudTypes.map(resourceTypeRow)}
           </tbody>
         </table>
       </Accordion>
