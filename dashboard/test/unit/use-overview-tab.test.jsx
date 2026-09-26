@@ -6,7 +6,8 @@ import { renderTabHook } from '../support/hooks.jsx';
 
 // The state of the Overview tab, as the dashboard shell sees it: the sort order of the
 // project breakdown, and what a click on a column header does to it. The shell calls the
-// hook with nothing: another tab or another month is just another render.
+// hook with nothing, on every render: the page tests check that the order survives a tab
+// switch (overview.test.jsx).
 
 // What the Overview shows, as the page requests it: at page start, from the shell, since the
 // KPI cards, the header, the Markdown report or other tabs read it as well (see
@@ -30,7 +31,7 @@ describe('useOverviewTab', () => {
     expect(queryClient.getQueryCache().getAll().map(({ queryKey }) => queryKey)).toEqual([]);
   });
 
-  it('returns the projects sorted by amount, most expensive first', async () => {
+  it('returns only the sort order, by amount descending, and its handler', async () => {
     const { result } = await renderTabHook(useOverviewTab);
 
     // What the shell spreads over the tab, and nothing else: the budget is the shell's
@@ -65,7 +66,7 @@ describe('useOverviewTab', () => {
     expect(result.current.projectSort).toEqual({ column: 'total', direction: 'desc' });
   });
 
-  it('keeps the sort order when another tab opens or the month changes', async () => {
+  it('keeps the sort order across renders', async () => {
     const { result, rerender } = await renderTabHook(useOverviewTab);
     act(() => result.current.handleProjectSort('name'));
     act(() => result.current.handleProjectSort('name'));
