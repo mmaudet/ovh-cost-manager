@@ -2,7 +2,7 @@
  * SQLite Session Store for OIDC authentication
  * Supports back-channel logout by tracking user_id (sub claim)
  */
-const { v4: uuidv4 } = require('uuid');
+const crypto = require('crypto');
 
 let db = null;
 
@@ -38,7 +38,7 @@ function init(database) {
 }
 
 function create(userId, userInfo, tokens, oidcSid, maxAge) {
-  const sid = uuidv4();
+  const sid = crypto.randomUUID();
   const expiresAt = new Date(Date.now() + maxAge).toISOString();
 
   db.prepare(`
