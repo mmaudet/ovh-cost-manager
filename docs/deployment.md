@@ -534,7 +534,7 @@ environment:
   - TRUST_PROXY=true
 ```
 
-Or in [config.json](../config.json):
+Or in `config.json`, as in [config.example.json](../config.example.json):
 
 ```json
 {

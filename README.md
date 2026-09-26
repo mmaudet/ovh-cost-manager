@@ -203,7 +203,7 @@ The API server includes rate limiting to protect against DoS attacks and brute-f
 
 ### Configuration via config.json
 
-Add a `rateLimit` section to your [config.json](config.json):
+Add a `rateLimit` section to your `config.json`, as in [config.example.json](config.example.json):
 
 ```json
 {
@@ -234,7 +234,7 @@ Add a `rateLimit` section to your [config.json](config.json):
 
 ### Configuration via Environment Variables
 
-Environment variables take **priority** over [config.json](config.json):
+Environment variables take **priority** over `config.json`:
 
 ```bash
 # Enable/disable
