@@ -1,7 +1,7 @@
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line,
 } from 'recharts';
-import { formatYearMonth } from '../utils/format.js';
+import { formatPercent, formatYearMonth } from '../utils/format.js';
 import { growthOverPeriod } from '../utils/periodGrowth.js';
 import { PERIOD_OPTIONS } from '../utils/trendPeriods.js';
 
@@ -150,7 +150,8 @@ const TrendsTab = ({
           >
             {!spansTwoMonths && 'N/A'}
             {growthNotComputable && '—'}
-            {growth !== null && `${growth > 0 ? '+' : ''}${growth.toFixed(1)}%`}
+            {/* In the number format of the language (#87) */}
+            {growth !== null && formatPercent(growth / 100, language, { signed: true })}
           </div>
           <p className="text-sm text-gray-500 mt-1">{t('overPeriod')} {t(currentPeriodLabel)}</p>
         </div>

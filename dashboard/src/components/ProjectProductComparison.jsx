@@ -57,7 +57,7 @@ export default function ProjectProductComparison({ projectId, monthA, monthB, fm
               <td className="p-3 text-right font-medium">{fmt(valA)}€</td>
               <td className="p-3 text-right text-gray-500">{fmt(valB)}€</td>
               <td className="p-3 text-right">
-                <Variation from={valA} to={valB} t={t} />
+                <Variation from={valA} to={valB} language={language} t={t} />
               </td>
             </tr>
           );

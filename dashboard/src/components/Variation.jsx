@@ -1,3 +1,4 @@
+import { formatPercent } from '../utils/format.js';
 import { variationPercent } from '../utils/variation.js';
 
 // The sizes of a variation: in a table cell, or the headline one between the totals of the
@@ -8,9 +9,10 @@ const SIZES = {
 };
 
 // The variation from one amount to another, as every table and the headline of the Compare
-// tab show it: in percent, red when it grows, green otherwise. From 0 € or less, it cannot be
-// computed (#65): "—", with a tooltip that says why.
-const Variation = ({ from, to, t, size = 'cell' }) => {
+// tab show it: in percent, in the number format of the language (#87), red when it grows,
+// green otherwise. From 0 € or less, it cannot be computed (#65): "—", with a tooltip that
+// says why.
+const Variation = ({ from, to, language, t, size = 'cell' }) => {
   const variation = variationPercent(from, to);
   if (variation === null) {
     return (
@@ -22,7 +24,7 @@ const Variation = ({ from, to, t, size = 'cell' }) => {
   const colors = variation > 0 ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700';
   return (
     <span className={`${SIZES[size]} ${colors}`}>
-      {`${variation > 0 ? '+' : ''}${variation.toFixed(1)}%`}
+      {formatPercent(variation / 100, language, { signed: true })}
     </span>
   );
 };

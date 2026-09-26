@@ -10,7 +10,7 @@ import {
 import { useLanguage } from '../hooks/useLanguage.jsx';
 import Logo from '../components/Logo';
 import { ResyncButton } from '../components/ResyncButton.jsx';
-import { formatCurrency, formatMonthLabel, yearMonthOf } from '../utils/format.js';
+import { formatCurrency, formatMonthLabel, formatPercent, yearMonthOf } from '../utils/format.js';
 import { parseSqliteDate } from '../utils/sqliteDate.js';
 import { generateMarkdownReport } from '../utils/markdownReport.js';
 import { shiftMonths } from '../utils/monthWindow.js';
@@ -213,10 +213,10 @@ export default function Dashboard() {
 
   // Calculations
   const total = summary?.total || 0;
-  // The "vs previous month" variation, from the month before (#50), with one decimal. Null
-  // when it cannot be computed, as in the Compare and Trends tabs (#65): from a month before
-  // at 0 € or less, or without a bill, so at 0 €.
-  const variation = variationPercent(previousSummary?.total ?? 0, total)?.toFixed(1) ?? null;
+  // The "vs previous month" variation, from the month before (#50), in percent. Null when it
+  // cannot be computed, as in the Compare and Trends tabs (#65): from a month before at 0 € or
+  // less, or without a bill, so at 0 €.
+  const variation = variationPercent(previousSummary?.total ?? 0, total);
 
   // Nothing billed yet, as on a new account or before its first import (#51): with no month
   // to select, there is no dashboard to show. Say so, rather than load forever, and offer the
@@ -384,8 +384,11 @@ export default function Dashboard() {
             </div>
             <div className="text-2xl font-bold text-gray-900">{fmt(total)}€</div>
             {variation !== null ? (
-              <div className={`flex items-center mt-2 text-sm ${Number(variation) > 0 ? 'text-red-500' : 'text-green-500'}`}>
-                {Number(variation) > 0 ? '+' : ''}{variation}% {t('vsPreviousMonth')}
+              <div className={`flex items-center mt-2 text-sm ${
+                variation > 0 ? 'text-red-500' : 'text-green-500'
+              }`}>
+                {/* In the number format of the language, as in the Compare tab (#87) */}
+                {formatPercent(variation / 100, language, { signed: true })} {t('vsPreviousMonth')}
               </div>
             ) : isFirstBilledMonth ? (
               <div className="flex items-center mt-2 text-sm text-gray-400">

@@ -3,7 +3,7 @@ import {
   PieChart, Pie, Cell,
 } from 'recharts';
 import { SortIcon } from '../components/SortIcon.jsx';
-import { takesSingular } from '../utils/format.js';
+import { formatPercent, takesSingular } from '../utils/format.js';
 import { sortProjects } from '../utils/projectSort.js';
 
 // The Overview tab, which the shell renders while it is active: what useOverviewTab()
@@ -19,7 +19,10 @@ const OverviewTab = ({
   expiringServices, budget, setBudget,
   setActiveTab, setSelectedProject, setSelectedResourceType,
 }) => {
-  const budgetUsage = budget ? (total / budget * 100).toFixed(0) : 0;
+  // The share of the budget the month has used, and the same in whole percents, which the bar
+  // and its colour follow
+  const budgetShare = budget ? total / budget : 0;
+  const budgetUsage = Math.round(budgetShare * 100);
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -36,7 +39,9 @@ const OverviewTab = ({
                 innerRadius={50}
                 outerRadius={80}
                 dataKey="value"
-                label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                label={({ name, percent }) => (
+                  `${name} ${formatPercent(percent, language, { decimals: 0 })}`
+                )}
                 labelLine={false}
               >
                 {byService.map((entry, i) => (
@@ -100,7 +105,9 @@ const OverviewTab = ({
                     innerRadius={50}
                     outerRadius={80}
                     dataKey="value"
-                    label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                    label={({ name, percent }) => (
+                      `${name} ${formatPercent(percent, language, { decimals: 0 })}`
+                    )}
                     labelLine={false}
                   >
                     {byResourceType.map((entry, i) => (
@@ -147,7 +154,8 @@ const OverviewTab = ({
               <span className="text-2xl font-bold text-purple-700">{fmt(gpuSummary.total)}€</span>
               {summary?.cloudTotal > 0 && (
                 <span className="text-sm text-gray-500">
-                  ({((gpuSummary.total / summary.cloudTotal) * 100).toFixed(1)}% {language === 'en' ? 'of cloud' : 'du cloud'})
+                  ({formatPercent(gpuSummary.total / summary.cloudTotal, language)}{' '}
+                  {language === 'en' ? 'of cloud' : 'du cloud'})
                 </span>
               )}
             </div>
@@ -203,7 +211,7 @@ const OverviewTab = ({
                   </thead>
                   <tbody>
                     {gpuSummary.byProject.map(p => {
-                      const pct = gpuSummary.total ? ((p.total / gpuSummary.total) * 100).toFixed(1) : 0;
+                      const share = gpuSummary.total ? p.total / gpuSummary.total : 0;
                       return (
                         <tr key={p.project_id} className="border-b hover:bg-gray-50">
                           <td className="p-2">
@@ -228,7 +236,9 @@ const OverviewTab = ({
                           </td>
                           <td className="p-2 text-right">
                             <div className="font-medium">{fmt(p.total)}€</div>
-                            <div className="text-xs text-gray-400">{pct}%</div>
+                            <div className="text-xs text-gray-400">
+                              {formatPercent(share, language)}
+                            </div>
                           </td>
                         </tr>
                       );
@@ -272,7 +282,8 @@ const OverviewTab = ({
             </thead>
             <tbody>
               {sortProjects(byProject, projectSort).map((p, i) => {
-                const pct = summary?.cloudTotal ? ((p.total / summary.cloudTotal) * 100).toFixed(1) : 0;
+                // With one decimal, 0,0 % of a Cloud total of 0 € included (#87)
+                const share = summary?.cloudTotal ? p.total / summary.cloudTotal : 0;
                 return (
                   <tr key={p.projectId || i} className="border-b hover:bg-gray-50">
                     <td className="p-3">
@@ -287,7 +298,9 @@ const OverviewTab = ({
                       </button>
                     </td>
                     <td className="p-3 text-right font-medium">{fmt(p.total)}€</td>
-                    <td className="p-3 text-right text-gray-500">{pct}%</td>
+                    <td className="p-3 text-right text-gray-500">
+                      {formatPercent(share, language)}
+                    </td>
                   </tr>
                 );
               })}
@@ -296,7 +309,7 @@ const OverviewTab = ({
               <tr className="bg-gray-50 font-semibold">
                 <td className="p-3">{t('totalCloud')}</td>
                 <td className="p-3 text-right">{fmt(summary?.cloudTotal || 0)}€</td>
-                <td className="p-3 text-right">100%</td>
+                <td className="p-3 text-right">{formatPercent(1, language, { decimals: 0 })}</td>
               </tr>
             </tfoot>
           </table>
@@ -308,7 +321,7 @@ const OverviewTab = ({
         <div className="flex justify-between items-center mb-3">
           <span className="font-semibold text-gray-900">{t('budgetConsumption')}</span>
           <span className={`px-3 py-1 rounded-full text-sm font-medium ${Number(budgetUsage) > 80 ? 'bg-orange-100 text-orange-700' : 'bg-green-100 text-green-700'}`}>
-            {budgetUsage}% {t('used')}
+            {formatPercent(budgetShare, language, { decimals: 0 })} {t('used')}
           </span>
         </div>
         <div className="w-full bg-gray-200 rounded-full h-3 overflow-hidden">

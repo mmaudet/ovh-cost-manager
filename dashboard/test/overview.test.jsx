@@ -149,15 +149,16 @@ describe('Overview tab', () => {
       'Domains', '30,00€',
     ]);
     // 310 / 702
-    expect(texts(gpuCosts()).slice(0, 3)).toEqual(['Coûts GPU', '310,00€', '(44.2% du cloud)']);
+    expect(texts(gpuCosts()).slice(0, 3))
+      .toEqual(['Coûts GPU', '310,00€', '(44,2 % du cloud)']);
     expect(projectRows()).toEqual([
       ['Projet○', 'Montant▼', '%'],
-      ['Production', '512,00€', '72.9%'],
-      ['Staging', '190,00€', '27.1%'],
-      ['Total Cloud', '702,00€', '100%'],
+      ['Production', '512,00€', '72,9 %'],
+      ['Staging', '190,00€', '27,1 %'],
+      ['Total Cloud', '702,00€', '100 %'],
     ]);
     expect(texts(budget()).slice(0, 3))
-      .toEqual(['Consommation du budget', '2% utilisé', 'Consommé: 1 042,00€']);
+      .toEqual(['Consommation du budget', '2 % utilisé', 'Consommé: 1 042,00€']);
   });
 
   describe('links', () => {
@@ -226,10 +227,10 @@ describe('Overview tab', () => {
 
       // 420.50 / 830.40
       expect(texts(gpuCosts())).toEqual([
-        'Coûts GPU', '420,50€', '(50.6% du cloud)',
+        'Coûts GPU', '420,50€', '(50,6 % du cloud)',
         'Par modèle GPU', 'NVIDIA L4', '420,50€',
         'Par projet', 'Projet', 'Types GPU', 'Montant',
-        'Production', 'l4-90', '420,50€', '100.0%',
+        'Production', 'l4-90', '420,50€', '100,0 %',
         'Total GPU', '420,50€',
       ]);
     });
@@ -253,9 +254,23 @@ describe('Overview tab', () => {
 
       expect(projectRows()).toEqual([
         ['Projet○', 'Montant▼', '%'],
-        ['Production', '610,40€', '73.5%'],
-        ['Staging', '220,00€', '26.5%'],
-        ['Total Cloud', '830,40€', '100%'],
+        ['Production', '610,40€', '73,5 %'],
+        ['Staging', '220,00€', '26,5 %'],
+        ['Total Cloud', '830,40€', '100 %'],
+      ]);
+    });
+
+    // With its decimal, as the other shares, and as the Backup tab writes the share of a
+    // month without cost (#64), where it read 0% (#87)
+    it('gives each project a share of 0,0 % of a Cloud total of 0 €', async () => {
+      const september = { ...account.summary['2026-09'], cloudTotal: 0 };
+      await renderDashboard({ ...account, summary: { ...account.summary, '2026-09': september } });
+
+      expect(projectRows()).toEqual([
+        ['Projet○', 'Montant▼', '%'],
+        ['Production', '610,40€', '0,0 %'],
+        ['Staging', '220,00€', '0,0 %'],
+        ['Total Cloud', '0,00€', '100 %'],
       ]);
     });
 
@@ -263,10 +278,10 @@ describe('Overview tab', () => {
       const { user } = await renderDashboard({ ...account, ...threeBilledProjects });
       expect(projectRows()).toEqual([
         ['Projet○', 'Montant▼', '%'],
-        ['Production', '460,40€', '55.4%'],
-        ['Staging', '250,00€', '30.1%'],
-        ['Sandbox', '120,00€', '14.5%'],
-        ['Total Cloud', '830,40€', '100%'],
+        ['Production', '460,40€', '55,4 %'],
+        ['Staging', '250,00€', '30,1 %'],
+        ['Sandbox', '120,00€', '14,5 %'],
+        ['Total Cloud', '830,40€', '100 %'],
       ]);
 
       await sortTable(user, projectTable(), /^Montant/);
@@ -299,9 +314,9 @@ describe('Overview tab', () => {
 
       expect(projectRows()).toEqual([
         ['Projet▼', 'Montant○', '%'],
-        ['Staging', '220,00€', '26.5%'],
-        ['Production', '610,40€', '73.5%'],
-        ['Total Cloud', '830,40€', '100%'],
+        ['Staging', '220,00€', '26,5 %'],
+        ['Production', '610,40€', '73,5 %'],
+        ['Total Cloud', '830,40€', '100 %'],
       ]);
     });
   });
@@ -312,7 +327,7 @@ describe('Overview tab', () => {
 
       // 1 250.40 / 50 000
       expect(texts(budget())).toEqual([
-        'Consommation du budget', '3% utilisé', 'Consommé: 1 250,40€', 'Budget:', '€',
+        'Consommation du budget', '3 % utilisé', 'Consommé: 1 250,40€', 'Budget:', '€',
       ]);
       expect(budgetInput()).toHaveValue(50000);
     });
@@ -322,7 +337,7 @@ describe('Overview tab', () => {
 
       expect(budgetInput()).toHaveValue(2000);
       // 1 250.40 / 2 000
-      expect(texts(budget())).toContain('63% utilisé');
+      expect(texts(budget())).toContain('63 % utilisé');
     });
 
     it('takes the budget the user types, and flags a forecast above it', async () => {
@@ -333,7 +348,7 @@ describe('Overview tab', () => {
 
       // 1 250.40 / 800
       expect(texts(budget())).toEqual([
-        'Consommation du budget', '156% utilisé', 'Consommé: 1 250,40€', 'Budget:', '€',
+        'Consommation du budget', '156 % utilisé', 'Consommé: 1 250,40€', 'Budget:', '€',
       ]);
       // The forecast of 862.18 goes over it
       expect(texts(forecastCard()))
@@ -351,7 +366,7 @@ describe('Overview tab', () => {
       await openTab(user, "Vue d'ensemble");
 
       expect(budgetInput()).toHaveValue(800);
-      expect(texts(budget())).toContain('156% utilisé');
+      expect(texts(budget())).toContain('156 % utilisé');
     });
   });
 

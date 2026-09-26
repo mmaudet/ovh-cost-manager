@@ -10,15 +10,18 @@ const formatCurrency = (value, language = 'fr') => {
   }).format(value);
 };
 
-// Format a share (0.092) as a percentage with one decimal, based on language:
-// 9,2 % in French, 9.2% in English
-const formatPercent = (share, language = 'fr') => {
+// Format a share (0.092) as a percentage, based on language: 9,2 % in French, 9.2% in
+// English. With one decimal unless told otherwise, and signed on request, as a variation is:
+// an increase reads +20,0 %, a decrease -16,7 % either way. A share of 0 out of a negative
+// total, which is -0, reads 0,0 % as any 0 does.
+const formatPercent = (share, language = 'fr', { decimals = 1, signed = false } = {}) => {
   const locale = localeOf(language);
   return new Intl.NumberFormat(locale, {
     style: 'percent',
-    minimumFractionDigits: 1,
-    maximumFractionDigits: 1,
-  }).format(share);
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+    signDisplay: signed && share > 0 ? 'always' : 'auto',
+  }).format(share === 0 ? 0 : share);
 };
 
 // A 'YYYY-MM' month and its year in the language, the month by its short or long name as

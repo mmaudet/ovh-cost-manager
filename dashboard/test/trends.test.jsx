@@ -132,7 +132,7 @@ describe('Trends tab', () => {
 
     // (1 250.40 - 980) / 980
     expect(texts(cardOf('Croissance sur la période')))
-      .toEqual(['Croissance sur la période', '+27.6%', 'Sur 3 mois']);
+      .toEqual(['Croissance sur la période', '+27,6 %', 'Sur 3 mois']);
     expect(texts(cardOf('Mois le plus coûteux')))
       .toEqual(['Mois le plus coûteux', 'sept. 2026', '1 250,40€']);
     // 12 times the last month
