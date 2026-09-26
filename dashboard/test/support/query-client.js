@@ -2,8 +2,8 @@
 // them under: shared by renderDashboard() (render.jsx) and renderTabHook() (hooks.jsx).
 
 import { vi } from 'vitest';
-import { act } from '@testing-library/react';
 import { QueryClient, notifyManager } from '@tanstack/react-query';
+import { actIn, currentSession } from './session.js';
 
 // React Query hands answers over to the page on a zero-delay timer. Same
 // timer here, tracked, so that settle() knows when none is on its way. Each
@@ -44,9 +44,10 @@ export function createQueryClient() {
 // Waits until the client has received every answer it was asked for,
 // including the requests those answers lead to, and handed them over.
 export async function settle(queryClient) {
+  const from = currentSession();
   do {
     // Fake timers make a zero-delay timer set while others run due 1 ms later
-    await act(() => (timersAreFake()
+    await actIn(from, 'settle()', () => (timersAreFake()
       ? vi.advanceTimersByTimeAsync(1)
       : new Promise((resolve) => setTimeout(resolve, 0))));
   } while (queryClient.isFetching() + queryClient.isMutating() + pendingNotifications.size > 0);

@@ -2,6 +2,7 @@ import '@testing-library/jest-dom/vitest';
 import { cleanup } from '@testing-library/react';
 import { afterEach, beforeEach, vi } from 'vitest';
 import { TODAY } from './fixtures/calendar.js';
+import { endTest } from './support/session.js';
 
 // Every test file gets the stand-in of the API service module (support/api.js)
 vi.mock('../src/services/api.js', async () => (await import('./support/api.js')).api);
@@ -41,10 +42,16 @@ beforeEach(() => {
   vi.setSystemTime(TODAY);
 });
 
-afterEach(() => {
-  // Without Vitest globals, Testing Library cannot register its own cleanup
-  cleanup();
-  vi.useRealTimers();
-  // The page remembers the chosen language
-  localStorage.clear();
+afterEach(async () => {
+  try {
+    // First stop what the test left running, so that the next test starts clean, and fail
+    // the test if it left anything (see support/session.js)
+    await endTest();
+  } finally {
+    // Without Vitest globals, Testing Library cannot register its own cleanup
+    cleanup();
+    vi.useRealTimers();
+    // The page remembers the chosen language
+    localStorage.clear();
+  }
 });

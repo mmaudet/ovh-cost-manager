@@ -5,6 +5,7 @@ import { api, holdBack, serve } from './support/api.js';
 import { captureFileDownloads } from './support/downloads.js';
 import {
   cardOf,
+  cardRowOf,
   disclosure,
   dropdown,
   emptyState,
@@ -21,10 +22,15 @@ import {
   selectMonth,
   settle,
   texts,
+  toneOf,
 } from './support/render.jsx';
 
 // The month selector of the header offers every billed month
 const monthSelector = () => dropdown('Juillet 2026');
+// The Cloud total card, among the KPI cards of the month's cost: the Overview's breakdown by
+// project ends with a row of the same label
+const cloudTotalCard = (label = 'Total Cloud', monthCost = 'Coût total du mois') =>
+  cardOf(within(cardRowOf(monthCost)).getByText(label));
 
 // The shell: the header, the KPI cards, the tab bar, the sync warning banner
 // and the footer, around whatever tab is open.
@@ -134,8 +140,8 @@ describe('dashboard shell', () => {
       expect(monthSelector()).toHaveDisplayValue('Août 2026');
       // Compared with July, the month before (#50)
       expect(texts(cardOf('Coût total du mois')))
-        .toEqual(['Coût total du mois', '1 042,00€', '+6.3% vs mois précédent']);
-      expect(texts(cardOf('Cloud Total'))).toEqual(['Cloud Total', '702,00€', 'Public Cloud']);
+        .toEqual(['Coût total du mois', '1 042,00€', '+6,3 % vs mois précédent']);
+      expect(texts(cloudTotalCard())).toEqual(['Total Cloud', '702,00€', 'Public Cloud']);
       expect(texts(cardOf('Coût moyen / jour')))
         .toEqual(['Coût moyen / jour', '33,61€', 'Sur 30 jours']);
       expect(texts(cardOf('Projets actifs'))).toEqual(['Projets actifs', '2', 'avec consommation']);
@@ -166,8 +172,9 @@ describe('dashboard shell', () => {
 
       // Compared with August, the month before (#50, see below)
       expect(texts(cardOf('Coût total du mois')))
-        .toEqual(['Coût total du mois', '1 250,40€', '+20.0% vs mois précédent']);
-      expect(texts(cardOf('Cloud Total'))).toEqual(['Cloud Total', '830,40€', 'Public Cloud']);
+        .toEqual(['Coût total du mois', '1 250,40€', '+20,0 % vs mois précédent']);
+      // In French, the Cloud total reads as in the breakdown by project and the report (#87)
+      expect(texts(cloudTotalCard())).toEqual(['Total Cloud', '830,40€', 'Public Cloud']);
       expect(texts(cardOf('Coût moyen / jour')))
         .toEqual(['Coût moyen / jour', '41,68€', 'Sur 30 jours']);
       expect(texts(cardOf('Projets actifs'))).toEqual(['Projets actifs', '2', 'avec consommation']);
@@ -207,7 +214,7 @@ describe('dashboard shell', () => {
       await renderDashboard();
 
       // (1 250.40 - 1 042) / 1 042
-      expect(texts(totalCostCard())).toContain('+20.0% vs mois précédent');
+      expect(texts(totalCostCard())).toContain('+20,0 % vs mois précédent');
     });
 
     it('compares an older month with the month before it, not with the latest', async () => {
@@ -216,7 +223,7 @@ describe('dashboard shell', () => {
       await selectMonth(user, 'Août 2026');
 
       // (1 042 - 980) / 980
-      expect(texts(totalCostCard())).toContain('+6.3% vs mois précédent');
+      expect(texts(totalCostCard())).toContain('+6,3 % vs mois précédent');
     });
 
     it('ignores the months picked in the Compare tab', async () => {
@@ -228,7 +235,7 @@ describe('dashboard shell', () => {
       await settle();
 
       // Still from August, not from July
-      expect(texts(totalCostCard())).toContain('+20.0% vs mois précédent');
+      expect(texts(totalCostCard())).toContain('+20,0 % vs mois précédent');
     });
 
     it('waits for the summary of the month before, rather than showing none', async () => {
@@ -244,7 +251,7 @@ describe('dashboard shell', () => {
       releaseJuly();
       await settle();
       expect(texts(totalCostCard()))
-        .toEqual(['Coût total du mois', '1 042,00€', '+6.3% vs mois précédent']);
+        .toEqual(['Coût total du mois', '1 042,00€', '+6,3 % vs mois précédent']);
     });
 
     // As in the Compare and Trends tabs (#65): it would be infinite from 0 €, and of the
@@ -289,6 +296,52 @@ describe('dashboard shell', () => {
 
       expect(texts(totalCostCard()))
         .toEqual(['Coût total du mois', '980,00€', 'Pas de données précédentes']);
+    });
+
+    it('shows an increase in red (#87)', async () => {
+      await renderDashboard();
+
+      expect(toneOf(within(totalCostCard()).getByText('+20,0 % vs mois précédent')))
+        .toBe('increase');
+    });
+
+    it('shows a decrease with its minus, in green (#87)', async () => {
+      await renderDashboard({
+        ...account,
+        summary: { ...account.summary, '2026-08': { ...account.summary['2026-08'], total: 1300 } },
+      });
+
+      // (1 250.40 - 1 300) / 1 300
+      expect(texts(totalCostCard()))
+        .toEqual(['Coût total du mois', '1 250,40€', '-3,8 % vs mois précédent']);
+      expect(toneOf(within(totalCostCard()).getByText('-3,8 % vs mois précédent')))
+        .toBe('decrease');
+    });
+
+    // "+0,0 %" in red read as an increase that does not show (#87)
+    it.each([
+      ['an increase', 1250],
+      ['a decrease', 1250.8],
+    ])('shows %s that rounds to 0 unsigned and neutral (#87)', async (_, augustTotal) => {
+      const { user } = await renderDashboard({
+        ...account,
+        summary: {
+          ...account.summary,
+          '2026-08': { ...account.summary['2026-08'], total: augustTotal },
+        },
+      });
+
+      // (1 250.40 - 1 250) / 1 250 is 0.03 %, (1 250.40 - 1 250.80) / 1 250.80 -0.03 %
+      expect(texts(totalCostCard()))
+        .toEqual(['Coût total du mois', '1 250,40€', '0,0 % vs mois précédent']);
+      expect(toneOf(within(totalCostCard()).getByText('0,0 % vs mois précédent')))
+        .toBe('neutral');
+
+      await selectLanguage(user, 'en');
+
+      const card = cardOf('Total monthly cost');
+      expect(texts(card)).toEqual(['Total monthly cost', '1,250.40€', '0.0% vs previous month']);
+      expect(toneOf(within(card).getByText('0.0% vs previous month'))).toBe('neutral');
     });
   });
 
@@ -776,6 +829,8 @@ describe('dashboard shell', () => {
       // The latest month, compared with August, the month before (#50)
       expect(texts(cardOf('Total monthly cost')))
         .toEqual(['Total monthly cost', '1,250.40€', '+20.0% vs previous month']);
+      expect(texts(cloudTotalCard('Cloud Total', 'Total monthly cost')))
+        .toEqual(['Cloud Total', '830.40€', 'Public Cloud']);
       expect(texts(cardOf('Daily average cost')))
         .toEqual(['Daily average cost', '41.68€', 'Over 30 days']);
       expect(screen.getByRole('button', { name: 'Overview' })).toBeInTheDocument();
@@ -792,7 +847,8 @@ describe('dashboard shell', () => {
       await selectLanguage(user, 'fr');
 
       expect(texts(cardOf('Coût total du mois')))
-        .toEqual(['Coût total du mois', '1 250,40€', '+20.0% vs mois précédent']);
+        .toEqual(['Coût total du mois', '1 250,40€', '+20,0 % vs mois précédent']);
+      expect(texts(cloudTotalCard())).toEqual(['Total Cloud', '830,40€', 'Public Cloud']);
       expect(screen.getByRole('button', { name: "Vue d'ensemble" })).toBeInTheDocument();
       // The months back in French (#33)
       expect(optionsOf(monthSelector())).toEqual(['Septembre 2026', 'Août 2026', 'Juillet 2026']);

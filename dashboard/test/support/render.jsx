@@ -7,7 +7,7 @@
 
 import { StrictMode } from 'react';
 import { vi } from 'vitest';
-import { act, render, screen, within } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { LanguageProvider } from '../../src/hooks/useLanguage.jsx';
@@ -18,14 +18,25 @@ import { serve } from './api.js';
 import {
   createQueryClient, keysIn, settle as settleQueries, timersAreFake,
 } from './query-client.js';
+import { actIn, currentSession, runStep } from './session.js';
 
 let queryClient;
+
+// The user of a test, each action of which is a step of the test (see session.js): one it
+// left running stops for good once it is over, rather than act on the page of the next test.
+// setup() is no action: it derives a user.
+const userOf = (from, user) => Object.fromEntries(Object.entries(user).map(
+  ([name, action]) => [name, name === 'setup'
+    ? action
+    : (...args) => runStep(from, `user.${name}()`, () => action(...args))],
+));
 
 // Renders the whole dashboard as src/main.jsx does, with the API answering
 // from the dataset, and waits until the page shows every answer. Returns the
 // user, and allKeys(), the key of every query the page holds in its cache,
 // the shell's and the tab hooks', as renderTabHook() gives for one hook.
 export async function renderDashboard(data = account) {
+  const from = currentSession();
   serve(data);
   queryClient = createQueryClient();
   // Under fake timers, user-event moves the clock on for its own delays
@@ -42,7 +53,7 @@ export async function renderDashboard(data = account) {
     </StrictMode>,
   );
   await settle();
-  return { user, allKeys: () => keysIn(queryClient) };
+  return { user: userOf(from, user), allKeys: () => keysIn(queryClient) };
 }
 
 // Waits until the page has received every answer it asked for, including the
@@ -64,7 +75,7 @@ export function fakeTimers() {
 // Under fake timers, lets time pass, then waits until the page shows what
 // that time brought
 export async function passTime(ms) {
-  await act(() => vi.advanceTimersByTimeAsync(ms));
+  await actIn(currentSession(), 'passTime()', () => vi.advanceTimersByTimeAsync(ms));
   await settle();
 }
 
@@ -283,4 +294,11 @@ export function backdropOf(dialog) {
 // The coloured dot of a chart legend item
 export function swatchOf(legendItem) {
   return legendItem.querySelector('span');
+}
+
+// The tone of a variation, as the colour of its text shows it: an increase in red, a
+// decrease in green, and neither in grey (#87)
+export function toneOf(variation) {
+  const colour = variation.className.match(/\btext-(red|green|gray)-\d+\b/)?.[1];
+  return { red: 'increase', green: 'decrease', gray: 'neutral' }[colour];
 }

@@ -89,6 +89,15 @@ const DATASETS = {
   consumption: ['consumption_snapshots', 'consumption_history'],
 };
 
+// Copies a file of the snapshot, writable by its owner, this script. A copy keeps the mode of
+// its source: from a read-only snapshot, the database copied would be read-only, and so would
+// the copy of each side, which its server could not migrate as it starts (SQLITE_READONLY);
+// its journal would not fold back into it either.
+function copyWritable(from, to) {
+  fs.copyFileSync(from, to, fs.constants.COPYFILE_EXCL);
+  fs.chmodSync(to, fs.statSync(to).mode | 0o200);
+}
+
 /**
  * Freezes the snapshot: copies its database into `destination`, never writing to it.
  * @returns {{ bills: number, latestBill: string, months: string[], lastImport: object|null,
@@ -117,10 +126,8 @@ export async function freezeSnapshot(dataDir, destination, Database) {
     // No -shm index: nothing has the database open. Opening it, even read-only, would create
     // or rewrite the -shm and -wal files; plain copies of the database and of its journal
     // leave the directory untouched, and opening the copies reads the journal back.
-    fs.copyFileSync(source, destination, fs.constants.COPYFILE_EXCL);
-    if (fs.existsSync(journal)) {
-      fs.copyFileSync(journal, `${destination}-wal`, fs.constants.COPYFILE_EXCL);
-    }
+    copyWritable(source, destination);
+    if (fs.existsSync(journal)) copyWritable(journal, `${destination}-wal`);
   }
   // Read-write on purpose: closing the copy folds its journal back into the file
   const copy = new Database(destination);

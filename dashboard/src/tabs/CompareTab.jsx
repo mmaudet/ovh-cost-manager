@@ -92,7 +92,7 @@ const CompareTab = ({
         <td className="p-3 text-right font-medium">{fmt(valA)}€</td>
         <td className="p-3 text-right text-gray-500">{fmt(valB)}€</td>
         <td className="p-3 text-right">
-          <Variation from={valA} to={valB} t={t} />
+          <Variation from={valA} to={valB} language={language} t={t} />
         </td>
       </tr>
     );
@@ -150,7 +150,8 @@ const CompareTab = ({
             {/* From the total of month A to that of month B, once both are in */}
             {compareDataA && compareDataB && (
               <Variation
-                from={compareDataA.total} to={compareDataB.total} t={t} size="headline"
+                from={compareDataA.total} to={compareDataB.total} language={language} t={t}
+                size="headline"
               />
             )}
           </div>
@@ -217,7 +218,7 @@ const CompareTab = ({
                 <td className="p-3 text-right font-medium">{fmt(p.totalA)}€</td>
                 <td className="p-3 text-right text-gray-500">{fmt(p.totalB)}€</td>
                 <td className="p-3 text-right">
-                  <Variation from={p.totalA} to={p.totalB} t={t} />
+                  <Variation from={p.totalA} to={p.totalB} language={language} t={t} />
                 </td>
               </tr>
             ))}
@@ -296,7 +297,7 @@ const CompareTab = ({
                   <td className="p-3 text-right font-medium">{a.count} / {fmt(a.total)}€</td>
                   <td className="p-3 text-right text-gray-500">{b.count} / {fmt(b.total)}€</td>
                   <td className="p-3 text-right">
-                    <Variation from={a.total} to={b.total} t={t} />
+                    <Variation from={a.total} to={b.total} language={language} t={t} />
                   </td>
                 </tr>
               );

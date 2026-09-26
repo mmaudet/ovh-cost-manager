@@ -33,9 +33,10 @@ const inventoryPanel = (heading) => cardOf(screen.getByRole('heading', { name: h
 const serversPanel = (heading = /^Serveurs dédiés \(/) => inventoryPanel(heading);
 const serversButton = (name) => within(serversPanel()).getByRole('button', { name });
 
+// The RAM in French units, and in powers of 1024 as OVH names it: its 65536 MB (#88)
 const serverRows = [
   ['ID', 'Datacenter', 'CPU', 'RAM', 'État', "Date d'expiration", 'Renouvellement'],
-  ['backup-server', 'rbx8', 'Intel Xeon-E 2388G', '64 GB', 'ok', '2026-09-20', 'automatic'],
+  ['backup-server', 'rbx8', 'Intel Xeon-E 2388G', '64 Go', 'ok', '2026-09-20', 'automatic'],
   // Just delivered: its RAM, expiration and renewal are not known yet
   ['ns3000002.ip-198-51-100.eu', 'gra3', 'AMD EPYC 4344P', '-', 'error', '-', '-'],
 ];
@@ -260,8 +261,9 @@ describe('Infrastructure tab', () => {
       const [fromPanel, fromModal] = await downloadFromPanelAndModal(user, serversPanel());
 
       expect(fromModal).toEqual(fromPanel);
+      // The RAM in megabytes as the API gives them, named in French units (#88)
       expect(fromPanel).toEqual(csvFile('ovh-dedicated-servers.csv', [
-        '"Nom";"ID";"Datacentre";"CPU";"RAM (MB)";"OS";"État";"Date d\'expiration";'
+        '"Nom";"ID";"Datacentre";"CPU";"RAM (Mo)";"OS";"État";"Date d\'expiration";'
           + '"Renouvellement"',
         '"backup-server";"ns3000001.ip-203-0-113.eu";"rbx8";"Intel Xeon-E 2388G";65536;'
           + '"debian12_64";"ok";"2026-09-20";"automatic"',
@@ -277,15 +279,37 @@ describe('Infrastructure tab', () => {
 
     await openTab(user, 'Infrastructure');
 
+    // The sizes in French units and number format, as the Public Cloud tab writes them (#88):
+    // the RAM in powers of 1024, the disk and the storage in powers of 1000
     expect(rowsOf(within(inventoryPanel('VPS')).getByRole('table'))).toEqual([
       ['ID', 'Modèle', 'Région', 'Spécifications', 'État', "Date d'expiration"],
       ['vps-0a1b2c3d.vps.ovh.net', 'vps-le-2-2-40', 'Region OpenStack: os-gra7',
-        '2 vCPU / 2048MB / 40GB', 'running', '2026-10-10'],
+        '2 vCPU / 2,0 Go / 40 Go', 'running', '2026-10-10'],
     ]);
     expect(rowsOf(within(inventoryPanel('Stockage')).getByRole('table'))).toEqual([
-      ['ID', 'Type', 'Région', 'Taille (GB)', 'Shares', "Date d'expiration"],
-      ['shared-files', 'netapp', 'eu-west-gra', '1024', '3', '2027-03-01'],
+      ['ID', 'Type', 'Région', 'Taille', 'Shares', "Date d'expiration"],
+      ['shared-files', 'netapp', 'eu-west-gra', '1,0 To', '3', '2027-03-01'],
     ]);
+  });
+
+  // The import stores 0 for a size the API did not give: "-", as for the RAM of a server,
+  // rather than "0 o" (#88)
+  it('writes a dash for the sizes of a VPS or storage the API did not give', async () => {
+    const [vps] = account.inventoryVps;
+    const [storage] = account.inventoryStorage;
+    const { user } = await renderDashboard({
+      ...account,
+      inventoryVps: [{ ...vps, ram_mb: 0, disk_gb: 0 }],
+      inventoryStorage: [{ ...storage, total_size_gb: 0 }],
+    });
+
+    await openTab(user, 'Infrastructure');
+
+    expect(rowsOf(within(inventoryPanel('VPS')).getByRole('table'))[1])
+      .toEqual(['vps-0a1b2c3d.vps.ovh.net', 'vps-le-2-2-40', 'Region OpenStack: os-gra7',
+        '2 vCPU / - / -', 'running', '2026-10-10']);
+    expect(rowsOf(within(inventoryPanel('Stockage')).getByRole('table'))[1])
+      .toEqual(['shared-files', 'netapp', 'eu-west-gra', '-', '3', '2027-03-01']);
   });
 
   it('shows only its cards with nothing of its own billed or in the inventory', async () => {
@@ -344,12 +368,20 @@ describe('Infrastructure tab', () => {
     expect(texts(screen.getByRole('heading', { name: /^Dedicated Servers \(/ })))
       .toEqual(['Dedicated Servers (2)', 'Show all', 'CSV']);
     const servers = serversPanel(/^Dedicated Servers \(/);
-    expect(rowsOf(within(servers).getByRole('table'))[0])
-      .toEqual(['ID', 'Datacenter', 'CPU', 'RAM', 'State', 'Expiration date', 'Renewal']);
-    expect(rowsOf(within(inventoryPanel('VPS')).getByRole('table'))[0])
-      .toEqual(['ID', 'Model', 'Region', 'Specifications', 'State', 'Expiration date']);
-    expect(rowsOf(within(inventoryPanel('Storage')).getByRole('table'))[0])
-      .toEqual(['ID', 'Type', 'Region', 'Size (GB)', 'Shares', 'Expiration date']);
+    // The sizes in English units and number format (#88)
+    expect(rowsOf(within(servers).getByRole('table')).slice(0, 2)).toEqual([
+      ['ID', 'Datacenter', 'CPU', 'RAM', 'State', 'Expiration date', 'Renewal'],
+      ['backup-server', 'rbx8', 'Intel Xeon-E 2388G', '64 GB', 'ok', '2026-09-20', 'automatic'],
+    ]);
+    expect(rowsOf(within(inventoryPanel('VPS')).getByRole('table'))).toEqual([
+      ['ID', 'Model', 'Region', 'Specifications', 'State', 'Expiration date'],
+      ['vps-0a1b2c3d.vps.ovh.net', 'vps-le-2-2-40', 'Region OpenStack: os-gra7',
+        '2 vCPU / 2.0 GB / 40 GB', 'running', '2026-10-10'],
+    ]);
+    expect(rowsOf(within(inventoryPanel('Storage')).getByRole('table'))).toEqual([
+      ['ID', 'Type', 'Region', 'Size', 'Shares', 'Expiration date'],
+      ['shared-files', 'netapp', 'eu-west-gra', '1.0 TB', '3', '2027-03-01'],
+    ]);
     const downloadedFiles = captureFileDownloads();
 
     await user.click(within(servers).getByRole('button', { name: 'CSV' }));

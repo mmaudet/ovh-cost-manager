@@ -17,6 +17,7 @@ import {
   settle,
   sortTable,
   texts,
+  toneOf,
 } from './support/render.jsx';
 
 // Months A and B both offer every month: the one they show tells them apart
@@ -93,7 +94,7 @@ describe('Compare tab', () => {
       // (1 250.40 - 1 042) / 1 042
       expect(texts(comparedTotals())).toEqual([
         'Mois A :', 'Août 2026', 'VS', 'Mois B :', 'Septembre 2026',
-        '1 042,00€', 'Août 2026', '+20.0%', '1 250,40€', 'Septembre 2026',
+        '1 042,00€', 'Août 2026', '+20,0 %', '1 250,40€', 'Septembre 2026',
       ]);
     });
 
@@ -108,7 +109,7 @@ describe('Compare tab', () => {
       // (1 042 - 980) / 980
       expect(texts(comparedTotals())).toEqual([
         'Mois A :', 'Juillet 2026', 'VS', 'Mois B :', 'Août 2026',
-        '980,00€', 'Juillet 2026', '+6.3%', '1 042,00€', 'Août 2026',
+        '980,00€', 'Juillet 2026', '+6,3 %', '1 042,00€', 'Août 2026',
       ]);
 
       await pickMonth(user, 'Juillet 2026', 'Septembre 2026');
@@ -116,7 +117,7 @@ describe('Compare tab', () => {
       // (1 042 - 1 250.40) / 1 250.40
       expect(texts(comparedTotals())).toEqual([
         'Mois A :', 'Septembre 2026', 'VS', 'Mois B :', 'Août 2026',
-        '1 250,40€', 'Septembre 2026', '-16.7%', '1 042,00€', 'Août 2026',
+        '1 250,40€', 'Septembre 2026', '-16,7 %', '1 042,00€', 'Août 2026',
       ]);
     });
 
@@ -130,7 +131,7 @@ describe('Compare tab', () => {
 
       expect(texts(comparedTotals())).toEqual([
         'Mois A :', 'Juillet 2026', 'VS', 'Mois B :', 'Septembre 2026',
-        '980,00€', 'Juillet 2026', '+27.6%', '1 250,40€', 'Septembre 2026',
+        '980,00€', 'Juillet 2026', '+27,6 %', '1 250,40€', 'Septembre 2026',
       ]);
     });
 
@@ -141,7 +142,7 @@ describe('Compare tab', () => {
 
       expect(texts(comparedTotals())).toEqual([
         'Mois A :', 'Septembre 2026', 'VS', 'Mois B :', 'Septembre 2026',
-        '1 250,40€', 'Septembre 2026', '0.0%', '1 250,40€', 'Septembre 2026',
+        '1 250,40€', 'Septembre 2026', '0,0 %', '1 250,40€', 'Septembre 2026',
       ]);
     });
   });
@@ -180,8 +181,8 @@ describe('Compare tab', () => {
       // Open from the start
       expect(projectRows()).toEqual([
         ['Projet○', 'Août 2026▼', 'Septembre 2026○', 'Variation○'],
-        ['Production', '512,00€', '610,40€', '+19.2%'],
-        ['Staging', '190,00€', '220,00€', '+15.8%'],
+        ['Production', '512,00€', '610,40€', '+19,2 %'],
+        ['Staging', '190,00€', '220,00€', '+15,8 %'],
       ]);
     });
 
@@ -190,9 +191,9 @@ describe('Compare tab', () => {
       await openTab(user, 'Comparaison');
       expect(projectRows()).toEqual([
         ['Projet○', 'Août 2026▼', 'Septembre 2026○', 'Variation○'],
-        ['Production', '412,00€', '460,40€', '+11.7%'],
-        ['Sandbox', '180,00€', '120,00€', '-33.3%'],
-        ['Staging', '110,00€', '250,00€', '+127.3%'],
+        ['Production', '412,00€', '460,40€', '+11,7 %'],
+        ['Sandbox', '180,00€', '120,00€', '-33,3 %'],
+        ['Staging', '110,00€', '250,00€', '+127,3 %'],
       ]);
 
       await sortTable(user, projectTable(), /^Août 2026/);
@@ -244,8 +245,8 @@ describe('Compare tab', () => {
 
       expect(projectRows()).toEqual([
         ['Projet▼', 'Août 2026○', 'Septembre 2026○', 'Variation○'],
-        ['Staging', '190,00€', '220,00€', '+15.8%'],
-        ['Production', '512,00€', '610,40€', '+19.2%'],
+        ['Staging', '190,00€', '220,00€', '+15,8 %'],
+        ['Production', '512,00€', '610,40€', '+19,2 %'],
       ]);
     });
 
@@ -260,7 +261,7 @@ describe('Compare tab', () => {
       // from 0 € cannot be computed, and a tooltip says why (#65)
       expect(projectRows()).toEqual([
         ['Projet○', 'Juillet 2026▼', 'Septembre 2026○', 'Variation○'],
-        ['Production', '680,00€', '610,40€', '-10.2%'],
+        ['Production', '680,00€', '610,40€', '-10,2 %'],
         ['Staging', '0,00€', '220,00€', '—'],
       ]);
       expect(within(projectTable()).getByTitle('non calculable : mois A à 0 € ou moins'))
@@ -324,9 +325,9 @@ describe('Compare tab', () => {
       // with itself, not with the other one
       expect(projectRows()).toEqual([
         ['Projet○', 'Août 2026▼', 'Septembre 2026○', 'Variation○'],
-        ['Production', '512,00€', '610,40€', '+19.2%'],
-        ['Staging', '190,00€', '220,00€', '+15.8%'],
-        ['Unknown', '40,00€', '0,00€', '-100.0%'],
+        ['Production', '512,00€', '610,40€', '+19,2 %'],
+        ['Staging', '190,00€', '220,00€', '+15,8 %'],
+        ['Unknown', '40,00€', '0,00€', '-100,0 %'],
         ['Unknown', '0,00€', '15,00€', '—'],
       ]);
     });
@@ -338,7 +339,7 @@ describe('Compare tab', () => {
       // Staging and Sandbox were first billed in August, after month A
       expect(projectRows()).toEqual([
         ['Projet○', 'Juillet 2026▼', 'Septembre 2026○', 'Variation○'],
-        ['Production', '680,00€', '460,40€', '-32.3%'],
+        ['Production', '680,00€', '460,40€', '-32,3 %'],
         ['Staging', '0,00€', '250,00€', '—'],
         ['Sandbox', '0,00€', '120,00€', '—'],
       ]);
@@ -373,8 +374,8 @@ describe('Compare tab', () => {
 
       expect(projectRows()).toEqual([
         ['Projet○', 'Septembre 2026▼', 'Juillet 2026○', 'Variation○'],
-        ['Production', '610,40€', '680,00€', '+11.4%'],
-        ['Staging', '220,00€', '0,00€', '-100.0%'],
+        ['Production', '610,40€', '680,00€', '+11,4 %'],
+        ['Staging', '220,00€', '0,00€', '-100,0 %'],
       ]);
     });
   });
@@ -403,14 +404,14 @@ describe('Compare tab', () => {
         // never opened (#35)
         [
           'Liste des Serveurs dédiés présents au 15/09/2026',
-          'backup-server', 'ns3000002.ip-198-51-100.eu', '270,00€', '270,00€', '0.0%',
+          'backup-server', 'ns3000002.ip-198-51-100.eu', '270,00€', '270,00€', '0,0 %',
         ],
         ['VPS', '0,00€', '0,00€', '—'],
         ['Stockage', '0,00€', '0,00€', '—'],
         ['Load Balancer', '0,00€', '0,00€', '—'],
         ['Adresses IP', '0,00€', '0,00€', '—'],
         // (35 - 30) / 30
-        ['Noms de domaine', '30,00€', '35,00€', '+16.7%'],
+        ['Noms de domaine', '30,00€', '35,00€', '+16,7 %'],
         ['Hôtes Private Cloud', '0,00€', '0,00€', '—'],
         ['Datastores Private Cloud', '0,00€', '0,00€', '—'],
       ]);
@@ -418,7 +419,7 @@ describe('Compare tab', () => {
       // and an Enterprise licence of 25 € in September only (#32)
       expect(rowsOf(comparisonTable(BACKUP))).toEqual([
         ['Catégorie', 'Août 2026', 'Septembre 2026', 'Variation'],
-        ['VMs Veeam Backup', '2 / 40,00€', '3 / 90,00€', '+125.0%'],
+        ['VMs Veeam Backup', '2 / 40,00€', '3 / 90,00€', '+125,0 %'],
         ['Licence Veeam Enterprise', '0 / 0,00€', '1 / 25,00€', '—'],
       ]);
       expect(rowsOf(comparisonTable(PRIVATE_CLOUD))).toEqual([
@@ -448,26 +449,26 @@ describe('Compare tab', () => {
         // With the servers of the inventory (#35)
         [
           'Liste des Serveurs dédiés présents au 15/09/2026',
-          'backup-server', 'ns3000002.ip-198-51-100.eu', '270,00€', '270,00€', '0.0%',
+          'backup-server', 'ns3000002.ip-198-51-100.eu', '270,00€', '270,00€', '0,0 %',
         ],
-        ['VPS', '11,99€', '0,00€', '-100.0%'],
-        ['Stockage', '64,80€', '0,00€', '-100.0%'],
-        ['Load Balancer', '18,00€', '0,00€', '-100.0%'],
-        ['Adresses IP', '6,00€', '0,00€', '-100.0%'],
+        ['VPS', '11,99€', '0,00€', '-100,0 %'],
+        ['Stockage', '64,80€', '0,00€', '-100,0 %'],
+        ['Load Balancer', '18,00€', '0,00€', '-100,0 %'],
+        ['Adresses IP', '6,00€', '0,00€', '-100,0 %'],
         // (30 - 35) / 35
-        ['Noms de domaine', '35,00€', '30,00€', '-14.3%'],
-        ['Hôtes Private Cloud', '1 450,00€', '0,00€', '-100.0%'],
-        ['Datastores Private Cloud', '380,00€', '0,00€', '-100.0%'],
+        ['Noms de domaine', '35,00€', '30,00€', '-14,3 %'],
+        ['Hôtes Private Cloud', '1 450,00€', '0,00€', '-100,0 %'],
+        ['Datastores Private Cloud', '380,00€', '0,00€', '-100,0 %'],
       ]);
       expect(rowsOf(comparisonTable(BACKUP))).toEqual([
         ['Catégorie', 'Septembre 2026', 'Juillet 2026', 'Variation'],
-        ['VMs Veeam Backup', '3 / 90,00€', '0 / 0,00€', '-100.0%'],
-        ['Licence Veeam Enterprise', '1 / 25,00€', '0 / 0,00€', '-100.0%'],
+        ['VMs Veeam Backup', '3 / 90,00€', '0 / 0,00€', '-100,0 %'],
+        ['Licence Veeam Enterprise', '1 / 25,00€', '0 / 0,00€', '-100,0 %'],
       ]);
       expect(rowsOf(comparisonTable(PRIVATE_CLOUD))).toEqual([
         ['Type', 'Septembre 2026', 'Juillet 2026', 'Variation'],
-        ['Hôtes Private Cloud', '1 450,00€', '0,00€', '-100.0%'],
-        ['Datastores Private Cloud', '380,00€', '0,00€', '-100.0%'],
+        ['Hôtes Private Cloud', '1 450,00€', '0,00€', '-100,0 %'],
+        ['Datastores Private Cloud', '380,00€', '0,00€', '-100,0 %'],
       ]);
     });
 
@@ -482,7 +483,7 @@ describe('Compare tab', () => {
       const dedicatedServers = [
         'Liste des Serveurs dédiés présents au 15/09/2026',
         'backup-server', 'ns3000002.ip-198-51-100.eu',
-        '270,00€', '270,00€', '0.0%',
+        '270,00€', '270,00€', '0,0 %',
       ];
       expect(rowTextsOf(comparisonTable(INFRASTRUCTURE))[1]).toEqual(dedicatedServers);
 
@@ -549,11 +550,11 @@ describe('Compare tab', () => {
       // each month's consumption (#54): every cloud resource kind drops to nothing
       expect(rowsOf(comparisonTable(PRODUCTION_CONSUMPTION))).toEqual([
         ['Produit/Type', 'Septembre 2026', 'Juillet 2026', 'Variation'],
-        ['instance', '234,25€', '0,00€', '-100.0%'],
-        ['instance_monthly', '64,00€', '0,00€', '-100.0%'],
-        ['volume', '7,50€', '0,00€', '-100.0%'],
-        ['snapshot', '3,25€', '0,00€', '-100.0%'],
-        ['objectStorage', '41,00€', '0,00€', '-100.0%'],
+        ['instance', '234,25€', '0,00€', '-100,0 %'],
+        ['instance_monthly', '64,00€', '0,00€', '-100,0 %'],
+        ['volume', '7,50€', '0,00€', '-100,0 %'],
+        ['snapshot', '3,25€', '0,00€', '-100,0 %'],
+        ['objectStorage', '41,00€', '0,00€', '-100,0 %'],
       ]);
     });
 
@@ -626,7 +627,7 @@ describe('Compare tab', () => {
       expect(rowTextsOf(comparisonTable(INFRASTRUCTURE)).slice(1).map((row) => row.slice(-3)))
         .toEqual([
           // The dedicated servers, 270 € both months
-          ['270,00€', '270,00€', '0.0%'],
+          ['270,00€', '270,00€', '0,0 %'],
           ['0,00€', '0,00€', '—'],
           ['0,00€', '0,00€', '—'],
           ['0,00€', '0,00€', '—'],
@@ -647,6 +648,59 @@ describe('Compare tab', () => {
         ['Hôtes Private Cloud', '0,00€', '0,00€', '—'],
         ['Datastores Private Cloud', '0,00€', '0,00€', '—'],
       ]);
+    });
+  });
+
+  describe('tones of the variations (#87)', () => {
+    it('show an increase in red, and a decrease in green', async () => {
+      const { user } = await renderDashboard({
+        ...account,
+        summary: { ...account.summary, '2026-08': { ...account.summary['2026-08'], total: 1300 } },
+      });
+      await openTab(user, 'Comparaison');
+
+      // (1 250.40 - 1 300) / 1 300
+      expect(toneOf(within(comparedTotals()).getByText('-3,8 %'))).toBe('decrease');
+      // (610.40 - 512) / 512
+      expect(toneOf(within(comparisonTable(PROJECTS)).getByText('+19,2 %'))).toBe('increase');
+    });
+
+    // "+0,0 %" in red read as an increase that does not show
+    it('show a variation that rounds to 0, either way, unsigned and neutral', async () => {
+      const [production, staging] = account.byProject['2026-08'];
+      const { user } = await renderDashboard({
+        ...account,
+        summary: { ...account.summary, '2026-08': { ...account.summary['2026-08'], total: 1250 } },
+        byProject: {
+          ...account.byProject,
+          '2026-08': [{ ...production, total: 610.3 }, { ...staging, total: 220.05 }],
+        },
+      });
+      await openTab(user, 'Comparaison');
+
+      // (1 250.40 - 1 250) / 1 250 is 0.03 %
+      expect(texts(comparedTotals()).slice(5)).toEqual([
+        '1 250,00€', 'Août 2026', '0,0 %', '1 250,40€', 'Septembre 2026',
+      ]);
+      expect(toneOf(within(comparedTotals()).getByText('0,0 %'))).toBe('neutral');
+      // (610.40 - 610.30) / 610.30 is 0.02 %, (220 - 220.05) / 220.05 -0.02 %
+      expect(rowsOf(comparisonTable(PROJECTS))).toEqual([
+        ['Projet○', 'Août 2026▼', 'Septembre 2026○', 'Variation○'],
+        ['Production', '610,30€', '610,40€', '0,0 %'],
+        ['Staging', '220,05€', '220,00€', '0,0 %'],
+      ]);
+      for (const variation of within(comparisonTable(PROJECTS)).getAllByText('0,0 %')) {
+        expect(toneOf(variation)).toBe('neutral');
+      }
+
+      await selectLanguage(user, 'en');
+
+      expect(toneOf(within(comparedTotals()).getByText('0.0%'))).toBe('neutral');
+      const projects = comparisonTable(/^Comparison by project/);
+      expect(rowsOf(projects).slice(1).map((row) => row[3])).toEqual(['0.0%', '0.0%']);
+      for (const variation of within(projects).getAllByText('0.0%')) {
+        expect(toneOf(variation)).toBe('neutral');
+      }
     });
   });
 

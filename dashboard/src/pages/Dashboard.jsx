@@ -14,7 +14,7 @@ import { formatCurrency, formatMonthLabel, yearMonthOf } from '../utils/format.j
 import { parseSqliteDate } from '../utils/sqliteDate.js';
 import { generateMarkdownReport } from '../utils/markdownReport.js';
 import { shiftMonths } from '../utils/monthWindow.js';
-import { variationPercent } from '../utils/variation.js';
+import { variationDisplay, variationPercent } from '../utils/variation.js';
 import { useWebCloudTab } from '../tabs/useWebCloudTab.js';
 import { WebCloudTab, WebCloudTabModals } from '../tabs/WebCloudTab.jsx';
 import { useBackupTab } from '../tabs/useBackupTab.js';
@@ -41,6 +41,14 @@ const IMPORT_STATUS_KEYS = {
   success: 'importStatusSuccess',
   failed: 'importStatusFailed',
   partial: 'importStatusPartial'
+};
+
+// The colours of each tone of the "vs previous month" variation: red when the cost grows,
+// green when it shrinks, grey when the variation rounds to 0 (#87)
+const VARIATION_TONES = {
+  increase: 'text-red-500',
+  decrease: 'text-green-500',
+  neutral: 'text-gray-500',
 };
 
 export default function Dashboard() {
@@ -213,10 +221,13 @@ export default function Dashboard() {
 
   // Calculations
   const total = summary?.total || 0;
-  // The "vs previous month" variation, from the month before (#50), with one decimal. Null
-  // when it cannot be computed, as in the Compare and Trends tabs (#65): from a month before
-  // at 0 € or less, or without a bill, so at 0 €.
-  const variation = variationPercent(previousSummary?.total ?? 0, total)?.toFixed(1) ?? null;
+  // The "vs previous month" variation, from the month before (#50), as the page shows it: its
+  // text and its tone, as in the Compare and Trends tabs (#87). Null when it cannot be
+  // computed, as there (#65): from a month before at 0 € or less, or without a bill, so at
+  // 0 €.
+  const variation = variationDisplay(
+    variationPercent(previousSummary?.total ?? 0, total), language,
+  );
 
   // Nothing billed yet, as on a new account or before its first import (#51): with no month
   // to select, there is no dashboard to show. Say so, rather than load forever, and offer the
@@ -384,8 +395,8 @@ export default function Dashboard() {
             </div>
             <div className="text-2xl font-bold text-gray-900">{fmt(total)}€</div>
             {variation !== null ? (
-              <div className={`flex items-center mt-2 text-sm ${Number(variation) > 0 ? 'text-red-500' : 'text-green-500'}`}>
-                {Number(variation) > 0 ? '+' : ''}{variation}% {t('vsPreviousMonth')}
+              <div className={`flex items-center mt-2 text-sm ${VARIATION_TONES[variation.tone]}`}>
+                {variation.text} {t('vsPreviousMonth')}
               </div>
             ) : isFirstBilledMonth ? (
               <div className="flex items-center mt-2 text-sm text-gray-400">

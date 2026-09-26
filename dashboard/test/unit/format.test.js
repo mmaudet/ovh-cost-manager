@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   localeOf, formatCurrency, formatPercent, formatYearMonth, formatMonthLabel, yearMonthOf,
-  fmtBytes, takesSingular,
+  fmtBytes, fmtMemory, takesSingular,
 } from '../../src/utils/format.js';
 import { NBSP, NNBSP } from '../support/amounts.js';
 
@@ -64,6 +64,28 @@ describe('formatPercent', () => {
   it('keeps its decimal for a share of nothing (#64)', () => {
     expect(formatPercent(0, 'fr')).toBe(`0,0${NBSP}%`);
     expect(formatPercent(0, 'en')).toBe('0.0%');
+  });
+
+  // 0 out of a negative total, as a project at 0 € in a month of credits, is -0
+  it('writes a share of 0 out of a negative total as 0 %, never -0 % (#87)', () => {
+    expect(formatPercent(0 / -120.5, 'fr')).toBe(`0,0${NBSP}%`);
+    expect(formatPercent(0 / -120.5, 'en')).toBe('0.0%');
+  });
+
+  // The budget used and the pie charts of the Overview show whole percents
+  it('writes as many decimals as asked for (#87)', () => {
+    expect(formatPercent(0.025008, 'fr', { decimals: 0 })).toBe(`3${NBSP}%`);
+    expect(formatPercent(1.5630, 'fr', { decimals: 0 })).toBe(`156${NBSP}%`);
+    expect(formatPercent(1, 'fr', { decimals: 0 })).toBe(`100${NBSP}%`);
+    expect(formatPercent(1.5630, 'en', { decimals: 0 })).toBe('156%');
+    expect(formatPercent(0.735, 'fr', { decimals: 1 })).toBe(`73,5${NBSP}%`);
+  });
+
+  // A variation has a sign of its own: see variationDisplay()
+  it('leaves a share unsigned, a negative one keeping its minus (#87)', () => {
+    expect(formatPercent(0.2, 'fr')).toBe(`20,0${NBSP}%`);
+    expect(formatPercent(-0.05, 'fr')).toBe(`-5,0${NBSP}%`);
+    expect(formatPercent(-0.05, 'en')).toBe('-5.0%');
   });
 });
 
@@ -238,5 +260,45 @@ describe('fmtBytes', () => {
   it('counts in petabytes beyond, with the thousands separator of the language (#70)', () => {
     expect(fmtBytes(5000000000000000000, 'en')).toBe('5,000 PB');
     expect(fmtBytes(5000000000000000000, 'fr')).toBe(`5${NNBSP}000 Po`);
+  });
+});
+
+// The RAM of a dedicated server or a VPS, as the Infrastructure tab shows it: OVH gives it in
+// megabytes of 1024 × 1024 bytes, and names it in powers of 1024 (#88)
+describe('fmtMemory', () => {
+  it('writes a dash for a RAM the API does not know', () => {
+    expect(fmtMemory(null, 'fr')).toBe('-');
+    expect(fmtMemory(undefined, 'en')).toBe('-');
+  });
+
+  it('counts in powers of 1024, as OVH names the RAM of its offers, in French units', () => {
+    // 64 Go, where powers of 1000 would read 66 Go
+    expect(fmtMemory(65536, 'fr')).toBe('64 Go');
+    expect(fmtMemory(24576, 'fr')).toBe('24 Go');
+    expect(fmtMemory(196608, 'fr')).toBe('192 Go');
+    expect(fmtMemory(1048576, 'fr')).toBe('1,0 To');
+  });
+
+  it('counts in English units in English', () => {
+    expect(fmtMemory(65536, 'en')).toBe('64 GB');
+    expect(fmtMemory(1048576, 'en')).toBe('1.0 TB');
+  });
+
+  it('writes French sizes by default', () => {
+    expect(fmtMemory(65536)).toBe('64 Go');
+  });
+
+  it('keeps one decimal below 10 of a unit, and none from 10, as fmtBytes() does', () => {
+    expect(fmtMemory(2048, 'fr')).toBe('2,0 Go');
+    expect(fmtMemory(1536, 'fr')).toBe('1,5 Go');
+    expect(fmtMemory(2048, 'en')).toBe('2.0 GB');
+    expect(fmtMemory(512, 'fr')).toBe('512 Mo');
+  });
+
+  it('picks the next unit when the size rounds to 1024 of one', () => {
+    expect(fmtMemory(1023.6, 'en')).toBe('1.0 GB');
+    // Below, with the thousands separator of the language
+    expect(fmtMemory(1023.4, 'en')).toBe('1,023 MB');
+    expect(fmtMemory(1023.4, 'fr')).toBe(`1${NNBSP}023 Mo`);
   });
 });

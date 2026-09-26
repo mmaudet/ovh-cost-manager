@@ -1,4 +1,4 @@
-import { variationPercent } from '../utils/variation.js';
+import { variationDisplay, variationPercent } from '../utils/variation.js';
 
 // The sizes of a variation: in a table cell, or the headline one between the totals of the
 // months compared
@@ -7,11 +7,19 @@ const SIZES = {
   headline: 'px-4 py-2 rounded-full text-lg font-bold',
 };
 
+// The colours of each tone of a variation
+const TONES = {
+  increase: 'bg-red-100 text-red-700',
+  decrease: 'bg-green-100 text-green-700',
+  neutral: 'bg-gray-100 text-gray-700',
+};
+
 // The variation from one amount to another, as every table and the headline of the Compare
-// tab show it: in percent, red when it grows, green otherwise. From 0 € or less, it cannot be
-// computed (#65): "—", with a tooltip that says why.
-const Variation = ({ from, to, t, size = 'cell' }) => {
-  const variation = variationPercent(from, to);
+// tab show it: in percent, in the number format of the language, red when it grows, green
+// when it shrinks, and grey when it rounds to 0 (#87). From 0 € or less, it cannot be computed
+// (#65): "—", with a tooltip that says why.
+const Variation = ({ from, to, language, t, size = 'cell' }) => {
+  const variation = variationDisplay(variationPercent(from, to), language);
   if (variation === null) {
     return (
       <span className={`${SIZES[size]} text-gray-400`} title={t('variationNotComputable')}>
@@ -19,12 +27,7 @@ const Variation = ({ from, to, t, size = 'cell' }) => {
       </span>
     );
   }
-  const colors = variation > 0 ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700';
-  return (
-    <span className={`${SIZES[size]} ${colors}`}>
-      {`${variation > 0 ? '+' : ''}${variation.toFixed(1)}%`}
-    </span>
-  );
+  return <span className={`${SIZES[size]} ${TONES[variation.tone]}`}>{variation.text}</span>;
 };
 
 export { Variation };

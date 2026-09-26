@@ -13,5 +13,10 @@ export default mergeConfig(viteConfig, defineConfig({
     // Every test starts with fresh mocks: no call, answer or spy left over
     mockReset: true,
     restoreMocks: true,
+    // A page test renders the whole dashboard, and walks through its tabs: the slowest
+    // take over 1.5 s on an idle machine, and more than Vitest's default of 5 s on a
+    // loaded one, as navigation.test.jsx did. 20 s absorbs the load, and still stops a
+    // test that hangs.
+    testTimeout: 20000,
   },
 }));

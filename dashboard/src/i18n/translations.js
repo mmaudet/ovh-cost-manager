@@ -22,7 +22,7 @@ export const translations = {
 
     // KPI Cards
     totalCost: 'Coût total du mois',
-    cloudTotal: 'Cloud Total',
+    cloudTotal: 'Total Cloud',
     publicCloud: 'Public Cloud',
     dailyAverage: 'Coût moyen / jour',
     over30Days: 'Sur 30 jours',
@@ -44,7 +44,6 @@ export const translations = {
     projectBreakdown: 'Répartition par projet',
     project: 'Projet',
     amount: 'Montant',
-    totalCloud: 'Total Cloud',
 
     // Compare
     monthA: 'Mois A',
@@ -230,7 +229,6 @@ export const translations = {
     projectBreakdown: 'Breakdown by project',
     project: 'Project',
     amount: 'Amount',
-    totalCloud: 'Cloud Total',
 
     // Compare
     monthA: 'Month A',
