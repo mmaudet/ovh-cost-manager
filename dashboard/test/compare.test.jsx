@@ -47,19 +47,19 @@ const projectComparisons = () => screen
   .map((button) => texts(button)[0]);
 
 describe('Compare tab', () => {
-  it('loads the figures of months A and B when the tab opens, not before', async () => {
+  it('loads the figures of month A when the tab opens, not before', async () => {
     const figures = [api.fetchSummary, api.fetchByService, api.fetchByProject];
     const { user } = await renderDashboard();
-    // Month B is the selected month, whose figures load with the page
     for (const fetchFigures of figures) {
       expect(fetchFigures).not.toHaveBeenCalledWith('2026-08-01', '2026-08-31');
     }
 
     await openTab(user, 'Comparaison');
 
+    // Month B, the latest month, is the one the page opens on: its figures
+    // are there already
     for (const fetchFigures of figures) {
       expect(fetchFigures).toHaveBeenCalledWith('2026-08-01', '2026-08-31');
-      expect(fetchFigures).toHaveBeenCalledWith('2026-09-01', '2026-09-30');
     }
     // The consumption of a project waits until its comparison opens, and the
     // dedicated servers until the Infrastructure tab opens (#35)
@@ -131,15 +131,21 @@ describe('Compare tab', () => {
 
   it('draws the service types of months A and B in a chart', async () => {
     const { user } = await renderDashboard();
+    expect(api.fetchByService).not.toHaveBeenCalledWith('2026-08-01', '2026-08-31');
+
     await openTab(user, 'Comparaison');
 
-    await pickMonth(user, 'Août 2026', 'Juillet 2026');
-
-    // The chart draws nothing without a layout: what it is drawn from
+    // Nothing else shows under the heading, no list or total: the legend and
+    // the axes are the chart's, and it draws nothing without a layout
     expect(screen.getByRole('heading', { name: 'Comparaison par service' }))
       .toBeInTheDocument();
+    // What it is drawn from: the service types of month A, once the tab opens
+    expect(api.fetchByService).toHaveBeenCalledWith('2026-08-01', '2026-08-31');
+
+    await pickMonth(user, 'Septembre 2026', 'Juillet 2026');
+
+    // ... and those of month B, once the user picks it
     expect(api.fetchByService).toHaveBeenCalledWith('2026-07-01', '2026-07-31');
-    expect(api.fetchByService).toHaveBeenCalledWith('2026-09-01', '2026-09-30');
   });
 
   describe('project comparison', () => {
