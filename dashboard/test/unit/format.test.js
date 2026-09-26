@@ -1,8 +1,17 @@
 import { describe, it, expect } from 'vitest';
 import {
-  formatCurrency, formatPercent, formatYearMonth, formatMonthLabel, fmtBytes,
+  localeOf, formatCurrency, formatPercent, formatYearMonth, formatMonthLabel, fmtBytes,
 } from '../../src/utils/format.js';
 import { NBSP, NNBSP } from '../support/amounts.js';
+
+// The locale of the page's numbers and dates, which the Markdown report writes its date in
+describe('localeOf', () => {
+  it('writes English the American way, and French otherwise', () => {
+    expect(localeOf('en')).toBe('en-US');
+    expect(localeOf('fr')).toBe('fr-FR');
+    expect(localeOf(undefined)).toBe('fr-FR');
+  });
+});
 
 describe('formatCurrency', () => {
   it('writes an amount the French way', () => {

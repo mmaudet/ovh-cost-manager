@@ -1,8 +1,8 @@
-import { formatCurrency, formatMonthLabel, formatPercent } from './format.js';
+import { formatCurrency, formatMonthLabel, formatPercent, localeOf } from './format.js';
 
 // Generate markdown report
 const generateMarkdownReport = (summary, byService, byProject, selectedMonth, language = 'fr') => {
-  const locale = language === 'en' ? 'en-US' : 'fr-FR';
+  const locale = localeOf(language);
   const fmt = (v) => formatCurrency(v, language);
   const month = formatMonthLabel(selectedMonth?.value, language) || 'N/A';
   const period = language === 'en'

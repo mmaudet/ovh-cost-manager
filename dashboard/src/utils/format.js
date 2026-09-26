@@ -88,4 +88,6 @@ const fmtBytes = (bytes, language = 'fr') => {
   return `${number} ${units[rank]}`;
 };
 
-export { formatCurrency, formatPercent, formatYearMonth, formatMonthLabel, fmtBytes };
+export {
+  localeOf, formatCurrency, formatPercent, formatYearMonth, formatMonthLabel, fmtBytes,
+};
