@@ -78,6 +78,7 @@ Open http://localhost:3001
 | `IMPORT_INTERVAL`           | Seconds between imports              | `86400` (24h)     |
 | `IMPORT_FLAGS`              | Extra flags for import script        | `--all`           |
 | `ALLOWED_ORIGINS`           | Comma-separated CORS allowed origins, only for other sites (see below) | (empty) |
+| `ALLOWED_HOSTS`             | Comma-separated host names, each with an optional port, that the server answers, against DNS rebinding (see below) | (empty: any host) |
 
 **The dashboard's own origin** is always accepted, so `ALLOWED_ORIGINS` only lists the other sites that call the API. The server compares the origin's host, without case or default port, with the request's `Host`, and with `TRUST_PROXY=true` with the first `X-Forwarded-Host` too. Limits:
 
@@ -85,6 +86,16 @@ Open http://localhost:3001
 - The scheme is only compared when `TRUST_PROXY=true` makes it known, through `X-Forwarded-Proto`. Otherwise an `http://` page passes for an `https://` dashboard on the same host, so that the dashboard does not go blank behind a TLS-terminating proxy.
 
 The SSO stack of `docker-compose.sso.yml` needs no `ALLOWED_ORIGINS`: its LemonLDAP-NG relay passes `Host` with its default port (`ocm.example.com:80`), a port the comparison ignores, and sends neither `X-Forwarded-Host` nor `X-Forwarded-Proto`, so hosts alone are compared, with or without `TRUST_PROXY`.
+
+**`ALLOWED_HOSTS`** protects a deployment without authentication that browsers can reach, such as a local instance or a LAN, against DNS rebinding: a page on another domain points that domain at the server's address, and the browser then lets that page call the API with same-origin requests, which CORS cannot restrict. Deployments with OIDC authentication, or behind a proxy that routes by host name, are not exposed in practice. When it is set, or `allowedHosts` in `config.json`, the server answers only the listed hosts, and any other with a 421 Misdirected Request, logged once per host. Unset, it answers any host, as before. For a dashboard at `https://ocm.example.com` and at `http://ocm.lan:3001`:
+
+```bash
+ALLOWED_HOSTS=ocm.example.com,ocm.lan:3001
+```
+
+- Hosts compare without case or default port: give the port only when it is neither 80 nor 443. `localhost`, `127.0.0.1` and `[::1]` are always allowed, on any port, for the Docker healthcheck and the import cron.
+- With `TRUST_PROXY=true`, the server checks the first `X-Forwarded-Host` instead of `Host`, when the proxy sends one: list the public host name, not the container's. The proxy must set that header itself, as nginx does with `proxy_set_header X-Forwarded-Host $http_host;`, and the server must not be reachable around it: otherwise a page can send the header with a listed host.
+- Other callers need an allowed host too. Kubernetes probes send the pod's IP address: give them a `Host: localhost` header in `httpHeaders`. A back-channel logout from the identity provider to `http://ocm:3001` needs `ocm:3001` listed.
 
 ### Customization
 

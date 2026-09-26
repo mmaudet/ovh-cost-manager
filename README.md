@@ -402,11 +402,14 @@ Access the dashboard at http://localhost:3001
 | `IMPORT_INTERVAL`           | Seconds between imports                                          | 86400 (24h)     |
 | `IMPORT_FLAGS`              | Extra flags for import script                                    | --all           |
 | `TRUST_PROXY`               | Trust X-Forwarded-For headers (⚠️ required for K8s/reverse proxy), and X-Forwarded-Host and X-Forwarded-Proto for the CORS check | false           |
+| `ALLOWED_HOSTS`             | Comma-separated host names, each with an optional port, that the server answers, against DNS rebinding (see below) | (empty: any host) |
 | `RATE_LIMIT_ENABLED`        | Enable rate limiting                                             | true            |
 | `RATE_LIMIT_API_MAX`        | Max API requests per IP per window                               | 100             |
 | `RATE_LIMIT_API_WINDOW_MS`  | API rate limit window in milliseconds                            | 900000 (15 min) |
 | `RATE_LIMIT_AUTH_MAX`       | Max auth requests per IP per window                              | 20              |
 | `RATE_LIMIT_AUTH_WINDOW_MS` | Auth rate limit window in milliseconds                           | 900000 (15 min) |
+
+> **`ALLOWED_HOSTS`**: set it when browsers can reach a dashboard without authentication, as on a LAN, to protect it against DNS rebinding, for instance `ALLOWED_HOSTS=ocm.example.com,ocm.lan:3001` (or `allowedHosts` in `config.json`). Other hosts then get a 421, but `localhost` is always allowed, for the healthcheck. With `TRUST_PROXY=true`, the server checks the first `X-Forwarded-Host` instead of `Host`. See [docs/deployment.md](docs/deployment.md#environment-variables).
 
 ### Option 2: SSO Deployment (with LemonLDAP-NG)
 
