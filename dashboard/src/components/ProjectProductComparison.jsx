@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { fetchProjectConsumption } from '../services/api';
 
 export default function ProjectProductComparison({ projectId, monthA, monthB, fmt, language }) {
-  // Récupérer la consommation détaillée pour chaque mois
+  // Fetch the detailed consumption of each month
   const { data: consA = [] } = useQuery({
     queryKey: ['projectConsumption', projectId, monthA?.from, monthA?.to],
     queryFn: () => fetchProjectConsumption(projectId, monthA?.from, monthA?.to),
@@ -14,7 +14,7 @@ export default function ProjectProductComparison({ projectId, monthA, monthB, fm
     enabled: !!projectId && !!monthB?.from && !!monthB?.to
   });
 
-  // Regrouper par resource_type
+  // Group by resource_type
   const groupByType = (arr) => {
     const map = {};
     arr.forEach(item => {
