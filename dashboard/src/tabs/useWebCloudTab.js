@@ -4,17 +4,12 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { fetchWebCloudSummary, fetchWebCloudItems } from '../services/api.js';
-import { WEB_CLOUD_MONTHS, shiftMonths } from '../utils/webCloudPeriod.js';
+import { webCloudPeriodEndingOn } from '../utils/webCloudPeriod.js';
 
 const useWebCloudTab = ({ selectedMonth, activeTab }) => {
   const [showAllWebCloud, setShowAllWebCloud] = useState(null); // category key, null when closed
 
-  // Domains, hosting and mail renew yearly, so the Web Cloud tab reads the 12
-  // months ending on the selected one rather than that single month.
-  const webCloudPeriod = selectedMonth ? {
-    from: shiftMonths(selectedMonth.from, -(WEB_CLOUD_MONTHS - 1)),
-    to: selectedMonth.to
-  } : null;
+  const webCloudPeriod = webCloudPeriodEndingOn(selectedMonth);
 
   const { data: webCloudSummary } = useQuery({
     queryKey: ['webCloudSummary', webCloudPeriod?.from, webCloudPeriod?.to],
