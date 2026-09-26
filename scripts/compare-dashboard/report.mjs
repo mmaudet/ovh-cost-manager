@@ -1,5 +1,21 @@
 // Compares two captures section by section, and describes each difference as a line diff.
 
+// The tables the page can show in full ("show all") and export as CSV, told apart by the
+// name of the file their export downloads. A table the page gets later belongs here.
+const TABLES = [
+  ['Web Cloud domains', /^ovh-domain-/],
+  ['Web Cloud DNS zones', /^ovh-dns_zone-/],
+  ['Web Cloud hosting', /^ovh-hosting-/],
+  ['Web Cloud emails', /^ovh-email-/],
+  ['Web Cloud options', /^ovh-option-/],
+  ['Public Cloud instances', /^ovh-instances-/],
+  ['Public Cloud buckets', /^ovh-buckets-/],
+  ['Public Cloud volumes', /^ovh-volumes-/],
+  ['Public Cloud snapshots', /^ovh-snapshots-/],
+  ['Public Cloud savings plans', /^ovh-savings-plans-/],
+  ['dedicated servers', /^ovh-dedicated-servers/],
+];
+
 const CONTEXT_LINES = 2;
 // Past this many changed lines, a section is shown as replaced as a whole: the diff would
 // cost more than it tells
@@ -33,6 +49,35 @@ export function compareCaptures(base, head) {
     }
   }
   return { total: keys.length, differences };
+}
+
+/**
+ * What the captures reached of what the page offers: for each table, whether its "show all"
+ * modal and its CSV export were captured, then the sections empty on both sides, which were
+ * not really compared.
+ * @returns {string[]} report lines
+ */
+export function describeCoverage(base, head) {
+  const keys = [...new Set([...Object.keys(base.sections), ...Object.keys(head.sections)])];
+  const files = (inModal) => keys
+    .filter((key) => key.includes('/export:') && key.includes('/modal:') === inModal)
+    .map((key) => key.slice(key.lastIndexOf('/export:') + '/export:'.length));
+  const modalFiles = files(true);
+  const tabFiles = files(false);
+  const lines = ['Tables the page offers, and what the captures reached:'];
+  for (const [name, file] of TABLES) {
+    const modal = modalFiles.some((f) => file.test(f));
+    const csv = tabFiles.some((f) => file.test(f));
+    lines.push(`  ${modal && csv ? '✓' : '✗'} ${name}: "show all" modal ${modal ? 'captured' : 'NOT REACHED'}, `
+      + `CSV export ${csv ? 'captured' : 'NOT REACHED'}`);
+  }
+  const report = tabFiles.some((f) => f.startsWith('ovh-report-'));
+  lines.push(`  ${report ? '✓' : '✗'} Markdown report: ${report ? 'captured' : 'NOT REACHED'}`);
+  const empty = keys.filter((key) => base.sections[key] === '' && head.sections[key] === '');
+  lines.push(empty.length
+    ? `Sections empty on both sides, so not really compared: ${empty.join(', ')}`
+    : 'No section is empty on both sides.');
+  return lines;
 }
 
 /**

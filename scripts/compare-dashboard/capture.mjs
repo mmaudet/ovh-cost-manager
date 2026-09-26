@@ -101,7 +101,7 @@ export async function launchBrowser() {
  * @param {string[]} options.languages     'fr', 'en'
  * @param {string[]} options.months        YYYY-MM, picked in the month selector
  * @param {string} options.openingMonth    the month the page opens on: left as is
- * @param {number} options.projects        how many Public Cloud projects to open
+ * @param {number} options.projects        how many Public Cloud projects to open (Infinity: all)
  * @param {(step: string, sections: number) => void} [options.onProgress]  after each month
  * @returns {Promise<{ sections: Record<string, string>, failures: string[] }>}
  */

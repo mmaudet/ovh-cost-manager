@@ -143,20 +143,25 @@ script:
   (`--months`), captures the visible text of the shell (header, KPI cards, tab
   bar, footer), of every tab and of every "show all" modal, and the content of
   the CSV exports and of the Markdown report; it also opens the Compare
-  accordions, the first three Public Cloud projects (`--projects`) and every
-  resource type of the Infrastructure tab, then the Compare tab again, which
-  only lists the dedicated servers once the Infrastructure tab has loaded them;
+  accordions, every Public Cloud project (`--projects 3` for the first three
+  only) and every resource type of the Infrastructure tab, then the Compare tab
+  again, which only lists the dedicated servers once the Infrastructure tab has
+  loaded them;
 - compares the two captures section by section, normalising nothing but runs
   of spaces, tabs and line breaks (the no-break spaces of amounts are kept),
   prints the differences, and exits with 1 when there is any, 0 otherwise, or
   2 when it could not complete. The one exception is the section of the page's
   console errors: each message keeps its first line only, with the server's
-  address and the bundle's file names replaced, and its number of occurrences.
+  address and the bundle's file names replaced, and its number of occurrences;
+- ends the report with its coverage: every table the page can show in full and
+  export, flagged when no capture reached its modal or its CSV, as for a table
+  the snapshot never fills (savings plans, or dedicated servers without an
+  inventory), then the sections empty on both sides, which were not compared.
 
-A run takes about three minutes, twice that with `--lang both`. The captures
-(`base.json`, `head.json`), the report and the logs go to the temporary
-directory it prints, or to `--out`. A refactoring step is ready to merge only
-when the comparison finds no difference.
+A run takes about two and a half minutes, twice that with `--lang both`. The
+captures (`base.json`, `head.json`), the report and the logs go to the
+temporary directory it prints, or to `--out`. A refactoring step is ready to
+merge only when the comparison finds no difference.
 
 The comparison does not see everything: styles, tooltips and chart shapes are
 not captured. Nor is the server's clock frozen: the months of the Trends tab

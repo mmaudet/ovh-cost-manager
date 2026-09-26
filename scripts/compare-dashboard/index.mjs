@@ -7,7 +7,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { parseArgs } from 'node:util';
 import { captureDashboard, launchBrowser } from './capture.mjs';
-import { compareCaptures, formatDifferences } from './report.mjs';
+import { compareCaptures, describeCoverage, formatDifferences } from './report.mjs';
 import {
   DB_FILE, build, createWorktree, ensureNativeBinaries, freezeSnapshot, git, loadBetterSqlite,
   startServer, stopChildren,
@@ -31,7 +31,8 @@ comparison could not be completed.
   --months <list>     months to capture, comma-separated: "default" for the month the page
                       opens on, YYYY-MM for a month picked in the month selector (default: the
                       month the page opens on and the same month a year earlier)
-  --projects <n>      Public Cloud projects to open, the first ones of the list (default: 3)
+  --projects <n>      Public Cloud projects to open: all, or the first <n> of the list
+                      (default: all)
   --help              show this help`;
 
 class UsageError extends Error {}
@@ -127,7 +128,7 @@ async function main(argv) {
     `Base      ${sides[0].label}`,
     `Head      ${sides[1].label}`,
     `Captures  ${options.languages.join(', ')}; months ${monthList.join(', ')}; `
-      + `${options.projects} Public Cloud project(s)`,
+      + `${options.projects === Infinity ? 'all' : `the first ${options.projects}`} Public Cloud projects`,
     `Output    ${out}`,
     ...state.warnings.map((warning) => `Warning   ${warning}`),
   ];
@@ -172,7 +173,7 @@ async function main(argv) {
       clock: clock.toISOString(),
       languages: options.languages,
       months,
-      projects: options.projects,
+      projects: options.projects === Infinity ? 'all' : options.projects,
       snapshot: state.stored,
       failures: result.failures,
       sections: result.sections,
@@ -193,16 +194,18 @@ async function main(argv) {
   const incomplete = failures.length
     ? [`${failures.length} capture step(s) failed, the comparison is incomplete:`, ...failures.map((f) => `  ${f}`)]
     : [];
+  const coverage = describeCoverage(captures[0], captures[1]);
   fs.writeFileSync(path.join(out, 'report.txt'), [
     ...header,
     '',
     formatDifferences(differences),
     ...incomplete,
+    ...coverage,
     verdict,
     '',
   ].join('\n'));
   if (differences.length) console.log(`\n${formatDifferences(differences, 40)}`);
-  for (const line of [...incomplete, verdict]) console.log(line);
+  for (const line of ['', ...incomplete, ...coverage, verdict]) console.log(line);
   console.log(`Prepared in ${duration(prepared - started)}, captured in ${duration(captured - prepared)}, `
     + `${duration(Date.now() - started)} in all.`);
   console.log(`Captures and report: ${out}`);
@@ -223,7 +226,7 @@ function parseOptions(argv) {
         clock: { type: 'string' },
         lang: { type: 'string', default: 'fr' },
         months: { type: 'string' },
-        projects: { type: 'string', default: '3' },
+        projects: { type: 'string', default: 'all' },
         help: { type: 'boolean', short: 'h' },
       },
     }));
@@ -234,8 +237,10 @@ function parseOptions(argv) {
   if (!values.data) throw new UsageError('--data is required: the snapshot data directory.');
   const languages = { fr: ['fr'], en: ['en'], both: ['fr', 'en'] }[values.lang];
   if (!languages) throw new UsageError(`--lang ${values.lang}: fr, en or both.`);
-  const projects = Number(values.projects);
-  if (!Number.isInteger(projects) || projects < 0) throw new UsageError(`--projects ${values.projects}: a whole number.`);
+  const projects = values.projects === 'all' ? Infinity : Number(values.projects);
+  if (projects !== Infinity && (!Number.isInteger(projects) || projects < 0)) {
+    throw new UsageError(`--projects ${values.projects}: all, or a whole number.`);
+  }
   return { ...values, data: path.resolve(expandHome(values.data)), languages, projects };
 }
 
