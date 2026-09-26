@@ -6,24 +6,33 @@
 // panel planned after the split, the tests are fixed here, in one place.
 
 import { StrictMode } from 'react';
+import { vi } from 'vitest';
 import { act, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider, notifyManager } from '@tanstack/react-query';
 import { LanguageProvider } from '../../src/hooks/useLanguage.jsx';
 import App from '../../src/App.jsx';
 import { account } from '../fixtures/account.js';
+import { TODAY } from '../fixtures/calendar.js';
 import { serve } from './api.js';
 
 // React Query hands answers over to the page on a zero-delay timer. Same
-// timer here, counted, so that settle() knows when none is on its way.
-let pendingNotifications = 0;
+// timer here, tracked, so that settle() knows when none is on its way. Each
+// render tracks its own: a timer left over by another test does not count.
+let pendingNotifications = new Set();
 notifyManager.setScheduler((callback) => {
-  pendingNotifications += 1;
-  setTimeout(() => {
-    pendingNotifications -= 1;
+  const pending = pendingNotifications;
+  const notify = () => {
+    pending.delete(notify);
     callback();
-  }, 0);
+  };
+  pending.add(notify);
+  setTimeout(notify, 0);
 });
+
+// Whether setTimeout is faked, and not only Date: Vitest's fake timers carry
+// their clock, which is what Testing Library looks for too.
+const timersAreFake = () => Object.hasOwn(globalThis.setTimeout, 'clock');
 
 let queryClient;
 
@@ -31,6 +40,7 @@ let queryClient;
 // from the dataset, and waits until the page shows every answer.
 export async function renderDashboard(data = account) {
   serve(data);
+  pendingNotifications = new Set();
   // A fresh client per test, with the options of src/main.jsx; no retry, and
   // no garbage collection timer left behind.
   queryClient = new QueryClient({
@@ -44,7 +54,10 @@ export async function renderDashboard(data = account) {
       mutations: { retry: false },
     },
   });
-  const user = userEvent.setup();
+  // Under fake timers, user-event moves the clock on for its own delays
+  const user = userEvent.setup(timersAreFake()
+    ? { advanceTimers: (ms) => vi.advanceTimersByTime(ms) }
+    : {});
   render(
     <StrictMode>
       <QueryClientProvider client={queryClient}>
@@ -62,8 +75,28 @@ export async function renderDashboard(data = account) {
 // requests those answers lead to, and shows them.
 export async function settle() {
   do {
-    await act(() => new Promise((resolve) => setTimeout(resolve, 0)));
-  } while (queryClient.isFetching() + queryClient.isMutating() + pendingNotifications > 0);
+    // Fake timers make a zero-delay timer set while others run due 1 ms later
+    await act(() => (timersAreFake()
+      ? vi.advanceTimersByTimeAsync(1)
+      : new Promise((resolve) => setTimeout(resolve, 0))));
+  } while (queryClient.isFetching() + queryClient.isMutating() + pendingNotifications.size > 0);
+}
+
+// Fakes the timers as well as Date, for the tests that wait for the page's
+// own timers: the import status refreshed 8 s after a resync, and polled
+// every 30 s while an import runs. To call before renderDashboard().
+export function fakeTimers() {
+  vi.useFakeTimers({
+    now: TODAY,
+    toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'Date'],
+  });
+}
+
+// Under fake timers, lets time pass, then waits until the page shows what
+// that time brought
+export async function passTime(ms) {
+  await act(() => vi.advanceTimersByTimeAsync(ms));
+  await settle();
 }
 
 export async function openTab(user, name) {

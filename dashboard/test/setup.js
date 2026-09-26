@@ -21,6 +21,11 @@ URL.revokeObjectURL = () => {};
 // - the PDF export prints the page.
 window.print = () => {};
 
+// Testing Library ends each user action by waiting on a zero-delay timer.
+// When the timers are fake (see fakeTimers() in support/render.jsx), it only
+// moves them on through Jest's API: lend it Vitest's. Inert otherwise.
+globalThis.jest = { advanceTimersByTime: (ms) => vi.advanceTimersByTime(ms) };
+
 // Recharts warns about every chart, since jsdom gives them no size
 const warn = console.warn;
 console.warn = (message, ...rest) => {
@@ -30,7 +35,8 @@ console.warn = (message, ...rest) => {
 
 beforeEach(() => {
   // Freeze "today" so that dates and durations read the same on every run.
-  // Only Date: React Query and user-event keep their real timers.
+  // Only Date: React Query and user-event keep their real timers, except in
+  // the tests that fake them too (fakeTimers() in support/render.jsx).
   vi.useFakeTimers({ toFake: ['Date'] });
   vi.setSystemTime(TODAY);
 });

@@ -1,15 +1,17 @@
 import { describe, it, expect, vi } from 'vitest';
 import { screen, within } from '@testing-library/react';
 import { account } from './fixtures/account.js';
-import { api } from './support/api.js';
+import { api, serve } from './support/api.js';
 import { captureFileDownloads } from './support/downloads.js';
 import {
   cardOf,
   disclosure,
   dropdown,
+  fakeTimers,
   headerBadge,
   openTab,
   optionsOf,
+  passTime,
   renderDashboard,
   rowsOf,
   selectLanguage,
@@ -344,6 +346,118 @@ describe('dashboard shell', () => {
       await settle();
 
       expect(screen.getByText(message)).toBeInTheDocument();
+    });
+  });
+
+  // The page learns that an import is over from the import status, which it
+  // asks again 8 s after a resync, then every 30 s while an import runs. It
+  // then reloads what is built from imported data. Timers are faked here only.
+  describe('end of an import', () => {
+    const running = {
+      ...account.importStatus.latest,
+      id: 4,
+      started_at: '2026-09-15 10:00:00',
+      completed_at: null,
+      bills_imported: 0,
+      details_imported: 0,
+      projects_imported: 0,
+      status: 'running',
+    };
+    const finished = {
+      ...running,
+      completed_at: '2026-09-15 10:00:31',
+      bills_imported: 4,
+      details_imported: 47,
+      projects_imported: 2,
+      status: 'success',
+    };
+    const importStatus = (latest) => ({
+      latest,
+      running: latest.status === 'running',
+      history: [latest, ...account.importStatus.history],
+    });
+    const signedIn = {
+      ...account,
+      user: { id: 'jdoe', name: 'Jane Doe', email: 'jane.doe@example.com', authEnabled: false },
+    };
+    // What the server says once the import is over: a late bill line raised
+    // the cost of September. The user and the budget changed meanwhile, but
+    // they are not imported data: the page keeps them.
+    const afterImport = {
+      ...signedIn,
+      importStatus: importStatus(finished),
+      summary: {
+        ...account.summary,
+        '2026-09': { ...account.summary['2026-09'], total: 1300.4 },
+      },
+      user: { ...signedIn.user, name: 'Jane Smith' },
+      config: { budget: 800, currency: 'EUR' },
+    };
+    const lastSync = (text) => screen.getByText(`Dernière sync: ${text}`);
+    const monthCost = () => texts(cardOf('Coût total du mois'))[1];
+
+    it('shows the import a resync starts 8 s later, and its figures once over', async () => {
+      fakeTimers();
+      const { user } = await renderDashboard(signedIn);
+      serve({ ...signedIn, importStatus: importStatus(running) });
+
+      await user.click(screen.getByRole('button', { name: /Synchroniser/ }));
+      await settle();
+      await passTime(7000);
+
+      expect(lastSync('14/09/2026 06:02:30 (3 factures)')).toBeInTheDocument();
+
+      await passTime(1000);
+
+      expect(lastSync('en cours')).toBeInTheDocument();
+
+      serve(afterImport);
+      await passTime(29000);
+
+      expect(lastSync('en cours')).toBeInTheDocument();
+      expect(monthCost()).toBe('1 250,40€');
+
+      await passTime(1000);
+
+      // SQLite timestamps are UTC: 10:00:31 reads 12:00:31 in Paris
+      expect(lastSync('15/09/2026 12:00:31 (4 factures)')).toBeInTheDocument();
+      expect(monthCost()).toBe('1 300,40€');
+      expect(screen.getByText('Jane Doe')).toBeInTheDocument();
+      // Still the budget of 50 000: the forecast is not flagged as above it
+      expect(texts(cardOf('Prévision fin de mois'))).toContain('14/30 jours');
+    });
+
+    it('shows the figures of an import running as the page opened, once over', async () => {
+      fakeTimers();
+      await renderDashboard({ ...signedIn, importStatus: importStatus(running) });
+
+      expect(lastSync('en cours')).toBeInTheDocument();
+      expect(monthCost()).toBe('1 250,40€');
+
+      serve(afterImport);
+      await passTime(30000);
+
+      expect(lastSync('15/09/2026 12:00:31 (4 factures)')).toBeInTheDocument();
+      expect(monthCost()).toBe('1 300,40€');
+      expect(screen.getByText('Jane Doe')).toBeInTheDocument();
+      expect(texts(cardOf('Prévision fin de mois'))).toContain('14/30 jours');
+    });
+
+    it('shows the figures of an import already over at the refresh after a resync', async () => {
+      fakeTimers();
+      const { user } = await renderDashboard(signedIn);
+      // An import quick enough to be over before the status is asked again
+      serve(afterImport);
+
+      await user.click(screen.getByRole('button', { name: /Synchroniser/ }));
+      await settle();
+
+      expect(monthCost()).toBe('1 250,40€');
+
+      await passTime(8000);
+
+      expect(lastSync('15/09/2026 12:00:31 (4 factures)')).toBeInTheDocument();
+      expect(monthCost()).toBe('1 300,40€');
     });
   });
 
