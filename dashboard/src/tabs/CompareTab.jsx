@@ -4,7 +4,7 @@ import {
 import Accordion from '../components/Accordion.jsx';
 import { SortIcon } from '../components/SortIcon.jsx';
 import ProjectProductComparison from '../components/ProjectProductComparison.jsx';
-import { compareProjects } from '../utils/projectComparison.js';
+import { projectComparisonRows } from '../utils/projectComparison.js';
 
 // The Compare tab, which the shell renders while it is active: what useCompareTab() returns,
 // with the shell's language, translations (t), amount format (fmt) and months list, and the
@@ -19,7 +19,7 @@ const CompareTab = ({
 }) => {
   // Merge and sort comparison data: the projects of months A and B, paired by id (#55)
   const getSortedCompareProjects = () => {
-    const merged = compareProjects(byProjectA, byProjectB);
+    const merged = projectComparisonRows(byProjectA, byProjectB);
     return merged.sort((a, b) => {
       let aVal, bVal;
       if (compareSort.column === 'name') {
@@ -32,8 +32,8 @@ const CompareTab = ({
         aVal = a.totalB || 0;
         bVal = b.totalB || 0;
       } else if (compareSort.column === 'diff') {
-        aVal = a.diff ?? -Infinity;
-        bVal = b.diff ?? -Infinity;
+        aVal = a.variation ?? -Infinity;
+        bVal = b.variation ?? -Infinity;
       }
       if (aVal < bVal) return compareSort.direction === 'asc' ? -1 : 1;
       if (aVal > bVal) return compareSort.direction === 'asc' ? 1 : -1;
@@ -163,9 +163,9 @@ const CompareTab = ({
                 <td className="p-3 text-right font-medium">{fmt(p.totalA)}€</td>
                 <td className="p-3 text-right text-gray-500">{fmt(p.totalB)}€</td>
                 <td className="p-3 text-right">
-                  {p.diff !== null ? (
-                    <span className={`px-2 py-1 rounded text-xs font-medium ${p.diff > 0 ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
-                      {p.diff > 0 ? '+' : ''}{p.diff.toFixed(1)}%
+                  {p.variation !== null ? (
+                    <span className={`px-2 py-1 rounded text-xs font-medium ${p.variation > 0 ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
+                      {p.variation > 0 ? '+' : ''}{p.variation.toFixed(1)}%
                     </span>
                   ) : (
                     // None to compute from 0 € in month A (#55), as for the growth of the
