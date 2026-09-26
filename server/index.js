@@ -20,6 +20,7 @@ const { trendWindowFromQuery } = require('./months');
 const { readConfigFile } = require('./config-file');
 const { buildRateLimitConfig } = require('./rate-limit-config');
 const { isHealthCheck } = require('./auth/health');
+const { requestLogLine, blockedOriginLogLine } = require('./request-log');
 
 // Load configuration: the first config.json that exists. One that cannot be
 // read stops the server, rather than let it run without its settings
@@ -82,7 +83,7 @@ function corsOptionsDelegate(req, callback) {
       credentials: true, // Allow cookies for authentication
     });
   } else {
-    console.warn(`CORS: Blocked request from origin: ${origin}`);
+    console.warn(blockedOriginLogLine(origin));
     callback(new Error('Not allowed by CORS'));
   }
 }
@@ -260,8 +261,9 @@ async function initializeServer() {
 
   // Logging middleware (inside async to run after auth middleware)
   app.use((req, res, next) => {
-    const user = req.user?.id || 'anonymous';
-    console.log(`${new Date().toISOString()} [${user}] ${req.method} ${req.path}`);
+    console.log(requestLogLine({
+      at: new Date(), user: req.user?.id, method: req.method, path: req.path,
+    }));
     next();
   });
 

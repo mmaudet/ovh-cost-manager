@@ -38,7 +38,7 @@ describe('an allowedOrigins string in config.json', () => {
     'https://reports.example.co',
   ])('refuses %s, a part or an extension of a listed origin', async (origin) => {
     expect(await allowedOrigin(origin)).toBeNull();
-    expect(ocm.output()).toContain(`CORS: Blocked request from origin: ${origin}`);
+    expect(ocm.output()).toContain(`CORS: Blocked request from origin: "${origin}"`);
   });
 });
 
