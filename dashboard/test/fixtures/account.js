@@ -208,3 +208,63 @@ export const account = {
   ...infrastructure,
   ...publicCloud,
 };
+
+// Variants of the account, to spread over it: { ...account, ...variant }
+
+// The other resource types of the variant below, most expensive first. Public
+// Cloud and the Web Cloud services (domain, web_cloud) have tabs of their own,
+// the others show on the Infrastructure tab.
+const otherResourceTypes = [
+  { name: 'Private Cloud Hosts', resource_type: 'private_cloud_host', color: '#9333ea',
+    value: 1450, detailsCount: 2, serviceCount: 2 },
+  { name: 'Private Cloud Datastores', resource_type: 'private_cloud_datastore',
+    color: '#a855f7', value: 380, detailsCount: 3, serviceCount: 3 },
+  { name: 'Storage', resource_type: 'storage', color: '#10b981',
+    value: 64.8, detailsCount: 1, serviceCount: 1 },
+  { name: 'Load Balancers', resource_type: 'load_balancer', color: '#06b6d4',
+    value: 18, detailsCount: 2, serviceCount: 2 },
+  { name: 'Web Cloud', resource_type: 'web_cloud', color: '#2563eb',
+    value: 12, detailsCount: 1, serviceCount: 1 },
+  { name: 'VPS', resource_type: 'vps', color: '#f59e0b',
+    value: 11.99, detailsCount: 1, serviceCount: 1 },
+  { name: 'Other', resource_type: 'other', color: '#6b7280',
+    value: 7.5, detailsCount: 2, serviceCount: 2 },
+  { name: 'IP', resource_type: 'ip_service', color: '#ec4899',
+    value: 6, detailsCount: 4, serviceCount: 4 },
+];
+
+// The account billed in September for every resource type the Infrastructure
+// tab has a card for, and a few more, on top of its own. Most expensive first,
+// as /api/analysis/by-resource-type answers.
+export const everyResourceType = {
+  byResourceType: {
+    ...account.byResourceType,
+    '2026-09': [...account.byResourceType['2026-09'], ...otherResourceTypes]
+      .sort((a, b) => b.value - a.value),
+  },
+};
+
+// The account with its Sandbox project billed too, in August and September,
+// for the same Cloud totals. The three projects rank differently by name, by
+// the cost of each month and by variation, which tells the sort orders apart.
+export const threeBilledProjects = {
+  byProject: {
+    ...account.byProject,
+    '2026-08': [
+      { projectId: 'project-production', projectName: 'Production',
+        total: 412, detailsCount: 22 },
+      { projectId: 'project-sandbox', projectName: 'Sandbox',
+        total: 180, detailsCount: 8 },
+      { projectId: 'project-staging', projectName: 'Staging',
+        total: 110, detailsCount: 5 },
+    ],
+    '2026-09': [
+      { projectId: 'project-production', projectName: 'Production',
+        total: 460.4, detailsCount: 24 },
+      { projectId: 'project-staging', projectName: 'Staging',
+        total: 250, detailsCount: 11 },
+      { projectId: 'project-sandbox', projectName: 'Sandbox',
+        total: 120, detailsCount: 6 },
+    ],
+  },
+};

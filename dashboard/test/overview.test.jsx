@@ -1,7 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { screen, within } from '@testing-library/react';
-import { account } from './fixtures/account.js';
-import { threeBilledProjects } from './fixtures/public-cloud.js';
+import { account, threeBilledProjects } from './fixtures/account.js';
 import { api } from './support/api.js';
 import {
   cardOf,

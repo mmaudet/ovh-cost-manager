@@ -1,7 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { screen, within } from '@testing-library/react';
-import { account } from './fixtures/account.js';
-import { everyResourceType } from './fixtures/infrastructure.js';
+import { account, everyResourceType } from './fixtures/account.js';
 import { api } from './support/api.js';
 import {
   BOM,
