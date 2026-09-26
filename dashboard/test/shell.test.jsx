@@ -532,7 +532,7 @@ describe('dashboard shell', () => {
 
   describe('header', () => {
     it('shows the signed-in user and how many services expire soon', async () => {
-      await renderDashboard({
+      const { user } = await renderDashboard({
         ...account,
         user: { id: 'jdoe', name: 'Jane Doe', email: 'jane.doe@example.com', authEnabled: true },
         expiringServices: [
@@ -554,9 +554,13 @@ describe('dashboard shell', () => {
       expect(screen.getByText('Jane Doe')).toBeInTheDocument();
       const logout = screen.getByRole('link', { name: '✕' });
       expect(logout).toHaveAttribute('href', '/auth/logout');
-      // The "logout" translation key is missing (#34)
-      expect(logout).toHaveAttribute('title', 'logout');
+      // The tooltip of the logout link, in the language of the page (#34)
+      expect(logout).toHaveAttribute('title', 'Se déconnecter');
       expect(texts(headerBadge('Expirations proches'))).toEqual(['2', 'Expirations proches']);
+
+      await selectLanguage(user, 'en');
+
+      expect(screen.getByRole('link', { name: '✕' })).toHaveAttribute('title', 'Log out');
     });
   });
 
