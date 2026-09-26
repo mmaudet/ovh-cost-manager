@@ -153,13 +153,17 @@ import, default 24h, controlled by `IMPORT_*` env vars) and the Express server i
 foreground. On first start with an empty DB, a full import runs automatically.
 
 - `docker-compose up -d --build` — simple mode, dashboard on `:3001`.
-- `docker-compose -f docker-compose.yml -f docker-compose.sso.yml up -d --build` — adds
-  Traefik + LemonLDAP-NG SSO; OCM reads identity from `Auth-User`/`Auth-Mail` headers.
+- `docker-compose -f docker-compose.sso.yml up -d --build` — SSO mode, a standalone file:
+  LemonLDAP-NG is the OIDC provider and, through its RELAY, the only way in to OCM, which
+  signs users in itself with OIDC. The `yadd/lemonldap-ng-portal` image has no Manager:
+  OCM's relying party comes from `demo/sso/`, mounted at `/over` as config overrides
+  (`demo/README.md`). No compose file sets up header mode.
 
 **`TRUST_PROXY=true` is required behind any reverse proxy / Kubernetes ingress**, otherwise
 rate limiting buckets all users under the proxy's single IP and everyone shares one limit.
 With it, the server also trusts `X-Forwarded-Host` and `X-Forwarded-Proto` for the CORS
-check (`server/cors.js`), which always accepts the dashboard's own origin.
+check (`server/cors.js`), which always accepts the dashboard's own origin, and the last
+`X-Forwarded-Host` for the `ALLOWED_HOSTS` check (`server/hosts.js`).
 
 See `docs/deployment.md` for full SSO/OIDC setup.
 

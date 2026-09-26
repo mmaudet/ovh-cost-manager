@@ -115,7 +115,7 @@ ovh-cost-manager/
 │   └── screenshots/          # Dashboard screenshots
 ├── Dockerfile                # Docker image definition
 ├── docker-compose.yml        # Base deployment (without SSO)
-├── docker-compose.sso.yml    # SSO extension (LemonLDAP + Traefik)
+├── docker-compose.sso.yml    # SSO deployment (LemonLDAP-NG + OIDC)
 ├── .dockerignore             # Docker build exclusions
 └── config.example.json       # Configuration template
 ```
@@ -371,11 +371,9 @@ npm run bills -- --month 2025-12 --format md         # Markdown output
 
 ## Docker Deployment
 
-Two deployment modes are available:
-- **Simple**: OCM only, direct access on port 3001
-- **SSO**: Full stack with Traefik reverse proxy and LemonLDAP-NG authentication
-
-> **Detailed documentation**: See [docs/deployment.md](docs/deployment.md) for complete deployment guide, including SAML and OIDC configuration with LemonLDAP-NG.
+Two deployment modes are available. The [deployment guide](docs/deployment.md) describes both, with every setting, and is the reference for them:
+- **Simple** (`docker-compose.yml`): OCM only, direct access on port 3001
+- **SSO** (`docker-compose.sso.yml`, used on its own): OCM behind LemonLDAP-NG, its OpenID Connect (OIDC) provider and reverse proxy
 
 ### Option 1: Simple Deployment (without SSO)
 
@@ -391,73 +389,26 @@ Access the dashboard at http://localhost:3001
 
 > **Automatic import**: On first start, a full import runs automatically if the database is empty. Then a differential import runs every 24 hours. Configure with `IMPORT_INTERVAL`, `IMPORT_FLAGS`, or disable with `IMPORT_ENABLED=false`.
 
-#### Environment Variables (Simple)
-
-| Variable                    | Description                                                      | Default         |
-| --------------------------- | ---------------------------------------------------------------- | --------------- |
-| `OCM_PORT`                  | Exposed port                                                     | 3001            |
-| `AUTH_REQUIRED`             | Require auth headers                                             | false           |
-| `DATA_DIR`                  | Directory for database storage (where `ocm-data` is mounted)     | /data           |
-| `IMPORT_ENABLED`            | Enable the periodic import and the dashboard's resync button     | true            |
-| `IMPORT_INTERVAL`           | Seconds between imports                                          | 86400 (24h)     |
-| `IMPORT_FLAGS`              | Extra flags for import script                                    | --all           |
-| `TRUST_PROXY`               | Trust X-Forwarded-For headers (⚠️ required for K8s/reverse proxy), X-Forwarded-Host for the CORS check and `ALLOWED_HOSTS`, and X-Forwarded-Proto for the CORS check | false           |
-| `ALLOWED_HOSTS`             | Comma-separated host names, each with an optional port, that the server answers, against DNS rebinding (see below) | (empty: any host) |
-| `RATE_LIMIT_ENABLED`        | Enable rate limiting                                             | true            |
-| `RATE_LIMIT_API_MAX`        | Max API requests per IP per window                               | 100             |
-| `RATE_LIMIT_API_WINDOW_MS`  | API rate limit window in milliseconds                            | 900000 (15 min) |
-| `RATE_LIMIT_AUTH_MAX`       | Max auth requests per IP per window                              | 20              |
-| `RATE_LIMIT_AUTH_WINDOW_MS` | Auth rate limit window in milliseconds                           | 900000 (15 min) |
-
-> **`ALLOWED_HOSTS`**: set it when browsers can reach a dashboard without authentication, as on a LAN, to protect it against DNS rebinding, for instance `ALLOWED_HOSTS=ocm.example.com,ocm.lan:3001` (or `allowedHosts` in `config.json`). Requests to other hosts get a 421. `Host` is always checked, and `localhost` passes on direct requests only, such as the healthcheck's; behind a proxy that rewrites `Host`, list its upstream too. With `TRUST_PROXY=true`, the last `X-Forwarded-Host` must be listed as well: the proxy must set or overwrite it, and if the server can be reached without the proxy, `TRUST_PROXY` lets any client forge it. See [docs/deployment.md](docs/deployment.md#environment-variables).
+The container's settings, such as `ALLOWED_HOSTS` against DNS rebinding, `TRUST_PROXY` behind a reverse proxy, or OIDC sign-in, are listed in the [deployment guide](docs/deployment.md#environment-variables).
 
 ### Option 2: SSO Deployment (with LemonLDAP-NG)
 
 ```bash
-# Build and start full stack
-docker-compose -f docker-compose.yml -f docker-compose.sso.yml up -d --build
+# Build and start the stack (the file is used on its own)
+docker-compose -f docker-compose.sso.yml up -d --build
 
 # View logs
-docker-compose -f docker-compose.yml -f docker-compose.sso.yml logs -f
+docker-compose -f docker-compose.sso.yml logs -f
 ```
 
-Access the dashboard at http://ocm.localhost (or your configured domain).
-
-#### Architecture (SSO)
-
 ```
-┌─────────────┐    ┌─────────────┐    ┌─────────────┐
-│   Traefik   │───▶│  LemonLDAP  │───▶│     OCM     │
-│   (:80)     │    │  (handler)  │    │   (:3001)   │
-└─────────────┘    └─────────────┘    └─────────────┘
+┌─────────────┐     ┌─────────────────────────┐   relay    ┌─────────────┐
+│   Browser   │────▶│      LemonLDAP-NG       │───────────▶│     OCM     │
+│             │ :80 │  portal, OIDC provider  │◀───────────│   (:3001)   │
+└─────────────┘     └─────────────────────────┘    OIDC    └─────────────┘
 ```
 
-#### Environment Variables (SSO)
-
-Create a `.env` file:
-
-```bash
-# Domain configuration
-OCM_DOMAIN=ocm.example.com
-SSO_DOMAIN=example.com
-```
-
-#### Docker Compose Services (SSO)
-
-| Service     | Description      | Port                 |
-| ----------- | ---------------- | -------------------- |
-| `ocm`       | OVH Cost Manager | internal             |
-| `traefik`   | Reverse proxy    | 80, 8080 (dashboard) |
-| `lemonldap` | SSO Portal       | internal             |
-
-#### SSO Configuration (LemonLDAP-NG)
-
-1. Access the LemonLDAP Manager at http://manager.localhost
-2. Create a virtual host for your OCM domain
-3. Configure exported headers:
-   - `Auth-User` → `$uid`
-   - `Auth-Mail` → `$mail`
-   - `Auth-CN` → `$cn`
+LemonLDAP-NG answers on port 80, the only published port: its portal, on `auth.localhost`, is the OIDC provider, and its relay passes `ocm.localhost` on to OCM, which signs users in itself. Open http://ocm.localhost and sign in with a demo account, such as `dwho` with the password `dwho`. This demo is for a test on `localhost`: the [deployment guide](docs/deployment.md#sso-deployment-with-lemonldap-ng) gives its settings, how to use another domain, and what to replace before any real use.
 
 ### Volume Mounts
 
@@ -473,12 +424,7 @@ SSO_DOMAIN=example.com
 
 ### Production Deployment
 
-For production with SSO:
-
-1. Configure proper domain names in `.env`
-2. Add HTTPS with Let's Encrypt (Traefik supports it)
-3. Connect LemonLDAP to your LDAP/AD directory
-4. Use external volume or backup strategy for data
+Before going to production, go through the [production checklist](docs/deployment.md#production-checklist) of the deployment guide: HTTPS, secrets, the demo's key pair and accounts, the reverse proxy settings, and backups.
 
 ## API Endpoints
 
