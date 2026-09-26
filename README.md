@@ -54,7 +54,7 @@
 - **VPS**: Model, zone, specs, state
 - **Storage**: NAS-HA services with size and shares
 - **Backup**: Veeam Backup VMs and Enterprise licenses with cost breakdown
-- **Expiring Services**: Alert for services expiring within 30 days
+- **Expiring Services**: Lists the services expired or expiring within 30 days, soonest first
 
 ### Tools & Export
 - **Export**: PDF and Markdown report generation, CSV exports (bills, details, inventory)
