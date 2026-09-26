@@ -75,6 +75,18 @@ describe('useWebCloudTab', () => {
     ]);
   });
 
+  // The cache is the page's: each period keeps its own answers there, and the end of an
+  // import invalidates them by the name of their query
+  it('caches each answer under the name of its query and its period', async () => {
+    const { queryClient } = await renderTabHook(useWebCloudTab,
+      { selectedMonth: september, activeTab: 'webcloud' });
+    const keysOf = (name) => queryClient.getQueriesData({ queryKey: [name] })
+      .map(([queryKey]) => queryKey);
+
+    expect(keysOf('webCloudSummary')).toEqual([['webCloudSummary', '2025-10-01', '2026-09-30']]);
+    expect(keysOf('webCloudItems')).toEqual([['webCloudItems', '2025-10-01', '2026-09-30']]);
+  });
+
   it('follows the selected month', async () => {
     const { result, rerender } = await renderTabHook(useWebCloudTab,
       { selectedMonth: september, activeTab: 'webcloud' });
