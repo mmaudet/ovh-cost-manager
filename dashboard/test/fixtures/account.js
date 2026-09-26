@@ -1,6 +1,7 @@
 import { months } from './calendar.js';
 import { webCloud } from './web-cloud.js';
 import { trends } from './trends.js';
+import { backup } from './backup.js';
 
 // A small synthetic OVHcloud account: two Public Cloud projects, a dedicated
 // server, Veeam backups and a few Web Cloud services, billed over three months.
@@ -182,4 +183,5 @@ export const account = {
 
   ...webCloud,
   ...trends,
+  ...backup,
 };
