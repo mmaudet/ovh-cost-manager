@@ -250,6 +250,34 @@ describe('Web Cloud tab', () => {
     expect(familyHeadings()).toHaveLength(5);
   });
 
+  // Rather than that none was billed, or zero services above the tables (#62)
+  it.each([
+    ['figures', 'fetchWebCloudSummary'],
+    ['services', 'fetchWebCloudItems'],
+  ])('says that its data could not be loaded when its %s fail (#62)', async (_, request) => {
+    const { user } = await renderDashboard();
+    api[request].mockRejectedValue(new Error('Request failed with status code 500'));
+
+    await openTab(user, 'Web Cloud');
+
+    expect(screen.getByText('Impossible de charger les données Web Cloud.')).toBeInTheDocument();
+    expect(screen.queryByText('Aucun service Web Cloud facturé sur cette période'))
+      .not.toBeInTheDocument();
+    expect(screen.queryByText('Chargement des données...')).not.toBeInTheDocument();
+    expect(screen.queryByText('Domaines')).not.toBeInTheDocument();
+    expect(familyHeadings()).toEqual([]);
+  });
+
+  it('says in English that its data could not be loaded (#62)', async () => {
+    const { user } = await renderDashboard();
+    await selectLanguage(user, 'en');
+    api.fetchWebCloudItems.mockRejectedValue(new Error('Request failed with status code 500'));
+
+    await openTab(user, 'Web Cloud');
+
+    expect(screen.getByText('Could not load the Web Cloud data.')).toBeInTheDocument();
+  });
+
   it('says when no Web Cloud service was billed over the period', async () => {
     const { user } = await renderDashboard({ ...account, webCloudItems: {}, webCloudSummary: {} });
 
