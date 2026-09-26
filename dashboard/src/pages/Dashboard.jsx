@@ -89,8 +89,9 @@ export default function Dashboard() {
 
   // The month just before the selected one in the calendar, as the months list gives it:
   // none when nothing was billed that month, as before the first billed month. The "vs
-  // previous month" KPI compares the selected month with its summary (#50), which shares the
-  // key of the Compare tab's month A: the same month when the page opens.
+  // previous month" KPI compares the selected month with its summary (#50), under the key of
+  // the Compare tab's month A when they are the same month. Month A defaults to the second
+  // latest billed month (months[1]): the month before the latest, unless that one had no bill.
   const previousMonth = selectedMonth
     ? months.find((m) => m.from === shiftMonths(selectedMonth.from, -1))
     : undefined;

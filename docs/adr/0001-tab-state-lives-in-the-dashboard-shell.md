@@ -23,11 +23,13 @@ that the query keeps a single owner and its loading condition: the Compare tab l
 dedicated servers that the Infrastructure hook loads, on its own tab and on Compare (#35).
 The shell reads no tab hook's result for what it shows itself: the "vs previous month" KPI
 runs its own query of the summary of the month before the selected one (#50). When a month
-the Compare tab compares is one the shell loads, as both are when the page opens, the
-Compare hook's queries of that month share their keys with those the shell and the Backup
-hook run for it: month B, the selected month, its summary, costs by resource type and
-Veeam backups (`summary`, `byResourceType`, `backupStats`), and month A, the month before,
-its summary. The Compare hook owns the months it picks, and a shared key only means a
+the Compare tab compares is one the shell loads, the Compare hook's queries of that month
+share their keys with those the shell and the Backup hook run for it. When the page opens,
+month B is the latest month, the selected one: its summary, costs by resource type and
+Veeam backups share their keys (`summary`, `byResourceType`, `backupStats`). Month A is the
+second latest billed month (`months[1]`): when it is the month just before the latest one,
+as it is unless nothing was billed that month, its summary shares its key with the shell's
+month before. The Compare hook owns the months it picks, and a shared key only means a
 shared cache, not a shared owner.
 
 What stays open depends on how the user moves around the page (#56):
