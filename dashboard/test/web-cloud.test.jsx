@@ -1,8 +1,8 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { screen, within } from '@testing-library/react';
 import { account } from './fixtures/account.js';
 import { api } from './support/api.js';
-import { csvDownloads } from './support/downloads.js';
+import { captureFileDownloads } from './support/downloads.js';
 import {
   cardOf,
   openTab,
@@ -12,11 +12,6 @@ import {
   selectMonth,
   texts,
 } from './support/render.jsx';
-
-vi.mock('../src/utils/csv.js', async (importOriginal) => ({
-  ...(await importOriginal()),
-  downloadCSV: vi.fn(),
-}));
 
 const periodLine = (label = '12 mois glissants') => screen.getByText(label);
 const familyCards = (firstLabel = 'Domaines') => cardOf(firstLabel).parentElement;
@@ -30,6 +25,9 @@ const familyHeadings = () =>
   screen.queryAllByRole('heading', { level: 3 }).map((heading) => texts(heading));
 
 const tableHeader = ['Service', 'Libellé de facture', 'Dernière facture', 'Coût'];
+// The byte order mark that starts the CSV files, so that Excel reads their
+// accents as UTF-8
+const BOM = '\uFEFF';
 const csvHeader =
   '"Service";"Famille";"Libellé de facture";"Lignes de facture";"Première facture";"Dernière facture";"Coût (EUR)"';
 
@@ -175,35 +173,40 @@ describe('Web Cloud tab', () => {
   });
 
   describe('CSV export', () => {
-    it('exports the services of a family', async () => {
+    it('downloads the services of a family', async () => {
       const { user } = await renderDashboard();
       await openTab(user, 'Web Cloud');
+      const downloadedFiles = captureFileDownloads();
 
       await user.click(familyButton('Emails', 'CSV'));
 
-      expect(csvDownloads()).toEqual([{
-        name: 'ovh-email-2025-10-to-2026-09.csv',
-        content: [
-          csvHeader,
-          '"example.com";"email";"Email Pro example.com - 2 comptes - 12 mois";1;"2026-09-01";"2026-09-01";47,52',
-          '"example.org";"email";"Avoir MX Plan example.org";1;"2026-09-01";"2026-09-01";-3',
-        ].join('\n'),
-      }]);
+      const files = await downloadedFiles();
+      expect(files).toHaveLength(1);
+      expect(files[0].name).toBe('ovh-email-2025-10-to-2026-09.csv');
+      expect(files[0].type).toBe('text/csv;charset=utf-8');
+      expect(files[0].content.startsWith(BOM)).toBe(true);
+      expect(files[0].content.slice(BOM.length)).toBe([
+        csvHeader,
+        '"example.com";"email";"Email Pro example.com - 2 comptes - 12 mois";1;"2026-09-01";"2026-09-01";47,52',
+        '"example.org";"email";"Avoir MX Plan example.org";1;"2026-09-01";"2026-09-01";-3',
+      ].join('\n'));
     });
 
-    it('exports the same file from the "show all" modal', async () => {
+    it('downloads the same file from the "show all" modal', async () => {
       const { user } = await renderDashboard();
       await openTab(user, 'Web Cloud');
+      const downloadedFiles = captureFileDownloads();
 
       await user.click(familyButton('Zones DNS', 'CSV'));
       await user.click(familyButton('Zones DNS', 'Tout afficher'));
       await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'CSV' }));
 
-      const [fromPanel, fromModal] = csvDownloads();
+      const [fromPanel, fromModal] = await downloadedFiles();
       expect(fromModal).toEqual(fromPanel);
       expect(fromModal).toEqual({
         name: 'ovh-dns_zone-2025-10-to-2026-09.csv',
-        content: [
+        type: 'text/csv;charset=utf-8',
+        content: BOM + [
           csvHeader,
           // Amounts keep their significant decimals only
           '"example.com";"dns_zone";"Zone DNS Anycast example.com - 12 mois";1;"2026-09-01";"2026-09-01";1,2',
@@ -252,11 +255,13 @@ describe('Web Cloud tab', () => {
     expect(familyHeadings()[0]).toEqual(['Domains (2)', '28.48€', 'Show all', 'CSV']);
     expect(rowsOf(familyTable('Domains'))[0])
       .toEqual(['Service', 'Bill wording', 'Last billed', 'Cost']);
+    const downloadedFiles = captureFileDownloads();
 
     await user.click(familyButton('Domains', 'CSV'));
 
-    expect(csvDownloads()[0].content.split('\n')[0]).toBe(
-      '"Service";"Family";"Bill wording";"Bill lines";"First billed";"Last billed";"Cost (EUR)"',
+    const [file] = await downloadedFiles();
+    expect(file.content.split('\n')[0]).toBe(
+      `${BOM}"Service";"Family";"Bill wording";"Bill lines";"First billed";"Last billed";"Cost (EUR)"`,
     );
   });
 });

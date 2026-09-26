@@ -335,14 +335,15 @@ describe('dashboard shell', () => {
   describe('report export', () => {
     it('downloads the report of the month as Markdown', async () => {
       const { user } = await renderDashboard();
-      const downloads = captureFileDownloads();
+      const downloadedFiles = captureFileDownloads();
 
       await user.selectOptions(screen.getByDisplayValue('Choisir...'), 'Markdown');
 
-      expect(downloads).toHaveLength(1);
-      expect(downloads[0].name).toBe('ovh-report-2026-09.md');
-      expect(downloads[0].type).toBe('text/markdown');
-      expect(await downloads[0].content).toBe([
+      const files = await downloadedFiles();
+      expect(files).toHaveLength(1);
+      expect(files[0].name).toBe('ovh-report-2026-09.md');
+      expect(files[0].type).toBe('text/markdown');
+      expect(files[0].content).toBe([
         '# OVH Cost Report - Septembre 2026',
         '',
         '**Période:** 2026-09-01 to 2026-09-30',
@@ -352,7 +353,7 @@ describe('dashboard shell', () => {
         '| Métrique | Valeur |',
         '|--------|-------|',
         // French amounts separate thousands with a narrow no-break space
-        '| Coût Total | 1 250,40€ |',
+        '| Coût Total | 1\u202f250,40€ |',
         '| Cloud Total | 830,40€ |',
         '| Non-Cloud Total | 420,00€ |',
         '| Moyenne Journalière | 41,68€ |',
@@ -384,11 +385,11 @@ describe('dashboard shell', () => {
     it('writes the report in the language of the page', async () => {
       const { user } = await renderDashboard();
       await selectLanguage(user, 'en');
-      const downloads = captureFileDownloads();
+      const downloadedFiles = captureFileDownloads();
 
       await user.selectOptions(screen.getByDisplayValue('Choose...'), 'Markdown');
 
-      const report = await downloads[0].content;
+      const [{ content: report }] = await downloadedFiles();
       expect(report).toContain('**Period:** 2026-09-01 to 2026-09-30');
       expect(report).toContain('| Total Cost | 1,250.40€ |');
       expect(report).toContain('## By Service Type');

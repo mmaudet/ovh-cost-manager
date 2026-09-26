@@ -1,26 +1,11 @@
 import { vi } from 'vitest';
-import { downloadCSV, toCSV } from '../../src/utils/csv.js';
 
-// The CSV files the page exported, as the user gets them: the name of the
-// download and the content of the real toCSV. The test file replaces
-// downloadCSV only:
-//
-//   vi.mock('../src/utils/csv.js', async (importOriginal) => ({
-//     ...(await importOriginal()),
-//     downloadCSV: vi.fn(),
-//   }));
-export function csvDownloads() {
-  return vi.mocked(downloadCSV).mock.calls.map(([rows, columns, filename]) => ({
-    name: `${filename}.csv`,
-    content: toCSV(rows, columns),
-  }));
-}
-
-// The files the page downloads through a blob URL and a link click, like the
-// Markdown report, from now on. Each one has a name, a type and a content
-// to await.
+// Captures the files the page downloads from now on: the CSV exports and the
+// Markdown report go through a blob URL and a click on a link. Returns a
+// function that reads them, as the user gets them: name, type and content.
+// The content keeps its byte order mark, which Blob.text() would drop.
 export function captureFileDownloads() {
-  const files = [];
+  const downloads = [];
   const blobs = new Map();
   vi.spyOn(URL, 'createObjectURL').mockImplementation((blob) => {
     const url = `blob:test/${blobs.size + 1}`;
@@ -28,8 +13,12 @@ export function captureFileDownloads() {
     return url;
   });
   vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function click() {
-    const blob = blobs.get(this.href);
-    files.push({ name: this.download, type: blob.type, content: blob.text() });
+    downloads.push({ name: this.download, blob: blobs.get(this.href) });
   });
-  return files;
+  const utf8 = new TextDecoder('utf-8', { ignoreBOM: true });
+  return () => Promise.all(downloads.map(async ({ name, blob }) => ({
+    name,
+    type: blob.type,
+    content: utf8.decode(await blob.arrayBuffer()),
+  })));
 }

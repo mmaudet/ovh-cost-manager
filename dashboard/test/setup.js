@@ -14,7 +14,8 @@ globalThis.ResizeObserver = class ResizeObserver {
   unobserve() {}
   disconnect() {}
 };
-// - the report export downloads a blob URL (see support/downloads.js);
+// - downloads, CSV exports and report, go through a blob URL (see
+//   support/downloads.js);
 URL.createObjectURL = () => 'blob:stub';
 URL.revokeObjectURL = () => {};
 // - the PDF export prints the page.
