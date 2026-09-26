@@ -19,6 +19,7 @@ const { importsEnabled } = require('./imports');
 const { trendWindowFromQuery } = require('./months');
 const { readConfigFile } = require('./config-file');
 const { buildRateLimitConfig } = require('./rate-limit-config');
+const { isHealthCheck } = require('./auth/health');
 
 // Load configuration: the first config.json that exists. One that cannot be
 // read stops the server, rather than let it run without its settings
@@ -90,12 +91,9 @@ const apiLimiter = rateLimit({
   message: { error: 'Too many requests, please try again later' },
   standardHeaders: true, // Return rate limit info in `RateLimit-*` headers
   legacyHeaders: false, // Disable `X-RateLimit-*` headers
-  skip: (req) => {
-    // Skip rate limiting for health checks. Use originalUrl: this limiter is
-    // mounted on '/api/', so req.path here is '/health' (prefix stripped),
-    // which made the previous '/api/health' check never match.
-    return (req.originalUrl || req.url).split('?')[0] === '/api/health';
-  }
+  // Skip rate limiting for the health check, matched as every auth check
+  // matches it: /api/health in any case, with or without a trailing slash
+  skip: (req) => isHealthCheck(req)
 });
 
 // Stricter rate limit for auth endpoints (prevent brute-force)
