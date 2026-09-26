@@ -1,7 +1,7 @@
 // The Trends tab's state and data queries, in a hook that the dashboard shell calls on
 // every render: see docs/adr/0001-tab-state-lives-in-the-dashboard-shell.md
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   fetchMonthlyTrend, fetchMonthlyTrendByCategory, fetchGpuSummary,
@@ -10,7 +10,8 @@ import { monthsBetween, availablePeriodsFor } from '../utils/trendPeriods.js';
 import { monthWindowEndingOn } from '../utils/monthWindow.js';
 
 const useTrendsTab = ({ months, selectedMonth, activeTab }) => {
-  const [trendPeriod, setTrendPeriod] = useState(6); // Months for trend
+  // The period the user picks, in months: 6 by default
+  const [chosenPeriod, setChosenPeriod] = useState(6);
 
   // The period ends on the month selected in the header, that month included, as the 12
   // months of the Web Cloud tab do (#66)
@@ -19,14 +20,10 @@ const useTrendsTab = ({ months, selectedMonth, activeTab }) => {
   // The periods offered go up to the first one that covers the months of data up to it
   const maxMonths = monthsBetween(months[months.length - 1]?.value, endMonth);
   const availablePeriods = availablePeriodsFor(maxMonths);
-
-  useEffect(() => {
-    // Adjust trend period if it is no longer one of the available options, once there is
-    // a month to count up to
-    if (endMonth && !availablePeriods.some(o => o.months === trendPeriod)) {
-      setTrendPeriod(availablePeriods[availablePeriods.length - 1].months);
-    }
-  }, [months, endMonth, trendPeriod]);
+  // The period shown and requested: the one picked, or the longest offered when that one is
+  // shorter. The choice stays, for a month that offers it again
+  const longestPeriod = availablePeriods[availablePeriods.length - 1].months;
+  const trendPeriod = Math.min(chosenPeriod, longestPeriod);
 
   const { data: monthlyTrend = [] } = useQuery({
     queryKey: ['monthlyTrend', trendPeriod, endMonth],
@@ -57,7 +54,7 @@ const useTrendsTab = ({ months, selectedMonth, activeTab }) => {
 
   return {
     trendPeriod,
-    setTrendPeriod,
+    setTrendPeriod: setChosenPeriod,
     availablePeriods,
     monthlyTrend,
     trendByCategory,

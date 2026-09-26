@@ -93,6 +93,22 @@ describe('Trends tab', () => {
         .toEqual(['Mois le plus coûteux', 'juil. 2025', '450,00€']);
     });
 
+    it('keeps the period picked while an older month offers only shorter ones', async () => {
+      const { user } = await renderDashboard({ ...account, ...sinceJuly2025 });
+      await openTab(user, 'Tendances');
+      await user.selectOptions(periodSelector(), '2 ans');
+      await settle();
+
+      await selectMonth(user, 'Juillet 2025');
+      expect(periodSelector()).toHaveDisplayValue('3 mois');
+
+      await selectMonth(user, 'Septembre 2026');
+
+      expect(periodSelector()).toHaveDisplayValue('2 ans');
+      expect(screen.getByRole('heading', { name: 'Évolution des coûts (total) sur 2 ans' }))
+        .toBeInTheDocument();
+    });
+
     it('reloads the trends over the period the user picks', async () => {
       const { user } = await renderDashboard({ ...account, ...sinceJuly2025 });
       await openTab(user, 'Tendances');

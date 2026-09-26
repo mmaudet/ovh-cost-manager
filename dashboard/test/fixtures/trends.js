@@ -92,15 +92,15 @@ const gpuInMonth = (month, total) => ({
 });
 
 export const trends = {
-  // The page asks for 6 months, then for 3: the longest period that three
-  // billed months allow. Both periods cover the same bills. With August
-  // selected, the 3 months run from June, which was not billed.
+  // The page asks for 3 months, the longest period that three billed months
+  // allow, rather than the 6 of the default. With August selected, the 3
+  // months run from June, which was not billed.
   monthlyTrend: {
-    '2026-09': { 3: lastThreeMonths, 6: lastThreeMonths },
+    '2026-09': { 3: lastThreeMonths },
     '2026-08': { 3: julyAndAugust },
   },
   monthlyTrendByCategory: {
-    '2026-09': { 3: costByResourceType, 6: costByResourceType },
+    '2026-09': { 3: costByResourceType },
     '2026-08': { 3: costByResourceTypeUpToAugust },
   },
   gpuSummary: {
@@ -131,8 +131,8 @@ export const sinceJuly2025 = {
       24: [july2025, ...lastThreeMonths],
     },
     '2026-08': { 6: julyAndAugust },
-    // The period picked, 6 months, then the 3 months that the first billed month allows
-    '2025-07': { 3: [july2025], 6: [july2025] },
+    // The first billed month allows 3 months only
+    '2025-07': { 3: [july2025] },
   },
   monthlyTrendByCategory: {
     '2026-09': {
@@ -148,6 +148,6 @@ export const sinceJuly2025 = {
       },
     },
     '2026-08': { 6: costByResourceTypeUpToAugust },
-    '2025-07': { 3: costByResourceTypeInJuly2025, 6: costByResourceTypeInJuly2025 },
+    '2025-07': { 3: costByResourceTypeInJuly2025 },
   },
 };

@@ -36,12 +36,13 @@ describe('useTrendsTab', () => {
       expect(api.fetchMonthlyTrendByCategory).not.toHaveBeenCalled();
       expect(api.fetchGpuSummary).not.toHaveBeenCalled();
       // They wait for the month their period ends on, rather than failing for the lack of it
-      expect(queryClient.getQueryState(['monthlyTrend', 6, undefined])).toMatchObject(WAITING);
-      expect(queryClient.getQueryState(['monthlyTrendByCategory', 6, undefined]))
+      expect(queryClient.getQueryState(['monthlyTrend', 3, undefined])).toMatchObject(WAITING);
+      expect(queryClient.getQueryState(['monthlyTrendByCategory', 3, undefined]))
         .toMatchObject(WAITING);
       expect(queryClient.getQueryState(['gpuTrend', undefined, undefined]))
         .toMatchObject(WAITING);
-      expect(result.current.trendPeriod).toBe(6);
+      // No month to count the billed months up to: 3 months are the only period offered
+      expect(result.current.trendPeriod).toBe(3);
       expect(result.current.monthlyTrend).toEqual([]);
       expect(result.current.trendByCategory).toEqual({ categories: [], data: [] });
       expect(result.current.gpuTrend).toBeUndefined();
@@ -155,36 +156,41 @@ describe('useTrendsTab', () => {
       // July 2025, the first billed month, is the only one up to itself
       expect(periods(result.current.availablePeriods)).toEqual([[3, 'period3m']]);
       expect(result.current.trendPeriod).toBe(3);
-      expect(api.fetchMonthlyTrend).toHaveBeenLastCalledWith(3, '2025-07');
+      // Only for the period shown, not for the 6 months of the default
+      expect(api.fetchMonthlyTrend).toHaveBeenCalledOnce();
+      expect(api.fetchMonthlyTrend).toHaveBeenCalledWith(3, '2025-07');
     });
 
-    it('keeps its period until a month is selected', async () => {
+    it('keeps the period picked through the renders before a month is selected', async () => {
       const { result, rerender } = await renderTabHook(useTrendsTab,
         { months: [], selectedMonth: null, activeTab: 'overview' });
 
       // The list comes before the shell selects its latest month: no month to count up to
       await rerender({ months: fifteenMonths, selectedMonth: null, activeTab: 'overview' });
-      expect(result.current.trendPeriod).toBe(6);
-
       await rerender({ months: fifteenMonths, selectedMonth: september, activeTab: 'overview' });
+
+      // The 6 months of the default, which 15 billed months allow
       expect(result.current.trendPeriod).toBe(6);
+      expect(api.fetchMonthlyTrend).toHaveBeenCalledOnce();
+      expect(api.fetchMonthlyTrend).toHaveBeenCalledWith(6, '2026-09');
     });
 
-    it('comes down to 3 months once a month is selected, with three billed months', async () => {
+    it('shows the longest period offered when the one picked is longer', async () => {
       const { result, rerender } = await renderTabHook(useTrendsTab,
         { months: [], selectedMonth: null, activeTab: 'overview' });
-      // No month yet: the period waits for one
-      expect(result.current.trendPeriod).toBe(6);
 
       await rerender({ months, selectedMonth: september, activeTab: 'overview' });
 
+      // Three billed months: 3 months, not the 6 of the default, shown and requested
       expect(periods(result.current.availablePeriods)).toEqual([[3, 'period3m']]);
       expect(result.current.trendPeriod).toBe(3);
+      expect(api.fetchMonthlyTrend).toHaveBeenCalledOnce();
       expect(api.fetchMonthlyTrend).toHaveBeenCalledWith(3, '2026-09');
+      expect(api.fetchMonthlyTrendByCategory).toHaveBeenCalledOnce();
       expect(api.fetchMonthlyTrendByCategory).toHaveBeenCalledWith(3, '2026-09');
     });
 
-    it('comes down from the period picked when an older month is selected', async () => {
+    it('keeps the period picked while an older month offers only shorter ones', async () => {
       const { result, rerender, queryClient } = await renderTabHook(useTrendsTab,
         { months: fifteenMonths, selectedMonth: september, activeTab: 'trends' },
         billedSinceJuly2025);
@@ -197,6 +203,14 @@ describe('useTrendsTab', () => {
       expect(periods(result.current.availablePeriods)).toEqual([[3, 'period3m']]);
       expect(result.current.trendPeriod).toBe(3);
       expect(api.fetchMonthlyTrend).toHaveBeenLastCalledWith(3, '2025-07');
+      // Nothing for 2 years up to July 2025, a period that month does not offer
+      expect(api.fetchMonthlyTrend).not.toHaveBeenCalledWith(24, '2025-07');
+      expect(api.fetchGpuSummary).not.toHaveBeenCalledWith('2023-08-01', '2025-07-31');
+
+      // Back to the latest month: the 2 years picked
+      await rerender({ months: fifteenMonths, selectedMonth: september, activeTab: 'trends' });
+
+      expect(result.current.trendPeriod).toBe(24);
     });
 
     it('comes down from the period picked when the months list gets shorter', async () => {
