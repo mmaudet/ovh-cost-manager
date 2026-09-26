@@ -387,7 +387,7 @@ docker-compose logs -f ocm
 
 Access the dashboard at http://localhost:3001
 
-> **Automatic import**: at start, the container runs a full import when its database holds no bill, then a differential import every 24 hours. Configure them with `IMPORT_INTERVAL` and `IMPORT_FLAGS`, or turn them off, with the dashboard's resync button, with `IMPORT_ENABLED=false` (see the [deployment guide](docs/deployment.md#3-import-billing-data)).
+> **Automatic import**: at start, the container runs a full import when its database holds no bill, then a differential import every 24 hours. Configure them with `IMPORT_INTERVAL` and `IMPORT_FLAGS`. `IMPORT_ENABLED=false` turns them off, and the dashboard's resync button with them (see the [deployment guide](docs/deployment.md#3-import-billing-data)).
 
 The container's settings, such as `ALLOWED_HOSTS` against DNS rebinding, `TRUST_PROXY` behind a reverse proxy, or OIDC sign-in, are listed in the [deployment guide](docs/deployment.md#environment-variables).
 
@@ -401,14 +401,7 @@ docker-compose -f docker-compose.sso.yml up -d --build
 docker-compose -f docker-compose.sso.yml logs -f
 ```
 
-```
-┌─────────────┐     ┌─────────────────────────┐   relay    ┌─────────────┐
-│   Browser   │────▶│      LemonLDAP-NG       │───────────▶│     OCM     │
-│             │ :80 │  portal, OIDC provider  │◀───────────│   (:3001)   │
-└─────────────┘     └─────────────────────────┘    OIDC    └─────────────┘
-```
-
-LemonLDAP-NG answers on port 80, the only published port: its portal, on `auth.localhost`, is the OIDC provider, and its relay passes `ocm.localhost` on to OCM, which signs users in itself. Open http://ocm.localhost and sign in with a demo account, such as `dwho` with the password `dwho`. This demo is for a test on `localhost`: the [deployment guide](docs/deployment.md#sso-deployment-with-lemonldap-ng) gives its settings, how to use another domain, and what to replace before any real use.
+LemonLDAP-NG is the OIDC provider and the only way in to OCM: open http://ocm.localhost and sign in with one of the demo accounts that [demo/README.md](demo/README.md#before-any-real-use) lists. The [deployment guide](docs/deployment.md#sso-deployment-with-lemonldap-ng) covers another domain, and what to replace before any real use.
 
 ### Volume Mounts
 
