@@ -2,7 +2,7 @@ import Modal from '../components/Modal.jsx';
 import TableActions from '../components/TableActions.jsx';
 import { ServersTable, serverCsvColumns } from '../components/ServersTable.jsx';
 import { downloadCSV } from '../utils/csv.js';
-import { formatMonthLabel } from '../utils/format.js';
+import { fmtBytes, fmtMemory, formatMonthLabel } from '../utils/format.js';
 
 // Resource types the Infrastructure tab leaves out: Public Cloud has its own
 // tab, and domains moved to Web Cloud, .ovh ones included (web_cloud type).
@@ -118,7 +118,7 @@ const InfrastructureTab = ({
         </h3>
         {/* ~11 rows before scrolling, the full list is one click away */}
         <div className="overflow-auto max-h-[430px]">
-          <ServersTable servers={inventoryServers} t={t} />
+          <ServersTable servers={inventoryServers} language={language} t={t} />
         </div>
       </div>
     )}
@@ -145,7 +145,12 @@ const InfrastructureTab = ({
                   <td className="p-3 font-medium">{v.display_name || v.id}</td>
                   <td className="p-3">{v.model}</td>
                   <td className="p-3">{v.zone}</td>
-                  <td className="p-3 text-xs">{v.vcpus} vCPU / {v.ram_mb}MB / {v.disk_gb}GB</td>
+                  {/* In the units and number format of the language (#88): the RAM in powers
+                      of 1024, as OVH names it, the disk in GB in powers of 1000 */}
+                  <td className="p-3 text-xs">
+                    {v.vcpus} vCPU / {fmtMemory(v.ram_mb, language)}
+                    {' / '}{fmtBytes(v.disk_gb * 1e9, language)}
+                  </td>
                   <td className="p-3">
                     <span className={`px-2 py-0.5 rounded text-xs font-medium ${v.state === 'running' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'}`}>
                       {v.state}
@@ -171,7 +176,9 @@ const InfrastructureTab = ({
                 <th className="p-3 text-left font-medium">ID</th>
                 <th className="p-3 text-left font-medium">Type</th>
                 <th className="p-3 text-left font-medium">{t('region')}</th>
-                <th className="p-3 text-right font-medium">{language === 'en' ? 'Size' : 'Taille'} (GB)</th>
+                <th className="p-3 text-right font-medium">
+                  {language === 'en' ? 'Size' : 'Taille'}
+                </th>
                 <th className="p-3 text-right font-medium">Shares</th>
                 <th className="p-3 text-left font-medium">{t('expirationDate')}</th>
               </tr>
@@ -182,7 +189,9 @@ const InfrastructureTab = ({
                   <td className="p-3 font-medium">{s.display_name || s.id}</td>
                   <td className="p-3">{s.service_type}</td>
                   <td className="p-3">{s.region}</td>
-                  <td className="p-3 text-right">{s.total_size_gb}</td>
+                  {/* In GB, in the units and number format of the language, as the volumes of
+                      the Public Cloud tab (#88) */}
+                  <td className="p-3 text-right">{fmtBytes(s.total_size_gb * 1e9, language)}</td>
                   <td className="p-3 text-right">{s.share_count}</td>
                   <td className="p-3">{s.expiration_date || '-'}</td>
                 </tr>
@@ -214,7 +223,7 @@ const InfrastructureTabModals = ({
       />
     }
   >
-    <ServersTable servers={inventoryServers} t={t} />
+    <ServersTable servers={inventoryServers} language={language} t={t} />
   </Modal>
 );
 

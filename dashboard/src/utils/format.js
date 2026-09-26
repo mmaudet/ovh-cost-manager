@@ -77,18 +77,19 @@ const roundSize = (value, rank) => {
     : { value: roundAsWritten(value, 0), decimals: 0 };
 };
 
-// Human-readable byte size (decimal units, like the OVH manager), in the units and the
-// number format of the language: 1,5 Go in French, 1.5 GB in English
-const fmtBytes = (bytes, language = 'fr') => {
+// A byte size in the units and the number format of the language, counted in powers of the
+// base, 1000 or 1024: in the largest unit it reaches, rounded as roundSize() does
+const formatSize = (bytes, language, base) => {
   if (bytes === null || bytes === undefined) return '-';
   const units = language === 'en' ? BYTE_UNITS.en : BYTE_UNITS.fr;
-  let rank = Math.min(Math.max(Math.floor(Math.log10(bytes) / 3), 0), units.length - 1);
-  let size = roundSize(bytes / Math.pow(1000, rank), rank);
-  // A size that rounds to 1000 of a unit reads in the next one: 999,999 bytes are 1.0 MB,
+  let rank = 0;
+  while (rank < units.length - 1 && bytes >= base ** (rank + 1)) rank += 1;
+  let size = roundSize(bytes / base ** rank, rank);
+  // A size that rounds to the base of a unit reads in the next one: 999,999 bytes are 1.0 MB,
   // not 1000 KB
-  if (size.value >= 1000 && rank < units.length - 1) {
+  if (size.value >= base && rank < units.length - 1) {
     rank += 1;
-    size = roundSize(bytes / Math.pow(1000, rank), rank);
+    size = roundSize(bytes / base ** rank, rank);
   }
   const number = new Intl.NumberFormat(localeOf(language), {
     minimumFractionDigits: size.decimals,
@@ -97,6 +98,19 @@ const fmtBytes = (bytes, language = 'fr') => {
   return `${number} ${units[rank]}`;
 };
 
+// Human-readable byte size (decimal units, like the OVH manager), in the units and the
+// number format of the language: 1,5 Go in French, 1.5 GB in English
+const fmtBytes = (bytes, language = 'fr') => formatSize(bytes, language, 1000);
+
+// The RAM of a server or a VPS, which OVH gives in megabytes of 1024 × 1024 bytes, in the
+// units and the number format of the language. In powers of 1024, as OVH names the RAM of
+// its offers: 65536 MB read 64 Go, where powers of 1000 would read 66 Go (#88)
+const fmtMemory = (megabytes, language = 'fr') => (
+  megabytes === null || megabytes === undefined
+    ? '-'
+    : formatSize(megabytes * 1024 ** 2, language, 1024)
+);
+
 // Whether a count takes the singular in the language, as its plural rules say: 0 and 1 in
 // French (0 jour, 1 jour, 2 jours), 1 only in English (0 days, 1 day, 2 days)
 const takesSingular = (count, language = 'fr') =>
@@ -104,5 +118,5 @@ const takesSingular = (count, language = 'fr') =>
 
 export {
   localeOf, formatCurrency, formatPercent, formatYearMonth, formatMonthLabel, yearMonthOf,
-  fmtBytes, takesSingular,
+  fmtBytes, fmtMemory, takesSingular,
 };
