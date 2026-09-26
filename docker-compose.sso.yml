@@ -20,6 +20,8 @@
 #   - Redirect URI: http://ocm.localhost/auth/callback
 #   - Post-logout redirect URI: http://ocm.localhost
 #   - Back-channel logout URI: http://ocm.localhost/logout/backchannel
+# They also hold the key pair that signs the OIDC tokens, committed in this
+# repository: never use it outside this demo.
 #
 # BUILD & RUN:
 #   docker compose -f docker-compose.sso.yml build
