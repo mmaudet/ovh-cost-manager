@@ -2,7 +2,7 @@
 # Multi-stage build: run npm/node natively on build host, avoid QEMU emulation
 
 # Stage 1: Build on the host platform (no QEMU)
-FROM --platform=$BUILDPLATFORM node:20-alpine AS builder
+FROM --platform=$BUILDPLATFORM node:24-alpine AS builder
 
 ARG TARGETARCH
 
@@ -34,8 +34,9 @@ RUN npm run build
 # Remove dev dependencies after build
 RUN npm prune --production
 
-# Stage 2: Runtime image (target platform)
-FROM node:20-alpine
+# Stage 2: Runtime image (target platform). Keep the same Node major as the
+# builder: prebuild-install picks the better-sqlite3 binary for its Node ABI.
+FROM node:24-alpine
 
 WORKDIR /app
 
