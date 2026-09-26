@@ -100,22 +100,26 @@ describe('createHostCheck', () => {
   );
 
   describe('behind a proxy that sets Host to the container', () => {
-    // The page is on ocm.example.com, the proxy reaches the container by its name
+    // The page is on ocm.example.com, the proxy reaches the container by its
+    // name, which is then listed too
     const container = 'ovh-cost-manager:3001';
+    const proxied = createHostCheck({
+      allowedHosts: [...allowedHosts, container],
+      trustProxy: true,
+    });
 
     test('allows a listed X-Forwarded-Host when the proxy is trusted', () => {
+      expect(passes(proxied, { host: container, 'x-forwarded-host': 'ocm.example.com' }))
+        .toBe(true);
+    });
+
+    test('checks Host too, which must be listed', () => {
       expect(passes(behindTrustedProxy, {
         host: container,
         'x-forwarded-host': 'ocm.example.com',
-      })).toBe(true);
+      })).toBe(false);
     });
 
-    test('ignores X-Forwarded-Host when the proxy is not trusted', () => {
-      expect(passes(direct, { host: container, 'x-forwarded-host': 'ocm.example.com' }))
-        .toBe(false);
-    });
-
-    // The host the browser asked for is then X-Forwarded-Host, not Host
     test('rejects an X-Forwarded-Host that is not listed, even with a listed Host', () => {
       expect(passes(behindTrustedProxy, {
         host: 'ocm.example.com',
@@ -123,30 +127,56 @@ describe('createHostCheck', () => {
       })).toBe(false);
     });
 
-    test('reads the first host of an X-Forwarded-Host list', () => {
-      expect(passes(behindTrustedProxy, {
-        host: container,
-        'x-forwarded-host': 'ocm.example.com, evil.example',
-      })).toBe(true);
+    // A page can send any X-Forwarded-Host, and a proxy that does not set the
+    // header passes it on: the loopback names do not pass there
+    test('rejects a forged X-Forwarded-Host: localhost', () => {
+      expect(passes(proxied, { host: container, 'x-forwarded-host': 'localhost:3001' }))
+        .toBe(false);
     });
 
-    test('rejects an X-Forwarded-Host list whose first host is not listed', () => {
+    // A page that rebinds its own domain sends it as Host, which a proxy keeps
+    test('rejects a listed X-Forwarded-Host when Host is not listed', () => {
       expect(passes(behindTrustedProxy, {
-        host: container,
-        'x-forwarded-host': 'evil.example, ocm.example.com',
+        host: 'evil.example',
+        'x-forwarded-host': 'ocm.example.com',
       })).toBe(false);
     });
 
-    test('compares X-Forwarded-Host as it compares Host', () => {
-      expect(passes(behindTrustedProxy, {
+    // The last one is what the nearest proxy set or appended: Apache appends
+    // the Host it received to the one it got
+    test('reads the last host of an X-Forwarded-Host list', () => {
+      expect(passes(proxied, {
         host: container,
-        'x-forwarded-host': 'OCM.example.com:443',
+        'x-forwarded-host': 'evil.example, ocm.example.com',
       })).toBe(true);
     });
 
+    test.each(['ocm.example.com, evil.example', 'localhost, evil.example'])(
+      'rejects the X-Forwarded-Host list %s, whose last host is not listed',
+      (forwardedHost) => {
+        expect(passes(proxied, { host: container, 'x-forwarded-host': forwardedHost }))
+          .toBe(false);
+      }
+    );
+
+    test('compares X-Forwarded-Host as it compares Host', () => {
+      expect(passes(proxied, { host: container, 'x-forwarded-host': 'OCM.example.com:443' }))
+        .toBe(true);
+    });
+
     // As the LemonLDAP relay of docker-compose.sso.yml does
-    test('reads Host when the trusted proxy sends no X-Forwarded-Host', () => {
+    test('reads Host alone when the trusted proxy sends no X-Forwarded-Host', () => {
       expect(passes(behindTrustedProxy, { host: 'ocm.example.com:80' })).toBe(true);
+    });
+
+    test('ignores X-Forwarded-Host when the proxy is not trusted', () => {
+      expect(passes(direct, { host: 'ocm.example.com', 'x-forwarded-host': 'evil.example' }))
+        .toBe(true);
+    });
+
+    test('rejects a forged X-Forwarded-Host: localhost without a trusted proxy too', () => {
+      expect(passes(direct, { host: 'evil.example', 'x-forwarded-host': 'localhost' }))
+        .toBe(false);
     });
   });
 
@@ -283,8 +313,17 @@ describe('createHostCheckMiddleware', () => {
     run(hostCheck, { host: 'evil.example' });
     run(hostCheck, { host: 'other.example' });
     expect(logger.warn.mock.calls).toEqual([
-      ['Host check: Blocked request for host: evil.example'],
-      ['Host check: Blocked request for host: other.example'],
+      ['Host check: Blocked request with Host: evil.example'],
+      ['Host check: Blocked request with Host: other.example'],
+    ]);
+  });
+
+  test('names the header of the host it blocked', () => {
+    const logger = makeLogger();
+    const hostCheck = createHostCheckMiddleware({ allowedHosts, trustProxy: true }, logger);
+    run(hostCheck, { host: 'ocm.example.com', 'x-forwarded-host': 'evil.example' });
+    expect(logger.warn.mock.calls).toEqual([
+      ['Host check: Blocked request with X-Forwarded-Host: evil.example'],
     ]);
   });
 
@@ -295,7 +334,7 @@ describe('createHostCheckMiddleware', () => {
     run(hostCheck, { host: 'evil.example:80' });
     run(hostCheck, { host: 'evil.example:443' });
     expect(logger.warn.mock.calls).toEqual([
-      ['Host check: Blocked request for host: evil.example'],
+      ['Host check: Blocked request with Host: evil.example'],
     ]);
   });
 
@@ -306,7 +345,7 @@ describe('createHostCheckMiddleware', () => {
     run(hostCheck, { host: ':3001' });
     run(hostCheck, {});
     expect(logger.warn.mock.calls).toEqual([
-      ['Host check: Blocked request for host: invalid'],
+      ['Host check: Blocked request with Host: invalid'],
     ]);
   });
 
@@ -319,9 +358,9 @@ describe('createHostCheckMiddleware', () => {
     jest.advanceTimersByTime(HOUR);
     run(hostCheck, { host: 'evil.example' });
     expect(logger.warn.mock.calls).toEqual([
-      ['Host check: Blocked request for host: evil.example'],
+      ['Host check: Blocked request with Host: evil.example'],
       ['Host check: 2 more blocked requests in the last hour, not logged'],
-      ['Host check: Blocked request for host: evil.example'],
+      ['Host check: Blocked request with Host: evil.example'],
     ]);
   });
 

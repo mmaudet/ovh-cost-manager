@@ -4,12 +4,13 @@
  * A page on another domain can point that domain at the server's address: the
  * browser then sends the page's requests to the server as same-origin ones,
  * which CORS does not restrict, with the page's domain in the Host header.
- * When ALLOWED_HOSTS is set, the server only answers the hosts it lists and
- * the loopback names. When it is not, no check runs, so that no existing
- * deployment breaks.
+ * When ALLOWED_HOSTS is set, the server only answers a request whose Host it
+ * lists, or is a loopback name, and behind a trusted proxy, whose last
+ * X-Forwarded-Host it lists too. When it is not, no check runs, so that no
+ * existing deployment breaks.
  */
 
-const { LOOPBACK_HOSTNAMES, firstValue, parseHost } = require('./hostHeader');
+const { LOOPBACK_HOSTNAMES, lastValue, parseHost } = require('./hostHeader');
 
 // The log names each blocked host once an hour, and at most this many hosts
 // an hour, as any client can send any number of them. It counts the others.
@@ -44,28 +45,33 @@ function createHostCheck({ allowedHosts, trustProxy }) {
     .filter(Boolean)
     .map(({ host }) => host);
 
-  // Listed, or a loopback name on any port: the Docker healthcheck, the import
-  // cron and local tools call the server on localhost
-  function isAllowed(parsed) {
-    if (!parsed) {
-      return false;
-    }
-    return LOOPBACK_HOSTNAMES.includes(parsed.hostname) || listedHosts.includes(parsed.host);
-  }
+  const isListed = (parsed) => parsed !== null && listedHosts.includes(parsed.host);
+  // A loopback name, on any port: the Docker healthcheck, the import cron and
+  // local tools call the server on localhost
+  const isLoopback = (parsed) => parsed !== null && LOOPBACK_HOSTNAMES.includes(parsed.hostname);
+  // The header and the host refused, as the check compares it, or null when
+  // the header holds none
+  const refuse = (header, parsed) => ({ allowed: false, header, host: parsed && parsed.host });
 
   return function checkHost(headers) {
-    const forwardedHost = headers['x-forwarded-host'];
-    // Behind a trusted proxy, the host the browser asked for is the proxy's
-    // X-Forwarded-Host, when it sends one: Host may be the container's name
-    const [header, value] = trustProxy && forwardedHost
-      ? ['X-Forwarded-Host', firstValue(forwardedHost)]
-      : ['Host', headers.host];
-    const parsed = parseHost(value);
-    if (isAllowed(parsed)) {
-      return { allowed: true };
+    // Host is always checked: a page that rebinds its own domain sends it
+    // there, and a proxy that keeps Host passes it on
+    const host = parseHost(headers.host);
+    if (!isListed(host) && !isLoopback(host)) {
+      return refuse('Host', host);
     }
-    // The host as the check compares it, or null when the header holds none
-    return { allowed: false, header, host: parsed && parsed.host };
+    // Behind a trusted proxy, the last X-Forwarded-Host must be listed too. A
+    // page can send any X-Forwarded-Host, such as localhost, and a proxy that
+    // does not set the header passes it on: the last value is the one the
+    // nearest proxy set or appended, and the loopback names do not pass there.
+    const forwardedHost = headers['x-forwarded-host'];
+    if (trustProxy && forwardedHost !== undefined) {
+      const forwarded = parseHost(lastValue(forwardedHost));
+      if (!isListed(forwarded)) {
+        return refuse('X-Forwarded-Host', forwarded);
+      }
+    }
+    return { allowed: true };
   };
 }
 
@@ -108,7 +114,7 @@ function createHostCheckMiddleware(settings, logger = console) {
       unlogged += 1;
     } else {
       loggedHosts.add(host);
-      logger.warn(`Host check: Blocked request for host: ${host}`);
+      logger.warn(`Host check: Blocked request with ${result.header}: ${host}`);
     }
     return res.status(421).json({ error: 'Host not allowed' });
   };

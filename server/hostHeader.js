@@ -16,6 +16,13 @@ function firstValue(header) {
   return header.split(',')[0].trim();
 }
 
+// The last value of a header that may hold a list: the one the nearest proxy
+// set or appended, where the others may come from the client
+function lastValue(header) {
+  const values = header.split(',');
+  return values[values.length - 1].trim();
+}
+
 /**
  * A host header as URL writes it: lowercase, and without the default port of
  * the request's scheme, or of both http and https when the scheme is not
@@ -42,4 +49,4 @@ function parseHost(header, protocol) {
   return { host, hostname: url.hostname };
 }
 
-module.exports = { LOOPBACK_HOSTNAMES, firstValue, parseHost };
+module.exports = { LOOPBACK_HOSTNAMES, firstValue, lastValue, parseHost };
