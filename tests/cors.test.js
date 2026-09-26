@@ -35,12 +35,17 @@ describe('createOriginCheck', () => {
     expect(production('https://ocm.example.com:8443', { host: 'ocm.example.com' })).toBe(false);
   });
 
-  test.each(['ocm.example.com', 'null'])(
+  // 'ocm.example.com:3001' parses, but as the scheme 'ocm.example.com:' without a host
+  test.each(['ocm.example.com', 'ocm.example.com:3001', 'null'])(
     'rejects the malformed Origin %s without throwing',
     (origin) => {
       expect(production(origin, { host: 'ocm.example.com' })).toBe(false);
     }
   );
+
+  test('rejects a non-HTTP origin on the request\'s own host', () => {
+    expect(production('ftp://ocm.example.com', { host: 'ocm.example.com' })).toBe(false);
+  });
 
   test('allows a listed origin on another host', () => {
     const check = createOriginCheck({
@@ -64,6 +69,10 @@ describe('createOriginCheck', () => {
       expect(development(origin, { host: 'localhost:3001' })).toBe(false);
     }
   );
+
+  test('rejects a non-HTTP origin on localhost in development', () => {
+    expect(development('tauri://localhost', { host: 'localhost:3001' })).toBe(false);
+  });
 
   test.each(['http://localhost:5173', 'http://127.0.0.1:5173'])(
     'rejects %s in production when it is not the request\'s own host',

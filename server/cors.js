@@ -49,13 +49,17 @@ function createOriginCheck({ allowedOrigins, isDev, trustProxy }) {
   };
 }
 
-// The Origin header as a URL, or null when it is malformed, or 'null'
+// The Origin header as an http(s) URL, which always has a host, or null: when
+// it is malformed, 'null', or of another scheme. 'ocm.example.com:3001' parses,
+// but as the scheme 'ocm.example.com:' without a host.
 function parseOrigin(origin) {
+  let url;
   try {
-    return new URL(origin);
+    url = new URL(origin);
   } catch (e) {
     return null;
   }
+  return ['http:', 'https:'].includes(url.protocol) ? url : null;
 }
 
 module.exports = { createOriginCheck };
