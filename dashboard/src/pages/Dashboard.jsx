@@ -64,6 +64,9 @@ export default function Dashboard() {
     queryKey: ['config'],
     queryFn: fetchConfig
   });
+  // Whether the server runs imports: the resync shows only then, as the server would refuse
+  // it otherwise (#51)
+  const importsEnabled = !!configData?.importEnabled;
 
   // Fetch current user
   const { data: userData } = useQuery({
@@ -223,7 +226,7 @@ export default function Dashboard() {
         <div className="m-auto max-w-md text-center space-y-4">
           <h2 className="text-2xl font-bold text-gray-900">{t('noDataYet')}</h2>
           <p className="text-gray-500">{t('noDataYetHint')}</p>
-          {configData?.importEnabled && <ResyncButton t={t} />}
+          {importsEnabled && <ResyncButton t={t} />}
         </div>
       </div>
     );
@@ -301,7 +304,7 @@ export default function Dashboard() {
           </div>
           <div className="flex items-center gap-3">
             {/* Manual resync */}
-            <ResyncButton t={t} />
+            {importsEnabled && <ResyncButton t={t} />}
             {/* Expiration badge */}
             {expiringServices.length > 0 && (
               <div className="flex items-center gap-1 px-3 py-1.5 bg-orange-100 text-orange-700 rounded-lg text-sm font-medium">

@@ -74,7 +74,7 @@ Open http://localhost:3001
 | `RATE_LIMIT_API_WINDOW_MS`  | API rate limit window in ms          | `900000` (15 min) |
 | `RATE_LIMIT_AUTH_MAX`       | Max auth requests per IP per window  | `20`              |
 | `RATE_LIMIT_AUTH_WINDOW_MS` | Auth rate limit window in ms         | `900000` (15 min) |
-| `IMPORT_ENABLED`            | Enable automatic periodic import     | `true`            |
+| `IMPORT_ENABLED`            | Enable the periodic import and the dashboard's resync button | `true` |
 | `IMPORT_INTERVAL`           | Seconds between imports              | `86400` (24h)     |
 | `IMPORT_FLAGS`              | Extra flags for import script        | `--all`           |
 | `ALLOWED_ORIGINS`           | Comma-separated CORS allowed origins, only for other sites (see below) | (empty) |

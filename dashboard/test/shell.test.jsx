@@ -453,7 +453,8 @@ describe('dashboard shell', () => {
     it.each([
       ['more than once an hour', refusal(429, { error: 'Too many requests' }),
         'Synchronisation limitée à une fois par heure. Réessayez plus tard.'],
-      ['with imports disabled on the server', refusal(409, { error: 'syncDisabled' }),
+      // Its config said it ran them when the page loaded: the button shows (#51)
+      ['by a server that no longer runs imports', refusal(409, { error: 'syncDisabled' }),
         'La synchronisation est désactivée sur ce serveur (IMPORT_ENABLED=false).'],
       ['while an import runs', refusal(409, { error: 'syncRunning' }),
         'Une synchronisation est déjà en cours.'],
@@ -468,6 +469,16 @@ describe('dashboard shell', () => {
 
       // Under the button too (#51)
       expect(texts(resync())).toEqual(['⟳', 'Synchroniser', message]);
+    });
+
+    // Rather than a button that could only answer that imports are disabled (#51)
+    it('does not show when the server runs no imports', async () => {
+      await renderDashboard({ ...account, config: { ...account.config, importEnabled: false } });
+
+      expect(screen.queryByRole('button', { name: /Synchroniser/ })).not.toBeInTheDocument();
+      // The rest of the header shows as ever
+      expect(screen.getByText('Tableau de bord de suivi des coûts OVHcloud')).toBeInTheDocument();
+      expect(monthSelector()).toHaveDisplayValue('Septembre 2026');
     });
   });
 

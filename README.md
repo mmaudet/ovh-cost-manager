@@ -398,7 +398,7 @@ Access the dashboard at http://localhost:3001
 | `OCM_PORT`                  | Exposed port                                                     | 3001            |
 | `AUTH_REQUIRED`             | Require auth headers                                             | false           |
 | `DATA_DIR`                  | Directory for database storage (where `ocm-data` is mounted)     | /data           |
-| `IMPORT_ENABLED`            | Enable automatic periodic import                                 | true            |
+| `IMPORT_ENABLED`            | Enable the periodic import and the dashboard's resync button     | true            |
 | `IMPORT_INTERVAL`           | Seconds between imports                                          | 86400 (24h)     |
 | `IMPORT_FLAGS`              | Extra flags for import script                                    | --all           |
 | `TRUST_PROXY`               | Trust X-Forwarded-For headers (⚠️ required for K8s/reverse proxy), X-Forwarded-Host for the CORS check and `ALLOWED_HOSTS`, and X-Forwarded-Proto for the CORS check | false           |
