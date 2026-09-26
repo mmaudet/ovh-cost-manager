@@ -5,8 +5,11 @@ import { api } from './support/api.js';
 import { captureFileDownloads } from './support/downloads.js';
 import {
   cardOf,
-  monthSelector,
+  disclosure,
+  dropdown,
+  headerBadge,
   openTab,
+  optionsOf,
   renderDashboard,
   rowsOf,
   selectLanguage,
@@ -14,6 +17,9 @@ import {
   settle,
   texts,
 } from './support/render.jsx';
+
+// The month selector of the header offers every billed month
+const monthSelector = () => dropdown('Juillet 2026');
 
 // The shell: the header, the KPI cards, the tab bar, the sync warning banner
 // and the footer, around whatever tab is open.
@@ -36,8 +42,7 @@ describe('dashboard shell', () => {
     it('lists the billed months and selects the most recent one', async () => {
       await renderDashboard();
 
-      expect([...monthSelector().options].map((option) => option.textContent))
-        .toEqual(['Septembre 2026', 'Août 2026', 'Juillet 2026']);
+      expect(optionsOf(monthSelector())).toEqual(['Septembre 2026', 'Août 2026', 'Juillet 2026']);
       expect(monthSelector()).toHaveDisplayValue('Septembre 2026');
     });
 
@@ -134,7 +139,8 @@ describe('dashboard shell', () => {
       await selectMonth(user, 'Août 2026');
       await openTab(user, 'Comparaison');
 
-      const monthB = within(screen.getByText('Mois B :').parentElement).getByRole('combobox');
+      // Month B shows the latest month, month A the one before
+      const monthB = dropdown('Juillet 2026', 'Septembre 2026');
       await user.selectOptions(monthB, 'Juillet 2026');
       await settle();
 
@@ -179,8 +185,11 @@ describe('dashboard shell', () => {
 
       expect(screen.queryByText('Export:')).not.toBeInTheDocument();
       // What is left: the language, then the months A and B of the comparison
-      expect(screen.getAllByRole('combobox').map((select) => select.value))
-        .toEqual(['fr', '2026-08', '2026-09']);
+      const dropdowns = screen.getAllByRole('combobox');
+      expect(dropdowns).toHaveLength(3);
+      expect(dropdowns[0]).toHaveDisplayValue('FR');
+      expect(dropdowns[1]).toHaveDisplayValue('Août 2026');
+      expect(dropdowns[2]).toHaveDisplayValue('Septembre 2026');
     });
   });
 
@@ -215,8 +224,7 @@ describe('dashboard shell', () => {
   });
 
   describe('footer', () => {
-    const importHistory = () =>
-      within(screen.getByText('Historique des imports').closest('details')).getByRole('table');
+    const importHistory = () => within(disclosure('Historique des imports')).getByRole('table');
 
     it('shows the last import, and the import history on demand', async () => {
       const { user } = await renderDashboard();
@@ -432,8 +440,7 @@ describe('dashboard shell', () => {
       expect(logout).toHaveAttribute('href', '/auth/logout');
       // The "logout" translation key is missing (#34)
       expect(logout).toHaveAttribute('title', 'logout');
-      expect(texts(screen.getByText('Expirations proches', { selector: 'span' }).parentElement))
-        .toEqual(['2', 'Expirations proches']);
+      expect(texts(headerBadge('Expirations proches'))).toEqual(['2', 'Expirations proches']);
     });
   });
 

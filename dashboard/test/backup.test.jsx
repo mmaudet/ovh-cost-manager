@@ -3,6 +3,7 @@ import { screen, within } from '@testing-library/react';
 import { api } from './support/api.js';
 import {
   cardOf,
+  cardRowOf,
   openTab,
   renderDashboard,
   rowsOf,
@@ -11,7 +12,7 @@ import {
   texts,
 } from './support/render.jsx';
 
-const backupCards = (firstLabel = 'Coût total backup') => cardOf(firstLabel).parentElement;
+const backupCards = (firstLabel = 'Coût total backup') => cardRowOf(firstLabel);
 const resourcesPanel = (heading = 'Ressources Backup') => cardOf(heading);
 
 describe('Backup tab', () => {

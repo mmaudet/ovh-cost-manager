@@ -1,3 +1,10 @@
+// Renders the dashboard page, and finds what the user sees on it.
+//
+// The lookups of this file (cards, dropdowns, badges, backdrops...) are the
+// tests' only coupling to the markup: the page may not change for its tests,
+// so it has no test ids. When the markup changes, as it will with the common
+// panel planned after the split, the tests are fixed here, in one place.
+
 import { StrictMode } from 'react';
 import { act, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -66,21 +73,33 @@ export async function openTab(user, name) {
   await settle();
 }
 
-// The month selector of the header: its options are months ('2026-09')
-export function monthSelector() {
-  return screen.getAllByRole('combobox').find((select) =>
-    [...select.options].some((option) => /^\d{4}-\d{2}$/.test(option.value)));
+// The labels of the options of a dropdown
+export function optionsOf(select) {
+  return within(select).getAllByRole('option').map((option) => option.textContent);
+}
+
+// The dropdown that offers an option: dropdown('Juillet 2026') is the month
+// selector, dropdown('EN') the language one. When several offer it, like the
+// months A and B of the Compare tab, the option it shows tells them apart.
+export function dropdown(offering, showing) {
+  const found = screen.getAllByRole('combobox').filter((select) =>
+    optionsOf(select).includes(offering)
+    && (showing === undefined || select.selectedOptions[0]?.textContent === showing));
+  if (found.length !== 1) {
+    const shown = showing === undefined ? '' : ` and show "${showing}"`;
+    throw new Error(`${found.length} dropdowns offer "${offering}"${shown}`);
+  }
+  return found[0];
 }
 
 export async function selectMonth(user, label) {
-  await user.selectOptions(monthSelector(), label);
+  // The month selector offers every month
+  await user.selectOptions(dropdown(label), label);
   await settle();
 }
 
 export async function selectLanguage(user, code) {
-  const selector = screen.getAllByRole('combobox').find((select) =>
-    [...select.options].some((option) => option.value === 'en'));
-  await user.selectOptions(selector, code);
+  await user.selectOptions(dropdown('EN'), code);
   await settle();
 }
 
@@ -104,6 +123,12 @@ export function texts(element) {
   return pieces.map(normalize).filter(Boolean);
 }
 
+// The rows of a table, header and footer included, as lists of cell texts
+export function rowsOf(table) {
+  return [...table.querySelectorAll('tr')].map((row) =>
+    [...row.cells].map((cell) => normalize(cell.textContent)));
+}
+
 // The card or panel that shows a label, or holds an element: the page draws
 // them as white blocks with rounded corners.
 export function cardOf(labelOrElement) {
@@ -113,8 +138,27 @@ export function cardOf(labelOrElement) {
   return element.closest('.rounded-xl');
 }
 
-// The rows of a table, header and footer included, as lists of cell texts
-export function rowsOf(table) {
-  return [...table.querySelectorAll('tr')].map((row) =>
-    [...row.cells].map((cell) => normalize(cell.textContent)));
+// The row of cards that holds the card showing a label
+export function cardRowOf(label) {
+  return cardOf(label).parentElement;
+}
+
+// A badge of the header: a count and its label
+export function headerBadge(label) {
+  return screen.getByText(label, { selector: 'span' }).parentElement;
+}
+
+// What a summary line shows or hides, like the import history
+export function disclosure(summary) {
+  return screen.getByText(summary).closest('details');
+}
+
+// The dimmed backdrop around a dialog, which closes it on a click
+export function backdropOf(dialog) {
+  return dialog.parentElement;
+}
+
+// The coloured dot of a chart legend item
+export function swatchOf(legendItem) {
+  return legendItem.querySelector('span');
 }

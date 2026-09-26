@@ -4,7 +4,9 @@ import { account } from './fixtures/account.js';
 import { api } from './support/api.js';
 import { captureFileDownloads } from './support/downloads.js';
 import {
+  backdropOf,
   cardOf,
+  cardRowOf,
   openTab,
   renderDashboard,
   rowsOf,
@@ -14,7 +16,7 @@ import {
 } from './support/render.jsx';
 
 const periodLine = (label = '12 mois glissants') => screen.getByText(label);
-const familyCards = (firstLabel = 'Domaines') => cardOf(firstLabel).parentElement;
+const familyCards = (firstLabel = 'Domaines') => cardRowOf(firstLabel);
 // The panel of a Web Cloud family, found by its heading: "Domaines (2)"
 const familyPanel = (family) =>
   cardOf(screen.getByRole('heading', { name: new RegExp(`^${family} \\(`) }));
@@ -165,8 +167,7 @@ describe('Web Cloud tab', () => {
       await openTab(user, 'Web Cloud');
       const dialog = await showAll(user, 'Domaines');
 
-      // The backdrop, around the dialog
-      await user.click(dialog.parentElement);
+      await user.click(backdropOf(dialog));
 
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     });

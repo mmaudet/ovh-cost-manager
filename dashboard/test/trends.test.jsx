@@ -5,23 +5,23 @@ import { sinceJuly2025 } from './fixtures/trends.js';
 import { api } from './support/api.js';
 import {
   cardOf,
+  dropdown,
   openTab,
+  optionsOf,
   renderDashboard,
   selectLanguage,
   settle,
+  swatchOf,
   texts,
 } from './support/render.jsx';
 
-// The period selector sits next to the tab bar
-const periodSelector = (label = 'Période:') =>
-  within(screen.getByText(label).parentElement).getByRole('combobox');
-const periodOptions = () => [...periodSelector().options].map((option) => option.textContent);
+// The period selector, next to the tab bar, always offers the shortest period
+const periodSelector = (shortest = '3 mois') => dropdown(shortest);
 // The legend of the cost trend by resource type: one button per resource type
 const legendItem = (resourceType) =>
   within(cardOf('Évolution par catégorie')).getByRole('button', { name: resourceType });
-// The coloured dot of a legend item
-const swatch = (item) => item.querySelector('span');
-const hidden = { backgroundColor: '#d1d5db' };
+// The grey that the dot of a hidden resource type turns to
+const hiddenSwatch = { backgroundColor: '#d1d5db' };
 
 describe('Trends tab', () => {
   it('loads the trends when the page opens, and the GPU trend when the tab opens', async () => {
@@ -55,7 +55,7 @@ describe('Trends tab', () => {
       await openTab(user, 'Tendances');
 
       // Three billed months: 3 months cover them all
-      expect(periodOptions()).toEqual(['3 mois']);
+      expect(optionsOf(periodSelector())).toEqual(['3 mois']);
       expect(periodSelector()).toHaveDisplayValue('3 mois');
       expect(screen.getByRole('heading', { name: 'Évolution des coûts (total) sur 3 mois' }))
         .toBeInTheDocument();
@@ -67,7 +67,7 @@ describe('Trends tab', () => {
       await openTab(user, 'Tendances');
 
       // 15 months of history: 2 years is the first period that covers them
-      expect(periodOptions()).toEqual(['3 mois', '6 mois', '1 an', '2 ans']);
+      expect(optionsOf(periodSelector())).toEqual(['3 mois', '6 mois', '1 an', '2 ans']);
       expect(periodSelector()).toHaveDisplayValue('6 mois');
       expect(screen.getByRole('heading', { name: 'Évolution des coûts (total) sur 6 mois' }))
         .toBeInTheDocument();
@@ -119,16 +119,16 @@ describe('Trends tab', () => {
     it('greys out a resource type the user hides, until a second click', async () => {
       const { user } = await renderDashboard();
       await openTab(user, 'Tendances');
-      expect(swatch(legendItem('Dedicated Servers'))).toHaveStyle({ backgroundColor: '#ef4444' });
+      expect(swatchOf(legendItem('Dedicated Servers'))).toHaveStyle({ backgroundColor: '#ef4444' });
 
       await user.click(legendItem('Dedicated Servers'));
 
-      expect(swatch(legendItem('Dedicated Servers'))).toHaveStyle(hidden);
-      expect(swatch(legendItem('Public Cloud'))).toHaveStyle({ backgroundColor: '#3b82f6' });
+      expect(swatchOf(legendItem('Dedicated Servers'))).toHaveStyle(hiddenSwatch);
+      expect(swatchOf(legendItem('Public Cloud'))).toHaveStyle({ backgroundColor: '#3b82f6' });
 
       await user.click(legendItem('Dedicated Servers'));
 
-      expect(swatch(legendItem('Dedicated Servers'))).toHaveStyle({ backgroundColor: '#ef4444' });
+      expect(swatchOf(legendItem('Dedicated Servers'))).toHaveStyle({ backgroundColor: '#ef4444' });
     });
 
     it('keeps the period and the hidden resource types when the user comes back', async () => {
@@ -142,8 +142,8 @@ describe('Trends tab', () => {
       await openTab(user, 'Tendances');
 
       expect(periodSelector()).toHaveDisplayValue('1 an');
-      expect(swatch(legendItem('Dedicated Servers'))).toHaveStyle(hidden);
-      expect(swatch(legendItem('Public Cloud'))).toHaveStyle({ backgroundColor: '#3b82f6' });
+      expect(swatchOf(legendItem('Dedicated Servers'))).toHaveStyle(hiddenSwatch);
+      expect(swatchOf(legendItem('Public Cloud'))).toHaveStyle({ backgroundColor: '#3b82f6' });
     });
   });
 
@@ -196,7 +196,7 @@ describe('Trends tab', () => {
 
     await openTab(user, 'Trends');
 
-    expect(periodSelector('Period:')).toHaveDisplayValue('3 months');
+    expect(periodSelector('3 months')).toHaveDisplayValue('3 months');
     expect(screen.getByRole('heading', { name: 'Total cost evolution over 3 months' }))
       .toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Cost evolution by category' }))
