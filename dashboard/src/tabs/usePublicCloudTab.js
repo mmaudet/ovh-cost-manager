@@ -18,7 +18,7 @@ const usePublicCloudTab = ({ selectedMonth, activeTab, selectedProject }) => {
   const [showAllSnapshots, setShowAllSnapshots] = useState(false);
   const [showAllSavingsPlans, setShowAllSavingsPlans] = useState(false);
 
-  // Enriched projects for inventory tab
+  // Enriched projects for the Public Cloud tab
   const { data: projectsEnriched = [] } = useQuery({
     queryKey: ['projectsEnriched'],
     queryFn: fetchProjectsEnriched,

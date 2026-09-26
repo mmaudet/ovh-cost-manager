@@ -402,7 +402,7 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Consumption KPI Cards */}
+        {/* Consumption, Forecast and Resource Count KPI Cards */}
         {(consumptionCurrent || byResourceType.length > 0) && (
           <div className="grid grid-cols-3 gap-4">
             {consumptionCurrent && (
