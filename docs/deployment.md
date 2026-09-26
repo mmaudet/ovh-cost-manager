@@ -77,7 +77,15 @@ Open http://localhost:3001
 | `IMPORT_ENABLED`            | Enable automatic periodic import     | `true`            |
 | `IMPORT_INTERVAL`           | Seconds between imports              | `86400` (24h)     |
 | `IMPORT_FLAGS`              | Extra flags for import script        | `--all`           |
-| `ALLOWED_ORIGINS`           | Comma-separated CORS allowed origins, needed only for sites other than the dashboard: its own origin is always accepted, matched against `Host`, or against `X-Forwarded-Host` with `TRUST_PROXY=true` | (empty)           |
+| `ALLOWED_ORIGINS`           | Comma-separated CORS allowed origins, only for other sites (see below) | (empty) |
+
+**The dashboard's own origin** is always accepted, so `ALLOWED_ORIGINS` only lists the other sites that call the API. The server compares the origin's host, without case or default port, with the request's `Host`, and with `TRUST_PROXY=true` with the first `X-Forwarded-Host` too. Limits:
+
+- A proxy that rewrites `Host` without sending `X-Forwarded-Host` (nginx sends none by default), or that sends it without the public port, still needs the dashboard's URL in `ALLOWED_ORIGINS`, or `proxy_set_header X-Forwarded-Host $http_host;` with `TRUST_PROXY=true`.
+- The scheme is only compared when `TRUST_PROXY=true` makes it known, through `X-Forwarded-Proto`. Otherwise an `http://` page passes for an `https://` dashboard on the same host, so that the dashboard does not go blank behind a TLS-terminating proxy.
+
+The SSO stack of `docker-compose.sso.yml` needs no `ALLOWED_ORIGINS`: its LemonLDAP-NG relay passes `Host` with its default port (`ocm.example.com:80`), a port the comparison ignores, and sends neither `X-Forwarded-Host` nor `X-Forwarded-Proto`, so hosts alone are compared, with or without `TRUST_PROXY`.
+
 ### Customization
 
 Create a `.env` file to override defaults:
