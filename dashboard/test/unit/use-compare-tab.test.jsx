@@ -224,15 +224,16 @@ describe('useCompareTab', () => {
   it('keeps months A and B and the sort order when another tab opens', async () => {
     const { result, rerender, queryClient } = await renderTabHook(useCompareTab, onCompare);
     act(() => result.current.setCompareMonthA(july));
+    act(() => result.current.setCompareMonthB(august));
     act(() => result.current.handleCompareSort('diff'));
     await settle(queryClient);
 
     await rerender({ months, selectedMonth: september, activeTab: 'overview' });
 
-    expect(compared(result.current)).toEqual(['2026-07', '2026-09']);
+    expect(compared(result.current)).toEqual(['2026-07', '2026-08']);
     expect(result.current.compareSort).toEqual({ column: 'diff', direction: 'desc' });
     // The answers stay, and the KPI of the shell keeps reading month B (#50)
     expect(result.current.compareDataA.total).toBe(980);
-    expect(result.current.compareDataB.total).toBe(1250.4);
+    expect(result.current.compareDataB.total).toBe(1042);
   });
 });
