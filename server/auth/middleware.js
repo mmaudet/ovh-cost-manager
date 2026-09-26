@@ -4,6 +4,11 @@
 const sessionStore = require('./session-store');
 const { unsignValue } = require('./session-cookie');
 
+// The paths as Express routes them, without case and with or without a
+// trailing slash: the API, /api itself included, and its health check
+const API_PATH = /^\/api(\/|$)/i;
+const HEALTH_PATH = /^\/api\/health\/?$/i;
+
 function createAuthMiddleware(config) {
   const cookieName = config.auth?.session?.name || 'ocm.sid';
   const secret = config.auth?.session?.secret;
@@ -34,14 +39,15 @@ function createAuthMiddleware(config) {
     req.user = null;
 
     // Public paths - no auth required
-    if (req.path === '/api/health' ||
+    if (HEALTH_PATH.test(req.path) ||
         req.path.startsWith('/auth/') ||
         req.path === '/logout/backchannel') {
       return next();
     }
 
-    // API routes - return 401
-    if (req.path.startsWith('/api/')) {
+    // API routes - return 401, which the dashboard turns into a sign-in,
+    // whatever the case of the path
+    if (API_PATH.test(req.path)) {
       return res.status(401).json({
         error: 'Authentication required',
         loginUrl: '/auth/login'
