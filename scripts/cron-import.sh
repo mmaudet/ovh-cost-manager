@@ -3,8 +3,8 @@
 #
 # Runs a differential import every IMPORT_INTERVAL seconds (default: 86400 = 24h).
 # On first run, if the database has no bills, performs a full import instead.
-# A full import clears the database, so it never runs when the bills cannot be
-# counted: a differential import runs instead.
+# A full import clears the imported data, so it never runs when the bills
+# cannot be counted: a differential import runs instead.
 #
 # Environment variables:
 #   IMPORT_INTERVAL  — Seconds between imports (default: 86400)
@@ -39,8 +39,10 @@ count_bills() {
 }
 
 # The import at start: full on a database without bills, none when it has
-# some. When the count fails, differential: it deletes nothing, and on an
-# empty database it imports every bill all the same.
+# some. When the count fails, differential: it does not clear the database,
+# and on an empty one it imports every bill all the same. With --all, it
+# still refreshes the current month's consumption and the cloud tables, as
+# every periodic run does.
 first_import() {
   if ! BILL_COUNT=$(count_bills); then
     log "Could not count the bills in the database — running differential import"
