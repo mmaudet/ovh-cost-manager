@@ -9,11 +9,12 @@ const { spawn } = require('child_process');
 
 // Import database module from data workspace
 const db = require('../data/db');
+const { monthBounds } = require('../data/months');
 
 // Import auth module
 const auth = require('./auth');
 const { createOriginCheck } = require('./cors');
-const { monthBounds, trendWindowFromQuery } = require('./months');
+const { trendWindowFromQuery } = require('./months');
 
 // Load configuration
 const CONFIG_PATHS = [

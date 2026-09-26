@@ -9,12 +9,12 @@
 const path = require('path');
 const { execFileSync } = require('child_process');
 const { trendWindowFromQuery } = require('../server/months');
-const { monthsOfWindow } = require('../data/months');
+const { monthsOfWindow, trendWindow } = require('../data/months');
 
-// Calls a function of server/months.js in a Node process of its own, run in a
+// Calls a function of data/months.js in a Node process of its own, run in a
 // timezone
 function callInTimezone(timezone, name, ...args) {
-  const monthsModule = path.join(__dirname, '..', 'server', 'months.js');
+  const monthsModule = path.join(__dirname, '..', 'data', 'months.js');
   const script = `process.stdout.write(JSON.stringify(require(${JSON.stringify(monthsModule)})`
     + `.${name}(...${JSON.stringify(args)})))`;
   const output = execFileSync(process.execPath, ['-e', script], {
@@ -181,5 +181,21 @@ describe('monthsOfWindow', () => {
   // As for an account with no bill, where trendWindowFromQuery() gives no window
   test('lists no months without a window', () => {
     expect(monthsOfWindow(null, null)).toEqual([]);
+  });
+
+  // trendWindow() counts the months of a trend the same way
+  test.each([
+    ['2026-09', 1],
+    ['2026-09', 3],
+    ['2026-01', 12],
+    ['2025-12', 12],
+    ['2024-02', 3],
+    ['2026-09', 240],
+  ])('lists the months of a trend window that ends on %s, %i of them', (end, months) => {
+    const { from, to } = trendWindow(end, months);
+    const listed = monthsOfWindow(from, to);
+
+    expect(listed).toHaveLength(months);
+    expect(listed[listed.length - 1]).toBe(end);
   });
 });

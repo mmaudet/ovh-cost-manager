@@ -8,7 +8,7 @@
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const { trendWindow } = require('../server/months');
+const { trendWindow } = require('../data/months');
 
 describe('monthly trend queries', () => {
   let db;
