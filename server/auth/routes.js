@@ -6,7 +6,7 @@ const { randomState, randomNonce } = require('openid-client');
 const oidcClient = require('./oidc-client');
 const sessionStore = require('./session-store');
 const { safeReturnTo } = require('./return-to');
-const { sessionCookieOptions } = require('./session-cookie');
+const { sessionCookieOptions, signSessionId, unsignSessionId } = require('./session-cookie');
 
 const router = express.Router();
 
@@ -91,8 +91,8 @@ function setup(config) {
         authConfig.session.maxAge
       );
 
-      // Set cookie: Secure over HTTPS, unless COOKIE_SECURE says otherwise
-      res.cookie(authConfig.session.name, sid, {
+      // Set cookie, signed: Secure over HTTPS, unless COOKIE_SECURE says otherwise
+      res.cookie(authConfig.session.name, signSessionId(sid, authConfig.session.secret), {
         ...sessionCookieOptions(req, authConfig),
         maxAge: authConfig.session.maxAge,
       });
@@ -107,7 +107,7 @@ function setup(config) {
 
   // GET /auth/logout - Front-channel logout
   router.get('/logout', (req, res) => {
-    const sid = req.cookies[authConfig.session.name];
+    const sid = unsignSessionId(req.cookies[authConfig.session.name], authConfig.session.secret);
 
     // Delete local session and get id_token
     let idToken = null;

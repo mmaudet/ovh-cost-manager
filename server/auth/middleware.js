@@ -2,9 +2,11 @@
  * Authentication Middleware
  */
 const sessionStore = require('./session-store');
+const { unsignSessionId } = require('./session-cookie');
 
 function createAuthMiddleware(config) {
   const cookieName = config.auth?.session?.name || 'ocm.sid';
+  const secret = config.auth?.session?.secret;
 
   return (req, res, next) => {
     // Skip auth if not enabled
@@ -13,8 +15,8 @@ function createAuthMiddleware(config) {
       return next();
     }
 
-    // Get session from cookie
-    const sid = req.cookies?.[cookieName];
+    // Get session from cookie, when its signature matches
+    const sid = unsignSessionId(req.cookies?.[cookieName], secret);
 
     if (sid) {
       const session = sessionStore.get(sid);
