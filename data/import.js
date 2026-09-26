@@ -74,11 +74,17 @@ function chunkArray(array, size) {
   return chunks;
 }
 
+// The HTTP status of a failed call: the ovh client puts it in `error`, other clients in
+// `statusCode`. Undefined when the call rejected with anything else, even with nothing.
+function errorStatus(err) {
+  return err?.statusCode ?? err?.error;
+}
+
 // Why a call failed, whatever it rejected with: the ovh client rejects with a plain object,
 // { error: HTTP status, message }, other code with an Error or a string
 function describeError(err) {
   if (err === null || typeof err !== 'object') return String(err);
-  const reason = [err.statusCode ?? err.error, err.message]
+  const reason = [errorStatus(err), err.message]
     .filter(part => part !== undefined && part !== null && part !== '')
     .join(' ');
   return reason || util.inspect(err, { breakLength: Infinity });
@@ -90,8 +96,7 @@ async function withRetry(fn, retries = MAX_RETRIES, backoff = INITIAL_BACKOFF_MS
     try {
       return await fn();
     } catch (err) {
-      // The ovh client puts the HTTP status in `error`, other clients in `statusCode`
-      const status = err.statusCode ?? err.error;
+      const status = errorStatus(err);
       const isRateLimited = status === 429;
       const isRetryable = isRateLimited || status >= 500;
       if (attempt < retries && isRetryable) {

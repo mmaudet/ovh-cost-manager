@@ -67,7 +67,8 @@ describe('an item that the import fails to fetch', () => {
   });
 
   // The ovh client leaves the message out when OVH's answer has none, and puts a string in
-  // place of the status when the answer is not JSON. Other code throws an Error, or a string.
+  // place of the status when the answer is not JSON. Other code throws an Error, or a string,
+  // or rejects with nothing at all.
   test.each([
     ['a status without a message', { error: 403, message: null }, '403'],
     ['a string in place of the status', { error: '[OVH] Unable to parse JSON reponse' },
@@ -76,6 +77,8 @@ describe('an item that the import fails to fetch', () => {
     ['a string', 'Unable to reach the API', 'Unable to reach the API'],
     ['an object without a status or a message', { code: 'ECONNRESET' },
       '{ code: \'ECONNRESET\' }'],
+    ['undefined', undefined, 'undefined'],
+    ['null', null, 'null'],
   ])('is logged with a readable reason when the error is %s', async (_, error, reason) => {
     routes.set('/me/bill/FR1/details/D2', () => Promise.reject(error));
 
