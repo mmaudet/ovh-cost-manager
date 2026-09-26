@@ -132,28 +132,32 @@ function setup(config) {
 
 // POST /logout/backchannel - Back-channel logout (called by OP)
 async function backChannelLogout(req, res, config) {
+  // No response of this endpoint may be cached (Back-Channel Logout 1.0, 2.8)
+  res.set('Cache-Control', 'no-store');
+
   // Until the provider is discovered, as awaitDiscovery does for /api and /auth
   const oidcConfig = oidcClient.getConfig();
   if (!oidcConfig) {
     return res.status(503).send('Authentication provider unavailable, try again later');
   }
 
+  const logoutToken = req.body?.logout_token;
+  if (typeof logoutToken !== 'string' || logoutToken === '') {
+    return res.status(400).send('logout_token required');
+  }
+
+  // Signature against the provider's JWKS, issuer, audience, iat, then the
+  // back-channel logout event, a sid or a sub, and no nonce: see
+  // oidc-client.js and logout-token.js
+  let claims;
   try {
-    const { logout_token } = req.body;
+    claims = await oidcClient.verifyLogoutToken(logoutToken);
+  } catch (err) {
+    console.warn('Back-channel logout: invalid logout token:', err.message);
+    return res.status(400).send('Invalid logout token');
+  }
 
-    if (!logout_token) {
-      return res.status(400).send('logout_token required');
-    }
-
-    // Verify JWT signature, expiration, issuer, and audience using openid-client
-    // This validates:
-    // - Signature against OIDC provider's JWKS
-    // - Token expiration (exp claim)
-    // - Issuer matches configured OIDC provider
-    // - Audience contains our client_id
-    // - Required claims (sub or sid) are present per RFC 7523
-    const claims = await oidcClient.verifyLogoutToken(logout_token);
-
+  try {
     let deleted = 0;
 
     // Prefer sid-based logout (more specific - single session)
@@ -172,7 +176,7 @@ async function backChannelLogout(req, res, config) {
     res.status(200).send('OK');
   } catch (err) {
     console.error('Back-channel logout error:', err.message);
-    res.status(400).send('Invalid logout token');
+    res.status(500).send('Logout failed');
   }
 }
 

@@ -7,21 +7,26 @@ const {
   authorizationCodeGrant,
   fetchUserInfo,
   buildEndSessionUrl,
-  allowInsecureRequests,
-  validateJwtLogoutToken
+  allowInsecureRequests
 } = require('openid-client');
+// openid-client v6 validates no logout token: jose, the JOSE library it is
+// built on, verifies them
+const { createRemoteJWKSet, jwtVerify } = require('jose');
+const { logoutTokenVerifyOptions, checkLogoutTokenClaims } = require('./logout-token');
 
 let config = null;
 let authConfig = null;
+// The provider's signing keys, fetched from its jwks_uri when a token needs them
+let jwks = null;
 
 async function initialize(appConfig) {
   authConfig = appConfig.auth;
-  const { provider, baseUrl } = authConfig;
+  const { provider } = authConfig;
 
   // Discover OIDC configuration from issuer
   const issuerUrl = new URL(provider.issuer);
 
-  config = await discovery(
+  const discovered = await discovery(
     issuerUrl,
     provider.clientId,
     provider.clientSecret,
@@ -30,6 +35,11 @@ async function initialize(appConfig) {
       execute: [allowInsecureRequests]
     }
   );
+
+  const { jwks_uri: jwksUri } = discovered.serverMetadata();
+  jwks = jwksUri ? createRemoteJWKSet(new URL(jwksUri)) : null;
+  // Set last: a configuration means the provider is discovered
+  config = discovered;
 
   console.log('OIDC: Discovered issuer %s', config.serverMetadata().issuer);
 
@@ -81,25 +91,31 @@ function getServerMetadata() {
 }
 
 /**
- * Verify and decode a back-channel logout token
+ * Verify a back-channel logout token (OpenID Connect Back-Channel Logout 1.0)
  * @param {string} logoutToken - The JWT logout token from the OP
- * @returns {Promise<object>} - The verified token claims
+ * @returns {Promise<{ sid: (string|undefined), sub: (string|undefined) }>} whose
+ *   sessions end
  * @throws {Error} - If token validation fails
  */
 async function verifyLogoutToken(logoutToken) {
   if (!config) {
     throw new Error('OIDC not initialized');
   }
+  if (!jwks) {
+    throw new Error('the provider publishes no jwks_uri');
+  }
 
-  // validateJwtLogoutToken verifies:
-  // - JWT signature against OIDC provider's JWKS
-  // - Token expiration (exp claim)
-  // - Issuer (iss claim) matches the OIDC provider
-  // - Audience (aud claim) contains our client_id
-  // - Required claims (sub or sid) are present
-  const claims = await validateJwtLogoutToken(config, logoutToken);
+  // jwtVerify checks the signature against the provider's JWKS, with an
+  // algorithm of its ID tokens, the issuer, the audience (our client id), iat
+  // (5 minutes old at most) and exp when present; then the claims of a logout
+  // token: the back-channel logout event, a sid or a sub, and no nonce
+  const { payload } = await jwtVerify(
+    logoutToken,
+    jwks,
+    logoutTokenVerifyOptions(config.serverMetadata(), authConfig.provider.clientId)
+  );
 
-  return claims;
+  return checkLogoutTokenClaims(payload);
 }
 
 module.exports = {

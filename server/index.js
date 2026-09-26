@@ -264,10 +264,12 @@ async function initializeServer() {
       : [auth.setupRoutes(authConfig)];
     app.use('/auth', ...authMiddleware);
 
-    // Back-channel logout endpoint
-    app.post('/logout/backchannel', express.urlencoded({ extended: false }), (req, res) => {
-      auth.backChannelLogout(req, res, authConfig);
-    });
+    // Back-channel logout endpoint, unless auth.backChannelLogout is false
+    if (authConfig.auth.backChannelLogout) {
+      app.post('/logout/backchannel', express.urlencoded({ extended: false }), (req, res) => {
+        auth.backChannelLogout(req, res, authConfig);
+      });
+    }
 
     // OIDC authentication middleware
     app.use(auth.createAuthMiddleware(authConfig));
