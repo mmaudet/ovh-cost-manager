@@ -52,7 +52,6 @@ services:
       # Database lives in a dedicated dir mounted as a volume, kept separate
       # from the application code under /app/data (which ships in the image).
       - DATA_DIR=/data
-      - TRUST_PROXY=true
       # OIDC Configuration
       - OIDC_ENABLED=true
       - OIDC_ISSUER=http://auth.${SSO_DOMAIN:-localhost}
