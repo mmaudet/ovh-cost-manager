@@ -352,6 +352,26 @@ describe('Compare tab', () => {
       ]);
     });
 
+    it('show a variation of -100% from the current month to any past one (#54)', async () => {
+      const { user } = await renderDashboard();
+      await openTab(user, 'Comparaison');
+      await pickMonth(user, 'Septembre 2026', 'Juillet 2026');
+      await pickMonth(user, 'Août 2026', 'Septembre 2026');
+
+      await openComparison(user, PRODUCTION_CONSUMPTION);
+
+      // Month A is the current month, the only one whose consumption the
+      // import keeps (#54): every cloud resource kind drops to nothing
+      expect(rowsOf(comparisonTable(PRODUCTION_CONSUMPTION))).toEqual([
+        ['Produit/Type', 'Septembre 2026', 'Juillet 2026', 'Variation'],
+        ['instance', '234,25€', '0,00€', '-100.0%'],
+        ['instance_monthly', '64,00€', '0,00€', '-100.0%'],
+        ['volume', '7,50€', '0,00€', '-100.0%'],
+        ['snapshot', '3,25€', '0,00€', '-100.0%'],
+        ['objectStorage', '41,00€', '0,00€', '-100.0%'],
+      ]);
+    });
+
     it('say when a project consumed nothing in months A and B', async () => {
       const { user } = await renderDashboard();
       await openTab(user, 'Comparaison');
