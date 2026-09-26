@@ -8,8 +8,8 @@ const crypto = require('crypto');
 const {
   cookieSecure,
   sessionCookieOptions,
-  signSessionId,
-  unsignSessionId,
+  signValue,
+  unsignValue,
   sessionSecretWarning,
 } = require('../server/auth/session-cookie');
 
@@ -79,7 +79,7 @@ describe('sessionCookieOptions', () => {
 
 // The cookie holds the session id signed with SESSION_SECRET: a session id
 // alone, as the sessions table stores it, is not a valid cookie
-describe('signSessionId and unsignSessionId', () => {
+describe('signValue and unsignValue, on the session id', () => {
   const SECRET = '0123456789abcdef0123456789abcdef';
   const SID = 'c9b5b670-72c2-4b5d-a30b-c623b2d0a777';
   // HMAC-SHA256 of SID under SECRET, in base64url, computed apart with:
@@ -88,19 +88,19 @@ describe('signSessionId and unsignSessionId', () => {
   const COOKIE = `${SID}.${SIGNATURE}`;
 
   test('appends the HMAC-SHA256 of the session id to it', () => {
-    expect(signSessionId(SID, SECRET)).toBe(COOKIE);
+    expect(signValue(SID, SECRET)).toBe(COOKIE);
   });
 
   test('reads the session id back', () => {
-    expect(unsignSessionId(COOKIE, SECRET)).toBe(SID);
+    expect(unsignValue(COOKIE, SECRET)).toBe(SID);
   });
 
   test('refuses a bare session id, as the cookies of 2.4.0 hold', () => {
-    expect(unsignSessionId(SID, SECRET)).toBeNull();
+    expect(unsignValue(SID, SECRET)).toBeNull();
   });
 
   test('refuses the cookie under another secret', () => {
-    expect(unsignSessionId(COOKIE, 'another-secret-another-secret-12')).toBeNull();
+    expect(unsignValue(COOKIE, 'another-secret-another-secret-12')).toBeNull();
   });
 
   test.each([
@@ -112,20 +112,20 @@ describe('signSessionId and unsignSessionId', () => {
     ['no session id', `.${SIGNATURE}`],
     ['the signature alone', SIGNATURE],
   ])('refuses %s', (label, value) => {
-    expect(unsignSessionId(value, SECRET)).toBeNull();
+    expect(unsignValue(value, SECRET)).toBeNull();
   });
 
   test.each([undefined, null, '', 42, [COOKIE]])(
     'refuses %p, which is no cookie value',
     (value) => {
-      expect(unsignSessionId(value, SECRET)).toBeNull();
+      expect(unsignValue(value, SECRET)).toBeNull();
     }
   );
 
   test('compares the signatures in constant time', () => {
     const timingSafeEqual = jest.spyOn(crypto, 'timingSafeEqual');
     try {
-      unsignSessionId(`${SID}.${SIGNATURE.slice(0, -1)}A`, SECRET);
+      unsignValue(`${SID}.${SIGNATURE.slice(0, -1)}A`, SECRET);
       expect(timingSafeEqual).toHaveBeenCalledTimes(1);
     } finally {
       timingSafeEqual.mockRestore();

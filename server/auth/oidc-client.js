@@ -13,6 +13,7 @@ const {
 // built on, verifies them
 const { createRemoteJWKSet, jwtVerify } = require('jose');
 const { logoutTokenVerifyOptions, checkLogoutTokenClaims } = require('./logout-token');
+const { authorizationParameters } = require('./provider');
 
 let config = null;
 let authConfig = null;
@@ -46,19 +47,21 @@ async function initialize(appConfig) {
   return config;
 }
 
-function buildAuthUrl(state, nonce) {
+function buildAuthUrl(state, nonce, codeChallenge) {
   const redirectUri = `${authConfig.baseUrl}/auth/callback`;
 
-  return buildAuthorizationUrl(config, {
-    redirect_uri: redirectUri,
-    scope: authConfig.provider.scopes.join(' '),
+  return buildAuthorizationUrl(config, authorizationParameters({
+    redirectUri,
+    scopes: authConfig.provider.scopes,
     state,
-    nonce
-  });
+    nonce,
+    codeChallenge,
+  }));
 }
 
-async function handleCallback(currentUrl, expectedState, expectedNonce) {
+async function handleCallback(currentUrl, expectedState, expectedNonce, pkceCodeVerifier) {
   const tokens = await authorizationCodeGrant(config, currentUrl, {
+    pkceCodeVerifier,
     expectedState,
     expectedNonce,
     idTokenExpected: true

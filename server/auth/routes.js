@@ -2,51 +2,58 @@
  * OIDC Authentication Routes (openid-client v6.x)
  */
 const express = require('express');
-const { randomState, randomNonce } = require('openid-client');
+const {
+  randomState,
+  randomNonce,
+  randomPKCECodeVerifier,
+  calculatePKCECodeChallenge,
+} = require('openid-client');
 const oidcClient = require('./oidc-client');
 const sessionStore = require('./session-store');
 const { safeReturnTo } = require('./return-to');
-const { sessionCookieOptions, signSessionId, unsignSessionId } = require('./session-cookie');
+const { sessionCookieOptions, signValue, unsignValue } = require('./session-cookie');
+const {
+  LOGIN_COOKIE,
+  LOGIN_MAX_AGE_MS,
+  encodeLoginState,
+  readLoginState,
+  loginCookieOptions,
+} = require('./login-state');
 
 const router = express.Router();
-
-// Temporary state storage (in-memory, cleaned up after 10 min)
-// Max 1000 pending auth requests to prevent memory exhaustion
-const pendingAuth = new Map();
-const PENDING_AUTH_MAX_SIZE = 1000;
 
 function setup(config) {
   const authConfig = config.auth;
 
   // GET /auth/login - Initiate OIDC flow
-  router.get('/login', (req, res) => {
+  router.get('/login', async (req, res) => {
     const oidcConfig = oidcClient.getConfig();
     if (!oidcConfig) {
       return res.status(503).json({ error: 'OIDC not configured' });
     }
 
-    // Reject if too many pending auth requests (DoS protection)
-    if (pendingAuth.size >= PENDING_AUTH_MAX_SIZE) {
-      console.warn(`pendingAuth limit reached (${PENDING_AUTH_MAX_SIZE}), rejecting new auth request`);
-      return res.status(503).json({ error: 'Too many pending authentication requests. Please try again later.' });
+    try {
+      const state = randomState();
+      const nonce = randomNonce();
+      // PKCE: the token request must prove that it comes from this sign-in
+      const codeVerifier = randomPKCECodeVerifier();
+      const codeChallenge = await calculatePKCECodeChallenge(codeVerifier);
+
+      // Bind the sign-in to this browser: the callback accepts its state only
+      // with this cookie. returnTo: a path of this site only, or the callback
+      // would redirect to any site
+      const pending = { state, nonce, codeVerifier, returnTo: safeReturnTo(req.query.returnTo) };
+      res.cookie(LOGIN_COOKIE, encodeLoginState(pending, authConfig.session.secret), {
+        ...loginCookieOptions(req, authConfig),
+        maxAge: LOGIN_MAX_AGE_MS,
+      });
+
+      const authUrl = oidcClient.buildAuthUrl(state, nonce, codeChallenge);
+      res.redirect(authUrl.href);
+    } catch (err) {
+      console.error('OIDC login error:', err.message);
+      res.status(500).send('Authentication failed');
     }
-
-    const state = randomState();
-    const nonce = randomNonce();
-
-    // Store state for callback validation, and where to go back: a path of
-    // this site only, or the callback would redirect to any site
-    pendingAuth.set(state, {
-      nonce,
-      returnTo: safeReturnTo(req.query.returnTo),
-      createdAt: Date.now()
-    });
-
-    // Cleanup after 10 minutes
-    setTimeout(() => pendingAuth.delete(state), 600000);
-
-    const authUrl = oidcClient.buildAuthUrl(state, nonce);
-    res.redirect(authUrl.href);
   });
 
   // GET /auth/callback - Handle OIDC callback
@@ -56,22 +63,27 @@ function setup(config) {
       return res.status(503).json({ error: 'OIDC not configured' });
     }
 
+    // The sign-in that this browser started, when the state is its own: a
+    // callback URL opened in another browser is refused. The cookie serves once
+    const state = req.query.state;
+    const pending = readLoginState(req.cookies?.[LOGIN_COOKIE], state, authConfig.session.secret);
+    res.clearCookie(LOGIN_COOKIE, loginCookieOptions(req, authConfig));
+    if (!pending) {
+      return res.status(400).send('Invalid or expired sign-in, please sign in again');
+    }
+
     try {
-      const state = req.query.state;
-      const pending = pendingAuth.get(state);
-
-      if (!pending) {
-        return res.status(400).send('Invalid or expired state parameter');
-      }
-
-      pendingAuth.delete(state);
-
       // Build current URL for callback validation
       const currentUrl = new URL(req.originalUrl, authConfig.baseUrl);
       console.log('OIDC callback URL:', currentUrl.href);
 
-      // Exchange code for tokens
-      const tokens = await oidcClient.handleCallback(currentUrl, state, pending.nonce);
+      // Exchange code for tokens, proving the sign-in with the PKCE code_verifier
+      const tokens = await oidcClient.handleCallback(
+        currentUrl,
+        state,
+        pending.nonce,
+        pending.codeVerifier
+      );
       console.log('OIDC tokens received');
 
       // Extract sub and sid from id_token claims
@@ -92,7 +104,7 @@ function setup(config) {
       );
 
       // Set cookie, signed: Secure over HTTPS, unless COOKIE_SECURE says otherwise
-      res.cookie(authConfig.session.name, signSessionId(sid, authConfig.session.secret), {
+      res.cookie(authConfig.session.name, signValue(sid, authConfig.session.secret), {
         ...sessionCookieOptions(req, authConfig),
         maxAge: authConfig.session.maxAge,
       });
@@ -107,7 +119,7 @@ function setup(config) {
 
   // GET /auth/logout - Front-channel logout
   router.get('/logout', (req, res) => {
-    const sid = unsignSessionId(req.cookies[authConfig.session.name], authConfig.session.secret);
+    const sid = unsignValue(req.cookies[authConfig.session.name], authConfig.session.secret);
 
     // Delete local session and get id_token
     let idToken = null;

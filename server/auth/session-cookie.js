@@ -1,6 +1,6 @@
 /**
- * The session cookie of OIDC sign-in: its flags, and its value, the session id
- * signed with SESSION_SECRET.
+ * The cookies of OIDC sign-in: their flags, and their values signed with
+ * SESSION_SECRET, such as the session id of the session cookie.
  */
 const crypto = require('crypto');
 
@@ -41,46 +41,46 @@ function sessionCookieOptions(req, auth) {
 }
 
 /**
- * The value of the session cookie: the session id, a dot, and the HMAC-SHA256
- * of the session id under SESSION_SECRET. A session id alone, as the sessions
- * table stores it, is then no valid cookie.
+ * A cookie value signed with SESSION_SECRET: the value, a dot, and its
+ * HMAC-SHA256. The session cookie holds the session id signed so: a session
+ * id alone, as the sessions table stores it, is then no valid cookie.
  *
- * @param {string} sid - the session id
+ * @param {string} value - such as the session id
  * @param {string} secret - SESSION_SECRET
  * @returns {string}
  */
-function signSessionId(sid, secret) {
-  return `${sid}.${signature(sid, secret)}`;
+function signValue(value, secret) {
+  return `${value}.${signature(value, secret)}`;
 }
 
 /**
- * The session id of a cookie value, when its signature matches.
+ * The value of a signed cookie value, when its signature matches.
  *
- * @param {*} value - the cookie value, whatever its type
+ * @param {*} signed - the cookie value, whatever its type
  * @param {string} secret - SESSION_SECRET
- * @returns {string|null} the session id, or null
+ * @returns {string|null} the value, or null
  */
-function unsignSessionId(value, secret) {
-  if (typeof value !== 'string') {
+function unsignValue(signed, secret) {
+  if (typeof signed !== 'string') {
     return null;
   }
-  const dot = value.lastIndexOf('.');
+  const dot = signed.lastIndexOf('.');
   if (dot <= 0) {
     return null;
   }
-  const sid = value.slice(0, dot);
-  const expected = Buffer.from(signature(sid, secret));
-  const given = Buffer.from(value.slice(dot + 1));
+  const value = signed.slice(0, dot);
+  const expected = Buffer.from(signature(value, secret));
+  const given = Buffer.from(signed.slice(dot + 1));
   // In constant time: timingSafeEqual needs buffers of the same length, and
   // the length of a signature tells nothing about the secret
   if (given.length !== expected.length || !crypto.timingSafeEqual(given, expected)) {
     return null;
   }
-  return sid;
+  return value;
 }
 
-function signature(sid, secret) {
-  return crypto.createHmac('sha256', secret).update(sid).digest('base64url');
+function signature(value, secret) {
+  return crypto.createHmac('sha256', secret).update(value).digest('base64url');
 }
 
 const MIN_SECRET_LENGTH = 32;
@@ -103,7 +103,7 @@ function sessionSecretWarning(secret) {
 module.exports = {
   cookieSecure,
   sessionCookieOptions,
-  signSessionId,
-  unsignSessionId,
+  signValue,
+  unsignValue,
   sessionSecretWarning,
 };
