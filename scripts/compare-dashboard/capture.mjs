@@ -1,0 +1,365 @@
+// Walks through the dashboard in a real browser and captures what it shows: the visible text
+// of the shell, of every tab and of every "show all" modal, and the files it exports.
+
+import fs from 'node:fs/promises';
+import { setTimeout as sleep } from 'node:timers/promises';
+import { chromium } from 'playwright';
+import { presetLanguage, readPage, rootText } from './in-page.mjs';
+
+// The labels users see. A pull request that renames one on purpose shows up as a
+// difference; update the label here once it is merged.
+const TABS = [
+  { id: 'overview', label: { fr: "Vue d'ensemble", en: 'Overview' } },
+  { id: 'compare', label: { fr: 'Comparaison', en: 'Compare' } },
+  { id: 'trends', label: { fr: 'Tendances', en: 'Trends' } },
+  { id: 'inventory', label: { fr: 'Public Cloud', en: 'Public Cloud' } },
+  { id: 'webcloud', label: { fr: 'Web Cloud', en: 'Web Cloud' } },
+  { id: 'infrastructure', label: { fr: 'Infrastructure', en: 'Infrastructure' } },
+  { id: 'backup', label: { fr: 'Backup', en: 'Backup' } },
+];
+// The overview comes last. When the page opens, or changes month, the loading screen only
+// waits for the summary, so the bar chart mounts before its projects arrive, and a chart
+// axis that mounts without labels measures them at the wrong font size for good. Coming
+// back to the overview mounts its charts again, on data already loaded.
+const VISIT_ORDER = [...TABS.slice(1), TABS[0]];
+const SHOW_ALL = { fr: 'Tout afficher', en: 'Show all' };
+const LOCALES = { fr: 'fr-FR', en: 'en-US' };
+const LANGUAGE_KEY = 'ovh-dashboard-language';
+const VIEWPORT = { width: 1440, height: 900 };
+
+// The page has settled once no API call is pending and its text has stayed the same for a
+// while. Opening a tab or a month can start charts, and a pie chart only shows its labels
+// once its animation is over, 1.9 s after its data arrives.
+const QUIET_AFTER_NAVIGATION = 2500;
+const QUIET_AFTER_CLICK = 500;
+const SETTLE_TIMEOUT = 30_000;
+const ACTION_TIMEOUT = 10_000;
+
+// The page gets its API responses one at a time, in the order it asked for them, each one
+// given time to render. Charts measure their labels as they render and keep the results
+// for good, measurements leaking into one another: when responses race, the charts render
+// in another order, and wrap or hide their axis labels differently.
+const RESPONSE_GAP = 100;
+
+// Whitespace is all that is normalised: innerText breaks lines and separates cells after
+// the layout, not after what the user reads.
+const normalize = (text) => text
+  .split('\n')
+  .map((line) => line.replace(/\s+/g, ' ').trim())
+  .filter(Boolean)
+  .join('\n');
+
+const firstLine = (error) => String(error?.message ?? error).split('\n')[0];
+
+// On a signal, Playwright would close the browser and exit at once, before the worktrees
+// and servers are cleaned up: the caller handles signals and closes the browser itself
+const LAUNCH_OPTIONS = { handleSIGINT: false, handleSIGTERM: false, handleSIGHUP: false };
+
+/**
+ * Starts the installed Google Chrome, or else Playwright's Chromium.
+ * @returns {Promise<{ browser: import('playwright').Browser, name: string, note?: string }>}
+ */
+export async function launchBrowser() {
+  try {
+    return { browser: await chromium.launch({ ...LAUNCH_OPTIONS, channel: 'chrome' }), name: 'Google Chrome' };
+  } catch (chromeError) {
+    try {
+      return {
+        browser: await chromium.launch(LAUNCH_OPTIONS),
+        name: "Playwright's Chromium",
+        note: `Google Chrome did not start (${firstLine(chromeError)}), using Playwright's Chromium.`,
+      };
+    } catch {
+      throw new Error(
+        'No browser to drive: install Google Chrome, or Playwright\'s Chromium with '
+        + '`npx playwright install chromium`.',
+      );
+    }
+  }
+}
+
+/**
+ * Captures one dashboard, month by month and language by language.
+ *
+ * @param {import('playwright').Browser} browser
+ * @param {object} options
+ * @param {string} options.url             where the dashboard is served
+ * @param {Date} options.clock             the time the page sees, frozen
+ * @param {string[]} options.languages     'fr', 'en'
+ * @param {string[]} options.months        YYYY-MM, picked in the month selector
+ * @param {string} options.openingMonth    the month the page opens on: left as is
+ * @param {number} options.projects        how many Public Cloud projects to open
+ * @param {(step: string, sections: number) => void} [options.onProgress]  after each month
+ * @returns {Promise<{ sections: Record<string, string>, failures: string[] }>}
+ */
+export async function captureDashboard(browser, { url, clock, languages, months, openingMonth, projects, onProgress }) {
+  const capture = new Capture();
+  for (const language of languages) {
+    const context = await browser.newContext({ viewport: VIEWPORT, locale: LOCALES[language] });
+    try {
+      await context.addInitScript(presetLanguage, { key: LANGUAGE_KEY, value: language });
+      // Before the first page load: "today", "N days ago" and the report date stay put
+      await context.clock.setFixedTime(clock);
+      const page = await context.newPage();
+      const walker = new Walker(page, { url, language, openingMonth, projects, capture });
+      await page.route('**/api/**', (route) => walker.answerInTurn(route));
+      for (const month of months) {
+        await walker.captureMonth(month);
+        onProgress?.(`${language} ${month}`, Object.keys(capture.sections).length);
+      }
+    } finally {
+      await context.close();
+    }
+  }
+  return { sections: capture.sections, failures: capture.failures };
+}
+
+/** The captured sections, in capture order, and the steps that failed. */
+class Capture {
+  sections = {};
+  failures = [];
+
+  /** Adds a section. A key already taken gets a number, so nothing is overwritten. */
+  add(key, text) {
+    let unique = key;
+    for (let n = 2; Object.hasOwn(this.sections, unique); n++) unique = `${key} #${n}`;
+    this.sections[unique] = text;
+    return unique;
+  }
+
+  fail(key, error) {
+    const message = `capture failed: ${firstLine(error)}`;
+    this.failures.push(`${key}: ${message}`);
+    this.add(`${key} (failed)`, message);
+  }
+}
+
+/** Drives one page through the dashboard. */
+class Walker {
+  constructor(page, { url, language, openingMonth, projects, capture }) {
+    Object.assign(this, { page, url, language, openingMonth, projects, capture });
+    this.tabLabels = TABS.map((tab) => tab.label[language]);
+    this.pending = new Set();
+    this.waiting = [];
+    this.answering = null;
+    this.errors = [];
+    page.setDefaultTimeout(ACTION_TIMEOUT);
+    const isApiCall = (request) => ['xhr', 'fetch'].includes(request.resourceType());
+    page.on('request', (request) => { if (isApiCall(request)) this.pending.add(request); });
+    page.on('requestfinished', (request) => this.pending.delete(request));
+    page.on('requestfailed', (request) => this.pending.delete(request));
+    page.on('pageerror', (error) => this.errors.push(`page error: ${error.message}`));
+    page.on('console', (message) => {
+      if (message.type() === 'error') this.errors.push(`console error: ${message.text()}`);
+    });
+  }
+
+  async captureMonth(month) {
+    const prefix = `${this.language}/${month}`;
+    this.errors = [];
+    try {
+      await this.open(month);
+    } catch (error) {
+      this.capture.fail(prefix, error);
+      return;
+    }
+    let reload = false;
+    for (const [index, tab] of VISIT_ORDER.entries()) {
+      // After a failure the page may be blank, or covered by a modal
+      if (reload) {
+        try {
+          await this.open(month);
+          reload = false;
+        } catch (error) {
+          for (const skipped of VISIT_ORDER.slice(index)) {
+            this.capture.fail(`${prefix}/${skipped.id}`, `the dashboard did not load again: ${firstLine(error)}`);
+          }
+          break;
+        }
+      }
+      const key = `${prefix}/${tab.id}`;
+      try {
+        await this.captureTab(tab, key, prefix);
+      } catch (error) {
+        this.capture.fail(key, error);
+        reload = true;
+      }
+    }
+    // Sorted and deduplicated: which errors occurred, not when
+    if (this.errors.length) this.capture.add(`${prefix}/errors`, [...new Set(this.errors)].sort().join('\n'));
+  }
+
+  /** Queues an API call of the page, see RESPONSE_GAP. */
+  answerInTurn(route) {
+    this.waiting.push(route);
+    this.answering ??= this.answerAll();
+  }
+
+  async answerAll() {
+    while (this.waiting.length) {
+      const route = this.waiting.shift();
+      try {
+        await route.fulfill({ response: await route.fetch() });
+      } catch {
+        // The page went away (a reload), or the server did: the call fails
+        await route.abort().catch(() => {});
+      }
+      await sleep(RESPONSE_GAP);
+    }
+    this.answering = null;
+  }
+
+  /** Loads the page, on a month, with the import history of the footer open. */
+  async open(month) {
+    // Calls of the page being left
+    for (const route of this.waiting.splice(0)) route.abort().catch(() => {});
+    this.pending.clear();
+    await this.page.goto(this.url);
+    // A loading screen shows until the months and the summary are in
+    await this.until(async () => (await this.page.evaluate(readPage, { tabLabels: this.tabLabels })).ok);
+    if (month !== this.openingMonth) {
+      const selector = this.page.locator('select').filter({ has: this.page.locator(`option[value="${month}"]`) }).first();
+      await selector.selectOption(month);
+      if ((await selector.inputValue()) !== month) throw new Error(`month ${month} could not be selected`);
+    }
+    const closedHistory = this.page.locator('details:not([open]) > summary');
+    for (let i = 0; i < 10 && (await closedHistory.count()); i++) await closedHistory.first().click();
+    await this.settle(QUIET_AFTER_NAVIGATION);
+  }
+
+  async captureTab(tab, key, prefix) {
+    const { tabBar } = await this.read();
+    await this.page.locator(tabBar).getByRole('button', { name: tab.label[this.language], exact: true }).click();
+    await this.settle(QUIET_AFTER_NAVIGATION);
+    const state = await this.read();
+    // The shell on every tab: parts of it depend on the tab (the month selector) or on
+    // the tabs visited before (the KPI variation reads a Compare query)
+    this.capture.add(`${key}/shell`, normalize(state.shell));
+    this.capture.add(key, normalize(state.view));
+    await this.captureTableActions(key);
+    if (tab.id === 'overview') await this.captureReport(prefix);
+    if (tab.id === 'compare') await this.expandAll(key);
+    // Public Cloud shows a project's panels once it is selected
+    if (tab.id === 'inventory') await this.openRows(key, 'project', this.projects, true);
+    if (tab.id === 'infrastructure') await this.openRows(key, 'type', Infinity, false);
+  }
+
+  /** Every "show all" modal of the tab, with its exports, then the exports of the tab. */
+  async captureTableActions(key) {
+    const tab = await this.tabLocator();
+    if (!tab) return;
+    const showAll = tab.getByRole('button', { name: SHOW_ALL[this.language], exact: true });
+    const modals = await showAll.count();
+    for (let i = 0; i < modals; i++) {
+      await showAll.nth(i).click();
+      await this.captureModal(key);
+    }
+    const exports = tab.getByRole('button', { name: 'CSV', exact: true });
+    const files = await exports.count();
+    for (let i = 0; i < files; i++) await this.captureDownload(key, () => exports.nth(i).click());
+  }
+
+  async captureModal(key) {
+    const dialog = this.page.getByRole('dialog');
+    await dialog.waitFor();
+    await this.settle(QUIET_AFTER_CLICK);
+    const text = normalize(await dialog.innerText());
+    // Named after its title, counts and amounts left out
+    const name = text.split('\n')[0].split(' (')[0].trim() || 'untitled';
+    const modalKey = this.capture.add(`${key}/modal:${name}`, text);
+    const exports = dialog.getByRole('button', { name: 'CSV', exact: true });
+    const files = await exports.count();
+    for (let i = 0; i < files; i++) await this.captureDownload(modalKey, () => exports.nth(i).click());
+    await dialog.getByRole('button', { name: 'Close', exact: true }).click();
+    await dialog.waitFor({ state: 'detached' });
+    await this.settle(QUIET_AFTER_CLICK);
+  }
+
+  /** The Markdown report of the header's export menu. */
+  async captureReport(prefix) {
+    const format = this.page.locator('select').filter({ has: this.page.locator('option[value="md"]') });
+    await this.captureDownload(prefix, () => format.selectOption('md'));
+  }
+
+  /** A file the page downloads, byte for byte: no normalisation. */
+  async captureDownload(key, trigger) {
+    const [download] = await Promise.all([this.page.waitForEvent('download'), trigger()]);
+    const name = download.suggestedFilename();
+    const failure = await download.failure();
+    if (failure) throw new Error(`download of ${name} failed: ${failure}`);
+    this.capture.add(`${key}/export:${name}`, await fs.readFile(await download.path(), 'utf8'));
+    await download.delete();
+  }
+
+  /** Opens every accordion of the tab. */
+  async expandAll(key) {
+    const tab = await this.tabLocator();
+    if (!tab) return;
+    const closed = tab.locator('button[aria-expanded="false"]');
+    const count = await closed.count();
+    if (!count) return;
+    for (let i = 0; i < count; i++) await closed.first().click();
+    await this.settle(QUIET_AFTER_NAVIGATION);
+    this.capture.add(`${key}/expanded`, normalize((await this.read()).view));
+  }
+
+  /** Opens the first rows of the tab (▼) one at a time, and closes each one again (▲). */
+  async openRows(key, kind, limit, withTableActions) {
+    const { rows } = await this.read();
+    const count = Math.min(rows.length, limit);
+    for (let i = 0; i < count; i++) {
+      const tab = await this.tabLocator();
+      await tab.locator('span').filter({ hasText: /^▼$/ }).nth(i).click();
+      await this.settle(QUIET_AFTER_NAVIGATION);
+      const rowKey = this.capture.add(`${key}/${kind}:${rows[i]}`, normalize((await this.read()).view));
+      if (withTableActions) await this.captureTableActions(rowKey);
+      await tab.locator('span').filter({ hasText: /^▲$/ }).first().click();
+      await this.settle(QUIET_AFTER_CLICK);
+    }
+  }
+
+  async read() {
+    const state = await this.page.evaluate(readPage, { tabLabels: this.tabLabels });
+    if (!state.ok) throw new Error(`the dashboard is not shown: ${state.reason}`);
+    return state;
+  }
+
+  async tabLocator() {
+    const { tab } = await this.read();
+    return tab ? this.page.locator(tab) : null;
+  }
+
+  /** Waits for the API calls to end and the text to stop changing. */
+  async settle(quiet) {
+    // A pointer left over a chart would add its tooltip to the text
+    await this.page.mouse.move(0, 0);
+    const start = Date.now();
+    let text = null;
+    let since = start;
+    for (;;) {
+      const current = await this.page.evaluate(rootText);
+      const now = Date.now();
+      if (current !== text || this.pending.size > 0) {
+        text = current;
+        since = now;
+      } else if (now - since >= quiet) {
+        return;
+      }
+      if (now - start > SETTLE_TIMEOUT) {
+        throw new Error(`the page was still changing after ${SETTLE_TIMEOUT / 1000} s`);
+      }
+      await sleep(100);
+    }
+  }
+
+  async until(condition) {
+    const start = Date.now();
+    while (!(await condition())) {
+      if (Date.now() - start > SETTLE_TIMEOUT) {
+        const state = await this.page.evaluate(readPage, { tabLabels: this.tabLabels });
+        throw new Error(`the dashboard did not show up within ${SETTLE_TIMEOUT / 1000} s: ${state.reason}`);
+      }
+      await sleep(200);
+    }
+  }
+}
