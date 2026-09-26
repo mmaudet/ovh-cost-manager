@@ -153,8 +153,10 @@ export const translations = {
     resourceTypeBreakdown: 'Répartition par type de ressource',
     expiringSoon: 'Expirations proches',
     expiringIn: 'Expire dans',
+    day: 'jour',
     days: 'jours',
     expiredSince: 'Expiré depuis',
+    dayAgo: 'jour',
     daysAgo: 'jours',
     noExpirations: 'Aucune expiration proche',
 
@@ -331,8 +333,10 @@ export const translations = {
     resourceTypeBreakdown: 'Breakdown by resource type',
     expiringSoon: 'Expiring soon',
     expiringIn: 'Expires in',
+    day: 'day',
     days: 'days',
     expiredSince: 'Expired',
+    dayAgo: 'day ago',
     daysAgo: 'days ago',
     noExpirations: 'No upcoming expirations',
 

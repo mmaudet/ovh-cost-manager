@@ -65,6 +65,19 @@ const expiringSoon = [
   { id: 'netapp-5f2c9a1e', display_name: 'shared-files',
     type: 'storage', expiration_date: '2026-10-14' },
 ];
+// Four services that expired or expire one or two days from today, 15 September
+const oneOrTwoDaysAway = [
+  { id: 'vps-2c3d4e5f.vps.ovh.net', display_name: 'legacy-vps',
+    type: 'vps', expiration_date: '2026-09-13' },
+  { id: 'netapp-5f2c9a1e', display_name: 'shared-files',
+    type: 'storage', expiration_date: '2026-09-14' },
+  { id: 'ns3000001.ip-203-0-113.eu', display_name: 'backup-server',
+    type: 'dedicated_server', expiration_date: '2026-09-16' },
+  { id: 'vps-0a1b2c3d.vps.ovh.net', display_name: 'vps-0a1b2c3d.vps.ovh.net',
+    type: 'vps', expiration_date: '2026-09-17' },
+];
+const expirationCard = (heading = 'Expirations proches') =>
+  cardOf(screen.getByRole('heading', { name: heading }));
 
 describe('Overview tab', () => {
   it('loads everything it shows with the page', async () => {
@@ -358,6 +371,29 @@ describe('Overview tab', () => {
     ]);
     // All seven in the header, the expired one included, as in the card
     expect(texts(headerBadge('Expirations proches'))).toEqual(['7', 'Expirations proches']);
+  });
+
+  // #74: a single day read "1 jours", and "1 days" in English
+  it('counts the days in the singular or the plural, as each language needs', async () => {
+    const { user } = await renderDashboard({ ...account, expiringServices: oneOrTwoDaysAway });
+
+    expect(texts(expirationCard())).toEqual([
+      'Expirations proches',
+      'VPS', 'legacy-vps', 'Expiré depuis 2 jours',
+      'Stockage', 'shared-files', 'Expiré depuis 1 jour',
+      'Serveurs dédiés', 'backup-server', 'Expire dans 1 jour',
+      'VPS', 'vps-0a1b2c3d.vps.ovh.net', 'Expire dans 2 jours',
+    ]);
+
+    await selectLanguage(user, 'en');
+
+    expect(texts(expirationCard('Expiring soon'))).toEqual([
+      'Expiring soon',
+      'VPS', 'legacy-vps', 'Expired 2 days ago',
+      'Storage', 'shared-files', 'Expired 1 day ago',
+      'Dedicated Servers', 'backup-server', 'Expires in 1 day',
+      'VPS', 'vps-0a1b2c3d.vps.ovh.net', 'Expires in 2 days',
+    ]);
   });
 
   it('speaks English when the page does', async () => {

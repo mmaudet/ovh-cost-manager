@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   localeOf, formatCurrency, formatPercent, formatYearMonth, formatMonthLabel, yearMonthOf,
-  fmtBytes,
+  fmtBytes, takesSingular,
 } from '../../src/utils/format.js';
 import { NBSP, NNBSP } from '../support/amounts.js';
 
@@ -136,6 +136,26 @@ describe('yearMonthOf', () => {
     // Still 30 September in UTC, 1 October in Paris
     expect(yearMonthOf(new Date(2026, 9, 1, 0, 30))).toBe('2026-10');
     expect(yearMonthOf(new Date(2025, 11, 31, 23, 59))).toBe('2025-12');
+  });
+});
+
+// Whether a number of days reads in the singular, as the expiring services do: the Overview
+// wrote "1 jours" (#74)
+describe('takesSingular', () => {
+  const counts = [0, 1, 2, 5, 31];
+
+  it('takes the singular for 0 and 1 in French: 0 jour, 1 jour, 2 jours', () => {
+    expect(counts.map((count) => takesSingular(count, 'fr')))
+      .toEqual([true, true, false, false, false]);
+  });
+
+  it('takes the singular for 1 only in English: 0 days, 1 day, 2 days', () => {
+    expect(counts.map((count) => takesSingular(count, 'en')))
+      .toEqual([false, true, false, false, false]);
+  });
+
+  it('counts in French by default', () => {
+    expect(takesSingular(0)).toBe(true);
   });
 });
 
