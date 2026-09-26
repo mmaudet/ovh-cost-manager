@@ -20,15 +20,33 @@ const PROXY_HEADERS = ['x-forwarded-for', 'x-forwarded-host', 'forwarded'];
 const LOG_PERIOD_MS = 60 * 60 * 1000;
 const MAX_LOGGED_HOSTS = 100;
 
-// The entries of ALLOWED_HOSTS, or of allowedHosts in config.json, without
-// blanks: a comma-separated string, as the environment gives, or an array.
-// The check is on as soon as there is one, well-formed or not, so that a typo
-// does not turn it off.
-function listEntries(setting) {
-  const entries = typeof setting === 'string' ? setting.split(',') : [].concat(setting ?? []);
-  return entries
+/**
+ * Reads ALLOWED_HOSTS, or allowedHosts in config.json: a comma-separated
+ * string, as the environment gives, or an array. The check is on as soon as
+ * there is an entry, well-formed or not, so that a typo does not turn it off.
+ *
+ * @returns {{hosts: string[], ignored: Array}|null} the hosts as the check
+ *   compares them, and the entries that are no host, such as a URL, which
+ *   match no request; null when there is no entry
+ */
+function readAllowedHosts(setting) {
+  const entries = (typeof setting === 'string' ? setting.split(',') : [].concat(setting ?? []))
     .map((entry) => (typeof entry === 'string' ? entry.trim() : entry))
     .filter((entry) => entry !== '');
+  if (entries.length === 0) {
+    return null;
+  }
+  const hosts = [];
+  const ignored = [];
+  for (const entry of entries) {
+    const parsed = typeof entry === 'string' ? parseHost(entry) : null;
+    if (parsed) {
+      hosts.push(parsed.host);
+    } else {
+      ignored.push(entry);
+    }
+  }
+  return { hosts, ignored };
 }
 
 /**
@@ -44,17 +62,12 @@ function listEntries(setting) {
  *   when it does not, the header and the host it refused
  */
 function createHostCheck({ allowedHosts, trustProxy }) {
-  const entries = listEntries(allowedHosts);
-  if (entries.length === 0) {
+  const setting = readAllowedHosts(allowedHosts);
+  if (!setting) {
     return () => ({ allowed: true });
   }
-  // A malformed entry, or one that is not a string, matches no request
-  const listedHosts = entries
-    .map((entry) => (typeof entry === 'string' ? parseHost(entry) : null))
-    .filter(Boolean)
-    .map(({ host }) => host);
 
-  const isListed = (parsed) => parsed !== null && listedHosts.includes(parsed.host);
+  const isListed = (parsed) => parsed !== null && setting.hosts.includes(parsed.host);
   // A loopback name, on any port: the Docker healthcheck, the import cron and
   // local tools call the server on localhost
   const isLoopback = (parsed) => parsed !== null && LOOPBACK_HOSTNAMES.includes(parsed.hostname);
@@ -89,17 +102,28 @@ function createHostCheck({ allowedHosts, trustProxy }) {
 
 /**
  * The check as Express middleware: it answers a request it refuses with a 421
- * Misdirected Request, and logs it.
+ * Misdirected Request, and logs it. Once built, it logs the hosts it allows,
+ * and warns about each entry it ignores.
  *
  * @param {object} settings - as for createHostCheck()
- * @param {object} [logger] - the console, or a stand-in with warn()
+ * @param {object} [logger] - the console, or a stand-in with log() and warn()
  * @returns {function|null} the middleware, or null when ALLOWED_HOSTS is not
  *   set, so that nothing runs then
  */
 function createHostCheckMiddleware(settings, logger = console) {
-  if (listEntries(settings.allowedHosts).length === 0) {
+  const setting = readAllowedHosts(settings.allowedHosts);
+  if (!setting) {
     return null;
   }
+  for (const entry of setting.ignored) {
+    const reason = 'not a host name with an optional port';
+    logger.warn(`Host check: ignoring ${JSON.stringify(entry)} in the allowed hosts: ${reason}`);
+  }
+  logger.log(setting.hosts.length > 0
+    ? `Host check: allowed hosts: ${setting.hosts.join(', ')}`
+      + ' (and the loopback names on direct requests)'
+    : 'Host check: allowed hosts: none (only the loopback names on direct requests)');
+
   const checkHost = createHostCheck(settings);
   let loggedHosts = new Set();
   let unlogged = 0;

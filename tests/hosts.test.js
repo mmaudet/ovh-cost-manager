@@ -342,13 +342,58 @@ describe('createHostCheckMiddleware', () => {
   }
 
   test.each([[undefined], [''], [[]]])(
-    'is not built when ALLOWED_HOSTS is %p, so that nothing runs',
+    'is not built when ALLOWED_HOSTS is %p, so that nothing runs or logs',
     (setting) => {
       const logger = makeLogger();
       expect(createHostCheckMiddleware({ allowedHosts: setting, trustProxy: false }, logger))
         .toBeNull();
+      expect(logger.log).not.toHaveBeenCalled();
+      expect(logger.warn).not.toHaveBeenCalled();
     }
   );
+
+  test('logs the hosts it allows once built, as it compares them', () => {
+    const logger = makeLogger();
+    createHostCheckMiddleware(
+      { allowedHosts: 'OCM.Example.com:443, ocm.lan:3001', trustProxy: false },
+      logger
+    );
+    expect(logger.log.mock.calls).toEqual([[
+      'Host check: allowed hosts: ocm.example.com, ocm.lan:3001'
+        + ' (and the loopback names on direct requests)',
+    ]]);
+    expect(logger.warn).not.toHaveBeenCalled();
+  });
+
+  // As an origin copied from ALLOWED_ORIGINS gives
+  test('warns about each entry that is not a host name, once built', () => {
+    const logger = makeLogger();
+    createHostCheckMiddleware({
+      allowedHosts: ['https://ocm.example.com', 'ocm.lan:port', 'ocm.lan:3001'],
+      trustProxy: false,
+    }, logger);
+    expect(logger.warn.mock.calls).toEqual([
+      ['Host check: ignoring "https://ocm.example.com" in the allowed hosts:'
+        + ' not a host name with an optional port'],
+      ['Host check: ignoring "ocm.lan:port" in the allowed hosts:'
+        + ' not a host name with an optional port'],
+    ]);
+    expect(logger.log.mock.calls).toEqual([[
+      'Host check: allowed hosts: ocm.lan:3001 (and the loopback names on direct requests)',
+    ]]);
+  });
+
+  test('keeps the check on when it ignores every entry, and says so', () => {
+    const logger = makeLogger();
+    const hostCheck = createHostCheckMiddleware(
+      { allowedHosts: 'https://ocm.example.com', trustProxy: false },
+      logger
+    );
+    expect(logger.log.mock.calls).toEqual([[
+      'Host check: allowed hosts: none (only the loopback names on direct requests)',
+    ]]);
+    expect(run(hostCheck, { host: 'ocm.example.com' }).status).toBe(421);
+  });
 
   test('passes an allowed request on', () => {
     const hostCheck = createHostCheckMiddleware(settings, makeLogger());
