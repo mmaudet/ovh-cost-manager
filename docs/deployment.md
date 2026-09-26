@@ -8,6 +8,8 @@ This guide covers Docker deployment options for OVH Cost Manager (OCM), includin
 - [Upgrading to 2.4.1](#upgrading-to-241)
 - [Simple Deployment (without SSO)](#simple-deployment-without-sso)
 - [SSO Deployment (with LemonLDAP-NG)](#sso-deployment-with-lemonldap-ng)
+  - [How OCM Signs Users In](#how-ocm-signs-users-in)
+- [Header-Based Authentication (without OIDC)](#header-based-authentication-without-oidc)
 - [LemonLDAP-NG Configuration](#lemonldap-ng-configuration)
   - [SAML Authentication](#saml-authentication)
   - [OIDC Authentication](#oidc-authentication)
@@ -21,7 +23,7 @@ This guide covers Docker deployment options for OVH Cost Manager (OCM), includin
 - Docker >= 20.10
 - Docker Compose >= 2.0
 - OVH API credentials (see main [README](../README.md#configuration))
-- For SSO: An identity provider (SAML or OIDC compatible)
+- For SSO: two host names, `ocm.<domain>` and `auth.<domain>`, that resolve to the Docker host, and users for LemonLDAP-NG to authenticate, for example from a directory or an external SAML or OIDC identity provider
 
 ---
 
@@ -84,7 +86,7 @@ Open http://localhost:3001
 | Variable                    | Description                          | Default           |
 | --------------------------- | ------------------------------------ | ----------------- |
 | `OCM_PORT`                  | Host port mapping                    | `3001`            |
-| `AUTH_REQUIRED`             | Require authentication headers, `true` or `false` | `false`           |
+| `AUTH_REQUIRED`             | Without OIDC, require an `Auth-User` header on API requests, `true` or `false` (see [Header-Based Authentication](#header-based-authentication-without-oidc)) | `false`           |
 | `OIDC_ENABLED`              | OIDC sign-in, `true` or `false`: overrides `auth.enabled` of `config.json` (see [OIDC settings](#oidc-settings)) | (`config.json`) |
 | `SESSION_SECRET`            | With OIDC, signs the session cookie: at least 32 random characters, such as the output of `openssl rand -hex 32` | (required with OIDC) |
 | `COOKIE_SECURE`             | With OIDC, the `Secure` flag of the session cookie: `true`, `false` or `auto` (see [OIDC settings](#oidc-settings)) | `auto` |
@@ -126,6 +128,22 @@ ALLOWED_HOSTS=ocm.example.com,ocm.lan:3001
 
 As elsewhere, the environment overrides `config.json`. The true/false settings take `true` or `false`, in any case in the environment, and as JSON booleans, without quotes, in `config.json`: any other value stops the server at startup, naming the setting, and the file for `config.json`. So does a `config.json` that cannot be read as JSON.
 
+The settings, with the values of the [SSO stack](#sso-deployment-with-lemonldap-ng):
+
+| Variable             | `config.json`                | SSO stack                                 | Description                                                                                                                         |
+| -------------------- | ---------------------------- | ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `OIDC_ENABLED`       | `auth.enabled`               | `true`                                    | OIDC sign-in, `true` or `false`                                                                                                     |
+| `OIDC_ISSUER`        | `auth.provider.issuer`       | `http://auth.<SSO_DOMAIN>`                | Issuer URL of the provider, which the server discovers. Required                                                                    |
+| `OIDC_CLIENT_ID`     | `auth.provider.clientId`     | `ocm-dashboard`                           | Client ID. Required                                                                                                                 |
+| `OIDC_CLIENT_SECRET` | `auth.provider.clientSecret` | From `.env`, or `change-me`               | Client secret. Required                                                                                                             |
+| `OIDC_BASE_URL`      | `auth.baseUrl`               | `http://ocm.<SSO_DOMAIN>`                 | Public URL of the dashboard: the redirect URI is `<base URL>/auth/callback`, and the post-logout redirect URI the base URL. Required |
+| `OIDC_SCOPES`        | `auth.provider.scopes`       | `openid,profile,email`                    | Comma-separated in the variable, an array in the file. Default: `openid`, `profile`, `email`                                        |
+| `SESSION_SECRET`     | `auth.session.secret`        | From `.env`, or `change-me-in-production` | Signs the session and sign-in cookies. Required                                                                                     |
+| `COOKIE_SECURE`      | `auth.session.secure`        | Unset                                     | `true`, `false` or `auto`. Default: `auto`                                                                                          |
+|                      | `auth.session.maxAge`        | Unset                                     | Session length in ms. Default: `86400000` (24 h)                                                                                    |
+|                      | `auth.session.name`          | Unset                                     | Name of the session cookie. Default: `ocm.sid`                                                                                      |
+|                      | `auth.backChannelLogout`     | Unset                                     | `false` leaves the back-channel logout endpoint out. Default: `true`                                                                |
+
 - **`OIDC_ENABLED`**: `false` turns OIDC off even when `auth.enabled` is `true` in `config.json`; unset or empty, `config.json` decides. With OIDC on, the server never falls back to header mode: a missing setting stops it at startup, and until the discovery of the provider succeeds, retried with backoff, `/api` and `/auth` answer 503, except `/api/health`.
 - **`SESSION_SECRET`** signs the session cookie, so changing it signs every user out. The server warns at startup when it is shorter than 32 characters.
 - **`COOKIE_SECURE`**: with `auto`, the default, the session cookie is `Secure` when the request comes over HTTPS, as the connection or, with `TRUST_PROXY=true`, the proxy's `X-Forwarded-Proto` says, or when `OIDC_BASE_URL` is `https`. On an HTTP stack it is not, as browsers would not store it. `COOKIE_SECURE=true` or `false`, or `"secure": true` or `false` under `auth.session` in `config.json`, forces it. A `Secure` session cookie is named `__Host-ocm.sid`, on `/`, which browsers accept from this host only: another host of the domain cannot plant a session cookie of its own. Otherwise it is `ocm.sid`, or the name `auth.session.name` sets, which the prefix then goes before.
@@ -144,68 +162,110 @@ OCM_PORT=8080
 
 ## SSO Deployment (with LemonLDAP-NG)
 
-This mode integrates OCM with LemonLDAP-NG for enterprise SSO, using Traefik as reverse proxy.
+`docker-compose.sso.yml` runs OCM behind LemonLDAP-NG, with no other proxy. LemonLDAP-NG has two roles: it is the OpenID Connect (OIDC) provider that OCM signs users in with, and its built-in reverse proxy, the relay, is the only way in to OCM. The file is standalone: it is used without `docker-compose.yml`.
+
+Below, `<domain>` stands for `SSO_DOMAIN`, `localhost` by default.
 
 ### Architecture
 
 ```
-                    ┌─────────────────────────────────────────────────┐
-                    │                   Docker Network                │
-                    │                                                 │
-┌──────────┐        │  ┌──────────┐    ┌──────────────┐    ┌────────┐ │
-│  Browser │───────▶│  │ Traefik  │───▶│  LemonLDAP   │───▶│  OCM   │ │
-│          │        │  │  (:80)   │    │  (handler)   │    │(:3001) │ │
-└──────────┘        │  └──────────┘    └──────────────┘    └────────┘ │
-                    │        │                 │                      │
-                    │        │          ┌──────┴──────┐               │
-                    │        │          │   Portal    │               │
-                    │        └─────────▶│  (auth.*)   │               │
-                    │                   └─────────────┘               │
-                    └─────────────────────────────────────────────────┘
+                    ┌────────────────────────── ocm-network ───────────────────────────┐
+                    │                                                                  │
+┌──────────┐        │  ┌───────────────────────────────┐          ┌─────────────────┐  │
+│ Browser  │───────▶│  │ lemonldap (:80)               │  relay   │ ocm (:3001)     │  │
+│          │  :80   │  │                               │─────────▶│                 │  │
+└──────────┘        │  │ ocm.<domain>   relay to OCM   │          │ dashboard, API, │  │
+                    │  │ auth.<domain>  portal and     │◀─────────│ OIDC client     │  │
+                    │  │                OIDC provider  │   OIDC   │                 │  │
+                    │  └───────────────────────────────┘          └─────────────────┘  │
+                    │                                                                  │
+                    └──────────────────────────────────────────────────────────────────┘
 ```
+
+- The `lemonldap` container publishes port 80, the only published port, and answers for two host names:
+  - `ocm.<domain>`: the relay (`RELAY` in the compose file) forwards each request to OCM, at `http://ocm:3001/`;
+  - `auth.<domain>`: the LemonLDAP-NG portal, where users log in, which is also the OIDC provider.
+- OCM publishes no port: requests reach it through the relay only.
+- OCM authenticates users itself, as an OIDC client (see [How OCM Signs Users In](#how-ocm-signs-users-in)): the relay is only a reverse proxy.
+- On `ocm-network`, `auth.<domain>` and `ocm.<domain>` are aliases of the `lemonldap` container, so OCM reaches the provider at the same URL as the browser, `http://auth.<domain>`, without leaving the Docker network.
 
 ### 1. Configuration
 
-Create `.env` file:
+The compose file mounts `config.json` into OCM, read-only: create it with your OVH credentials, as for the [simple deployment](#1-configuration). The compose file's `OIDC_*` and `SESSION_SECRET` variables take precedence over the `auth` section of `config.json`.
+
+Then create a `.env` file next to the compose file:
 
 ```bash
-# Domain configuration
+cat > .env <<EOF
 SSO_DOMAIN=example.com
-OCM_DOMAIN=ocm.example.com
-
-# For local testing
-# SSO_DOMAIN=localhost
-# OCM_DOMAIN=ocm.localhost
+OIDC_CLIENT_SECRET=$(openssl rand -hex 32)
+SESSION_SECRET=$(openssl rand -hex 32)
+EOF
 ```
 
-### 2. Start the stack
+| Variable             | Description                                                                                                                                     | Default                   |
+| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------- |
+| `SSO_DOMAIN`         | Base domain: the dashboard is `http://ocm.<domain>`, the portal and OIDC provider `http://auth.<domain>`                                        | `localhost`               |
+| `OIDC_CLIENT_SECRET` | OCM's client secret, which must equal the one of its relying party in LemonLDAP-NG (see [step 2](#2-register-ocm-in-lemonldap-ng))              | `change-me`               |
+| `SESSION_SECRET`     | Signs OCM's session and sign-in cookies: 32 random characters or more, and changing it signs everyone out (see [OIDC settings](#oidc-settings)) | `change-me-in-production` |
+
+Left unset, the three variables give a test stack on `localhost`, and OCM warns at startup that the default `SESSION_SECRET` is too short. Set them for anything else.
+
+### 2. Register OCM in LemonLDAP-NG
+
+LemonLDAP-NG must know OCM as an OIDC relying party. The stack runs no LemonLDAP-NG Manager: `yadd/lemonldap-ng-portal` is the portal alone (see the [image documentation](https://github.com/guimard/llng-docker/tree/master/portal#readme)). The relying party comes from `demo/sso/` instead, which the compose file mounts in the `lemonldap` container at `/over`, where LemonLDAP-NG reads each file as the configuration key of its name. [demo/README.md](../demo/README.md) describes these files: they also turn the OIDC provider on, set the claims OCM gets, and hold the key pair that signs the tokens.
+
+They register OCM for a stack started without `.env`, on `localhost`:
+
+| Setting                  | Demo value                                | In OCM                                   |
+| ------------------------ | ----------------------------------------- | ---------------------------------------- |
+| Client ID                | `ocm-dashboard`                           | `OIDC_CLIENT_ID`                         |
+| Client secret            | `change-me`                               | `OIDC_CLIENT_SECRET`                     |
+| Redirect URI             | `http://ocm.localhost/auth/callback`      | `OIDC_BASE_URL`, then `/auth/callback`   |
+| Post-logout redirect URI | `http://ocm.localhost`                    | `OIDC_BASE_URL`                          |
+| Back-channel logout URI  | `http://ocm.localhost/logout/backchannel` | `/logout/backchannel`, through the relay |
+
+LemonLDAP-NG compares the URIs character for character: a redirect URI that differs makes the sign-in fail, and a post-logout redirect URI that differs, the sign-out. With another `SSO_DOMAIN` or `OIDC_CLIENT_SECRET`, change these values in `demo/sso/oidcRPMetaDataOptions` as [demo/README.md](../demo/README.md#using-another-domain) shows, then restart the `lemonldap` container.
+
+Before any real use, replace the demo's key pair, public in this repository, and LemonLDAP-NG's default Demo authentication, which accepts the accounts `dwho`, `rtyler` and `msmith` with their login as password (see [demo/README.md](../demo/README.md#before-any-real-use)).
+
+### 3. Start the stack
 
 ```bash
-docker-compose -f docker-compose.yml -f docker-compose.sso.yml up -d --build
+docker-compose -f docker-compose.sso.yml up -d --build
 ```
 
-### 3. Import billing data
+Then check that OCM has discovered the provider:
+
+```bash
+docker-compose -f docker-compose.sso.yml logs ocm | grep OIDC
+```
+
+The output should include `OIDC: provider discovered, sign-in is available`. Until then, `/api` and `/auth` answer 503: see [Troubleshooting](#troubleshooting). With the demo's defaults, it also warns that `SESSION_SECRET` is short and that the issuer is plain HTTP.
+
+Do not add `docker-compose.yml` (`-f docker-compose.yml -f docker-compose.sso.yml`): OCM would also be published on port 3001, a way in around the relay, and the `TRUST_PROXY=true` of the SSO file would then let any client choose the address that rate limiting sees.
+
+### 4. Import billing data
 
 ```bash
 docker exec ovh-cost-manager node data/import.js --from 2025-01-01 --to 2025-12-31
 ```
 
-### 4. Access the services
+### 5. Access the services
 
-| Service           | URL                        | Description                      |
-| ----------------- | -------------------------- | -------------------------------- |
-| OCM Dashboard     | http://ocm.example.com     | Main application (requires auth) |
-| LemonLDAP Portal  | http://auth.example.com    | Login page                       |
-| LemonLDAP Manager | http://manager.example.com | Configuration interface          |
-| Traefik Dashboard | http://localhost:8080      | Reverse proxy status             |
+| Service             | URL                    | Description                                          |
+| ------------------- | ---------------------- | ---------------------------------------------------- |
+| OCM Dashboard       | `http://ocm.<domain>`  | Main application, through the relay (requires login) |
+| LemonLDAP-NG Portal | `http://auth.<domain>` | Login page and OIDC provider                         |
+
+Both host names must resolve to the Docker host, from the browser: through DNS, or `/etc/hosts` for a test. Until you replace LemonLDAP-NG's Demo authentication (see [LemonLDAP-NG Configuration](#lemonldap-ng-configuration)), sign in at the portal with a demo account, such as `dwho` with the password `dwho`.
 
 ### Services Overview
 
-| Container          | Image                    | Purpose              |
-| ------------------ | ------------------------ | -------------------- |
-| `ovh-cost-manager` | Custom (Dockerfile)      | Application server   |
-| `lemonldap`        | yadd/lemonldap-ng-portal | SSO Portal & Handler |
-| `traefik`          | traefik:v2.10            | Reverse proxy        |
+| Container          | Image                             | Purpose                                                |
+| ------------------ | --------------------------------- | ------------------------------------------------------ |
+| `ovh-cost-manager` | Custom (Dockerfile)               | Application server and OIDC client, no published port  |
+| `lemonldap`        | `yadd/lemonldap-ng-portal:latest` | SSO portal, OIDC provider and relay to OCM, on port 80 |
 
 ### Volumes
 
@@ -215,32 +275,43 @@ docker exec ovh-cost-manager node data/import.js --from 2025-01-01 --to 2025-12-
 | `lemonldap-conf`     | LemonLDAP configuration     |
 | `lemonldap-sessions` | SSO session storage         |
 
+The compose file also mounts `./config.json` into OCM, read-only, and `./demo/sso` into LemonLDAP-NG, at `/over`.
+
+### How OCM Signs Users In
+
+OCM authenticates users itself, as an OIDC client (`server/auth/`). Its settings and their rules are under [OIDC settings](#oidc-settings).
+
+1. **Startup.** A missing or malformed setting stops the server. It then discovers the provider from the issuer URL, in the background, retrying with backoff: until it succeeds, `/api` and `/auth` answer 503, except `/api/health`. With OIDC on, it never falls back to [header mode](#header-based-authentication-without-oidc).
+2. **Sign-in.** A page request without a session is redirected to `/auth/login`, which sends the browser to the provider: authorization code flow with PKCE, bound to the browser by a sign-in cookie. An API request without a session gets a `401` with a `loginUrl`, which the dashboard follows.
+3. **Callback.** The provider sends the browser back to `<OIDC_BASE_URL>/auth/callback`. OCM exchanges the code for tokens, reads the user from the provider's userinfo endpoint (`sub`, `email`, and `name` or `preferred_username`), stores a session in its SQLite database and sets the session cookie, signed with `SESSION_SECRET`. It then goes back to the page first asked for, when that is a path of the dashboard.
+4. **Logout.** `/auth/logout`, the ✕ next to the user's name in the dashboard, deletes the session, then sends the browser to the provider's end-session endpoint, if it has one, with `OIDC_BASE_URL` as `post_logout_redirect_uri`.
+5. **Back-channel logout.** When a user signs out of the portal, the provider can post a logout token to `/logout/backchannel`, which ends the dashboard's sessions that the token names.
+
+`/api/health`, `/auth/*` and `/logout/backchannel` need no session, and `/auth/*` has the stricter rate limit (`RATE_LIMIT_AUTH_*`).
+
+---
+
+## Header-Based Authentication (without OIDC)
+
+OCM has a second mode, for a reverse proxy that authenticates users itself and passes them on in request headers, such as a LemonLDAP-NG handler. No compose file of this repository sets it up.
+
+OCM uses it only when OIDC is off: with `OIDC_ENABLED=false`, or with `OIDC_ENABLED` unset or empty and `auth.enabled` not `true` in `config.json`. With OIDC on, it never falls back to this mode, even while the provider is unreachable (see [OIDC settings](#oidc-settings)). It reads three headers:
+
+| Header      | Used as                                       |
+| ----------- | --------------------------------------------- |
+| `Auth-User` | User ID. Without it, the request is anonymous |
+| `Auth-Mail` | Email                                         |
+| `Auth-CN`   | Display name, `Auth-User` when missing        |
+
+- **`AUTH_REQUIRED=true`** makes OCM answer `401` to API requests without `Auth-User`, except `/api/health`. The dashboard page and its assets are served either way. Without it, `false` by default, OCM refuses nothing and serves the API to anyone: the headers only name the user, in the logs and in `/api/user`.
+- **What OCM trusts:** these headers, on any request that reaches it. OCM does not check where they come from, and `TRUST_PROXY` plays no part. Only the proxy must be able to reach OCM, so do not publish OCM's port, and the proxy must set or remove the three headers on every request, so that no client can send its own.
+- OCM has no login or logout of its own in this mode.
+
 ---
 
 ## LemonLDAP-NG Configuration
 
-LemonLDAP-NG can act as a Service Provider (SP) for external Identity Providers using SAML or OIDC protocols.
-
-### Access the Manager
-
-1. Open http://manager.example.com (or http://manager.localhost for local testing)
-2. Default credentials: `dwho` / `dwho` (demo user)
-
-### Configure Virtual Host for OCM
-
-1. Go to **Virtual Hosts** > **Add virtual host**
-2. Enter your OCM domain: `ocm.example.com`
-3. Configure exported headers:
-
-| Header      | Value   | Description       |
-| ----------- | ------- | ----------------- |
-| `Auth-User` | `$uid`  | User identifier   |
-| `Auth-Mail` | `$mail` | User email        |
-| `Auth-CN`   | `$cn`   | User display name |
-
-4. Set access rules:
-   - Default rule: `accept` (authenticated users)
-   - Or use `$groups =~ /admin/` for group-based access
+In the SSO stack, LemonLDAP-NG is the OIDC provider of OCM. How it authenticates users in turn is its own configuration, for which the [LemonLDAP-NG documentation](https://lemonldap-ng.org/documentation) is the reference. It can act as a Service Provider (SP) for external Identity Providers using SAML or OIDC protocols, as below. These steps use the LemonLDAP-NG Manager, which the SSO stack does not run (see [2. Register OCM in LemonLDAP-NG](#2-register-ocm-in-lemonldap-ng)).
 
 ---
 
@@ -434,13 +505,14 @@ Discovery URL: https://idp.example.com/.well-known/openid-configuration
 
 ### Security
 
-- [ ] Enable HTTPS with TLS certificates (Let's Encrypt via Traefik)
+- [ ] Serve the stack over HTTPS (see [HTTPS](#https))
+- [ ] Set `OIDC_CLIENT_SECRET`, and `SESSION_SECRET` to 32 random characters or more, and replace the demo key pair and client secret of `demo/sso/`
 - [ ] Change default LemonLDAP demo users
 - [ ] Configure strong session parameters
 - [ ] Use secrets management for credentials
 - [ ] **Configure `TRUST_PROXY=true` for reverse proxy/Kubernetes deployments**
 - [ ] Adjust rate limiting based on your usage patterns (or disable for internal apps behind SSO)
-- [ ] Enable rate limiting on Traefik
+- [ ] Enable rate limiting on your reverse proxy
 - [ ] Configure firewall rules
 
 ### Rate Limiting for Kubernetes/Reverse Proxy
@@ -481,31 +553,9 @@ environment:
   - RATE_LIMIT_AUTH_MAX=100         # Increase from 20 to 100
 ```
 
-### Traefik HTTPS Configuration
+### HTTPS
 
-Add to `docker-compose.sso.yml`:
-
-```yaml
-services:
-  traefik:
-    command:
-      - "--entrypoints.websecure.address=:443"
-      - "--certificatesresolvers.letsencrypt.acme.httpchallenge=true"
-      - "--certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web"
-      - "--certificatesresolvers.letsencrypt.acme.email=admin@example.com"
-      - "--certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json"
-    ports:
-      - "443:443"
-    volumes:
-      - letsencrypt:/letsencrypt
-```
-
-Update router labels:
-```yaml
-labels:
-  - "traefik.http.routers.ocm.entrypoints=websecure"
-  - "traefik.http.routers.ocm.tls.certresolver=letsencrypt"
-```
+`docker-compose.sso.yml` serves plain HTTP on port 80 and has no HTTPS setup: sign-in codes, tokens and session cookies travel unencrypted, and OCM warns at startup that its issuer is plain HTTP. With `COOKIE_SECURE=auto`, the default, the session cookie is not `Secure` on this stack, as browsers would not store it over plain HTTP (see [OIDC settings](#oidc-settings)). Beyond a test, the stack needs HTTPS, which this compose file does not provide.
 
 ### High Availability
 
@@ -537,13 +587,16 @@ docker run --rm -v lemonldap-conf:/data -v $(pwd):/backup alpine \
 ```bash
 # Check logs
 docker-compose logs -f ocm
-docker-compose -f docker-compose.yml -f docker-compose.sso.yml logs -f
+docker-compose -f docker-compose.sso.yml logs -f
 ```
 
 **Authentication not working:**
-1. Check Traefik dashboard (http://localhost:8080) for routing
-2. Verify LemonLDAP handler is accessible: `curl -I http://handler.localhost`
-3. Check exported headers in browser developer tools
+1. Check OCM's log: `docker-compose -f docker-compose.sso.yml logs ocm`.
+   - `Failed to start server: ...`: a setting is missing or malformed, and the message names it (see [OIDC settings](#oidc-settings)). The server does not start until it is fixed.
+   - `OIDC: discovery of ... failed: ...`: OCM cannot reach the provider yet, as while LemonLDAP-NG starts (`depends_on` only orders the start). It retries with backoff, and `/api` and `/auth` answer 503 until it logs `OIDC: provider discovered, sign-in is available`.
+2. An error on the portal, or `Sign-in failed, please sign in again.` from OCM after it: check that the client ID, client secret and URIs of the relying party match OCM's settings (see [2. Register OCM in LemonLDAP-NG](#2-register-ocm-in-lemonldap-ng)). OCM's log gives the provider's reason, after `OIDC callback: sign-in refused:`.
+3. `Sign-in failed, please sign in again.` with `OIDC callback: no valid sign-in cookie for its state` in the log: the sign-in took more than 10 minutes, or did not start on the host of `OIDC_BASE_URL`, so the browser did not send its sign-in cookie back. Start again from the dashboard, at `OIDC_BASE_URL`.
+4. The sign-in loops between OCM and the portal: the session cookie is `Secure` on a plain HTTP page, as with `COOKIE_SECURE=true` there, and the browser drops it. Leave `COOKIE_SECURE` to `auto` on an HTTP stack (see [OIDC settings](#oidc-settings)).
 
 **SAML errors:**
 - Verify clock synchronization between containers and IdP
@@ -565,23 +618,19 @@ services:
   lemonldap:
     environment:
       - LOGLEVEL=debug
-
-  traefik:
-    command:
-      - "--log.level=DEBUG"
 ```
 
 ### Reset Configuration
 
 ```bash
 # Stop all containers
-docker-compose -f docker-compose.yml -f docker-compose.sso.yml down
+docker-compose -f docker-compose.sso.yml down
 
 # Remove volumes (WARNING: destroys data)
 docker volume rm ocm-data lemonldap-conf lemonldap-sessions
 
 # Restart fresh
-docker-compose -f docker-compose.yml -f docker-compose.sso.yml up -d --build
+docker-compose -f docker-compose.sso.yml up -d --build
 ```
 
 ---
@@ -591,5 +640,5 @@ docker-compose -f docker-compose.yml -f docker-compose.sso.yml up -d --build
 - [LemonLDAP-NG Documentation](https://lemonldap-ng.org/documentation)
 - [LemonLDAP-NG SAML Guide](https://lemonldap-ng.org/documentation/latest/authsaml)
 - [LemonLDAP-NG OIDC Guide](https://lemonldap-ng.org/documentation/latest/authopenidconnect)
-- [Traefik Documentation](https://doc.traefik.io/traefik/)
+- [yadd/lemonldap-ng-portal image](https://github.com/guimard/llng-docker/tree/master/portal#readme)
 - [Docker Compose Reference](https://docs.docker.com/compose/)
