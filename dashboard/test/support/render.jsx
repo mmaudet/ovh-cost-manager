@@ -18,20 +18,17 @@ import { serve } from './api.js';
 import {
   createQueryClient, keysIn, settle as settleQueries, timersAreFake,
 } from './query-client.js';
-import { actIn, currentSession, stopIfOver } from './session.js';
+import { actIn, currentSession, runStep } from './session.js';
 
 let queryClient;
 
-// The user of a test, whose actions stop for good once the test is over, failed or timed
-// out: an action it left running would go on to wait in act() and act on the page of the
-// next test (see endTest() in session.js). setup() is no action: it derives a user.
+// The user of a test, each action of which is a step of the test (see session.js): one it
+// left running stops for good once it is over, rather than act on the page of the next test.
+// setup() is no action: it derives a user.
 const userOf = (from, user) => Object.fromEntries(Object.entries(user).map(
-  ([name, action]) => [name, name === 'setup' ? action : async (...args) => {
-    await stopIfOver(from);
-    const done = await action(...args);
-    await stopIfOver(from);
-    return done;
-  }],
+  ([name, action]) => [name, name === 'setup'
+    ? action
+    : (...args) => runStep(from, `user.${name}()`, () => action(...args))],
 ));
 
 // Renders the whole dashboard as src/main.jsx does, with the API answering
@@ -78,7 +75,7 @@ export function fakeTimers() {
 // Under fake timers, lets time pass, then waits until the page shows what
 // that time brought
 export async function passTime(ms) {
-  await actIn(currentSession(), () => vi.advanceTimersByTimeAsync(ms));
+  await actIn(currentSession(), 'passTime()', () => vi.advanceTimersByTimeAsync(ms));
   await settle();
 }
 

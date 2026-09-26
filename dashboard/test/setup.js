@@ -43,12 +43,15 @@ beforeEach(() => {
 });
 
 afterEach(async () => {
-  // First stop what the test left running, if it failed or timed out while a helper of
-  // support/ waited, so that the next test starts clean (see endTest())
-  await endTest();
-  // Without Vitest globals, Testing Library cannot register its own cleanup
-  cleanup();
-  vi.useRealTimers();
-  // The page remembers the chosen language
-  localStorage.clear();
+  try {
+    // First stop what the test left running, so that the next test starts clean, and fail
+    // the test if it left anything (see support/session.js)
+    await endTest();
+  } finally {
+    // Without Vitest globals, Testing Library cannot register its own cleanup
+    cleanup();
+    vi.useRealTimers();
+    // The page remembers the chosen language
+    localStorage.clear();
+  }
 });

@@ -47,7 +47,7 @@ export async function settle(queryClient) {
   const from = currentSession();
   do {
     // Fake timers make a zero-delay timer set while others run due 1 ms later
-    await actIn(from, () => (timersAreFake()
+    await actIn(from, 'settle()', () => (timersAreFake()
       ? vi.advanceTimersByTimeAsync(1)
       : new Promise((resolve) => setTimeout(resolve, 0))));
   } while (queryClient.isFetching() + queryClient.isMutating() + pendingNotifications.size > 0);
