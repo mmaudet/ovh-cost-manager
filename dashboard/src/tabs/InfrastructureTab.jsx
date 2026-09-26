@@ -2,6 +2,7 @@ import Modal from '../components/Modal.jsx';
 import TableActions from '../components/TableActions.jsx';
 import { ServersTable, serverCsvColumns } from '../components/ServersTable.jsx';
 import { downloadCSV } from '../utils/csv.js';
+import { formatMonthLabel } from '../utils/format.js';
 
 // Resource types the Infrastructure tab leaves out: Public Cloud has its own
 // tab, and domains moved to Web Cloud, .ovh ones included (web_cloud type).
@@ -53,7 +54,11 @@ const InfrastructureTab = ({
       <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
         <h3 className="font-semibold text-gray-900 mb-4">
           {language === 'en' ? 'Costs by resource type' : 'Coûts par type de ressource'}
-          {selectedMonth && <span className="text-sm font-normal text-gray-400 ml-2">({selectedMonth.label})</span>}
+          {selectedMonth && (
+            <span className="text-sm font-normal text-gray-400 ml-2">
+              ({formatMonthLabel(selectedMonth.value, language)})
+            </span>
+          )}
         </h3>
         <div className="space-y-2">
           {byResourceType.filter(r => !INFRA_EXCLUDED_TYPES.includes(r.resource_type)).map(s => {

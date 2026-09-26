@@ -9,7 +9,7 @@ import {
 } from '../services/api';
 import { useLanguage } from '../hooks/useLanguage.jsx';
 import Logo from '../components/Logo';
-import { formatCurrency } from '../utils/format.js';
+import { formatCurrency, formatMonthLabel, yearMonthOf } from '../utils/format.js';
 import { parseSqliteDate } from '../utils/sqliteDate.js';
 import { generateMarkdownReport } from '../utils/markdownReport.js';
 import { useWebCloudTab } from '../tabs/useWebCloudTab.js';
@@ -333,7 +333,11 @@ export default function Dashboard() {
                   }}
                   className="px-4 py-2 bg-white border border-gray-200 rounded-lg text-sm shadow-sm cursor-pointer"
                 >
-                  {months.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
+                  {months.map(m => (
+                    <option key={m.value} value={m.value}>
+                      {formatMonthLabel(m.value, language)}
+                    </option>
+                  ))}
                 </select>
                 <div className="flex items-center gap-2">
                   <span className="text-sm text-gray-600">{t('export')}:</span>
@@ -441,7 +445,9 @@ export default function Dashboard() {
               <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
                 <div className="flex justify-between items-start mb-3">
                   <span className="text-gray-500 text-sm font-medium">{t('forecastEndOfMonth')}</span>
-                  <span className="text-xs text-gray-400">{new Date().toLocaleDateString(locale, { month: 'long', year: 'numeric' })}</span>
+                  <span className="text-xs text-gray-400">
+                    {formatMonthLabel(yearMonthOf(new Date()), language)}
+                  </span>
                 </div>
                 <div className="text-2xl font-bold text-gray-900">{fmt(consumptionForecast.forecast_total || 0)}€</div>
                 {consumptionForecast.progress > 0 && (

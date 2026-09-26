@@ -331,9 +331,9 @@ describe('Infrastructure tab', () => {
       'Private Cloud Datastores', '3', '380.00€',
     ]);
     const costs = () => costsByResourceType('Costs by resource type');
-    // Month labels come from the API, in French only (#33)
+    // The month in the language of the page, not in the French of the API (#33)
     expect(texts(costs()).slice(0, 5)).toEqual([
-      'Costs by resource type', '(Septembre 2026)', 'Private Cloud Hosts', '1,450.00€', '▼',
+      'Costs by resource type', '(September 2026)', 'Private Cloud Hosts', '1,450.00€', '▼',
     ]);
 
     await user.click(within(costs()).getByText('Dedicated Servers'));

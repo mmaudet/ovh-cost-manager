@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { fetchProjectConsumption } from '../services/api';
+import { formatMonthLabel } from '../utils/format.js';
 import { Variation } from './Variation.jsx';
 
 export default function ProjectProductComparison({ projectId, monthA, monthB, fmt, language, t }) {
@@ -37,8 +38,12 @@ export default function ProjectProductComparison({ projectId, monthA, monthB, fm
       <thead>
         <tr className="border-b text-left bg-gray-50">
           <th className="p-3 font-medium rounded-tl-lg">{language === 'en' ? 'Product/Type' : 'Produit/Type'}</th>
-          <th className="p-3 font-medium text-right">{monthA?.label}</th>
-          <th className="p-3 font-medium text-right">{monthB?.label}</th>
+          <th className="p-3 font-medium text-right">
+            {formatMonthLabel(monthA?.value, language)}
+          </th>
+          <th className="p-3 font-medium text-right">
+            {formatMonthLabel(monthB?.value, language)}
+          </th>
           <th className="p-3 font-medium text-right rounded-tr-lg">{language === 'en' ? 'Variation' : 'Variation'}</th>
         </tr>
       </thead>

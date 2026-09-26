@@ -649,14 +649,14 @@ describe('Compare tab', () => {
 
     await openTab(user, 'Compare');
 
-    // Month labels come from the API, in French only (#33)
+    // The months in the language of the page, not in the French of the API (#33)
     expect(texts(comparedTotals())).toEqual([
-      'Month A :', 'Août 2026', 'VS', 'Month B :', 'Septembre 2026',
-      '1,042.00€', 'Août 2026', '+20.0%', '1,250.40€', 'Septembre 2026',
+      'Month A :', 'August 2026', 'VS', 'Month B :', 'September 2026',
+      '1,042.00€', 'August 2026', '+20.0%', '1,250.40€', 'September 2026',
     ]);
     expect(screen.getByRole('heading', { name: 'Comparison by service' })).toBeInTheDocument();
     expect(rowsOf(comparisonTable(/^Comparison by project/))).toEqual([
-      ['Project○', 'Août 2026▼', 'Septembre 2026○', 'Variation○'],
+      ['Project○', 'August 2026▼', 'September 2026○', 'Variation○'],
       ['Production', '512.00€', '610.40€', '+19.2%'],
       ['Staging', '190.00€', '220.00€', '+15.8%'],
     ]);
@@ -666,6 +666,11 @@ describe('Compare tab', () => {
     await openComparison(user, /^Private Cloud Comparison/);
     await openComparison(user, /^Production \(Project\)/);
 
+    // Months A and B head the other comparisons too, in English (#33)
+    expect(headerOf(comparisonTable(/^Infrastructure Comparison/)))
+      .toEqual(['Type', 'August 2026', 'September 2026', 'Variation']);
+    expect(headerOf(comparisonTable(/^Private Cloud Comparison/)))
+      .toEqual(['Type', 'August 2026', 'September 2026', 'Variation']);
     // The label of each row, its first text: the row of the dedicated servers
     // lists them after it (#35)
     const infrastructureTypes = rowTextsOf(comparisonTable(/^Infrastructure Comparison/))
@@ -679,7 +684,7 @@ describe('Compare tab', () => {
     // The Veeam backups of months A and B (#32), none to compute a variation
     // from (#65)
     expect(rowsOf(comparisonTable(/^Backup Comparison/))).toEqual([
-      ['Category', 'Août 2026', 'Septembre 2026', 'Variation'],
+      ['Category', 'August 2026', 'September 2026', 'Variation'],
       ['Veeam Backup VMs', '2 / 40.00€', '3 / 90.00€', '+125.0%'],
       ['Veeam Enterprise License', '0 / 0.00€', '1 / 25.00€', '—'],
     ]);
@@ -688,7 +693,7 @@ describe('Compare tab', () => {
     expect(rowsOf(comparisonTable(/^Private Cloud Comparison/)).map(([type]) => type))
       .toEqual(['Type', 'Private Cloud Hosts', 'Private Cloud Datastores']);
     expect(rowsOf(comparisonTable(/^Production \(Project\)/)).slice(0, 2)).toEqual([
-      ['Product/Type', 'Août 2026', 'Septembre 2026', 'Variation'],
+      ['Product/Type', 'August 2026', 'September 2026', 'Variation'],
       ['instance', '0.00€', '234.25€', '—'],
     ]);
   });

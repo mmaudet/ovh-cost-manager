@@ -101,8 +101,9 @@ describe('dashboard shell', () => {
         'Consommation en cours', '15 septembre 2026',
         '402,35€', 'Public Cloud · 2 projets cloud',
       ]);
+      // The month capitalised, as the other month labels (#33)
       expect(texts(cardOf('Prévision fin de mois')))
-        .toEqual(['Prévision fin de mois', 'septembre 2026', '862,18€', '14/30 jours']);
+        .toEqual(['Prévision fin de mois', 'Septembre 2026', '862,18€', '14/30 jours']);
       expect(texts(cardOf('Total ressources')))
         .toEqual(['Total ressources', '9', '1 Serveurs dédiés · 0 VPS · 2 Projets Cloud']);
     });
@@ -111,7 +112,7 @@ describe('dashboard shell', () => {
       await renderDashboard({ ...account, config: { budget: 800, currency: 'EUR' } });
 
       expect(texts(cardOf('Prévision fin de mois')))
-        .toEqual(['Prévision fin de mois', 'septembre 2026', '862,18€', '> Budget!']);
+        .toEqual(['Prévision fin de mois', 'Septembre 2026', '862,18€', '> Budget!']);
     });
   });
 
@@ -465,10 +466,12 @@ describe('dashboard shell', () => {
       expect(files).toHaveLength(1);
       expect(files[0].name).toBe('ovh-report-2026-09.md');
       expect(files[0].type).toBe('text/markdown');
+      // All in French: the title, the period, the totals and the percentages (#60), with a
+      // space before the colon
       expect(files[0].content).toBe([
-        '# OVH Cost Report - Septembre 2026',
+        '# Rapport de coûts OVH - Septembre 2026',
         '',
-        '**Période:** 2026-09-01 to 2026-09-30',
+        '**Période :** du 2026-09-01 au 2026-09-30',
         '',
         '## Résumé',
         '',
@@ -476,8 +479,8 @@ describe('dashboard shell', () => {
         '|--------|-------|',
         // French amounts separate thousands with a narrow no-break space
         '| Coût Total | 1\u202f250,40€ |',
-        '| Cloud Total | 830,40€ |',
-        '| Non-Cloud Total | 420,00€ |',
+        '| Total Cloud | 830,40€ |',
+        '| Total hors Cloud | 420,00€ |',
         '| Moyenne Journalière | 41,68€ |',
         '| Projets Actifs | 2 |',
         '',
@@ -485,9 +488,10 @@ describe('dashboard shell', () => {
         '',
         '| Service | Coût | % |',
         '|---------|------|---|',
-        '| Compute | 800,40€ | 64.0% |',
-        '| Storage | 250,00€ | 20.0% |',
-        '| Other | 200,00€ | 16.0% |',
+        // and French percentages their sign with a no-break space
+        '| Compute | 800,40€ | 64,0\u00a0% |',
+        '| Storage | 250,00€ | 20,0\u00a0% |',
+        '| Other | 200,00€ | 16,0\u00a0% |',
         '',
         '## Top Projets',
         '',
@@ -512,6 +516,8 @@ describe('dashboard shell', () => {
       await user.selectOptions(screen.getByDisplayValue('Choose...'), 'Markdown');
 
       const [{ content: report }] = await downloadedFiles();
+      // The month in English too (#33)
+      expect(report).toContain('# OVH Cost Report - September 2026');
       expect(report).toContain('**Period:** 2026-09-01 to 2026-09-30');
       expect(report).toContain('| Total Cost | 1,250.40€ |');
       expect(report).toContain('## By Service Type');
@@ -530,7 +536,7 @@ describe('dashboard shell', () => {
 
   describe('header', () => {
     it('shows the signed-in user and how many services expire soon', async () => {
-      await renderDashboard({
+      const { user } = await renderDashboard({
         ...account,
         user: { id: 'jdoe', name: 'Jane Doe', email: 'jane.doe@example.com', authEnabled: true },
         expiringServices: [
@@ -552,9 +558,13 @@ describe('dashboard shell', () => {
       expect(screen.getByText('Jane Doe')).toBeInTheDocument();
       const logout = screen.getByRole('link', { name: '✕' });
       expect(logout).toHaveAttribute('href', '/auth/logout');
-      // The "logout" translation key is missing (#34)
-      expect(logout).toHaveAttribute('title', 'logout');
+      // The tooltip of the logout link, in the language of the page (#34)
+      expect(logout).toHaveAttribute('title', 'Se déconnecter');
       expect(texts(headerBadge('Expirations proches'))).toEqual(['2', 'Expirations proches']);
+
+      await selectLanguage(user, 'en');
+
+      expect(screen.getByRole('link', { name: '✕' })).toHaveAttribute('title', 'Log out');
     });
   });
 
@@ -575,14 +585,21 @@ describe('dashboard shell', () => {
       expect(screen.getByRole('button', { name: 'Trends' })).toBeInTheDocument();
       expect(screen.getByText('Data synchronized via OVHcloud API')).toBeInTheDocument();
       expect(screen.getByText('Last sync: 9/14/2026, 6:02:30 AM (3 bills)')).toBeInTheDocument();
-      // Month labels come from the API, in French only (#33)
-      expect(monthSelector()).toHaveDisplayValue('Septembre 2026');
+      // The months in the language of the page, not in the French of the API (#33)
+      expect(optionsOf(dropdown('July 2026')))
+        .toEqual(['September 2026', 'August 2026', 'July 2026']);
+      expect(dropdown('July 2026')).toHaveDisplayValue('September 2026');
+      expect(texts(cardOf('End of month forecast')))
+        .toEqual(['End of month forecast', 'September 2026', '862.18€', '14/30 days']);
 
       await selectLanguage(user, 'fr');
 
       expect(texts(cardOf('Coût total du mois')))
         .toEqual(['Coût total du mois', '1 250,40€', '0.0% vs mois précédent']);
       expect(screen.getByRole('button', { name: "Vue d'ensemble" })).toBeInTheDocument();
+      // The months back in French (#33)
+      expect(optionsOf(monthSelector())).toEqual(['Septembre 2026', 'Août 2026', 'Juillet 2026']);
+      expect(monthSelector()).toHaveDisplayValue('Septembre 2026');
     });
   });
 });

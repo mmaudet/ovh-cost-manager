@@ -188,7 +188,9 @@ describe('Backup tab', () => {
       'Veeam Enterprise Licenses', '1', '25.00€',
       '% of Total Cost', '9.2%',
     ]);
-    expect(screen.getByRole('heading', { name: /^Backup Resources/ })).toBeInTheDocument();
+    // The month in the language of the page, not in the French of the API (#33)
+    expect(texts(within(resourcesPanel('Backup Resources')).getByRole('heading')))
+      .toEqual(['Backup Resources', '(September 2026)']);
     expect(rowsOf(within(resourcesPanel('Backup Resources')).getByRole('table'))).toEqual([
       ['Category', 'Count', 'Cost'],
       ['Veeam Backup VMs', '3', '90.00€'],

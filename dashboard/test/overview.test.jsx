@@ -322,7 +322,7 @@ describe('Overview tab', () => {
       ]);
       // The forecast of 862.18 goes over it
       expect(texts(forecastCard()))
-        .toEqual(['Prévision fin de mois', 'septembre 2026', '862,18€', '> Budget!']);
+        .toEqual(['Prévision fin de mois', 'Septembre 2026', '862,18€', '> Budget!']);
     });
 
     it('keeps the budget the user typed across tabs', async () => {

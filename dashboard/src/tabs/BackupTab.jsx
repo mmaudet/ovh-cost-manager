@@ -1,5 +1,5 @@
 import { backupFigures } from '../utils/backupFigures.js';
-import { formatPercent } from '../utils/format.js';
+import { formatMonthLabel, formatPercent } from '../utils/format.js';
 
 // The Backup tab, which the shell renders while it is active: what useBackupTab() returns,
 // with the shell's language, amount format (fmt) and selected month, and two of its
@@ -87,7 +87,7 @@ const BackupTab = ({
           {language === 'en' ? 'Backup Resources' : 'Ressources Backup'}
           {selectedMonth && (
             <span className="text-sm font-normal text-gray-400 ml-2">
-              ({selectedMonth.label})
+              ({formatMonthLabel(selectedMonth.value, language)})
             </span>
           )}
         </h3>
