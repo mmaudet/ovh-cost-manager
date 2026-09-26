@@ -83,7 +83,7 @@ function createOriginCheck({ allowedOrigins, isDev, trustProxy }) {
     if (trustProxy && request.forwardedHost) {
       ownHosts.push(lastValue(request.forwardedHost));
     }
-    return ownHosts.some((ownHost) => namesOriginHost(ownHost, url));
+    return ownHosts.some((ownHost) => matchesOriginHost(ownHost, url));
   };
 }
 
@@ -97,18 +97,12 @@ function knownScheme({ forwardedProto, encrypted }, trustProxy) {
   return encrypted ? 'https' : null;
 }
 
-// Whether a Host or X-Forwarded-Host value names the origin's host. Hosts
-// compare as URL writes them: lowercase, and without the default port of the
-// origin's scheme.
-//
 // An https origin on its default port also matches its hostname on port 80:
 // behind a TLS terminator, the LemonLDAP relay of docker-compose.sso.yml
-// passes the port it listens on, Host: ocm.example.com:80, and an https page
-// cannot be forged without a certificate for its host. Not the other way
-// round: an http origin does not match its hostname on port 443. An http page
-// can be a network attacker's, and must not pass for an https dashboard when
-// the request says it came in on the https port.
-function namesOriginHost(header, url) {
+// passes the port it listens on, and an https page cannot be forged without a
+// certificate for its host. An http origin does not match its hostname on
+// port 443: an http page can be a network attacker's.
+function matchesOriginHost(header, url) {
   const host = parseHost(header, url.protocol)?.host;
   const httpsOnDefaultPort = url.protocol === 'https:' && url.port === '';
   return host === url.host || (httpsOnDefaultPort && host === `${url.hostname}:80`);
