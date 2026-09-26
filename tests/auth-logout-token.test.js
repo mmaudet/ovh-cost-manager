@@ -175,14 +175,29 @@ describe('replayKey', () => {
   });
 });
 
+// jose, with maxTokenAge 300 and clockTolerance 30, compares whole seconds,
+// rounded down: it accepts a token until iat + 331 s and exp + 30 s, both
+// excluded, as a scratch run of jwtVerify at those instants showed. The key
+// must outlive that: it is kept one second more
 describe('replayWindowEnd', () => {
-  // Refused anyway once iat is 5 minutes old, or at exp, with 30 s of skew
-  test('ends 5 minutes after iat, with the skew, when exp is later', () => {
-    expect(replayWindowEnd({ iat: 1790000000, exp: 1790003600 })).toBe((1790000300 + 30) * 1000);
+  const IAT = 1790000000;
+
+  test('ends a second after jose\'s last acceptance by iat, when exp is later', () => {
+    expect(replayWindowEnd({ iat: IAT, exp: IAT + 3600 })).toBe((IAT + 332) * 1000);
   });
 
-  test('ends at exp, with the skew, when exp comes first', () => {
-    expect(replayWindowEnd({ iat: 1790000000, exp: 1790000120 })).toBe((1790000120 + 30) * 1000);
+  test('ends a second after jose\'s last acceptance by exp, when exp comes first', () => {
+    expect(replayWindowEnd({ iat: IAT, exp: IAT + 120 })).toBe((IAT + 151) * 1000);
+  });
+
+  test.each([
+    ['iat + 330.999 s, the last instant by iat', IAT + 3600, (IAT + 330) * 1000 + 999],
+    ['exp + 29.999 s, the last instant by exp', IAT + 120, (IAT + 149) * 1000 + 999],
+  ])('keeps the key at %s that jose accepts the token', (label, exp, lastAccepted) => {
+    const guard = createReplayGuard();
+    const end = replayWindowEnd({ iat: IAT, exp });
+    guard.firstUse('key', end, IAT * 1000);
+    expect(guard.firstUse('key', end, lastAccepted)).toBe(false);
   });
 });
 

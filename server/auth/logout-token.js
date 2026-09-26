@@ -100,15 +100,22 @@ function replayKey({ iss, jti }, logoutToken) {
 }
 
 /**
- * When the verification refuses a logout token anyway, in milliseconds: 5
- * minutes after its iat, or at its exp, with the clock tolerance. Until then,
- * its jti is remembered.
+ * Until when the replay key of a logout token is kept, in milliseconds:
+ * strictly longer than the verification accepts the token. jose compares
+ * whole seconds, rounded down: it accepts the token while the second is at
+ * most iat + 330, 5 minutes and the clock tolerance, and below exp + 30, so
+ * until iat + 331 s or exp + 30 s, whichever comes first. The key is kept one
+ * second more, which also covers an iat or exp with a fraction.
  *
  * @param {{ iat: number, exp: number }} claims - verified claims
  * @returns {number}
  */
 function replayWindowEnd({ iat, exp }) {
-  return (Math.min(iat + MAX_AGE_SECONDS, exp) + CLOCK_TOLERANCE_SECONDS) * 1000;
+  const acceptedUntil = Math.min(
+    iat + MAX_AGE_SECONDS + CLOCK_TOLERANCE_SECONDS + 1,
+    exp + CLOCK_TOLERANCE_SECONDS
+  );
+  return (acceptedUntil + 1) * 1000;
 }
 
 // The tokens a guard keeps at most, well above the sign-outs of a few
