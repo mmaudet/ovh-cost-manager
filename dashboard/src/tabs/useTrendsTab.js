@@ -6,22 +6,13 @@ import { useQuery } from '@tanstack/react-query';
 import {
   fetchMonthlyTrend, fetchMonthlyTrendByCategory, fetchGpuSummary,
 } from '../services/api.js';
-import { PERIOD_OPTIONS, monthsSince } from '../utils/trendPeriods.js';
+import { PERIOD_OPTIONS, monthsSince, availablePeriodsFor } from '../utils/trendPeriods.js';
 
 const useTrendsTab = ({ months, activeTab }) => {
   const [trendPeriod, setTrendPeriod] = useState(6); // Months for trend
 
-  // Trend periods available given how far back the data goes. Offer every
-  // predefined step up to (and including) the first one that covers all data.
   const maxMonths = months.length > 0 ? monthsSince(months[months.length - 1].value) : 0;
-  const availablePeriods = (() => {
-    const out = [];
-    for (const opt of PERIOD_OPTIONS) {
-      out.push(opt);
-      if (opt.months >= maxMonths) break;
-    }
-    return out.length > 0 ? out : [PERIOD_OPTIONS[0]];
-  })();
+  const availablePeriods = availablePeriodsFor(maxMonths);
   const currentPeriodLabel = (PERIOD_OPTIONS.find(o => o.months === trendPeriod) || {}).key;
 
   useEffect(() => {
