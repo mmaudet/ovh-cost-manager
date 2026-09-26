@@ -30,7 +30,7 @@ const availablePeriodsFor = (maxMonths) => {
     out.push(opt);
     if (opt.months >= maxMonths) break;
   }
-  return out.length > 0 ? out : [PERIOD_OPTIONS[0]];
+  return out;
 };
 
 export { PERIOD_OPTIONS, monthsSince, availablePeriodsFor };

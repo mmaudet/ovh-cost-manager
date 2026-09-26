@@ -26,7 +26,7 @@ const cell = (value) => {
  * @param {Array<{key: string, label: string}>} columns
  * @returns {string}
  */
-export function toCSV(rows, columns) {
+function toCSV(rows, columns) {
   const header = columns.map(c => `"${c.label}"`).join(';');
   const body = rows.map(row => columns.map(c => cell(row[c.key])).join(';'));
   return [header, ...body].join('\n');
