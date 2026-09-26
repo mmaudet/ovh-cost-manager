@@ -184,22 +184,24 @@ describe('Public Cloud tab', () => {
       ]);
     });
 
-    it('keep the open project when the user comes back to the tab', async () => {
+    it('keep the open project when the user comes back to the tab (#56)', async () => {
       const { user } = await openProduction();
 
       await openTab(user, "Vue d'ensemble");
       await openTab(user, 'Public Cloud');
 
+      // The tab bar keeps the open project, the logo does not (#56)
       expect(texts(cloudProjectRow('Production'))).toContain('▲');
       expect(detailHeadings()[1]).toEqual(['Instances (5)', '538,90€', 'Tout afficher', 'CSV']);
     });
 
-    it('close the open project when the user goes back to the Overview by the logo', async () => {
+    it('close the open project when the user goes back through the logo (#56)', async () => {
       const { user } = await openProduction();
 
       await user.click(screen.getByRole('button', { name: 'OVH Cost Manager' }));
       await openTab(user, 'Public Cloud');
 
+      // The logo closes the open project, the tab bar does not (#56)
       expect(detailHeadings()).toEqual([]);
     });
   });

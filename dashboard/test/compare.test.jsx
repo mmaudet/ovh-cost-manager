@@ -226,13 +226,14 @@ describe('Compare tab', () => {
       ]);
     });
 
-    it('leaves out the projects billed in month B only', async () => {
+    it('leaves out the projects billed in month B only (#55)', async () => {
       const { user } = await renderDashboard();
       await openTab(user, 'Comparaison');
 
       await pickMonth(user, 'Août 2026', 'Juillet 2026');
 
-      // Staging was first billed in August
+      // Staging was first billed in August: missing from the table and from
+      // the comparisons of each project (#55)
       expect(projectRows()).toEqual([
         ['Projet○', 'Juillet 2026▼', 'Septembre 2026○', 'Variation○'],
         ['Production', '680,00€', '610,40€', '-10.2%'],
@@ -339,8 +340,8 @@ describe('Compare tab', () => {
         .toHaveBeenCalledWith('project-production', '2026-08-01', '2026-08-31');
       expect(api.fetchProjectConsumption)
         .toHaveBeenCalledWith('project-production', '2026-09-01', '2026-09-30');
-      // The import keeps the consumption of the current month only: nothing
-      // in August, so no variation
+      // The import keeps the consumption of the current month only (#54):
+      // nothing in August, so no variation
       expect(rowsOf(comparisonTable(PRODUCTION_CONSUMPTION))).toEqual([
         ['Produit/Type', 'Août 2026', 'Septembre 2026', 'Variation'],
         ['instance', '0,00€', '234,25€', ''],
@@ -359,6 +360,8 @@ describe('Compare tab', () => {
 
       await openComparison(user, PRODUCTION_CONSUMPTION);
 
+      // Production was billed both months, but the import keeps the
+      // consumption of the current month only (#54)
       expect(within(comparison(PRODUCTION_CONSUMPTION))
         .getByText('Aucune donnée pour ce projet')).toBeInTheDocument();
       expect(comparisonTable(PRODUCTION_CONSUMPTION)).not.toBeInTheDocument();
