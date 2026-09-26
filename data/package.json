@@ -9,7 +9,7 @@
     "import:diff": "node import.js --diff"
   },
   "dependencies": {
-    "better-sqlite3": "^11.10.0",
+    "better-sqlite3": "^12.11.1",
     "jsonfile": "^6.2.0",
     "ovh": "^2.0.3"
   }
