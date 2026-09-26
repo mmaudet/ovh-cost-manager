@@ -51,8 +51,24 @@ describe('monthBounds', () => {
   });
 });
 
-// A trend over N months covers N calendar months, the month it ends on included
+// A trend over N months covers N calendar months, the month it ends on included. The
+// dashboard counts its windows the same way: dashboard/test/unit/month-window.test.js checks
+// its monthWindowEndingOn() on the same months.
 describe('trendWindow', () => {
+  test.each([
+    ['2026-09', 1, '2026-09-01', '2026-09-30'],
+    ['2026-09', 3, '2026-07-01', '2026-09-30'],
+    ['2026-09', 12, '2025-10-01', '2026-09-30'],
+    ['2026-09', 24, '2024-10-01', '2026-09-30'],
+    ['2026-09', 240, '2006-10-01', '2026-09-30'],
+    ['2026-01', 3, '2025-11-01', '2026-01-31'],
+    ['2026-01', 12, '2025-02-01', '2026-01-31'],
+    ['2025-12', 12, '2025-01-01', '2025-12-31'],
+    ['2024-02', 3, '2023-12-01', '2024-02-29'],
+  ])('ends on %s, %i months: from %s to %s', (endMonth, months, from, to) => {
+    expect(trendWindowInTimezone(endMonth, months, 'Europe/Paris')).toEqual({ from, to });
+  });
+
   test.each(['UTC', 'America/New_York', 'Europe/Paris', 'Pacific/Kiritimati'])(
     'covers July to September for 3 months that end on September 2026 in %s',
     (timezone) => {
@@ -60,42 +76,6 @@ describe('trendWindow', () => {
         .toEqual({ from: '2026-07-01', to: '2026-09-30' });
     }
   );
-
-  test('covers the month it ends on alone for 1 month', () => {
-    expect(trendWindowInTimezone('2026-09', 1, 'Europe/Paris'))
-      .toEqual({ from: '2026-09-01', to: '2026-09-30' });
-  });
-
-  test('starts in the October before for 12 months that end on a September', () => {
-    expect(trendWindowInTimezone('2026-09', 12, 'Europe/Paris'))
-      .toEqual({ from: '2025-10-01', to: '2026-09-30' });
-  });
-
-  test('starts in the year before for 3 months that end on a January', () => {
-    expect(trendWindowInTimezone('2026-01', 3, 'Europe/Paris'))
-      .toEqual({ from: '2025-11-01', to: '2026-01-31' });
-  });
-
-  test('starts in the February before for 12 months that end on a January', () => {
-    expect(trendWindowInTimezone('2026-01', 12, 'Europe/Paris'))
-      .toEqual({ from: '2025-02-01', to: '2026-01-31' });
-  });
-
-  test('covers the calendar year for 12 months that end on a December', () => {
-    expect(trendWindowInTimezone('2025-12', 12, 'Europe/Paris'))
-      .toEqual({ from: '2025-01-01', to: '2025-12-31' });
-  });
-
-  test('ends on the 29th for months that end on a leap-year February', () => {
-    expect(trendWindowInTimezone('2024-02', 3, 'Europe/Paris'))
-      .toEqual({ from: '2023-12-01', to: '2024-02-29' });
-  });
-
-  // The longest period the Trends tab offers
-  test('goes back 20 years for 240 months', () => {
-    expect(trendWindowInTimezone('2026-09', 240, 'Europe/Paris'))
-      .toEqual({ from: '2006-10-01', to: '2026-09-30' });
-  });
 });
 
 // The window that the trend routes read from their query: ?months=3&end=2026-09
