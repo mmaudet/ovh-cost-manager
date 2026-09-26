@@ -110,7 +110,8 @@ describe('useInfrastructureTab', () => {
     ]);
   });
 
-  // The logo leads back to the Overview with the resource type still open (#56)
+  // A resource type can stay open while another tab is active: its bill lines keep loading
+  // there, so that the user finds them ready when coming back (#56, ADR 0001)
   it('requests the bill lines of an open resource type whatever the tab', async () => {
     const { result } = await renderTabHook(useInfrastructureTab,
       { ...onInfrastructure, activeTab: 'overview', selectedResourceType: 'dedicated_server' });

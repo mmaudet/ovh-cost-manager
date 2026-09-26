@@ -197,50 +197,8 @@ describe('Infrastructure tab', () => {
       ]);
     });
 
-    it('close when the user leaves the tab (#56)', async () => {
-      const { user } = await renderDashboard();
-      await openTab(user, 'Infrastructure');
-      await user.click(resourceType('Dedicated Servers'));
-      await settle();
-
-      await openTab(user, "Vue d'ensemble");
-      await openTab(user, 'Infrastructure');
-
-      // The tab bar closes the open resource type, the logo does not (#56)
-      expect(billLines()).not.toBeInTheDocument();
-    });
-
-    it('stay open when the user goes back to the Overview through the logo (#56)', async () => {
-      const { user } = await renderDashboard();
-      await openTab(user, 'Infrastructure');
-      await user.click(resourceType('Dedicated Servers'));
-      await settle();
-
-      await user.click(screen.getByRole('button', { name: 'OVH Cost Manager' }));
-      await openTab(user, 'Infrastructure');
-
-      // The logo keeps the open resource type, the tab bar does not (#56)
-      expect(rowsOf(billLines())[1][0]).toBe('ns3000001.ip-203-0-113.eu');
-    });
-
-    it('are all closed when the link of the Overview opens the tab (#56)', async () => {
-      const { user } = await renderDashboard();
-      await openTab(user, 'Infrastructure');
-      await user.click(resourceType('Dedicated Servers'));
-      await settle();
-      await user.click(screen.getByRole('button', { name: 'OVH Cost Manager' }));
-
-      await user.click(screen.getByRole('button', { name: 'Voir le détail infrastructure →' }));
-      await settle();
-
-      // The link opens the summary of the tab, whatever was open (#56)
-      expect(texts(costsByResourceType())).toEqual([
-        'Coûts par type de ressource', '(Septembre 2026)',
-        'Dedicated Servers', '270,00€', '▼',
-        'Backup', '90,00€', '▼',
-        'Licenses', '25,00€', '▼',
-      ]);
-    });
+    // Which ways of moving around the page keep the open resource type: see
+    // navigation.test.jsx (#56)
   });
 
   describe('dedicated servers', () => {

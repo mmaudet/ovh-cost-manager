@@ -16,13 +16,22 @@ the tab's hook, so that each query keeps a single owner and a hook returns only 
 tab owns.
 
 Shared state that a tab changes along with other parts of the page stays in the shell,
-and reaches the tab with its setter: the Infrastructure tab opens the bill lines of a
-resource type, which the Overview's link and the tab bar close (#56). When a tab reads
+and reaches the tab with its setter: the Public Cloud project whose detail is open, and
+the resource type whose bill lines are open on the Infrastructure tab. When a tab reads
 data that another tab's hook owns, that hook returns it and the shell passes it on, so
 that the query keeps a single owner and its loading condition: the Compare tab lists the
 dedicated servers that the Infrastructure hook loads, only on its own tab (#35). The shell
 itself reads a tab hook's result the same way: the "vs previous month" KPI reads the
 summary of month B from what the Compare hook returns (#50).
+
+What stays open depends on how the user moves around the page (#56):
+
+- the tab bar keeps the open project and resource type;
+- the logo goes back to the Overview and closes both;
+- the Overview's link to the Infrastructure tab opens its summary, with no resource type
+  open;
+- the Overview's other links open their target, a project on the Public Cloud tab or the
+  Web Cloud tab, and keep the rest.
 
 A tab module may also export pieces that the shell renders in place, outside the tab, so
 that the page's markup stays as it is: the Trends period selector (`TrendsPeriodSelector`),

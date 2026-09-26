@@ -10,8 +10,8 @@ import { sortProjects } from '../utils/projectSort.js';
 // the shell holds for the whole page: the month's figures and the services about to expire,
 // which load at page start for the KPI cards, the header, the Markdown report or other tabs
 // too, and the budget with its setter, which the month-end forecast card reads as well. Its
-// links navigate with the shell's setters: a project opens on the Public Cloud tab, and the
-// links to the Infrastructure and Web Cloud tabs close any open resource type (#56).
+// links navigate with the shell's setters: what each one keeps open is in
+// docs/adr/0001-tab-state-lives-in-the-dashboard-shell.md (#56).
 const OverviewTab = ({
   projectSort, handleProjectSort,
   language, t, fmt, summary, total, byService, byProject, byResourceType, gpuSummary,
@@ -126,7 +126,7 @@ const OverviewTab = ({
               </button>
               {byResourceType.some(r => ['domain', 'web_cloud'].includes(r.resource_type)) && (
                 <button
-                  onClick={() => { setActiveTab('webcloud'); setSelectedResourceType(null); }}
+                  onClick={() => setActiveTab('webcloud')}
                   className="text-xs text-blue-600 hover:underline text-left"
                 >
                   {language === 'en' ? 'View Web Cloud detail (domains) →' : 'Voir le détail Web Cloud (domaines) →'}
