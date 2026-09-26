@@ -96,6 +96,21 @@ npm run lint                                      # ESLint, no-undef only (eslin
 CI (`.github/workflows/ci.yml`) runs lint, tests and the dashboard build on every pull
 request and push to main.
 
+## Releases and changelog
+
+Every change goes through a pull request: its title is its changelog line, and it needs
+one category label (`feature`, `security`, `bug`, `maintenance`, `dependencies`,
+`documentation`, or `skip-changelog`). `.github/workflows/pr-labels.yml` sets it from a
+Conventional Commits title prefix and fails otherwise; `.github/release.yml` maps the
+labels to the release-note headings.
+
+`npm run release -- X.Y.Z` (`scripts/release.sh`) generates the notes from those labels,
+inserts them in `CHANGELOG.md`, bumps the version and opens the release PR;
+`npm run release -- --tag` tags main once it is merged. The tag runs
+`docker-publish.yml`, which publishes the image and creates the GitHub release from the
+`CHANGELOG.md` section. Since #8, Docker image tags keep the `v` prefix (`v2.3.0`);
+up to 2.2.2 they did not (`2.2.2`).
+
 ## Docker
 
 `scripts/entrypoint.sh` runs `cron-import.sh` in the background (periodic differential

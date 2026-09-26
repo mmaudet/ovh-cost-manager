@@ -1,6 +1,6 @@
-# Contributing to ovh-bill
+# Contributing to OVH Cost Manager
 
-First off, thank you for considering contributing to ovh-bill! It's people like you that make ovh-bill such a great tool.
+First off, thank you for considering contributing to OVH Cost Manager! It's people like you that make it such a great tool.
 
 ## Code of Conduct
 
@@ -17,6 +17,8 @@ Before creating bug reports, please check the existing issues to avoid duplicate
 - **Provide specific examples** (command lines, configuration files)
 - **Describe the behavior you observed and what you expected**
 - **Include your environment** (Node.js version, OS, etc.)
+
+To report a security vulnerability, do not open an issue: see [SECURITY.md](SECURITY.md).
 
 ### Suggesting Enhancements
 
@@ -36,7 +38,7 @@ Enhancement suggestions are tracked as GitHub issues. When creating an enhanceme
    ```
 3. **Make your changes** and commit them with clear messages:
    ```bash
-   git commit -m "Add feature: description of the feature"
+   git commit -m "feat: add the Web Cloud tab"
    ```
 4. **Push** to your fork:
    ```bash
@@ -51,24 +53,66 @@ Enhancement suggestions are tracked as GitHub issues. When creating an enhanceme
 - Limit the first line to 72 characters or less
 - Reference issues and pull requests when relevant
 
+## Pull Requests and the Changelog
+
+The title of a pull request becomes its line in the [changelog](CHANGELOG.md)
+and in the release notes: write it for users, saying what changes for them.
+
+Each pull request also needs one category label, which files it under a
+heading of the release notes:
+
+| Label                                          | Heading                                         |
+| ---------------------------------------------- | ----------------------------------------------- |
+| `feature`                                      | New features                                    |
+| `security`                                     | Security                                        |
+| `bug`                                          | Bug fixes                                       |
+| `maintenance`, `dependencies`, `documentation` | Maintenance                                     |
+| `skip-changelog`                               | Left out, for instance the release pull request |
+
+A title starting with a [Conventional Commits](https://www.conventionalcommits.org/)
+prefix gets its label automatically: `feat:` → `feature`, `fix:` → `bug`,
+`security:` → `security`, and `chore:`, `ci:`, `build:`, `docs:`, `refactor:`,
+`test:` or `perf:` → `maintenance`. Otherwise a maintainer sets it during the
+review: the **PR labels** check fails until the pull request has one.
+
+Dependabot pull requests are labelled `dependencies`. When one fixes a
+vulnerability, add the `security` label so that it is listed under Security.
+
+## Releases
+
+Maintainers release from an up-to-date `main`:
+
+```bash
+npm run release -- 2.3.0 --dry-run   # preview the release notes
+npm run release -- 2.3.0             # open the "Release 2.3.0" pull request
+npm run release -- --tag             # once it is merged: tag main
+```
+
+The release pull request adds the notes to `CHANGELOG.md` and bumps the
+version: review it and add upgrade notes if needed. Pushing the tag builds and
+publishes the Docker image, then creates the GitHub release from the
+`CHANGELOG.md` section.
+
 ## Development Setup
 
 1. Clone your fork:
    ```bash
-   git clone https://github.com/YOUR_USERNAME/ovh-bill.git
-   cd ovh-bill
+   git clone https://github.com/YOUR_USERNAME/ovh-cost-manager.git
+   cd ovh-cost-manager
    ```
 
-2. Install dependencies:
+2. Install dependencies (Node.js 22 or later):
    ```bash
    npm install
    ```
 
 3. Set up your credentials (see [README.md](README.md#configuration))
 
-4. Test your changes:
+4. Check your changes, as the CI does on each pull request:
    ```bash
-   node index.js --from=2024-01-01 --verbose
+   npm run lint
+   npm test
+   npm run build
    ```
 
 ## Style Guide
