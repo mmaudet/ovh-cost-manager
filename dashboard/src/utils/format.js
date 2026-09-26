@@ -94,7 +94,12 @@ const fmtBytes = (bytes, language = 'fr') => {
   return `${number} ${units[rank]}`;
 };
 
+// Whether a count takes the singular in the language, as its plural rules say: 0 and 1 in
+// French (0 jour, 1 jour, 2 jours), 1 only in English (0 days, 1 day, 2 days)
+const takesSingular = (count, language = 'fr') =>
+  new Intl.PluralRules(localeOf(language)).select(count) === 'one';
+
 export {
   localeOf, formatCurrency, formatPercent, formatYearMonth, formatMonthLabel, yearMonthOf,
-  fmtBytes,
+  fmtBytes, takesSingular,
 };

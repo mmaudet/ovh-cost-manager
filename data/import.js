@@ -445,6 +445,26 @@ async function fetchBillPayment(billId) {
 
 // --- Phase 3: Inventory ---
 
+// Removes the services of a kind that the answer of its inventory list call, all those that
+// exist now, no longer names: those cancelled since an import stored them, which only a full
+// import removed before (#74). Anything but a list, such as the null that the ovh client
+// answers for an empty body, fails like the call, and the import keeps every service of that
+// kind. Returns the names of the list.
+function removeUnlistedServices(answer, deleteNotIn, kind) {
+  if (!Array.isArray(answer)) {
+    throw new Error(`the list is ${util.inspect(answer)}, not an array`);
+  }
+  const removed = deleteNotIn(answer);
+  // An empty list is OVH's answer once none is left, which removes them all: a warning, for a
+  // list that would be empty by mistake
+  if (answer.length === 0 && removed > 0) {
+    console.warn(`  OVH lists no ${kind} any more: removed all ${removed} of them`);
+  } else if (removed > 0) {
+    console.log(`  Removed ${removed} ${kind} that OVH no longer lists`);
+  }
+  return answer;
+}
+
 async function importInventory(projectMap) {
     // Private Cloud Hosts
     if (ovh.requestPromised && db.inventory.upsertPrivateCloudHost) {
@@ -547,8 +567,11 @@ async function importInventory(projectMap) {
   // Dedicated servers - parallel fetch
   try {
     console.log('Fetching dedicated servers...');
-    const serverNames = await ovh.requestPromised('GET', '/dedicated/server');
-    
+    const serverNames = removeUnlistedServices(
+      await ovh.requestPromised('GET', '/dedicated/server'),
+      db.inventory.deleteServersNotIn, 'dedicated servers',
+    );
+
     await runInBatches(serverNames, async (name) => {
       const info = await ovh.requestPromised('GET', `/dedicated/server/${name}`);
       let hwSpecs = {};
@@ -591,8 +614,10 @@ async function importInventory(projectMap) {
   // VPS - parallel fetch
   try {
     console.log('Fetching VPS instances...');
-    const vpsNames = await ovh.requestPromised('GET', '/vps');
-    
+    const vpsNames = removeUnlistedServices(
+      await ovh.requestPromised('GET', '/vps'), db.inventory.deleteVpsNotIn, 'VPS instances',
+    );
+
     await runInBatches(vpsNames, async (name) => {
       const info = await ovh.requestPromised('GET', `/vps/${name}`);
       let serviceInfos = {};
@@ -643,8 +668,11 @@ async function importInventory(projectMap) {
   // NetApp Storage - parallel fetch
   try {
     console.log('Fetching storage services...');
-    const storageIds = await ovh.requestPromised('GET', '/storage/netapp');
-    
+    const storageIds = removeUnlistedServices(
+      await ovh.requestPromised('GET', '/storage/netapp'),
+      db.inventory.deleteStorageNotIn, 'NetApp storage services',
+    );
+
     await runInBatches(storageIds, async (sid) => {
       const info = await ovh.requestPromised('GET', `/storage/netapp/${sid}`);
       let serviceInfos = {};

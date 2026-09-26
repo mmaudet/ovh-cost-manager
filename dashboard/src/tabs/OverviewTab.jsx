@@ -3,6 +3,7 @@ import {
   PieChart, Pie, Cell,
 } from 'recharts';
 import { SortIcon } from '../components/SortIcon.jsx';
+import { takesSingular } from '../utils/format.js';
 import { sortProjects } from '../utils/projectSort.js';
 
 // The Overview tab, which the shell renders while it is active: what useOverviewTab()
@@ -338,6 +339,9 @@ const OverviewTab = ({
           <div className="space-y-2">
             {expiringServices.slice(0, 5).map(s => {
               const daysLeft = Math.ceil((new Date(s.expiration_date) - new Date()) / (1000 * 60 * 60 * 24));
+              // The days since it expired or until it does: "1 jour", "2 jours" (#74)
+              const days = Math.abs(daysLeft);
+              const singular = takesSingular(days, language);
               return (
                 <div key={s.id} className="flex items-center justify-between text-sm p-2 bg-orange-50 rounded">
                   <div className="flex items-center gap-2">
@@ -352,7 +356,12 @@ const OverviewTab = ({
                     <span className="font-medium">{s.display_name || s.id}</span>
                   </div>
                   <span className={`text-sm font-medium ${daysLeft <= 7 ? 'text-red-600' : 'text-orange-600'}`}>
-                    {t('expiringIn')} {daysLeft} {t('days')}
+                    {/* A service already expired, first in the list, says since when (#74) */}
+                    {daysLeft < 0 ? (
+                      <>{t('expiredSince')} {days} {t(singular ? 'dayAgo' : 'daysAgo')}</>
+                    ) : (
+                      <>{t('expiringIn')} {days} {t(singular ? 'day' : 'days')}</>
+                    )}
                   </span>
                 </div>
               );

@@ -519,6 +519,24 @@ const accountOps = {
   }
 };
 
+// Makes the function that deletes the services of an inventory table whose id is not in
+// `ids`, the list the OVH API gave of all those that exist now: the services cancelled since
+// an import stored them (#74). `serviceType`, for a table whose list covers one type of its
+// services only, leaves the others alone. The ids compare as text, as the table stores them:
+// json_each() gives a number as an integer, which no text equals. The function returns how
+// many it deleted.
+function deleteNotIn(table, serviceType = null) {
+  const ofType = serviceType === null ? '' : 'service_type = ? AND ';
+  const typeParams = serviceType === null ? [] : [serviceType];
+  return (ids) => {
+    const db = getDb();
+    return db.prepare(`
+      DELETE FROM ${table}
+      WHERE ${ofType}id NOT IN (SELECT CAST(value AS TEXT) FROM json_each(?))
+    `).run(...typeParams, JSON.stringify(ids)).changes;
+  };
+}
+
 // Inventory operations (Phase 3)
 const inventoryOps = {
   // Dedicated servers
@@ -578,6 +596,12 @@ const inventoryOps = {
     return db.prepare('SELECT * FROM storage_services ORDER BY display_name').all();
   },
 
+  // The services cancelled since an import stored them go, see deleteNotIn() (#74)
+  deleteServersNotIn: deleteNotIn('dedicated_servers'),
+  deleteVpsNotIn: deleteNotIn('vps_instances'),
+  // Their list, /storage/netapp, names the NetApp services only
+  deleteStorageNotIn: deleteNotIn('storage_services', 'netapp'),
+
   getSummary: () => {
     const db = getDb();
     const servers = db.prepare('SELECT COUNT(*) as count FROM dedicated_servers').get();
@@ -592,6 +616,9 @@ const inventoryOps = {
     };
   },
 
+  // The servers, VPS and storage services that expire within daysAhead days, in one list,
+  // soonest first: those already expired stay in it, first (#74). Services that expire on the
+  // same day keep the order of the inventories: servers, VPS, then storage.
   getExpiringServices: (daysAhead = 30) => {
     const db = getDb();
     const cutoff = new Date();
@@ -608,10 +635,12 @@ const inventoryOps = {
       "SELECT id, display_name, 'storage' as type, expiration_date FROM storage_services WHERE expiration_date IS NOT NULL AND expiration_date <= ? ORDER BY expiration_date"
     ).all(cutoffStr);
 
-    return [...servers, ...vps, ...storages];
+    return [...servers, ...vps, ...storages]
+      .sort((a, b) => a.expiration_date.localeCompare(b.expiration_date));
   },
 
-  // Analysis by resource type
+  // Analysis by resource type. The bill lines without a resource type count as 'other', in
+  // the same row as those typed 'other', as the details of that type list them (#86).
   byResourceType: (fromDate, toDate) => {
     const db = getDb();
     return db.prepare(`
@@ -623,7 +652,7 @@ const inventoryOps = {
       FROM bill_details d
       JOIN bills b ON d.bill_id = b.id
       WHERE b.date >= ? AND b.date <= ?
-      GROUP BY d.resource_type
+      GROUP BY COALESCE(d.resource_type, 'other')
       ORDER BY total DESC
     `).all(fromDate, toDate);
   },
