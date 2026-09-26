@@ -21,27 +21,30 @@ const formatPercent = (share, language = 'fr') => {
   }).format(share);
 };
 
-// Format a 'YYYY-MM' string into a localized "short month + year" label.
-// Localization belongs on the client; the API sends the raw yearMonth.
-const formatYearMonth = (yearMonth, language = 'fr') => {
-  if (!yearMonth) return '';
-  const [year, month] = yearMonth.split('-').map(Number);
-  if (!year || !month) return yearMonth;
-  const locale = localeOf(language);
-  return new Date(year, month - 1, 1).toLocaleDateString(locale, { month: 'short', year: 'numeric' });
-};
-
-// Format a 'YYYY-MM' string into the full name of the month and its year, capitalised, as
-// the month selectors and the report show it: Septembre 2026 in French, September 2026 in
-// English. The label of /api/months, always in French, is left for compatibility (#33).
-const formatMonthLabel = (yearMonth, language = 'fr') => {
+// A 'YYYY-MM' month and its year in the language, the month by its short or long name as
+// Intl writes it, capitalised on request: '' without a month, and what is not one left as
+// it is. Localization belongs on the client; the API sends the raw yearMonth.
+const formatMonth = (yearMonth, language, { name, capitalised = false }) => {
   if (!yearMonth) return '';
   const [year, month] = yearMonth.split('-').map(Number);
   if (!year || !month) return yearMonth;
   const label = new Date(year, month - 1, 1)
-    .toLocaleDateString(localeOf(language), { month: 'long', year: 'numeric' });
-  return label.charAt(0).toUpperCase() + label.slice(1);
+    .toLocaleDateString(localeOf(language), { month: name, year: 'numeric' });
+  return capitalised ? label.charAt(0).toUpperCase() + label.slice(1) : label;
 };
+
+// The short name of a 'YYYY-MM' month and its year, as the Trends and Web Cloud tabs show
+// it: sept. 2026 in French, Sep 2026 in English
+const formatYearMonth = (yearMonth, language = 'fr') => (
+  formatMonth(yearMonth, language, { name: 'short' })
+);
+
+// The long name of a 'YYYY-MM' month and its year, capitalised as in the label of
+// /api/months, which is always in French (#33): Septembre 2026 in French, September 2026
+// in English, as the month selectors and the report show it
+const formatMonthLabel = (yearMonth, language = 'fr') => (
+  formatMonth(yearMonth, language, { name: 'long', capitalised: true })
+);
 
 const BYTE_UNITS = {
   fr: ['o', 'Ko', 'Mo', 'Go', 'To', 'Po'],
