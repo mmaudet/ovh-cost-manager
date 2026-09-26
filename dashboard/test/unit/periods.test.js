@@ -1,8 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { translations } from '../../src/i18n/translations.js';
-import {
-  PERIOD_OPTIONS, monthsSince, WEB_CLOUD_MONTHS, shiftMonths,
-} from '../../src/utils/periods.js';
+import { PERIOD_OPTIONS, monthsSince, shiftMonths } from '../../src/utils/periods.js';
 
 // "Today" is 15 September 2026 (see setup.js)
 
@@ -46,12 +44,6 @@ describe('monthsSince', () => {
     expect(monthsSince('2027-01')).toBe(1);
     expect(monthsSince('2026-12')).toBe(2);
     expect(monthsSince('2026-02')).toBe(12);
-  });
-});
-
-describe('Web Cloud period', () => {
-  it('lasts 12 months', () => {
-    expect(WEB_CLOUD_MONTHS).toBe(12);
   });
 });
 
