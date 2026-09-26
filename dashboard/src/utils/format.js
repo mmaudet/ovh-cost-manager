@@ -7,6 +7,17 @@ const formatCurrency = (value, language = 'fr') => {
   }).format(value);
 };
 
+// Format a share (0.092) as a percentage with one decimal, based on language:
+// 9,2 % in French, 9.2% in English
+const formatPercent = (share, language = 'fr') => {
+  const locale = language === 'en' ? 'en-US' : 'fr-FR';
+  return new Intl.NumberFormat(locale, {
+    style: 'percent',
+    minimumFractionDigits: 1,
+    maximumFractionDigits: 1,
+  }).format(share);
+};
+
 // Format a 'YYYY-MM' string into a localized "short month + year" label.
 // Localization belongs on the client; the API sends the raw yearMonth.
 const formatYearMonth = (yearMonth, language = 'fr') => {
@@ -27,4 +38,4 @@ const fmtBytes = (bytes) => {
   return `${value.toFixed(value < 10 && i > 0 ? 1 : 0)} ${units[i]}`;
 };
 
-export { formatCurrency, formatYearMonth, fmtBytes };
+export { formatCurrency, formatPercent, formatYearMonth, fmtBytes };

@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { formatCurrency, formatYearMonth, fmtBytes } from '../../src/utils/format.js';
-import { NNBSP } from '../support/amounts.js';
+import {
+  formatCurrency, formatPercent, formatYearMonth, fmtBytes,
+} from '../../src/utils/format.js';
+import { NBSP, NNBSP } from '../support/amounts.js';
 
 describe('formatCurrency', () => {
   it('writes an amount the French way', () => {
@@ -28,6 +30,30 @@ describe('formatCurrency', () => {
   it('keeps the minus sign of a credit note', () => {
     expect(formatCurrency(-120.5, 'fr')).toBe('-120,50');
     expect(formatCurrency(-120.5, 'en')).toBe('-120.50');
+  });
+});
+
+// A share of a total, such as that of the backups in the month's cost (#64)
+describe('formatPercent', () => {
+  it('writes a share the French way, with one decimal (#64)', () => {
+    expect(formatPercent(0.092, 'fr')).toBe(`9,2${NBSP}%`);
+    expect(formatPercent(0.0919, 'fr')).toBe(`9,2${NBSP}%`);
+    expect(formatPercent(1, 'fr')).toBe(`100,0${NBSP}%`);
+  });
+
+  it('writes a share the English way in English (#64)', () => {
+    expect(formatPercent(0.092, 'en')).toBe('9.2%');
+    expect(formatPercent(0.0919, 'en')).toBe('9.2%');
+    expect(formatPercent(1, 'en')).toBe('100.0%');
+  });
+
+  it('writes French shares by default (#64)', () => {
+    expect(formatPercent(0.092)).toBe(`9,2${NBSP}%`);
+  });
+
+  it('keeps its decimal for a share of nothing (#64)', () => {
+    expect(formatPercent(0, 'fr')).toBe(`0,0${NBSP}%`);
+    expect(formatPercent(0, 'en')).toBe('0.0%');
   });
 });
 

@@ -1,3 +1,16 @@
+import { formatPercent } from '../utils/format.js';
+
+// The Veeam VMs of the month, for the VMs row of the backup resources and their Total: from
+// the backup statistics or, while they are missing (loading, or an error), from the costs
+// by resource type, which sum the same bill lines (#64)
+const veeamVms = (backupStats, byResourceType) => {
+  const backup = byResourceType.find(r => r.resource_type === 'backup');
+  return {
+    count: backupStats?.vms?.count || backup?.serviceCount || 0,
+    total: backupStats?.vms?.total || backup?.value || 0,
+  };
+};
+
 // The Backup tab, which the shell renders while it is active: what useBackupTab() returns,
 // with the shell's language, amount format (fmt) and selected month, and two of its
 // queries that load at page start: the month's summary and its costs by resource type.
@@ -31,9 +44,14 @@ const BackupTab = ({
       <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
         <span className="text-gray-500 text-sm">{language === 'en' ? '% of Total Cost' : '% du coût total'}</span>
         <div className="text-3xl font-bold text-gray-600 mt-2">
-          {(summary?.total || 0) > 0 
-            ? `${(((backupStats?.vms?.total || 0) + (backupStats?.enterprise?.total || 0)) / summary.total * 100).toFixed(1)}%`
-            : '0%'}
+          {/* In the number format of the language, and 0,0 % of a month without cost (#64) */}
+          {formatPercent(
+            (summary?.total || 0) > 0
+              ? ((backupStats?.vms?.total || 0) + (backupStats?.enterprise?.total || 0))
+                / summary.total
+              : 0,
+            language,
+          )}
         </div>
       </div>
     </div>
@@ -57,8 +75,10 @@ const BackupTab = ({
             <tbody>
               <tr className="border-b hover:bg-gray-50">
                 <td className="p-3 font-medium">{language === 'en' ? 'Veeam Backup VMs' : 'VMs Veeam Backup'}</td>
-                <td className="p-3 text-right">{backupStats?.vms?.count || byResourceType.find(r => r.resource_type === 'backup')?.serviceCount || 0}</td>
-                <td className="p-3 text-right font-medium">{fmt(backupStats?.vms?.total || byResourceType.find(r => r.resource_type === 'backup')?.value || 0)}€</td>
+                <td className="p-3 text-right">{veeamVms(backupStats, byResourceType).count}</td>
+                <td className="p-3 text-right font-medium">
+                  {fmt(veeamVms(backupStats, byResourceType).total)}€
+                </td>
               </tr>
               {backupStats?.enterprise?.count > 0 && (
                 <tr className="border-b hover:bg-gray-50">
@@ -72,10 +92,12 @@ const BackupTab = ({
               <tr className="bg-gray-50 font-semibold">
                 <td className="p-3">Total</td>
                 <td className="p-3 text-right">
-                  {(backupStats?.vms?.count || 0) + (backupStats?.enterprise?.count || 0)}
+                  {veeamVms(backupStats, byResourceType).count
+                    + (backupStats?.enterprise?.count || 0)}
                 </td>
                 <td className="p-3 text-right">
-                  {fmt((backupStats?.vms?.total || 0) + (backupStats?.enterprise?.total || 0))}€
+                  {fmt(veeamVms(backupStats, byResourceType).total
+                    + (backupStats?.enterprise?.total || 0))}€
                 </td>
               </tr>
             </tfoot>
