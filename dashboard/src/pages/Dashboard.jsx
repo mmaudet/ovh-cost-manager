@@ -33,9 +33,10 @@ import { ServersTable, serverCsvColumns } from '../components/ServersTable.jsx';
 import { SortIcon } from '../components/SortIcon.jsx';
 import { downloadCSV } from '../utils/csv.js';
 import { formatCurrency, formatYearMonth } from '../utils/format.js';
-import { PERIOD_OPTIONS, monthsSince, WEB_CLOUD_MONTHS, shiftMonths } from '../utils/periods.js';
+import { PERIOD_OPTIONS, monthsSince } from '../utils/trendPeriods.js';
 import { parseSqliteDate } from '../utils/sqliteDate.js';
 import { generateMarkdownReport } from '../utils/markdownReport.js';
+import { WEB_CLOUD_MONTHS, shiftMonths } from '../utils/webCloudPeriod.js';
 import ProjectProductComparison from './ProjectProductComparison.jsx';
 
 // Translation keys for the import_log type and status values
