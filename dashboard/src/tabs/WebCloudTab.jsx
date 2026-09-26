@@ -90,9 +90,9 @@ const WebCloudTab = ({
   </div>
 );
 
-// The "show all" modal of a Web Cloud family. Modals overlay the whole page, so the shell
-// renders them after the page column, whatever the active tab: in the column, the margin
-// that spaces its blocks would push the backdrop down.
+// The "show all" modal of a Web Cloud family, which the shell renders after the page
+// column, whatever the active tab, so that its backdrop covers the whole page: see
+// docs/adr/0001-tab-state-lives-in-the-dashboard-shell.md
 const WebCloudTabModals = ({
   webCloudPeriod, webCloudItems, showAllWebCloud, setShowAllWebCloud,
   language, t, fmt,
