@@ -13,7 +13,7 @@ describe('growthOverPeriod', () => {
     expect(growthOverPeriod(200, 150)).toBe(-25);
   });
 
-  it('is nil from a first month equal to the last', () => {
+  it('is 0 % when the first month equals the last', () => {
     expect(growthOverPeriod(980, 980)).toBe(0);
   });
 
