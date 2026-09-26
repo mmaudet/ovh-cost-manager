@@ -5,9 +5,10 @@
 const crypto = require('crypto');
 
 /**
- * Whether the session cookie gets the Secure flag. Browsers then send it over
- * HTTPS only, but also refuse to store it from an http:// page: a Secure
- * cookie on an HTTP stack makes the sign-in loop.
+ * Whether the session cookie gets the Secure flag, which the sign-in cookies
+ * of login-state.js share. Browsers then send it over HTTPS only, but also
+ * refuse to store it from an http:// page: on an HTTP stack, the browser drops
+ * the Secure sign-in cookie, and the callback refuses the sign-in.
  *
  * @param {object} req - the request: req.secure is true over HTTPS, as the
  *   connection says or, with TRUST_PROXY, the proxy's X-Forwarded-Proto
