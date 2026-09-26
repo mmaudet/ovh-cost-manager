@@ -93,7 +93,6 @@ describe('useTrendsTab', () => {
       expect(periods(result.current.availablePeriods))
         .toEqual([[3, 'period3m'], [6, 'period6m'], [12, 'period1y'], [24, 'period2y']]);
       expect(result.current.trendPeriod).toBe(6);
-      expect(result.current.currentPeriodLabel).toBe('period6m');
     });
 
     it('comes down to 3 months once the list shows three billed months', async () => {
@@ -106,7 +105,6 @@ describe('useTrendsTab', () => {
 
       expect(periods(result.current.availablePeriods)).toEqual([[3, 'period3m']]);
       expect(result.current.trendPeriod).toBe(3);
-      expect(result.current.currentPeriodLabel).toBe('period3m');
       expect(api.fetchMonthlyTrend).toHaveBeenCalledWith(3);
       expect(api.fetchMonthlyTrendByCategory).toHaveBeenCalledWith(3);
     });
@@ -123,7 +121,6 @@ describe('useTrendsTab', () => {
 
       expect(periods(result.current.availablePeriods)).toEqual([[3, 'period3m']]);
       expect(result.current.trendPeriod).toBe(3);
-      expect(result.current.currentPeriodLabel).toBe('period3m');
     });
   });
 
@@ -148,7 +145,6 @@ describe('useTrendsTab', () => {
     await rerender({ months: fifteenMonths, activeTab: 'overview' });
 
     expect(result.current.trendPeriod).toBe(12);
-    expect(result.current.currentPeriodLabel).toBe('period1y');
     expect([...result.current.hiddenCategories]).toEqual(['dedicated_server']);
   });
 });
