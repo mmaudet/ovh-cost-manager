@@ -605,11 +605,14 @@ function registerRoutes() {
     }
   });
 
+  // The month of the latest bill, YYYY-MM, or undefined when nothing was billed
+  const latestBilledMonth = () => db.bills.getLatestDate()?.slice(0, 7);
+
   // The trend over the `months` months that end on the `end` month (YYYY-MM), that one
-  // included: 6 months, and the current month, by default
+  // included: 6 months, and the month of the latest bill, by default
   app.get('/api/analysis/monthly-trend', (req, res) => {
     try {
-      const { valid, error, from, to } = trendWindowFromQuery(req.query);
+      const { valid, error, from, to } = trendWindowFromQuery(req.query, latestBilledMonth());
       if (!valid) {
         return res.status(400).json({ error });
       }
@@ -639,7 +642,7 @@ function registerRoutes() {
   // Over the same months as /api/analysis/monthly-trend, from the same parameters.
   app.get('/api/analysis/monthly-trend-by-category', (req, res) => {
     try {
-      const { valid, error, from, to } = trendWindowFromQuery(req.query);
+      const { valid, error, from, to } = trendWindowFromQuery(req.query, latestBilledMonth());
       if (!valid) {
         return res.status(400).json({ error });
       }

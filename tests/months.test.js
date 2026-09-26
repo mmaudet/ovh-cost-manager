@@ -8,6 +8,7 @@
 
 const path = require('path');
 const { execFileSync } = require('child_process');
+const { trendWindowFromQuery } = require('../server/months');
 
 // Calls a function of server/months.js in a Node process of its own, run in a
 // timezone
@@ -28,10 +29,6 @@ function monthBoundsInTimezone(yearMonth, timezone) {
 
 function trendWindowInTimezone(endMonth, months, timezone) {
   return callInTimezone(timezone, 'trendWindow', endMonth, months);
-}
-
-function trendWindowFromQueryInTimezone(query, now, timezone) {
-  return callInTimezone(timezone, 'trendWindowFromQuery', query, now);
 }
 
 describe('monthBounds', () => {
@@ -78,35 +75,37 @@ describe('trendWindow', () => {
   );
 });
 
-// The window that the trend routes read from their query: ?months=3&end=2026-09
+// The window that the trend routes read from their query, ?months=3&end=2026-09, and the
+// month of the latest bill. It does not read the real date: no timezone to run it in.
 describe('trendWindowFromQuery', () => {
-  // 30 September 2026, 23:30 UTC: 1 October already in Paris
-  const lastHourOfSeptember = Date.parse('2026-09-30T23:30:00Z');
-  const windowOf = (query) =>
-    trendWindowFromQueryInTimezone(query, lastHourOfSeptember, 'Europe/Paris');
+  // The latest bill of the account is from August 2026
+  const windowOf = (query) => trendWindowFromQuery(query, '2026-08');
 
   test('ends on the month the query names', () => {
-    expect(windowOf({ months: '3', end: '2026-08' }))
-      .toEqual({ valid: true, from: '2026-06-01', to: '2026-08-31' });
+    expect(windowOf({ months: '3', end: '2026-09' }))
+      .toEqual({ valid: true, from: '2026-07-01', to: '2026-09-30' });
   });
 
   test('covers 6 months when the query names no number of months', () => {
-    expect(windowOf({ end: '2026-08' }))
-      .toEqual({ valid: true, from: '2026-03-01', to: '2026-08-31' });
+    expect(windowOf({ end: '2026-09' }))
+      .toEqual({ valid: true, from: '2026-04-01', to: '2026-09-30' });
   });
 
-  // As SQLite's date('now') did before the end month was sent
-  test.each(['UTC', 'America/New_York', 'Europe/Paris', 'Pacific/Kiritimati'])(
-    'ends on the current month in UTC when the query names no end month, in %s',
-    (timezone) => {
-      expect(trendWindowFromQueryInTimezone({ months: '3' }, lastHourOfSeptember, timezone))
-        .toEqual({ valid: true, from: '2026-07-01', to: '2026-09-30' });
-    }
-  );
+  // Where the bills end, as the dashboard's latest month, whatever the date today
+  test('ends on the month of the latest bill when the query names no end month', () => {
+    expect(windowOf({ months: '3' }))
+      .toEqual({ valid: true, from: '2026-06-01', to: '2026-08-31' });
+  });
 
   test('reads an empty end month as none', () => {
     expect(windowOf({ months: '3', end: '' }))
-      .toEqual({ valid: true, from: '2026-07-01', to: '2026-09-30' });
+      .toEqual({ valid: true, from: '2026-06-01', to: '2026-08-31' });
+  });
+
+  // No window: a trend over it finds no bill (see trend-queries.test.js)
+  test('covers no months when the query names no end month and nothing was billed', () => {
+    expect(trendWindowFromQuery({ months: '3' }, undefined))
+      .toEqual({ valid: true, from: null, to: null });
   });
 
   test.each(['2026-9', '09-2026', '2026-09-01', 'september'])(

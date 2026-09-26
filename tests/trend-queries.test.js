@@ -70,6 +70,12 @@ describe('monthly trend queries', () => {
     ]);
   });
 
+  // As for an account with no bill, where trendWindowFromQuery() gives no window
+  test('finds nothing without a window', () => {
+    expect(db.analysis.monthlyTrend(null, null)).toEqual([]);
+    expect(db.analysis.monthlyTrendByResourceType(null, null)).toEqual([]);
+  });
+
   // #66: 3 months used to cover June as well
   test('covers the 3 calendar months that end on September, without June', () => {
     const { from, to } = trendWindow('2026-09', 3);

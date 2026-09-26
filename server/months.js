@@ -39,16 +39,20 @@ const MONTH_REGEX = /^\d{4}-\d{2}$/;
 /**
  * The window that a request to a trend route asks for: `months` months, 6 by
  * default, that end on the `end` month (YYYY-MM). Without an end month, the
- * current one in UTC, as SQLite's date('now') gave it. An end month that is
- * not one is refused, as the dates of the other routes are.
+ * month of the latest bill, so that no trend depends on the real date; with
+ * no bill either, no window, from and to null, which no bill falls in. An end
+ * month that is not one is refused, as the dates of the other routes are.
  * @param {{months?: string, end?: string}} query - The query parameters
- * @param {number|Date} [now] - The current time
- * @returns {{valid: boolean, error?: string, from?: string, to?: string}}
+ * @param {string} [latestBilledMonth] - The month of the latest bill, YYYY-MM
+ * @returns {{valid: boolean, error?: string, from?: ?string, to?: ?string}}
  */
-function trendWindowFromQuery(query, now = Date.now()) {
+function trendWindowFromQuery(query, latestBilledMonth) {
   const months = parseInt(query.months) || 6;
-  const end = query.end || new Date(now).toISOString().slice(0, 7);
+  const end = query.end || latestBilledMonth;
 
+  if (!end) {
+    return { valid: true, from: null, to: null };
+  }
   if (!MONTH_REGEX.test(end)) {
     return { valid: false, error: `Invalid 'end' month format: ${end}. Expected YYYY-MM` };
   }

@@ -493,7 +493,11 @@ For production with SSO:
 | `GET /api/analysis/public-cloud-stats?from=&to=`          | Public Cloud stats (K8s, S3, Registry)        |
 | `GET /api/analysis/backup-stats?from=&to=`                | Backup stats (Veeam VMs, Enterprise licenses) |
 | `GET /api/analysis/daily-trend?from=&to=`                 | Daily cost trend                              |
-| `GET /api/analysis/monthly-trend?months=6&end=`           | Monthly cost trend, `months` ending on `end`  |
+| `GET /api/analysis/monthly-trend?months=6&end=YYYY-MM`    | Monthly cost trend, `months` ending on `end`  |
+
+The monthly trend covers `months` calendar months, 6 by default, that end on
+the `end` month, that one included: `?months=3&end=2026-09` covers July to
+September 2026. Without `end`, it ends on the month of the latest bill.
 
 ### Consumption & Account
 
