@@ -117,6 +117,56 @@ describe('the booleans of config.json', () => {
   });
 });
 
+// "auth": true turned authentication off: its settings were read from true
+describe('the sections of config.json', () => {
+  const SOURCE = '/etc/ocm/config.json';
+
+  test.each([
+    ['auth', { auth: true }, 'true'],
+    ['auth', { auth: 'oidc' }, 'a string'],
+    ['auth', { auth: null }, 'null'],
+    ['auth.provider', { auth: { provider: 'https://sso.example.com' } }, 'a string'],
+    ['auth.session', { auth: { session: [] } }, 'an array'],
+  ])('refuses %s that is not an object: %j', (key, file, shown) => {
+    expect(() => buildAuthConfig(file, {}, SOURCE))
+      .toThrow(`${key} in ${SOURCE} must be an object, not ${shown}`);
+  });
+
+  test('refuses them when the environment enables OIDC too', () => {
+    expect(() => buildAuthConfig({ auth: true }, OIDC_ENV, SOURCE)).toThrow(`auth in ${SOURCE}`);
+  });
+});
+
+describe('auth.session.maxAge', () => {
+  const SOURCE = '/etc/ocm/config.json';
+  const withMaxAge = (maxAge) => ({ auth: { session: { maxAge } } });
+
+  test('is 24 hours by default', () => {
+    expect(buildAuthConfig({}, OIDC_ENV).session.maxAge).toBe(86400000);
+  });
+
+  test('is read from config.json', () => {
+    expect(buildAuthConfig(withMaxAge(3600000), OIDC_ENV).session.maxAge).toBe(3600000);
+  });
+
+  test.each([
+    ['"abc"', 'abc'],
+    ['"3600000"', '3600000'],
+    ['0', 0],
+    ['-1', -1],
+    ['1.5', 1.5],
+  ])('refuses %s', (shown, value) => {
+    expect(() => buildAuthConfig(withMaxAge(value), OIDC_ENV, SOURCE)).toThrow(
+      `auth.session.maxAge in ${SOURCE} must be a positive integer (a JSON number), not ${shown}`
+    );
+  });
+
+  test('refuses a wrong value when OIDC is disabled', () => {
+    expect(() => buildAuthConfig(withMaxAge('abc'), {}, SOURCE))
+      .toThrow(`auth.session.maxAge in ${SOURCE}`);
+  });
+});
+
 describe('missingSettings', () => {
   test('finds none when every setting is set', () => {
     expect(missingSettings(buildAuthConfig({}, OIDC_ENV))).toEqual([]);

@@ -1,14 +1,16 @@
 /**
  * The OIDC settings, read from the environment and config.json.
  */
-const { parseBoolean } = require('../boolean-setting');
+const { parseBoolean, parsePositiveInteger, readSection } = require('../settings');
 
 const DEFAULT_SCOPES = ['openid', 'profile', 'email'];
+const DEFAULT_SESSION_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 
 /**
  * Builds the auth settings from environment variables and the config file:
- * the environment overrides the file. Every boolean is read, whatever the
- * mode, so that a mistake in one stops the server.
+ * the environment overrides the file. Every boolean and number is read, and
+ * every section checked, whatever the mode, so that a mistake in one stops
+ * the server.
  *
  * @param {object} fileConfig - the content of config.json
  * @param {object} [env] - the environment variables
@@ -17,7 +19,9 @@ const DEFAULT_SCOPES = ['openid', 'profile', 'email'];
  *   is enabled
  */
 function buildAuthConfig(fileConfig, env = process.env, source = 'config.json') {
-  const file = fileConfig?.auth || {};
+  const file = readSection(fileConfig || {}, 'auth', { name: `auth in ${source}` });
+  const provider = readSection(file, 'provider', { name: `auth.provider in ${source}` });
+  const session = readSection(file, 'session', { name: `auth.session in ${source}` });
   const fromEnv = (name, options) => parseBoolean(env[name], { name, ...options });
   const fromFile = (key, value, options) => parseBoolean(value, {
     name: `auth.${key} in ${source}`,
@@ -26,8 +30,12 @@ function buildAuthConfig(fileConfig, env = process.env, source = 'config.json') 
   });
 
   const fileEnabled = fromFile('enabled', file.enabled);
-  const fileSecure = fromFile('session.secure', file.session?.secure, { auto: true });
+  const fileSecure = fromFile('session.secure', session.secure, { auto: true });
   const backChannelLogout = fromFile('backChannelLogout', file.backChannelLogout) ?? true;
+  const maxAge = parsePositiveInteger(session.maxAge, {
+    name: `auth.session.maxAge in ${source}`,
+    fromFile: true,
+  }) ?? DEFAULT_SESSION_MAX_AGE_MS;
   const envSecure = fromEnv('COOKIE_SECURE', { auto: true });
   // Header mode: whether Auth-User is required on the API
   const required = fromEnv('AUTH_REQUIRED') ?? false;
@@ -42,15 +50,15 @@ function buildAuthConfig(fileConfig, env = process.env, source = 'config.json') 
     enabled: true,
     required,
     provider: {
-      issuer: env.OIDC_ISSUER || file.provider?.issuer,
-      clientId: env.OIDC_CLIENT_ID || file.provider?.clientId,
-      clientSecret: env.OIDC_CLIENT_SECRET || file.provider?.clientSecret,
-      scopes: env.OIDC_SCOPES?.split(',') || file.provider?.scopes || DEFAULT_SCOPES,
+      issuer: env.OIDC_ISSUER || provider.issuer,
+      clientId: env.OIDC_CLIENT_ID || provider.clientId,
+      clientSecret: env.OIDC_CLIENT_SECRET || provider.clientSecret,
+      scopes: env.OIDC_SCOPES?.split(',') || provider.scopes || DEFAULT_SCOPES,
     },
     session: {
-      secret: env.SESSION_SECRET || file.session?.secret,
-      maxAge: file.session?.maxAge || 86400000, // 24h
-      name: file.session?.name || 'ocm.sid',
+      secret: env.SESSION_SECRET || session.secret,
+      maxAge,
+      name: session.name || 'ocm.sid',
       // The Secure flag of the session cookie: true or false when forced,
       // 'auto' to follow the request's scheme
       secure: envSecure ?? fileSecure ?? 'auto',

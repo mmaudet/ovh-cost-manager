@@ -45,3 +45,31 @@ describe('first_import_mode of scripts/import-decision.sh', () => {
     expect(firstImportMode(status, output)).toBe('diff\n');
   });
 });
+
+// Whether the cron imports at all, from IMPORT_ENABLED, as the server reads it
+// (server/imports.js): with FALSE, the cron imported while the server said no
+describe('imports_enabled of scripts/import-decision.sh', () => {
+  function importsEnabled(value) {
+    const shell = '. "$1" && imports_enabled "$2"';
+    return spawnSync('sh', ['-c', shell, 'sh', decisionScript, value], { encoding: 'utf8' });
+  }
+
+  test.each([
+    ['true', 'true'],
+    ['TRUE', 'true'],
+    ['', 'true'],
+    ['false', 'false'],
+    ['FALSE', 'false'],
+    ['False', 'false'],
+  ])('reads IMPORT_ENABLED=%p as %s', (value, expected) => {
+    const result = importsEnabled(value);
+    expect(result.stdout).toBe(`${expected}\n`);
+    expect(result.status).toBe(0);
+  });
+
+  test.each(['0', 'no', 'off'])('fails with IMPORT_ENABLED=%s, as the server does', (value) => {
+    const result = importsEnabled(value);
+    expect(result.stdout).toBe('');
+    expect(result.status).not.toBe(0);
+  });
+});

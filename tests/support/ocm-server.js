@@ -2,7 +2,8 @@
  * The server, server/index.js, started in a child process for the tests that
  * go through its routes: Jest cannot load openid-client, an ES module, while
  * the server's own Node can. It runs with a throwaway HOME and DATA_DIR, and
- * reads neither the developer's config.json nor data.
+ * reads neither the developer's config.json nor data: only the config.json a
+ * test gives it, if any.
  *
  * Also a minimal browser, which keeps the cookies the server sets and follows
  * no redirect, so that a test sees each step of a sign-in.
@@ -39,16 +40,14 @@ async function waitFor(check, what, output) {
   throw new Error(`the server never ${what}:\n${output()}`);
 }
 
-/**
- * Starts the server and waits until it answers, and, with OIDC, until it has
- * discovered the provider.
- *
- * @param {function(string): object} envOf - its environment, beyond the
- *   throwaway places, from its URL, such as for OIDC_BASE_URL
- * @returns {Promise<{ url: string, output: function(): string, stop: function }>}
- */
-async function startOcm(envOf) {
+// The server in a child process, with a throwaway HOME, which holds config
+// in my-ovh-bills/config.json when it is given, and DATA_DIR
+async function spawnOcm(envOf, config) {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'ocm-test-'));
+  if (config !== undefined) {
+    fs.mkdirSync(path.join(home, 'my-ovh-bills'));
+    fs.writeFileSync(path.join(home, 'my-ovh-bills', 'config.json'), JSON.stringify(config));
+  }
   const port = await freePort();
   const url = `http://127.0.0.1:${port}`;
   const env = envOf(url);
@@ -73,10 +72,25 @@ async function startOcm(envOf) {
     output += chunk;
   });
   const exited = new Promise((resolve) => child.on('exit', resolve));
+  return { home, url, env, child, exited, output: () => output };
+}
+
+/**
+ * Starts the server and waits until it answers, and, with OIDC, until it has
+ * discovered the provider.
+ *
+ * @param {function(string): object} envOf - its environment, beyond the
+ *   throwaway places, from its URL, such as for OIDC_BASE_URL
+ * @param {object} [options]
+ * @param {object} [options.config] - the content of its config.json
+ * @returns {Promise<{ url: string, output: function(): string, stop: function }>}
+ */
+async function startOcm(envOf, { config } = {}) {
+  const { home, url, env, child, exited, output } = await spawnOcm(envOf, config);
 
   const server = {
     url,
-    output: () => output,
+    output,
     stop: async () => {
       child.kill();
       await exited;
@@ -97,6 +111,25 @@ async function startOcm(envOf) {
     throw err;
   }
   return server;
+}
+
+/**
+ * Starts the server with a setting it must refuse, and waits until it exits,
+ * 15 s at most.
+ *
+ * @param {object} env - its environment, beyond the throwaway places
+ * @param {object} [options]
+ * @param {object} [options.config] - the content of its config.json
+ * @returns {Promise<{ code: (number|null), output: string }>} its exit code,
+ *   null when it had to be stopped, and its output
+ */
+async function runOcmUntilExit(env, { config } = {}) {
+  const { home, child, exited, output } = await spawnOcm(() => env, config);
+  const timer = setTimeout(() => child.kill(), 15000);
+  const code = await exited;
+  clearTimeout(timer);
+  fs.rmSync(home, { recursive: true, force: true });
+  return { code, output: output() };
 }
 
 /**
@@ -143,4 +176,4 @@ function createBrowser(base) {
   };
 }
 
-module.exports = { startOcm, createBrowser };
+module.exports = { startOcm, runOcmUntilExit, createBrowser };

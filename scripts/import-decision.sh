@@ -1,7 +1,19 @@
 # shellcheck shell=sh
-# import-decision.sh — The import that cron-import.sh runs when the container starts
+# import-decision.sh — Whether cron-import.sh imports, and the import it runs when the
+# container starts
 #
 # Sourced by cron-import.sh, and by its test (tests/import-decision.test.js).
+
+# Print whether the periodic imports run, from IMPORT_ENABLED ($1), as the server reads
+# it (server/imports.js): true or false, in any case, and true when empty. Fail on any
+# other value, which stops the server too.
+imports_enabled() {
+  case "${1:-true}" in
+    [Tt][Rr][Uu][Ee]) echo true ;;
+    [Ff][Aa][Ll][Ss][Ee]) echo false ;;
+    *) return 1 ;;
+  esac
+}
 
 # Print the import to run at start, from the exit status ($1) and the output
 # ($2) of data/count-bills.js, which counts the bills in the database:

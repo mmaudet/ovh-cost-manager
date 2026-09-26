@@ -30,7 +30,7 @@ const CONFIG_PATHS = [
 
 let config = { dashboard: { budget: 50000, currency: 'EUR' } };
 let configPath = null;
-// Rate limiting and TRUST_PROXY: a malformed boolean stops the server too
+// Rate limiting and TRUST_PROXY: a malformed setting stops the server too
 let rateLimitConfig;
 
 try {
@@ -38,6 +38,8 @@ try {
   config = { ...config, ...loaded.config };
   configPath = loaded.path;
   rateLimitConfig = buildRateLimitConfig(config, process.env, configPath || undefined);
+  // IMPORT_ENABLED too, which the routes read later
+  importsEnabled();
 } catch (err) {
   console.error(`Failed to start server: ${err.message}`);
   process.exit(1);
