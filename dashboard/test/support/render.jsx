@@ -47,6 +47,13 @@ export async function settle() {
   await settleQueries(queryClient);
 }
 
+// The key of every query the page holds in its cache, the shell's and the tab
+// hooks', whether it ran or still waits for what it needs, in the order the
+// page first built them: what renderTabHook()'s allKeys() gives for one hook
+export function cachedQueryKeys() {
+  return queryClient.getQueriesData({}).map(([queryKey]) => queryKey);
+}
+
 // Fakes the timers as well as Date, for the tests that wait for the page's
 // own timers: the import status refreshed 8 s after a resync, and polled
 // every 30 s while an import runs. To call before renderDashboard().
