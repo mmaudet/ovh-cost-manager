@@ -124,6 +124,11 @@ describe('createHostCheck', () => {
     ['x-forwarded-for', '203.0.113.7'],
     ['x-forwarded-host', 'ocm.example.com'],
     ['forwarded', 'for=203.0.113.7'],
+    // What nginx sends when told to add X-Real-IP or X-Forwarded-Proto alone
+    ['x-real-ip', '203.0.113.7'],
+    ['x-forwarded-proto', 'http'],
+    ['x-forwarded-port', '80'],
+    ['via', '1.1 proxy.example'],
   ])('rejects a loopback Host on a request with %s, which a proxy adds', (name, value) => {
     expect(passes(direct, { host: '127.0.0.1:3001', [name]: value })).toBe(false);
   });

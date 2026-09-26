@@ -12,8 +12,19 @@
 
 const { LOOPBACK_HOSTNAMES, lastValue, parseHost } = require('./hostHeader');
 
-// The headers a proxy adds: a request with any of them is not a direct one
-const PROXY_HEADERS = ['x-forwarded-for', 'x-forwarded-host', 'forwarded'];
+// The headers a proxy adds: a request with any of them is not a direct one.
+// nginx adds none unless told to, and often only X-Real-IP or
+// X-Forwarded-Proto. The remote address cannot tell instead: Kubernetes
+// probes, which may send Host: localhost, come from the node.
+const PROXY_HEADERS = [
+  'x-forwarded-for',
+  'x-forwarded-host',
+  'forwarded',
+  'x-real-ip',
+  'x-forwarded-proto',
+  'x-forwarded-port',
+  'via',
+];
 
 // The log names each blocked host once an hour, and at most this many hosts
 // an hour, as any client can send any number of them. It counts the others.
