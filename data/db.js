@@ -578,6 +578,30 @@ const inventoryOps = {
     return db.prepare('SELECT * FROM storage_services ORDER BY display_name').all();
   },
 
+  // Each deletes the services of its kind that are not in `ids`, the list the OVH API gave of
+  // all those that exist now: the services cancelled since an import stored them (#74). It
+  // returns how many it deleted.
+  deleteServersNotIn: (ids) => {
+    const db = getDb();
+    return db.prepare(`
+      DELETE FROM dedicated_servers WHERE id NOT IN (SELECT value FROM json_each(?))
+    `).run(JSON.stringify(ids)).changes;
+  },
+
+  deleteVpsNotIn: (ids) => {
+    const db = getDb();
+    return db.prepare(`
+      DELETE FROM vps_instances WHERE id NOT IN (SELECT value FROM json_each(?))
+    `).run(JSON.stringify(ids)).changes;
+  },
+
+  deleteStorageNotIn: (ids) => {
+    const db = getDb();
+    return db.prepare(`
+      DELETE FROM storage_services WHERE id NOT IN (SELECT value FROM json_each(?))
+    `).run(JSON.stringify(ids)).changes;
+  },
+
   getSummary: () => {
     const db = getDb();
     const servers = db.prepare('SELECT COUNT(*) as count FROM dedicated_servers').get();

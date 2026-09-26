@@ -1,6 +1,7 @@
 /**
  * Tests for the service inventory import (Phase 3), against a simulated OVH
- * API: what it stores of each VPS.
+ * API: what it stores of each VPS, and the services it removes once OVH no
+ * longer lists them.
  */
 
 const { routes, ok, fail, useThrowawayImport } = require('./support/simulated-ovh');
@@ -108,5 +109,99 @@ describe('VPS inventory import', () => {
     await importInventory();
 
     expect(storedVps()).toEqual([['', 40]]);
+  });
+});
+
+// #74: a service cancelled at OVH stayed in the inventory until a full import, and the
+// Overview listed it first among the services about to expire, expired for months
+describe('services that OVH no longer lists', () => {
+  const SERVER = 'ns3000001.ip-203-0-113.eu';
+  const STORAGE = 'netapp-8c9d0e1f';
+  const CANCELLED = {
+    server: 'ns3000009.ip-203-0-113.eu',
+    vps: 'vps-9f8e7d6c.vps.ovh.net',
+    storage: 'netapp-9a8b7c6d',
+  };
+  const LISTS = ['/dedicated/server', '/vps', '/storage/netapp'];
+
+  // What an earlier import stored: a service of each kind that OVH still lists, and one that
+  // was cancelled since, expired in March
+  function storeServices() {
+    for (const id of [SERVER, CANCELLED.server]) {
+      db.inventory.upsertServer({
+        id, display_name: id, reverse: '', datacenter: 'rbx8', os: '', state: 'ok', cpu: '',
+        ram_size: 0, disk_info: '[]', bandwidth: 0, expiration_date: '2026-03-01',
+        renewal_type: '',
+      });
+    }
+    for (const id of [VPS, CANCELLED.vps]) {
+      db.inventory.upsertVps({
+        id, display_name: id, model: '', zone: '', state: 'running', os: '', vcpus: 2,
+        ram_mb: 2048, disk_gb: 40, expiration_date: '2026-03-01', renewal_type: '',
+        ip_addresses: '[]',
+      });
+    }
+    for (const id of [STORAGE, CANCELLED.storage]) {
+      db.inventory.upsertStorage({
+        id, service_type: 'netapp', display_name: id, region: 'eu-west-gra',
+        total_size_gb: 1024, used_size_gb: 0, share_count: 0, expiration_date: '2026-03-01',
+      });
+    }
+  }
+
+  // OVH lists the services it still has: the VPS (see serveVps()), a server and a storage
+  // service
+  function serveLists() {
+    routes.set('/dedicated/server', ok([SERVER]));
+    routes.set(`/dedicated/server/${SERVER}`, ok({ datacenter: 'rbx8', state: 'ok' }));
+    routes.set('/storage/netapp', ok([STORAGE]));
+    routes.set(`/storage/netapp/${STORAGE}`, ok({ name: STORAGE, region: 'eu-west-gra' }));
+  }
+
+  // The ids of the services stored of each kind
+  const storedIds = () => ({
+    servers: db.inventory.getAllServers().map(s => s.id),
+    vps: db.inventory.getAllVps().map(v => v.id),
+    storage: db.inventory.getAllStorage().map(s => s.id),
+  });
+
+  test('removes the services cancelled since an earlier import', async () => {
+    storeServices();
+    serveLists();
+
+    await importInventory();
+
+    expect(storedIds()).toEqual({ servers: [SERVER], vps: [VPS], storage: [STORAGE] });
+  });
+
+  // What OVH lists decides, not what the import could read of each service
+  test('keeps a service that OVH lists but whose details it could not read', async () => {
+    storeServices();
+    serveLists();
+    routes.set(`/dedicated/server/${SERVER}`, fail(500, 'Internal server error'));
+
+    await importInventory();
+
+    expect(storedIds().servers).toEqual([SERVER]);
+  });
+
+  test.each([
+    // As for the maintainer's own key, which is not granted these routes
+    ['is not granted', fail(403, 'This call has not been granted')],
+    ['fails', fail(500, 'Internal server error')],
+    // The ovh client answers null for an empty body
+    ['answers nothing', ok(null)],
+    ['answers anything but a list', ok({})],
+  ])('keeps every service when the list call %s', async (_, answer) => {
+    storeServices();
+    for (const list of LISTS) routes.set(list, answer);
+
+    await importInventory();
+
+    expect(storedIds()).toEqual({
+      servers: [SERVER, CANCELLED.server],
+      vps: [VPS, CANCELLED.vps],
+      storage: [STORAGE, CANCELLED.storage],
+    });
   });
 });
