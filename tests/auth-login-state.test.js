@@ -69,8 +69,34 @@ describe('readLoginState', () => {
     ['text that is no JSON', 'not-json'],
     ['JSON that is no object', Buffer.from('"state-of-browser-a"').toString('base64url')],
   ])('refuses a signed cookie holding %s', (label, payload) => {
-    expect(readLoginState(signValue(payload, SECRET), 'state-of-browser-a', SECRET, NOW))
+    expect(readLoginState(signValue(payload, SECRET, 'login'), 'state-of-browser-a', SECRET, NOW))
       .toBeNull();
+  });
+});
+
+// The cookie as a browser could send it back altered: its payload is readable
+// base64url JSON, but any change breaks its signature
+describe('a tampered sign-in cookie', () => {
+  const [PAYLOAD, SIGNATURE] = COOKIE.split('.');
+  const pending = JSON.parse(Buffer.from(PAYLOAD, 'base64url').toString());
+  const withPayload = (changes) => `${Buffer.from(JSON.stringify({ ...pending, ...changes }))
+    .toString('base64url')}.${SIGNATURE}`;
+  const flipped = SIGNATURE.endsWith('A') ? 'B' : 'A';
+
+  test.each([
+    ['a character of its signature changed', `${PAYLOAD}.${SIGNATURE.slice(0, -1)}${flipped}`],
+    ['its signature cut short', `${PAYLOAD}.${SIGNATURE.slice(0, 20)}`],
+    ['no signature', PAYLOAD],
+    ['its expiry pushed back, its signature kept', withPayload({ expiresAt: NOW + 86400000 })],
+    ['another returnTo, its signature kept', withPayload({ returnTo: 'https://evil.example/' })],
+    ['another code_verifier, its signature kept', withPayload({ codeVerifier: 'mine' })],
+    ['its payload signed for the session cookie', signValue(PAYLOAD, SECRET, 'session')],
+  ])('is refused with %s', (label, cookie) => {
+    expect(readLoginState(cookie, 'state-of-browser-a', SECRET, NOW)).toBeNull();
+  });
+
+  test('is read untouched', () => {
+    expect(readLoginState(COOKIE, 'state-of-browser-a', SECRET, NOW)).not.toBeNull();
   });
 });
 

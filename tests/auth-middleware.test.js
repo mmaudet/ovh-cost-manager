@@ -99,7 +99,7 @@ describe('the OIDC authentication middleware', () => {
   describe('with a session', () => {
     test.each(['/api/months', '/API/months'])('serves %s', async (path) => {
       const sid = sessionStore.create('alice', { name: 'Alice' }, {}, null, 60 * 1000);
-      const cookie = `ocm.sid=${signValue(sid, SECRET)}`;
+      const cookie = `ocm.sid=${signValue(sid, SECRET, 'session')}`;
       const res = await server.request('GET', path, { Cookie: cookie });
       expect(res.status).toBe(200);
       expect(JSON.parse(res.body)).toEqual({ route: 'months', user: 'alice' });

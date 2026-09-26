@@ -32,7 +32,7 @@ function encodeLoginState({ state, nonce, codeVerifier, returnTo }, secret, now 
     returnTo,
     expiresAt: now + LOGIN_MAX_AGE_MS,
   });
-  return signValue(Buffer.from(json).toString('base64url'), secret);
+  return signValue(Buffer.from(json).toString('base64url'), secret, 'login');
 }
 
 /**
@@ -46,7 +46,7 @@ function encodeLoginState({ state, nonce, codeVerifier, returnTo }, secret, now 
  *   when the cookie is missing, altered or expired, or holds another state
  */
 function readLoginState(cookie, state, secret, now = Date.now()) {
-  const payload = unsignValue(cookie, secret);
+  const payload = unsignValue(cookie, secret, 'login');
   if (!payload || typeof state !== 'string' || state === '') {
     return null;
   }

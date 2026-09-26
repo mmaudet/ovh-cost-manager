@@ -20,7 +20,7 @@ function createAuthMiddleware(config) {
     }
 
     // Get session from cookie, when its signature matches
-    const sid = unsignValue(req.cookies?.[cookieName], secret);
+    const sid = unsignValue(req.cookies?.[cookieName], secret, 'session');
 
     if (sid) {
       const session = sessionStore.get(sid);

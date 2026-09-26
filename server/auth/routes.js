@@ -105,7 +105,7 @@ function setup(config) {
       );
 
       // Set cookie, signed: Secure over HTTPS, unless COOKIE_SECURE says otherwise
-      res.cookie(authConfig.session.name, signValue(sid, authConfig.session.secret), {
+      res.cookie(authConfig.session.name, signValue(sid, authConfig.session.secret, 'session'), {
         ...sessionCookieOptions(req, authConfig),
         maxAge: authConfig.session.maxAge,
       });
@@ -125,7 +125,11 @@ function setup(config) {
 
   // GET /auth/logout - Front-channel logout
   router.get('/logout', (req, res) => {
-    const sid = unsignValue(req.cookies[authConfig.session.name], authConfig.session.secret);
+    const sid = unsignValue(
+      req.cookies[authConfig.session.name],
+      authConfig.session.secret,
+      'session'
+    );
 
     // Delete local session and get id_token
     let idToken = null;

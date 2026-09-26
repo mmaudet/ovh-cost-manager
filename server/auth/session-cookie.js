@@ -41,26 +41,32 @@ function sessionCookieOptions(req, auth) {
 }
 
 /**
- * A cookie value signed with SESSION_SECRET: the value, a dot, and its
- * HMAC-SHA256. The session cookie holds the session id signed so: a session
- * id alone, as the sessions table stores it, is then no valid cookie.
+ * A cookie value signed with SESSION_SECRET for a purpose: the value, a dot,
+ * and the HMAC-SHA256 of the purpose, a colon and the value. The session
+ * cookie holds the session id signed for 'session': a session id alone, as
+ * the sessions table stores it, is then no valid cookie. The sign-in cookie
+ * is signed for 'login': neither cookie passes for the other.
  *
  * @param {string} value - such as the session id
  * @param {string} secret - SESSION_SECRET
+ * @param {string} purpose - what the value is for: 'session' or 'login'
  * @returns {string}
  */
-function signValue(value, secret) {
-  return `${value}.${signature(value, secret)}`;
+function signValue(value, secret, purpose) {
+  return `${value}.${signature(value, secret, purpose)}`;
 }
 
 /**
- * The value of a signed cookie value, when its signature matches.
+ * The value of a signed cookie value, when its signature matches for the
+ * purpose.
  *
  * @param {*} signed - the cookie value, whatever its type
  * @param {string} secret - SESSION_SECRET
+ * @param {string} purpose - what the value is for: 'session' or 'login'
  * @returns {string|null} the value, or null
  */
-function unsignValue(signed, secret) {
+function unsignValue(signed, secret, purpose) {
+  checkPurpose(purpose);
   if (typeof signed !== 'string') {
     return null;
   }
@@ -69,7 +75,7 @@ function unsignValue(signed, secret) {
     return null;
   }
   const value = signed.slice(0, dot);
-  const expected = Buffer.from(signature(value, secret));
+  const expected = Buffer.from(signature(value, secret, purpose));
   const given = Buffer.from(signed.slice(dot + 1));
   // In constant time: timingSafeEqual needs buffers of the same length, and
   // the length of a signature tells nothing about the secret
@@ -79,8 +85,17 @@ function unsignValue(signed, secret) {
   return value;
 }
 
-function signature(value, secret) {
-  return crypto.createHmac('sha256', secret).update(value).digest('base64url');
+function signature(value, secret, purpose) {
+  checkPurpose(purpose);
+  return crypto.createHmac('sha256', secret).update(`${purpose}:${value}`).digest('base64url');
+}
+
+// A purpose ends at its colon: it holds none, so that no two pairs of
+// purpose and value sign the same text
+function checkPurpose(purpose) {
+  if (typeof purpose !== 'string' || purpose === '' || purpose.includes(':')) {
+    throw new TypeError(`a signed value needs a purpose without colon, not ${purpose}`);
+  }
 }
 
 const MIN_SECRET_LENGTH = 32;
