@@ -16,6 +16,7 @@ import {
 
 const backupCards = (firstLabel = 'Coût total backup') => cardRowOf(firstLabel);
 const resourcesPanel = (heading = 'Ressources Backup') => cardOf(heading);
+const resourceRows = () => rowsOf(within(resourcesPanel()).getByRole('table'));
 
 describe('Backup tab', () => {
   it('loads the backup figures when the tab opens, not before', async () => {
@@ -104,42 +105,66 @@ describe('Backup tab', () => {
     expect(texts(cardOf('% du coût total'))).toEqual(['% du coût total', '0,0 %']);
   });
 
-  // The VMs row then counts the backup bill lines of the costs by resource type, and the
-  // Total row with it (#64)
-  describe('while the backup statistics are missing', () => {
-    const fallbackRows = [
+  // Rather than figures that change once they arrive, as the Web Cloud tab does (#64)
+  it('shows that it is loading until the backup statistics arrive (#64)', async () => {
+    const { user } = await renderDashboard();
+    // Hold back the backup statistics
+    const release = holdBack(api.fetchBackupStats);
+
+    await user.click(screen.getByRole('button', { name: 'Backup' }));
+
+    expect(screen.getByText('Chargement des données...')).toBeInTheDocument();
+    expect(screen.queryByText('Coût total backup')).not.toBeInTheDocument();
+    expect(screen.queryByText('Ressources Backup')).not.toBeInTheDocument();
+
+    release();
+    await settle();
+    expect(screen.queryByText('Chargement des données...')).not.toBeInTheDocument();
+    expect(resourceRows()).toEqual([
       ['Catégorie', 'Nombre', 'Coût'],
       ['VMs Veeam Backup', '3', '90,00€'],
-      ['Total', '3', '90,00€'],
-    ];
-    const resourceRows = () => rowsOf(within(resourcesPanel()).getByRole('table'));
+      ['Licence Veeam Enterprise', '1', '25,00€'],
+      ['Total', '4', '115,00€'],
+    ]);
+  });
 
-    it('totals the VMs of the costs by resource type while they load (#64)', async () => {
-      const { user } = await renderDashboard();
-      // Hold back the backup statistics
-      const release = holdBack(api.fetchBackupStats);
+  it('says in English that it is loading (#64)', async () => {
+    const { user } = await renderDashboard();
+    await selectLanguage(user, 'en');
+    const release = holdBack(api.fetchBackupStats);
 
-      await user.click(screen.getByRole('button', { name: 'Backup' }));
+    await user.click(screen.getByRole('button', { name: 'Backup' }));
 
-      expect(resourceRows()).toEqual(fallbackRows);
+    expect(screen.getByText('Loading data...')).toBeInTheDocument();
+    release();
+    await settle();
+  });
 
-      release();
-      await settle();
-      expect(resourceRows()).toEqual([
-        ['Catégorie', 'Nombre', 'Coût'],
-        ['VMs Veeam Backup', '3', '90,00€'],
-        ['Licence Veeam Enterprise', '1', '25,00€'],
-        ['Total', '4', '115,00€'],
-      ]);
-    });
-
-    it('totals the VMs of the costs by resource type when they fail (#64)', async () => {
+  // It then says so, above what the costs by resource type still tell: the VMs, whose bill
+  // lines they sum, in the VMs row and in the Total row (#64)
+  describe('when the backup statistics fail', () => {
+    it('says so, and totals the VMs of the costs by resource type (#64)', async () => {
       const { user } = await renderDashboard();
       api.fetchBackupStats.mockRejectedValue(new Error('Request failed with status code 500'));
 
       await openTab(user, 'Backup');
 
-      expect(resourceRows()).toEqual(fallbackRows);
+      expect(screen.getByText('Impossible de charger les données Backup.')).toBeInTheDocument();
+      expect(resourceRows()).toEqual([
+        ['Catégorie', 'Nombre', 'Coût'],
+        ['VMs Veeam Backup', '3', '90,00€'],
+        ['Total', '3', '90,00€'],
+      ]);
+    });
+
+    it('says so in English when the page does (#64)', async () => {
+      const { user } = await renderDashboard();
+      await selectLanguage(user, 'en');
+      api.fetchBackupStats.mockRejectedValue(new Error('Request failed with status code 500'));
+
+      await openTab(user, 'Backup');
+
+      expect(screen.getByText('Could not load the Backup data.')).toBeInTheDocument();
     });
   });
 

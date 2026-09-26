@@ -1,8 +1,8 @@
 import { formatPercent } from '../utils/format.js';
 
 // The Veeam VMs of the month, for the VMs row of the backup resources and their Total: from
-// the backup statistics or, while they are missing (loading, or an error), from the costs
-// by resource type, which sum the same bill lines (#64)
+// the backup statistics or, once these failed, from the costs by resource type, which sum
+// the same bill lines (#64)
 const veeamVms = (backupStats, byResourceType) => {
   const backup = byResourceType.find(r => r.resource_type === 'backup');
   return {
@@ -15,15 +15,34 @@ const veeamVms = (backupStats, byResourceType) => {
 // with the shell's language, amount format (fmt) and selected month, and two of its
 // queries that load at page start: the month's summary and its costs by resource type.
 const BackupTab = ({
-  backupStats,
+  backupStats, loadingBackup, failedBackup,
   language, fmt, selectedMonth, summary, byResourceType,
 }) => {
+  // Until the statistics arrive, the tab says it is loading, in the words of the page's
+  // loading screen, as the Web Cloud tab does (#64)
+  if (loadingBackup) {
+    return (
+      <div className="text-center text-gray-500 py-8">
+        {language === 'en' ? 'Loading data...' : 'Chargement des données...'}
+      </div>
+    );
+  }
+
   // Whether the month has backup resources to list
   const hasBackups = byResourceType.some(r => r.resource_type === 'backup')
     || backupStats?.vms?.count > 0;
 
   return (
     <div className="space-y-6">
+      {/* Once they failed, it says so, above what the costs by resource type still tell (#64) */}
+      {failedBackup && (
+        <div className="text-center text-red-600 py-8">
+          {language === 'en'
+            ? 'Could not load the Backup data.'
+            : 'Impossible de charger les données Backup.'}
+        </div>
+      )}
+
       {/* Backup Summary Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
