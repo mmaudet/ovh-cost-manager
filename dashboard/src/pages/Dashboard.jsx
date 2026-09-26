@@ -14,10 +14,7 @@ import {
 import { useLanguage } from '../hooks/useLanguage.jsx';
 import Logo from '../components/Logo';
 import Accordion from '../components/Accordion.jsx';
-import Modal from '../components/Modal.jsx';
-import TableActions from '../components/TableActions.jsx';
 import { SortIcon } from '../components/SortIcon.jsx';
-import { downloadCSV } from '../utils/csv.js';
 import { formatCurrency } from '../utils/format.js';
 import { parseSqliteDate } from '../utils/sqliteDate.js';
 import { generateMarkdownReport } from '../utils/markdownReport.js';
