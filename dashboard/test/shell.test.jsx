@@ -101,8 +101,9 @@ describe('dashboard shell', () => {
         'Consommation en cours', '15 septembre 2026',
         '402,35€', 'Public Cloud · 2 projets cloud',
       ]);
+      // The month capitalised, as the other month labels (#33)
       expect(texts(cardOf('Prévision fin de mois')))
-        .toEqual(['Prévision fin de mois', 'septembre 2026', '862,18€', '14/30 jours']);
+        .toEqual(['Prévision fin de mois', 'Septembre 2026', '862,18€', '14/30 jours']);
       expect(texts(cardOf('Total ressources')))
         .toEqual(['Total ressources', '9', '1 Serveurs dédiés · 0 VPS · 2 Projets Cloud']);
     });
@@ -111,7 +112,7 @@ describe('dashboard shell', () => {
       await renderDashboard({ ...account, config: { budget: 800, currency: 'EUR' } });
 
       expect(texts(cardOf('Prévision fin de mois')))
-        .toEqual(['Prévision fin de mois', 'septembre 2026', '862,18€', '> Budget!']);
+        .toEqual(['Prévision fin de mois', 'Septembre 2026', '862,18€', '> Budget!']);
     });
   });
 
@@ -588,6 +589,8 @@ describe('dashboard shell', () => {
       expect(optionsOf(dropdown('July 2026')))
         .toEqual(['September 2026', 'August 2026', 'July 2026']);
       expect(dropdown('July 2026')).toHaveDisplayValue('September 2026');
+      expect(texts(cardOf('End of month forecast')))
+        .toEqual(['End of month forecast', 'September 2026', '862.18€', '14/30 days']);
 
       await selectLanguage(user, 'fr');
 

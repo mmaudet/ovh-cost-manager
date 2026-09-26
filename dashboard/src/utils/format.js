@@ -46,6 +46,12 @@ const formatMonthLabel = (yearMonth, language = 'fr') => (
   formatMonth(yearMonth, language, { name: 'long', capitalised: true })
 );
 
+// The month of a date as YYYY-MM, as the month formats above read it: in local time, as
+// they write it
+const yearMonthOf = (date) => (
+  `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
+);
+
 const BYTE_UNITS = {
   fr: ['o', 'Ko', 'Mo', 'Go', 'To', 'Po'],
   en: ['B', 'KB', 'MB', 'GB', 'TB', 'PB'],
@@ -89,5 +95,6 @@ const fmtBytes = (bytes, language = 'fr') => {
 };
 
 export {
-  localeOf, formatCurrency, formatPercent, formatYearMonth, formatMonthLabel, fmtBytes,
+  localeOf, formatCurrency, formatPercent, formatYearMonth, formatMonthLabel, yearMonthOf,
+  fmtBytes,
 };

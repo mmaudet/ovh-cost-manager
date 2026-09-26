@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
-  localeOf, formatCurrency, formatPercent, formatYearMonth, formatMonthLabel, fmtBytes,
+  localeOf, formatCurrency, formatPercent, formatYearMonth, formatMonthLabel, yearMonthOf,
+  fmtBytes,
 } from '../../src/utils/format.js';
 import { NBSP, NNBSP } from '../support/amounts.js';
 
@@ -125,6 +126,16 @@ describe('formatMonthLabel', () => {
     expect(formatMonthLabel('')).toBe('');
     expect(formatMonthLabel('2026-00')).toBe('2026-00');
     expect(formatMonthLabel('N/A')).toBe('N/A');
+  });
+});
+
+// The month of a date, as the month-end forecast names that of today (#33)
+describe('yearMonthOf', () => {
+  it('gives the month of a date as YYYY-MM, in the local time of the page', () => {
+    expect(yearMonthOf(new Date(2026, 8, 15, 12))).toBe('2026-09');
+    // Still 30 September in UTC, 1 October in Paris
+    expect(yearMonthOf(new Date(2026, 9, 1, 0, 30))).toBe('2026-10');
+    expect(yearMonthOf(new Date(2025, 11, 31, 23, 59))).toBe('2025-12');
   });
 });
 
