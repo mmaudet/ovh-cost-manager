@@ -143,7 +143,7 @@ export default function Dashboard() {
   // at start under the same key: the KPI reads it from page start.
   const { compareDataB } = compareTab;
 
-  const trendsTab = useTrendsTab({ months, activeTab });
+  const trendsTab = useTrendsTab({ months, selectedMonth, activeTab });
 
   const publicCloudTab = usePublicCloudTab({ selectedMonth, activeTab, selectedProject });
 

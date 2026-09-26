@@ -8,7 +8,7 @@ import {
 } from '../services/api.js';
 import { monthsSince, availablePeriodsFor } from '../utils/trendPeriods.js';
 
-const useTrendsTab = ({ months, activeTab }) => {
+const useTrendsTab = ({ months, selectedMonth, activeTab }) => {
   const [trendPeriod, setTrendPeriod] = useState(6); // Months for trend
 
   const maxMonths = months.length > 0 ? monthsSince(months[months.length - 1].value) : 0;
@@ -21,14 +21,20 @@ const useTrendsTab = ({ months, activeTab }) => {
     }
   }, [months, trendPeriod]);
 
+  // The period ends on the month selected in the header, that month included, as the 12
+  // months of the Web Cloud tab do (#66)
+  const endMonth = selectedMonth?.value;
+
   const { data: monthlyTrend = [] } = useQuery({
-    queryKey: ['monthlyTrend', trendPeriod],
-    queryFn: () => fetchMonthlyTrend(trendPeriod)
+    queryKey: ['monthlyTrend', trendPeriod, endMonth],
+    queryFn: () => fetchMonthlyTrend(trendPeriod, endMonth),
+    enabled: !!endMonth
   });
 
   const { data: trendByCategory = { categories: [], data: [] } } = useQuery({
-    queryKey: ['monthlyTrendByCategory', trendPeriod],
-    queryFn: () => fetchMonthlyTrendByCategory(trendPeriod)
+    queryKey: ['monthlyTrendByCategory', trendPeriod, endMonth],
+    queryFn: () => fetchMonthlyTrendByCategory(trendPeriod, endMonth),
+    enabled: !!endMonth
   });
   // Categories hidden from the by-category chart (toggled via the legend).
   const [hiddenCategories, setHiddenCategories] = useState(() => new Set());

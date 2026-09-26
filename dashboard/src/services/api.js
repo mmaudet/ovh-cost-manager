@@ -48,13 +48,16 @@ export const fetchByService = async (from, to) => {
   return data;
 };
 
-export const fetchMonthlyTrend = async (months = 6) => {
-  const { data } = await api.get('/analysis/monthly-trend', { params: { months } });
+// Trends over `months` months that end on the `end` month, 'YYYY-MM'
+export const fetchMonthlyTrend = async (months = 6, end) => {
+  const { data } = await api.get('/analysis/monthly-trend', { params: { months, end } });
   return data;
 };
 
-export const fetchMonthlyTrendByCategory = async (months = 6) => {
-  const { data } = await api.get('/analysis/monthly-trend-by-category', { params: { months } });
+export const fetchMonthlyTrendByCategory = async (months = 6, end) => {
+  const { data } = await api.get('/analysis/monthly-trend-by-category', {
+    params: { months, end }
+  });
   return data;
 };
 

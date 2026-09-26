@@ -27,9 +27,9 @@ describe('Trends tab', () => {
   it('loads the trends when the page opens, and the GPU trend when the tab opens', async () => {
     const { user } = await renderDashboard();
 
-    // Over the longest period the three billed months allow
-    expect(api.fetchMonthlyTrend).toHaveBeenCalledWith(3);
-    expect(api.fetchMonthlyTrendByCategory).toHaveBeenCalledWith(3);
+    // Over the longest period the three billed months allow, up to the selected month
+    expect(api.fetchMonthlyTrend).toHaveBeenCalledWith(3, '2026-09');
+    expect(api.fetchMonthlyTrendByCategory).toHaveBeenCalledWith(3, '2026-09');
     // Only the GPU costs of the selected month so far, for the Overview
     expect(api.fetchGpuSummary).not.toHaveBeenCalledWith();
 

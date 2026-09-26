@@ -1,14 +1,17 @@
 import { months } from './calendar.js';
 
 // Cost trends of the synthetic account, as /api/analysis/monthly-trend and
-// /api/analysis/monthly-trend-by-category answer, keyed by the number of
-// months asked for, and its GPU costs, as /api/gpu/summary answers.
+// /api/analysis/monthly-trend-by-category answer, keyed by the month they end
+// on, then by the number of months asked for, and its GPU costs, as
+// /api/gpu/summary answers.
 
 const lastThreeMonths = [
   { month: 'Jul', yearMonth: '2026-07', cost: 980 },
   { month: 'Aoû', yearMonth: '2026-08', cost: 1042 },
   { month: 'Sep', yearMonth: '2026-09', cost: 1250.4 },
 ];
+// Up to August: September is left out
+const julyAndAugust = lastThreeMonths.slice(0, 2);
 
 // Categories are resource types, labelled by the server in English only and
 // ordered by what they cost over the period.
@@ -27,6 +30,20 @@ const costByResourceType = {
       cloud_project: 702, dedicated_server: 270, backup: 40, domain: 30, license: 0 },
     { yearMonth: '2026-09',
       cloud_project: 830.4, dedicated_server: 270, backup: 90, domain: 35, license: 25 },
+  ],
+};
+// Up to August: no licence was billed yet, and the domains cost more than the
+// backups
+const costByResourceTypeUpToAugust = {
+  categories: [
+    { key: 'cloud_project', label: 'Public Cloud', color: '#3b82f6' },
+    { key: 'dedicated_server', label: 'Dedicated Servers', color: '#ef4444' },
+    { key: 'domain', label: 'Domains', color: '#8b5cf6' },
+    { key: 'backup', label: 'Backup', color: '#059669' },
+  ],
+  data: [
+    { yearMonth: '2026-07', cloud_project: 680, dedicated_server: 270, domain: 30, backup: 0 },
+    { yearMonth: '2026-08', cloud_project: 702, dedicated_server: 270, domain: 30, backup: 40 },
   ],
 };
 
@@ -76,8 +93,8 @@ const gpuInMonth = (month, total) => ({
 export const trends = {
   // The page asks for 6 months, then for 3: the longest period that three
   // billed months allow. Both periods cover the same bills.
-  monthlyTrend: { 3: lastThreeMonths, 6: lastThreeMonths },
-  monthlyTrendByCategory: { 3: costByResourceType, 6: costByResourceType },
+  monthlyTrend: { '2026-09': { 3: lastThreeMonths, 6: lastThreeMonths } },
+  monthlyTrendByCategory: { '2026-09': { 3: costByResourceType, 6: costByResourceType } },
   gpuSummary: {
     all: gpuOverAllMonths,
     '2026-08': gpuInMonth('2026-08', 310),
@@ -92,20 +109,26 @@ export const sinceJuly2025 = {
     { value: '2025-07', label: 'Juillet 2025', from: '2025-07-01', to: '2025-07-31' },
   ],
   monthlyTrend: {
-    6: lastThreeMonths,
-    12: lastThreeMonths,
-    24: [{ month: 'Jul', yearMonth: '2025-07', cost: 450 }, ...lastThreeMonths],
+    '2026-09': {
+      6: lastThreeMonths,
+      12: lastThreeMonths,
+      24: [{ month: 'Jul', yearMonth: '2025-07', cost: 450 }, ...lastThreeMonths],
+    },
+    '2026-08': { 6: julyAndAugust },
   },
   monthlyTrendByCategory: {
-    6: costByResourceType,
-    12: costByResourceType,
-    24: {
-      categories: costByResourceType.categories,
-      data: [
-        { yearMonth: '2025-07',
-          cloud_project: 450, dedicated_server: 0, backup: 0, domain: 0, license: 0 },
-        ...costByResourceType.data,
-      ],
+    '2026-09': {
+      6: costByResourceType,
+      12: costByResourceType,
+      24: {
+        categories: costByResourceType.categories,
+        data: [
+          { yearMonth: '2025-07',
+            cloud_project: 450, dedicated_server: 0, backup: 0, domain: 0, license: 0 },
+          ...costByResourceType.data,
+        ],
+      },
     },
+    '2026-08': { 6: costByResourceTypeUpToAugust },
   },
 };
