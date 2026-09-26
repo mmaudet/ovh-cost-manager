@@ -2,9 +2,8 @@
 // of the shell, of every tab and of every "show all" modal, and the files it exports.
 
 import fs from 'node:fs/promises';
-import { setTimeout as sleep } from 'node:timers/promises';
 import { chromium } from 'playwright';
-import { presetLanguage, readPage, rootText } from './in-page.mjs';
+import { countAnimationFrames, presetLanguage, readPage, stillFor } from './in-page.mjs';
 import { waitFor } from './wait.mjs';
 
 // The labels users see. A pull request that renames one on purpose shows up as a
@@ -34,19 +33,18 @@ const LOCALES = { fr: 'fr-FR', en: 'en-US' };
 const LANGUAGE_KEY = 'ovh-dashboard-language';
 const VIEWPORT = { width: 1440, height: 900 };
 
-// The page has settled once no API call is pending and its text has stayed the same for a
-// while. Opening a tab or a month can start charts, and a pie chart only shows its labels
-// once its animation is over, 1.9 s after its data arrives.
-const QUIET_AFTER_NAVIGATION = 2500;
-const QUIET_AFTER_CLICK = 500;
+// The page has settled once no API call is pending and it has kept still for a few frames,
+// charts included: a pie chart only shows its labels at the end of its animation, 1.9 s
+// after its data arrives, and first waits 0.4 s without changing anything.
+const STILL_FRAMES = 6;
+const MAX_FRAMES = 300;
 const SETTLE_TIMEOUT = 30_000;
 const ACTION_TIMEOUT = 10_000;
 
 // The page gets its API responses one at a time, in the order it asked for them, each one
-// given time to render. Charts measure their labels as they render and keep the results
-// for good, measurements leaking into one another: when responses race, the charts render
-// in another order, and wrap or hide their axis labels differently.
-const RESPONSE_GAP = 100;
+// once the page has rendered the previous one. Charts measure their labels as they render
+// and keep the results for good, measurements leaking into one another: when responses
+// race, the charts render in another order, and wrap or hide their axis labels differently.
 
 // Whitespace is all that is normalised: innerText breaks lines and separates cells after
 // the layout, not after what the user reads. Only runs of spaces, tabs and line breaks
@@ -115,6 +113,7 @@ export async function captureDashboard(browser, { url, clock, languages, months,
       await context.addInitScript(presetLanguage, { key: LANGUAGE_KEY, value: language });
       // Before the first page load: "today", "N days ago" and the report date stay put
       await context.clock.setFixedTime(clock);
+      await context.addInitScript(countAnimationFrames);
       const page = await context.newPage();
       const walker = new Walker(page, { url, language, openingMonth, projects, capture });
       await page.route('**/*', (route) => walker.handle(route));
@@ -226,7 +225,7 @@ class Walker {
     return route.continue();
   }
 
-  /** Queues an API call of the page, see RESPONSE_GAP. */
+  /** Queues an API call of the page, answered in turn (see STILL_FRAMES). */
   answerInTurn(route) {
     this.waiting.push(route);
     this.answering ??= this.answerAll();
@@ -237,11 +236,13 @@ class Walker {
       const route = this.waiting.shift();
       try {
         await route.fulfill({ response: await route.fetch() });
+        await (await route.request().response())?.finished();
+        // Rendered once the page keeps still, the chart animations it may start aside
+        await this.page.evaluate(stillFor, { frames: STILL_FRAMES, animations: false, maxFrames: MAX_FRAMES });
       } catch {
         // The page went away (a reload), or the server did: the call fails
         await route.abort().catch(() => {});
       }
-      await sleep(RESPONSE_GAP);
     }
     this.answering = null;
   }
@@ -267,13 +268,13 @@ class Walker {
     }
     const closedHistory = this.page.locator('details:not([open]) > summary');
     for (let i = 0; i < 10 && (await closedHistory.count()); i++) await closedHistory.first().click();
-    await this.settle(QUIET_AFTER_NAVIGATION);
+    await this.settle();
   }
 
   async captureTab(tab, key, prefix) {
     const { tabBar } = await this.read();
     await this.page.locator(tabBar).getByRole('button', { name: tab.label[this.language], exact: true }).click();
-    await this.settle(QUIET_AFTER_NAVIGATION);
+    await this.settle();
     const state = await this.read();
     // The shell on every tab: parts of it depend on the tab (the month selector) or on
     // the tabs visited before (the KPI variation reads a Compare query)
@@ -303,7 +304,7 @@ class Walker {
   async captureModal(key) {
     const dialog = this.page.getByRole('dialog');
     await dialog.waitFor();
-    await this.settle(QUIET_AFTER_CLICK);
+    await this.settle();
     const text = normalize(await dialog.innerText());
     // Named after its title, counts and amounts left out
     const name = text.split('\n')[0].split(' (')[0].trim() || 'untitled';
@@ -311,7 +312,7 @@ class Walker {
     await this.captureExports(dialog, modalKey);
     await dialog.getByRole('button', { name: 'Close', exact: true }).click();
     await dialog.waitFor({ state: 'detached' });
-    await this.settle(QUIET_AFTER_CLICK);
+    await this.settle();
   }
 
   /** Every CSV export offered in `scope`, a tab or a modal. */
@@ -345,7 +346,7 @@ class Walker {
     const count = await closed.count();
     if (!count) return;
     for (let i = 0; i < count; i++) await closed.first().click();
-    await this.settle(QUIET_AFTER_NAVIGATION);
+    await this.settle();
     this.capture.add(`${key}/expanded`, normalize((await this.read()).view));
   }
 
@@ -356,11 +357,11 @@ class Walker {
     for (let i = 0; i < count; i++) {
       const tab = await this.tabLocator();
       await tab.locator('span').filter({ hasText: /^▼$/ }).nth(i).click();
-      await this.settle(QUIET_AFTER_NAVIGATION);
+      await this.settle();
       const rowKey = this.capture.add(`${key}/${kind}:${rowLabels[i]}`, normalize((await this.read()).view));
       if (withTableActions) await this.captureTableActions(rowKey);
       await tab.locator('span').filter({ hasText: /^▲$/ }).first().click();
-      await this.settle(QUIET_AFTER_CLICK);
+      await this.settle();
     }
   }
 
@@ -375,19 +376,14 @@ class Walker {
     return tab ? this.page.locator(tab) : null;
   }
 
-  /** Waits for the API calls to end and the text to stop changing. */
-  async settle(quiet) {
+  /** Waits for the API calls to end, then for the page and its charts to keep still. */
+  async settle() {
     // A pointer left over a chart would add its tooltip to the text
     await this.page.mouse.move(0, 0);
-    let text = null;
-    let since = Date.now();
-    await waitFor(async () => {
-      const current = await this.page.evaluate(rootText);
-      if (current === text && this.pending.size === 0) return Date.now() - since >= quiet;
-      text = current;
-      since = Date.now();
-      return false;
-    }, {
+    const still = { frames: STILL_FRAMES, animations: true, maxFrames: MAX_FRAMES };
+    await waitFor(async () => this.pending.size === 0
+      && (await this.page.evaluate(stillFor, still))
+      && this.pending.size === 0, {
       timeoutMs: SETTLE_TIMEOUT,
       failure: () => `the page was still changing after ${SETTLE_TIMEOUT / 1000} s`,
     });

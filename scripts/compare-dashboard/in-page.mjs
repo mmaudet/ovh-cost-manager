@@ -98,9 +98,56 @@ export function readPage({ tabLabels }) {
   };
 }
 
-/** The whole page text, modals included, to tell when the page stops changing. */
-export function rootText() {
-  return document.getElementById('root')?.innerText ?? '';
+/**
+ * Counts the animation frames the page requests (a context init script, added after the
+ * frozen clock's, whose timers it keeps).
+ */
+export function countAnimationFrames() {
+  const counter = { requested: 0, request: window.requestAnimationFrame.bind(window) };
+  window.__compareDashboardFrames = counter;
+  window.requestAnimationFrame = (callback) => {
+    counter.requested++;
+    return counter.request(callback);
+  };
+}
+
+/**
+ * Resolves true once the page has kept still for `frames` animation frames in a row:
+ * nothing changed in the document, and, with `animations`, the page asked for no animation
+ * frame either, which is all a chart does while it waits to start its animation. Without
+ * `animations`, what chart animations change (SVG attributes) does not count. Resolves
+ * false after `maxFrames`. Under the frozen clock, a frame is a 16 ms timer tick.
+ */
+export function stillFor({ frames, animations, maxFrames }) {
+  const counter = window.__compareDashboardFrames;
+  return new Promise((resolve) => {
+    let changed = false;
+    const observer = new MutationObserver((mutations) => {
+      if (animations || mutations.some((m) => m.type !== 'attributes' || !(m.target instanceof SVGElement))) {
+        changed = true;
+      }
+    });
+    observer.observe(document.documentElement, {
+      subtree: true, childList: true, attributes: true, characterData: true,
+    });
+    let requested = counter.requested;
+    let still = 0;
+    let elapsed = 0;
+    const tick = () => {
+      const asked = animations && counter.requested !== requested;
+      still = changed || asked ? 0 : still + 1;
+      changed = false;
+      requested = counter.requested;
+      elapsed++;
+      if (still >= frames || elapsed >= maxFrames) {
+        observer.disconnect();
+        resolve(still >= frames);
+      } else {
+        counter.request(tick);
+      }
+    };
+    counter.request(tick);
+  });
 }
 
 /** Sets the dashboard language before the page scripts run (a context init script). */
