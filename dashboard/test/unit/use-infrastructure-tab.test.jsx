@@ -16,8 +16,13 @@ const onInfrastructure = {
   selectedMonth: september, activeTab: 'infrastructure', selectedResourceType: null,
 };
 
-// The services of the inventory, as [id, display name]
-const services = (inventory) => inventory.map(({ id, display_name }) => [id, display_name]);
+// The dedicated servers of the inventory, as [id, display name]
+const servers = (inventory) => inventory.map(({ id, display_name }) => [id, display_name]);
+// The VPS of the inventory, as [id, model, zone]
+const vpsInstances = (inventory) => inventory.map(({ id, model, zone }) => [id, model, zone]);
+// The storage services of the inventory, as [id, display name, type]
+const storageServices = (inventory) => inventory
+  .map(({ id, display_name, service_type }) => [id, display_name, service_type]);
 // The bill lines of a resource type, as [service, cost]
 const billLines = (lines) => lines.map(({ domain, total }) => [domain, total]);
 
@@ -56,21 +61,23 @@ describe('useInfrastructureTab', () => {
   it('returns the inventory, and the "show all" modal of the servers closed', async () => {
     const { result } = await renderTabHook(useInfrastructureTab, onInfrastructure);
 
+    // What the shell spreads over the tab and its modal, and nothing else
     expect(result.current).toEqual({
-      inventoryServers: [
-        expect.objectContaining({
-          id: 'ns3000001.ip-203-0-113.eu', display_name: 'backup-server',
-        }),
-        expect.objectContaining({
-          id: 'ns3000002.ip-198-51-100.eu', display_name: 'ns3000002.ip-198-51-100.eu',
-        }),
-      ],
-      inventoryVps: [expect.objectContaining({ id: 'vps-0a1b2c3d.vps.ovh.net' })],
-      inventoryStorage: [expect.objectContaining({ id: 'netapp-5f2c9a1e' })],
+      inventoryServers: expect.any(Array),
+      inventoryVps: expect.any(Array),
+      inventoryStorage: expect.any(Array),
       resourceTypeDetails: [],
       showAllServers: false,
       setShowAllServers: expect.any(Function),
     });
+    expect(servers(result.current.inventoryServers)).toEqual([
+      ['ns3000001.ip-203-0-113.eu', 'backup-server'],
+      ['ns3000002.ip-198-51-100.eu', 'ns3000002.ip-198-51-100.eu'],
+    ]);
+    expect(vpsInstances(result.current.inventoryVps))
+      .toEqual([['vps-0a1b2c3d.vps.ovh.net', 'vps-le-2-2-40', 'Region OpenStack: os-gra7']]);
+    expect(storageServices(result.current.inventoryStorage))
+      .toEqual([['netapp-5f2c9a1e', 'shared-files', 'netapp']]);
   });
 
   // The Compare tab, still in the shell, lists the servers this hook returns, though they
@@ -83,7 +90,7 @@ describe('useInfrastructureTab', () => {
     await rerender(onInfrastructure);
     await rerender({ ...onInfrastructure, activeTab: 'compare' });
 
-    expect(services(result.current.inventoryServers)).toEqual([
+    expect(servers(result.current.inventoryServers)).toEqual([
       ['ns3000001.ip-203-0-113.eu', 'backup-server'],
       ['ns3000002.ip-198-51-100.eu', 'ns3000002.ip-198-51-100.eu'],
     ]);
