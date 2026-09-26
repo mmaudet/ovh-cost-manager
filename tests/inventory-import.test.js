@@ -205,6 +205,23 @@ describe('services that OVH no longer lists', () => {
     expect(storedIds().storage).toEqual(['nasha-001', STORAGE]);
   });
 
+  // OVH's answer once none of them is left, which the log flags: an empty list removes them all
+  test('removes every service of a kind whose list is empty, with a warning', async () => {
+    storeServer(SERVER);
+    storeServer(CANCELLED.server);
+    routes.set('/dedicated/server', ok([]));
+    // Nothing stored of the other kinds, whose lists are empty too: nothing to warn about
+    routes.set('/vps', ok([]));
+    routes.set('/storage/netapp', ok([]));
+
+    await importInventory();
+
+    expect(storedIds().servers).toEqual([]);
+    expect(console.warn.mock.calls).toEqual([
+      ['  OVH lists no dedicated servers any more: removed all 2 of them'],
+    ]);
+  });
+
   test.each([
     // As for the maintainer's own key, which is not granted these routes
     ['is not granted', fail(403, 'This call has not been granted')],

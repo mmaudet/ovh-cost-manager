@@ -455,7 +455,13 @@ function removeUnlistedServices(answer, deleteNotIn, kind) {
     throw new Error(`the list is ${util.inspect(answer)}, not an array`);
   }
   const removed = deleteNotIn(answer);
-  if (removed > 0) console.log(`  Removed ${removed} ${kind} that OVH no longer lists`);
+  // An empty list is OVH's answer once none is left, which removes them all: a warning, for a
+  // list that would be empty by mistake
+  if (answer.length === 0 && removed > 0) {
+    console.warn(`  OVH lists no ${kind} any more: removed all ${removed} of them`);
+  } else if (removed > 0) {
+    console.log(`  Removed ${removed} ${kind} that OVH no longer lists`);
+  }
   return answer;
 }
 
@@ -664,7 +670,7 @@ async function importInventory(projectMap) {
     console.log('Fetching storage services...');
     const storageIds = removeUnlistedServices(
       await ovh.requestPromised('GET', '/storage/netapp'),
-      db.inventory.deleteStorageNotIn, 'storage services',
+      db.inventory.deleteStorageNotIn, 'NetApp storage services',
     );
 
     await runInBatches(storageIds, async (sid) => {
