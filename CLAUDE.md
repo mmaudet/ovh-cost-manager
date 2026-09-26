@@ -136,6 +136,8 @@ foreground. On first start with an empty DB, a full import runs automatically.
 
 **`TRUST_PROXY=true` is required behind any reverse proxy / Kubernetes ingress**, otherwise
 rate limiting buckets all users under the proxy's single IP and everyone shares one limit.
+With it, the server also trusts `X-Forwarded-Host` and `X-Forwarded-Proto` for the CORS
+check (`server/cors.js`), which always accepts the dashboard's own origin.
 
 See `docs/deployment.md` for full SSO/OIDC setup.
 
