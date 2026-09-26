@@ -235,9 +235,20 @@ describe('back-channel logout', () => {
     expect(ocm.output()).toMatch(/invalid logout token: .*replay/);
   });
 
+  // LemonLDAP-NG, the provider of the demo stack, may leave jti out: the token
+  // itself then tells a replay
+  test('accepts a token without jti, and refuses its replay', async () => {
+    const first = await signedIn('heidi');
+    const token = provider.logoutToken({ sid: first.sid, sub: 'heidi', jti: undefined });
+    expect((await logout(token)).status).toBe(200);
+    expect(await isSignedIn(first)).toBe(false);
+
+    expect((await logout(token)).status).toBe(400);
+    expect(ocm.output()).toMatch(/invalid logout token: replay of the token sha256:/);
+  });
+
   test.each([
     ['without exp', { exp: undefined }, /"exp"/],
-    ['without jti', { jti: undefined }, /"jti"/],
     ['for another client', { aud: 'another-client' }, /"aud"/],
     ['from another issuer', { iss: 'http://evil.example' }, /"iss"/],
   ])('refuses a token %s', async (label, claims, reason) => {

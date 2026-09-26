@@ -10,6 +10,7 @@ const {
   logoutTokenVerifyOptions,
   checkLogoutTokenClaims,
   sessionsToEnd,
+  replayKey,
   replayWindowEnd,
   createReplayGuard,
 } = require('../server/auth/logout-token');
@@ -41,11 +42,12 @@ describe('logoutTokenVerifyOptions', () => {
     expect(logoutTokenVerifyOptions(withNone, 'ocm').algorithms).toEqual(['RS256']);
   });
 
-  // exp and jti are required by the specification: exp bounds the token's
-  // life, jti lets a replay be told apart
-  test('requires iat, exp and jti, iat no more than 5 minutes ago, 30 s of skew', () => {
+  // exp bounds the token's life, as the specification requires. jti, which
+  // it requires too, is not: LemonLDAP-NG, the provider of the demo stack,
+  // may leave it out, and a replay is then told by the token itself
+  test('requires iat and exp, iat no more than 5 minutes ago, 30 s of skew', () => {
     const options = logoutTokenVerifyOptions(metadata, 'ocm');
-    expect(options.requiredClaims).toEqual(['iat', 'exp', 'jti']);
+    expect(options.requiredClaims).toEqual(['iat', 'exp']);
     expect(options.maxTokenAge).toBe(300);
     expect(options.clockTolerance).toBe(30);
   });
@@ -89,6 +91,15 @@ describe('checkLogoutTokenClaims', () => {
     expect(checkLogoutTokenClaims(subOnly)).toEqual({ sid: undefined, sub: 'alice', jti: 'bWJq' });
   });
 
+  test('accepts a token without jti', () => {
+    const { jti: _, ...withoutJti } = claims;
+    expect(checkLogoutTokenClaims(withoutJti)).toEqual({
+      sid: '08a5019c-17e1-4977-8f42-65a12843ea02',
+      sub: 'alice',
+      jti: undefined,
+    });
+  });
+
   test.each([
     ['no events claim', { events: undefined }],
     ['events that are not an object', { events: 'backchannel-logout' }],
@@ -102,7 +113,6 @@ describe('checkLogoutTokenClaims', () => {
     ['neither sid nor sub', { sid: undefined, sub: undefined }],
     ['an empty sid and no sub', { sid: '', sub: undefined }],
     ['a sid that is not a string and no sub', { sid: 42, sub: undefined }],
-    ['no jti', { jti: undefined }],
     ['an empty jti', { jti: '' }],
     ['a jti that is not a string', { jti: 7 }],
   ])('refuses a token with %s', (label, change) => {
@@ -125,6 +135,26 @@ describe('sessionsToEnd', () => {
 
   test('ends every session of the sub, when the token has no sid', () => {
     expect(sessionsToEnd({ sid: undefined, sub: 'alice' })).toEqual({ sub: 'alice' });
+  });
+});
+
+// What tells a replay: the token's jti, or without one, the token itself
+describe('replayKey', () => {
+  // A compact token, and its SHA-256 computed apart:
+  // printf %s "$TOKEN" | openssl dgst -sha256
+  const TOKEN = 'eyJhbGciOiJSUzI1NiJ9.eyJzaWQiOiJvcC1zZXNzaW9uLTEifQ.c2lnbmF0dXJl';
+  const DIGEST = 'f7bf78f64080b0c0062a675291ef8bc778867638902e6d96a9a5423e878d9b8c';
+
+  test('is the jti, when the token has one', () => {
+    expect(replayKey({ jti: 'bWJq' }, TOKEN)).toBe('jti:bWJq');
+  });
+
+  test('is the SHA-256 of the compact token, when it has no jti', () => {
+    expect(replayKey({ jti: undefined }, TOKEN)).toBe(`sha256:${DIGEST}`);
+  });
+
+  test('tells apart two tokens without jti', () => {
+    expect(replayKey({}, TOKEN)).not.toBe(replayKey({}, `${TOKEN}x`));
   });
 });
 

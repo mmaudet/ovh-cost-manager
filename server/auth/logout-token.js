@@ -6,6 +6,8 @@
  * claims of a logout token, and a replay guard refuses a token seen before.
  */
 
+const crypto = require('crypto');
+
 const BACKCHANNEL_LOGOUT_EVENT = 'http://schemas.openid.net/event/backchannel-logout';
 
 // The provider sends the token as the user signs out: an older one is refused
@@ -14,9 +16,11 @@ const CLOCK_TOLERANCE_SECONDS = 30;
 
 /**
  * The options of jose's jwtVerify for a logout token: issued by the provider,
- * for this client, less than 5 minutes ago, with the exp and the jti the
- * specification requires, and signed with an algorithm of the provider's ID
- * tokens (RS256 by default, as for ID tokens), never none.
+ * for this client, less than 5 minutes ago, with the exp the specification
+ * requires, and signed with an algorithm of the provider's ID tokens (RS256 by
+ * default, as for ID tokens), never none. The jti, which the specification
+ * requires too, is not: LemonLDAP-NG, the provider of the demo stack, may
+ * leave it out, and replayKey then tells a replay by the token itself.
  *
  * @param {object} metadata - the provider's discovered metadata
  * @param {string} clientId - the client id of the dashboard
@@ -28,7 +32,7 @@ function logoutTokenVerifyOptions(metadata, clientId) {
     issuer: metadata.issuer,
     audience: clientId,
     algorithms: algorithms.filter((alg) => alg !== 'none'),
-    requiredClaims: ['iat', 'exp', 'jti'],
+    requiredClaims: ['iat', 'exp'],
     maxTokenAge: MAX_AGE_SECONDS,
     clockTolerance: CLOCK_TOLERANCE_SECONDS,
   };
@@ -36,11 +40,12 @@ function logoutTokenVerifyOptions(metadata, clientId) {
 
 /**
  * Checks the claims of a verified logout token that are its own: the
- * back-channel logout event, no nonce, which tells it from an ID token, a jti,
- * which tells a replay, and a sid or a sub, which says whose sessions end.
+ * back-channel logout event, no nonce, which tells it from an ID token, a jti
+ * that is text when there is one, and a sid or a sub, which says whose
+ * sessions end.
  *
  * @param {object} claims - the payload that jwtVerify returned
- * @returns {{ sid: (string|undefined), sub: (string|undefined), jti: string }}
+ * @returns {{ sid: (string|undefined), sub: (string|undefined), jti: (string|undefined) }}
  * @throws {Error} when a check fails
  */
 function checkLogoutTokenClaims(claims) {
@@ -51,8 +56,8 @@ function checkLogoutTokenClaims(claims) {
     throw new Error('a logout token has no nonce');
   }
   const jti = nonEmptyString(claims.jti);
-  if (!jti) {
-    throw new Error('no jti');
+  if ('jti' in claims && !jti) {
+    throw new Error('a jti that is not text');
   }
   const sid = nonEmptyString(claims.sid);
   const sub = nonEmptyString(claims.sub);
@@ -76,6 +81,21 @@ function sessionsToEnd({ sid, sub }) {
 }
 
 /**
+ * What tells a replay of a logout token: its jti, or without one, the SHA-256
+ * of the compact token, which a replay repeats byte for byte.
+ *
+ * @param {{ jti: (string|undefined) }} claims - checked claims
+ * @param {string} logoutToken - the compact token, as posted
+ * @returns {string}
+ */
+function replayKey({ jti }, logoutToken) {
+  if (jti) {
+    return `jti:${jti}`;
+  }
+  return `sha256:${crypto.createHash('sha256').update(logoutToken).digest('hex')}`;
+}
+
+/**
  * When the verification refuses a logout token anyway, in milliseconds: 5
  * minutes after its iat, or at its exp, with the clock tolerance. Until then,
  * its jti is remembered.
@@ -88,26 +108,27 @@ function replayWindowEnd({ iat, exp }) {
 }
 
 /**
- * Remembers the jti of the logout tokens accepted, until the verification
- * refuses them anyway, so that a token replayed meanwhile is refused: without
- * a sid, a replay would end the sessions opened since the sign-out.
+ * Remembers the logout tokens accepted, by their replayKey, until the
+ * verification refuses them anyway, so that a token replayed meanwhile is
+ * refused: without a sid, a replay would end the sessions opened since the
+ * sign-out.
  *
  * @returns {{ firstUse: function(string, number, number=): boolean, size: function(): number }}
  */
 function createReplayGuard() {
   const seen = new Map();
   return {
-    // true for the first use of jti; until: see replayWindowEnd
-    firstUse(jti, until, now = Date.now()) {
-      for (const [id, end] of seen) {
+    // true for the first use of key; until: see replayWindowEnd
+    firstUse(key, until, now = Date.now()) {
+      for (const [seenKey, end] of seen) {
         if (end <= now) {
-          seen.delete(id);
+          seen.delete(seenKey);
         }
       }
-      if (seen.has(jti)) {
+      if (seen.has(key)) {
         return false;
       }
-      seen.set(jti, until);
+      seen.set(key, until);
       return true;
     },
     size: () => seen.size,
@@ -127,6 +148,7 @@ module.exports = {
   logoutTokenVerifyOptions,
   checkLogoutTokenClaims,
   sessionsToEnd,
+  replayKey,
   replayWindowEnd,
   createReplayGuard,
 };

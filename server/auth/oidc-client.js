@@ -19,6 +19,7 @@ const { createRemoteJWKSet, jwtVerify } = require('jose');
 const {
   logoutTokenVerifyOptions,
   checkLogoutTokenClaims,
+  replayKey,
   replayWindowEnd,
   createReplayGuard,
 } = require('./logout-token');
@@ -33,7 +34,7 @@ let config = null;
 let authConfig = null;
 // The provider's signing keys, fetched from its jwks_uri when a token needs them
 let jwks = null;
-// The logout tokens accepted, by jti, until they expire
+// The logout tokens accepted, by jti or else by digest, until they expire
 const replayGuard = createReplayGuard();
 
 async function initialize(appConfig) {
@@ -139,8 +140,8 @@ async function verifyLogoutToken(logoutToken) {
 
   // jwtVerify checks the signature against the provider's JWKS, with an
   // algorithm of its ID tokens, the issuer, the audience (our client id), iat
-  // (5 minutes old at most), exp and jti; then the claims of a logout token:
-  // the back-channel logout event, a sid or a sub, and no nonce
+  // (5 minutes old at most) and exp; then the claims of a logout token: the
+  // back-channel logout event, a sid or a sub, and no nonce
   const { payload } = await jwtVerify(
     logoutToken,
     jwks,
@@ -149,9 +150,10 @@ async function verifyLogoutToken(logoutToken) {
   const claims = checkLogoutTokenClaims(payload);
 
   // Last, once the token is known valid, so that no forged token can use up
-  // a jti
-  if (!replayGuard.firstUse(claims.jti, replayWindowEnd(payload))) {
-    throw new Error(`replay of the token ${claims.jti}`);
+  // a key: its jti, or without one, the SHA-256 of the token
+  const key = replayKey(claims, logoutToken);
+  if (!replayGuard.firstUse(key, replayWindowEnd(payload))) {
+    throw new Error(`replay of the token ${key}`);
   }
   return claims;
 }
