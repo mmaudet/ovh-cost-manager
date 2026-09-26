@@ -16,15 +16,15 @@ import { account } from '../fixtures/account.js';
 import { TODAY } from '../fixtures/calendar.js';
 import { serve } from './api.js';
 import {
-  actIn, createQueryClient, currentSession, keysIn, settle as settleQueries, stopIfOver,
-  timersAreFake,
+  createQueryClient, keysIn, settle as settleQueries, timersAreFake,
 } from './query-client.js';
+import { actIn, currentSession, stopIfOver } from './session.js';
 
 let queryClient;
 
 // The user of a test, whose actions stop for good once the test is over, failed or timed
 // out: an action it left running would go on to wait in act() and act on the page of the
-// next test (see endTest() in query-client.js). setup() is no action: it derives a user.
+// next test (see endTest() in session.js). setup() is no action: it derives a user.
 const userOf = (from, user) => Object.fromEntries(Object.entries(user).map(
   ([name, action]) => [name, name === 'setup' ? action : async (...args) => {
     await stopIfOver(from);

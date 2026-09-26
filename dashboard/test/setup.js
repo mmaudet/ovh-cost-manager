@@ -2,7 +2,7 @@ import '@testing-library/jest-dom/vitest';
 import { cleanup } from '@testing-library/react';
 import { afterEach, beforeEach, vi } from 'vitest';
 import { TODAY } from './fixtures/calendar.js';
-import { endTest } from './support/query-client.js';
+import { endTest } from './support/session.js';
 
 // Every test file gets the stand-in of the API service module (support/api.js)
 vi.mock('../src/services/api.js', async () => (await import('./support/api.js')).api);
