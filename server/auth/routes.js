@@ -6,6 +6,7 @@ const { randomState, randomNonce } = require('openid-client');
 const oidcClient = require('./oidc-client');
 const sessionStore = require('./session-store');
 const { safeReturnTo } = require('./return-to');
+const { sessionCookieOptions } = require('./session-cookie');
 
 const router = express.Router();
 
@@ -90,12 +91,10 @@ function setup(config) {
         authConfig.session.maxAge
       );
 
-      // Set cookie
+      // Set cookie: Secure over HTTPS, unless COOKIE_SECURE says otherwise
       res.cookie(authConfig.session.name, sid, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'lax',
-        maxAge: authConfig.session.maxAge
+        ...sessionCookieOptions(req, authConfig),
+        maxAge: authConfig.session.maxAge,
       });
 
       res.redirect(pending.returnTo);
@@ -116,8 +115,8 @@ function setup(config) {
       idToken = sessionStore.remove(sid);
     }
 
-    // Clear cookie
-    res.clearCookie(authConfig.session.name);
+    // Clear cookie, with the flags it was set with
+    res.clearCookie(authConfig.session.name, sessionCookieOptions(req, authConfig));
 
     // Redirect to OP end_session_endpoint if available
     const logoutUrl = oidcClient.getEndSessionUrl(idToken);

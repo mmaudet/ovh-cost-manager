@@ -52,3 +52,41 @@ describe('missingSettings', () => {
     expect(missingSettings(buildAuthConfig({}, { OIDC_ENABLED: 'true' }))).toHaveLength(5);
   });
 });
+
+describe('the Secure flag of the session cookie', () => {
+  // config.json with auth.session.secure set to value
+  const fileWith = (value) => ({ auth: { session: { secure: value } } });
+  const secureSetting = (fileConfig, env) => buildAuthConfig(fileConfig, env).session.secure;
+
+  test('is auto by default', () => {
+    expect(secureSetting({}, OIDC_ENV)).toBe('auto');
+  });
+
+  test.each([
+    ['true', true],
+    ['false', false],
+  ])('is forced by COOKIE_SECURE=%s', (value, expected) => {
+    expect(secureSetting({}, { ...OIDC_ENV, COOKIE_SECURE: value })).toBe(expected);
+  });
+
+  test.each([true, false])('is forced by auth.session.secure: %s in config.json', (value) => {
+    expect(secureSetting(fileWith(value), OIDC_ENV)).toBe(value);
+  });
+
+  test.each([
+    ['false', true, false],
+    ['true', false, true],
+  ])('COOKIE_SECURE=%s overrides auth.session.secure: %s', (envValue, fileValue, expected) => {
+    expect(secureSetting(fileWith(fileValue), { ...OIDC_ENV, COOKIE_SECURE: envValue }))
+      .toBe(expected);
+  });
+
+  test('ignores an empty COOKIE_SECURE, as an unset one', () => {
+    expect(secureSetting(fileWith(true), { ...OIDC_ENV, COOKIE_SECURE: '' })).toBe(true);
+  });
+
+  test.each(['yes', '1', 'TRUE', 'auto'])('refuses COOKIE_SECURE=%s', (value) => {
+    expect(() => buildAuthConfig({}, { ...OIDC_ENV, COOKIE_SECURE: value }))
+      .toThrow(`COOKIE_SECURE must be true or false, not '${value}'`);
+  });
+});

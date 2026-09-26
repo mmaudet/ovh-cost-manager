@@ -5,6 +5,33 @@
 const DEFAULT_SCOPES = ['openid', 'profile', 'email'];
 
 /**
+ * A true/false setting of the environment, which overrides config.json.
+ *
+ * @param {object} env - the environment variables
+ * @param {string} name - the variable
+ * @returns {boolean|undefined} undefined when unset or empty, for the file's
+ *   value to apply
+ * @throws {Error} on any other value than true or false, rather than guess
+ */
+function envBoolean(env, name) {
+  const value = env[name];
+  if (value === undefined || value === '') {
+    return undefined;
+  }
+  if (value !== 'true' && value !== 'false') {
+    throw new Error(`${name} must be true or false, not '${value}'`);
+  }
+  return value === 'true';
+}
+
+// The Secure flag of the session cookie: true or false when COOKIE_SECURE or
+// auth.session.secure forces it, 'auto' to follow the request's scheme
+function cookieSecureSetting(env, fileSession) {
+  const fromFile = typeof fileSession?.secure === 'boolean' ? fileSession.secure : 'auto';
+  return envBoolean(env, 'COOKIE_SECURE') ?? fromFile;
+}
+
+/**
  * Builds the auth settings from environment variables and the config file.
  *
  * @param {object} fileConfig - the content of config.json
@@ -32,6 +59,7 @@ function buildAuthConfig(fileConfig, env = process.env) {
       secret: env.SESSION_SECRET || file.session?.secret,
       maxAge: file.session?.maxAge || 86400000, // 24h
       name: file.session?.name || 'ocm.sid',
+      secure: cookieSecureSetting(env, file.session),
     },
     baseUrl: env.OIDC_BASE_URL || file.baseUrl,
     backChannelLogout: file.backChannelLogout !== false,
