@@ -1,18 +1,23 @@
-import { formatCurrency, formatMonthLabel } from './format.js';
+import { formatCurrency, formatMonthLabel, formatPercent } from './format.js';
 
 // Generate markdown report
 const generateMarkdownReport = (summary, byService, byProject, selectedMonth, language = 'fr') => {
   const locale = language === 'en' ? 'en-US' : 'fr-FR';
   const fmt = (v) => formatCurrency(v, language);
   const month = formatMonthLabel(selectedMonth?.value, language) || 'N/A';
+  const period = language === 'en'
+    ? `${selectedMonth?.from} to ${selectedMonth?.to}`
+    : `du ${selectedMonth?.from} au ${selectedMonth?.to}`;
 
-  let md = `# OVH Cost Report - ${month}\n\n`;
-  md += `**${language === 'en' ? 'Period' : 'Période'}:** ${selectedMonth?.from} to ${selectedMonth?.to}\n\n`;
+  let md = `# ${language === 'en' ? 'OVH Cost Report' : 'Rapport de coûts OVH'} - ${month}\n\n`;
+  md += `**${language === 'en' ? 'Period' : 'Période'}:** ${period}\n\n`;
   md += `## ${language === 'en' ? 'Summary' : 'Résumé'}\n\n`;
   md += `| ${language === 'en' ? 'Metric' : 'Métrique'} | ${language === 'en' ? 'Value' : 'Valeur'} |\n|--------|-------|\n`;
   md += `| ${language === 'en' ? 'Total Cost' : 'Coût Total'} | ${fmt(summary?.total || 0)}€ |\n`;
-  md += `| ${language === 'en' ? 'Cloud Total' : 'Cloud Total'} | ${fmt(summary?.cloudTotal || 0)}€ |\n`;
-  md += `| ${language === 'en' ? 'Non-Cloud Total' : 'Non-Cloud Total'} | ${fmt(summary?.nonCloudTotal || 0)}€ |\n`;
+  md += `| ${language === 'en' ? 'Cloud Total' : 'Total Cloud'}`
+    + ` | ${fmt(summary?.cloudTotal || 0)}€ |\n`;
+  md += `| ${language === 'en' ? 'Non-Cloud Total' : 'Total hors Cloud'}`
+    + ` | ${fmt(summary?.nonCloudTotal || 0)}€ |\n`;
   md += `| ${language === 'en' ? 'Daily Average' : 'Moyenne Journalière'} | ${fmt(summary?.dailyAverage || 0)}€ |\n`;
   md += `| ${language === 'en' ? 'Active Projects' : 'Projets Actifs'} | ${summary?.projectsCount || 0} |\n\n`;
 
@@ -20,8 +25,10 @@ const generateMarkdownReport = (summary, byService, byProject, selectedMonth, la
   md += `| Service | ${language === 'en' ? 'Cost' : 'Coût'} | % |\n|---------|------|---|\n`;
   const totalService = byService.reduce((sum, s) => sum + s.value, 0);
   byService.forEach(s => {
-    const pct = totalService ? ((s.value / totalService) * 100).toFixed(1) : 0;
-    md += `| ${s.name} | ${fmt(s.value)}€ | ${pct}% |\n`;
+    // In the number format of the language, as the amounts are, and 0 % of service types
+    // that sum to 0 € (#60)
+    const share = totalService ? s.value / totalService : 0;
+    md += `| ${s.name} | ${fmt(s.value)}€ | ${formatPercent(share, language)} |\n`;
   });
 
   md += `\n## ${language === 'en' ? 'Top Projects' : 'Top Projets'}\n\n`;

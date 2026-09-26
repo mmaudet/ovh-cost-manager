@@ -465,10 +465,11 @@ describe('dashboard shell', () => {
       expect(files).toHaveLength(1);
       expect(files[0].name).toBe('ovh-report-2026-09.md');
       expect(files[0].type).toBe('text/markdown');
+      // All in French: the title, the period, the totals and the percentages (#60)
       expect(files[0].content).toBe([
-        '# OVH Cost Report - Septembre 2026',
+        '# Rapport de coûts OVH - Septembre 2026',
         '',
-        '**Période:** 2026-09-01 to 2026-09-30',
+        '**Période:** du 2026-09-01 au 2026-09-30',
         '',
         '## Résumé',
         '',
@@ -476,8 +477,8 @@ describe('dashboard shell', () => {
         '|--------|-------|',
         // French amounts separate thousands with a narrow no-break space
         '| Coût Total | 1\u202f250,40€ |',
-        '| Cloud Total | 830,40€ |',
-        '| Non-Cloud Total | 420,00€ |',
+        '| Total Cloud | 830,40€ |',
+        '| Total hors Cloud | 420,00€ |',
         '| Moyenne Journalière | 41,68€ |',
         '| Projets Actifs | 2 |',
         '',
@@ -485,9 +486,10 @@ describe('dashboard shell', () => {
         '',
         '| Service | Coût | % |',
         '|---------|------|---|',
-        '| Compute | 800,40€ | 64.0% |',
-        '| Storage | 250,00€ | 20.0% |',
-        '| Other | 200,00€ | 16.0% |',
+        // and French percentages their sign with a no-break space
+        '| Compute | 800,40€ | 64,0\u00a0% |',
+        '| Storage | 250,00€ | 20,0\u00a0% |',
+        '| Other | 200,00€ | 16,0\u00a0% |',
         '',
         '## Top Projets',
         '',
