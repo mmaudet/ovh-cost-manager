@@ -17,6 +17,7 @@ import { SortIcon } from '../components/SortIcon.jsx';
 import { formatCurrency } from '../utils/format.js';
 import { parseSqliteDate } from '../utils/sqliteDate.js';
 import { generateMarkdownReport } from '../utils/markdownReport.js';
+import { sortProjects } from '../utils/projectSort.js';
 import { useWebCloudTab } from '../tabs/useWebCloudTab.js';
 import { WebCloudTab, WebCloudTabModals } from '../tabs/WebCloudTab.jsx';
 import { useBackupTab } from '../tabs/useBackupTab.js';
@@ -56,24 +57,6 @@ export default function Dashboard() {
   // Helper to format currency with current language
   const fmt = (value) => formatCurrency(value, language);
   const locale = language === 'en' ? 'en-US' : 'fr-FR';
-
-  // Sort projects helper
-  const sortProjects = (projects, sortConfig) => {
-    if (!projects) return [];
-    return [...projects].sort((a, b) => {
-      let aVal, bVal;
-      if (sortConfig.column === 'name') {
-        aVal = a.projectName?.toLowerCase() || '';
-        bVal = b.projectName?.toLowerCase() || '';
-      } else {
-        aVal = a.total || 0;
-        bVal = b.total || 0;
-      }
-      if (aVal < bVal) return sortConfig.direction === 'asc' ? -1 : 1;
-      if (aVal > bVal) return sortConfig.direction === 'asc' ? 1 : -1;
-      return 0;
-    });
-  };
 
   const handleProjectSort = (column) => {
     setProjectSort(prev => ({
