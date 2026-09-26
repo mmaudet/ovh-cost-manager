@@ -30,6 +30,7 @@ import {
   InstancesTable, instanceCsvColumns, instanceCsvRows
 } from '../components/InstancesTable.jsx';
 import { ServersTable, serverCsvColumns } from '../components/ServersTable.jsx';
+import { SortIcon } from '../components/SortIcon.jsx';
 import { downloadCSV } from '../utils/csv.js';
 import { formatCurrency, formatYearMonth } from '../utils/format.js';
 import { PERIOD_OPTIONS, monthsSince, WEB_CLOUD_MONTHS, shiftMonths } from '../utils/periods.js';
@@ -162,12 +163,6 @@ export default function Dashboard() {
       return 0;
     });
   };
-
-  const SortIcon = ({ column, current }) => (
-    <span className="ml-1 text-gray-400">
-      {current.column === column ? (current.direction === 'desc' ? '▼' : '▲') : '○'}
-    </span>
-  );
 
   // Fetch config (budget)
   const { data: configData } = useQuery({
