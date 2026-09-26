@@ -4,6 +4,7 @@ import {
 import Accordion from '../components/Accordion.jsx';
 import { SortIcon } from '../components/SortIcon.jsx';
 import ProjectProductComparison from '../components/ProjectProductComparison.jsx';
+import { compareProjects } from '../utils/projectComparison.js';
 
 // The Compare tab, which the shell renders while it is active: what useCompareTab() returns,
 // with the shell's language, translations (t), amount format (fmt) and months list, and the
@@ -16,23 +17,17 @@ const CompareTab = ({
   byResourceTypeA, byResourceTypeB, backupStatsA, backupStatsB,
   language, t, fmt, months, inventoryServers,
 }) => {
-  // Merge and sort comparison data
+  // Merge and sort comparison data: the projects of months A and B, paired by id (#55)
   const getSortedCompareProjects = () => {
-    if (!byProjectA.length) return [];
-    const merged = byProjectA.map(p => {
-      const pB = byProjectB.find(proj => proj.projectName === p.projectName) || { total: 0 };
-      // Variation: how MoisB changed compared to MoisA (reference)
-      const diff = p.total ? ((pB.total - p.total) / p.total * 100) : null;
-      return { ...p, totalB: pB.total, diff };
-    });
+    const merged = compareProjects(byProjectA, byProjectB);
     return merged.sort((a, b) => {
       let aVal, bVal;
       if (compareSort.column === 'name') {
         aVal = a.projectName?.toLowerCase() || '';
         bVal = b.projectName?.toLowerCase() || '';
       } else if (compareSort.column === 'totalA') {
-        aVal = a.total || 0;
-        bVal = b.total || 0;
+        aVal = a.totalA || 0;
+        bVal = b.totalA || 0;
       } else if (compareSort.column === 'totalB') {
         aVal = a.totalB || 0;
         bVal = b.totalB || 0;
@@ -165,13 +160,17 @@ const CompareTab = ({
             {getSortedCompareProjects().map((p) => (
               <tr key={p.projectId} className="border-b hover:bg-gray-50 transition-colors">
                 <td className="p-3 font-medium">{p.projectName}</td>
-                <td className="p-3 text-right font-medium">{fmt(p.total)}€</td>
+                <td className="p-3 text-right font-medium">{fmt(p.totalA)}€</td>
                 <td className="p-3 text-right text-gray-500">{fmt(p.totalB)}€</td>
                 <td className="p-3 text-right">
-                  {p.diff !== null && (
+                  {p.diff !== null ? (
                     <span className={`px-2 py-1 rounded text-xs font-medium ${p.diff > 0 ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
                       {p.diff > 0 ? '+' : ''}{p.diff.toFixed(1)}%
                     </span>
+                  ) : (
+                    // None to compute from 0 € in month A (#55), as for the growth of the
+                    // Trends tab from a first month at 0 € (#65)
+                    <span className="text-gray-400" title={t('variationNotComputable')}>—</span>
                   )}
                 </td>
               </tr>

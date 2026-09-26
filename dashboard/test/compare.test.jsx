@@ -242,19 +242,119 @@ describe('Compare tab', () => {
       ]);
     });
 
-    it('leaves out the projects billed in month B only (#55)', async () => {
+    // #55: the projects of both months, paired by id
+    it('lists a project billed in month B only, from 0 € in month A (#55)', async () => {
       const { user } = await renderDashboard();
       await openTab(user, 'Comparaison');
 
       await pickMonth(user, 'Août 2026', 'Juillet 2026');
 
-      // Staging was first billed in August: missing from the table and from
-      // the comparisons of each project (#55)
+      // Staging was first billed in August, after month A: its variation
+      // from 0 € cannot be computed, and a tooltip says why
       expect(projectRows()).toEqual([
         ['Projet○', 'Juillet 2026▼', 'Septembre 2026○', 'Variation○'],
         ['Production', '680,00€', '610,40€', '-10.2%'],
+        ['Staging', '0,00€', '220,00€', '—'],
       ]);
-      expect(projectComparisons()).toEqual(['Production (Projet)']);
+      expect(within(projectTable()).getByTitle('non calculable : mois A à 0 €'))
+        .toHaveTextContent('—');
+      // Its consumption is compared too
+      expect(projectComparisons()).toEqual(['Production (Projet)', 'Staging (Projet)']);
+      await openComparison(user, /^Staging \(Projet\)/);
+      expect(api.fetchProjectConsumption)
+        .toHaveBeenCalledWith('project-staging', '2026-07-01', '2026-07-31');
+      expect(rowsOf(comparisonTable(/^Staging \(Projet\)/))).toEqual([
+        ['Produit/Type', 'Juillet 2026', 'Septembre 2026', 'Variation'],
+        ['instance', '0,00€', '52,35€', ''],
+      ]);
+
+      await selectLanguage(user, 'en');
+
+      expect(within(comparisonTable(/^Comparison by project/))
+        .getByTitle('cannot be computed: month A at €0')).toHaveTextContent('—');
+    });
+
+    it('lists the projects of month B when month A has none (#55)', async () => {
+      // No project billed in July
+      const { user } = await renderDashboard({
+        ...account, byProject: { ...account.byProject, '2026-07': [] },
+      });
+      await openTab(user, 'Comparaison');
+
+      await pickMonth(user, 'Août 2026', 'Juillet 2026');
+
+      expect(projectRows()).toEqual([
+        ['Projet○', 'Juillet 2026▼', 'Septembre 2026○', 'Variation○'],
+        ['Production', '0,00€', '610,40€', '—'],
+        ['Staging', '0,00€', '220,00€', '—'],
+      ]);
+      expect(projectComparisons()).toEqual(['Production (Projet)', 'Staging (Projet)']);
+    });
+
+    it('pairs the projects of months A and B by their id (#55)', async () => {
+      // Staging, renamed in September, and two projects deleted since, which
+      // the server cannot name: they read "Unknown"
+      const deleted = (projectId, total) => ({
+        projectId, projectName: 'Unknown', total, detailsCount: 1,
+      });
+      const [production, staging] = account.byProject['2026-09'];
+      const { user } = await renderDashboard({
+        ...account,
+        byProject: {
+          ...account.byProject,
+          '2026-08': [...account.byProject['2026-08'], deleted('project-deleted-1', 40)],
+          '2026-09': [
+            production,
+            { ...staging, projectName: 'Recette' },
+            deleted('project-deleted-2', 15),
+          ],
+        },
+      });
+
+      await openTab(user, 'Comparaison');
+
+      // Staging keeps its name of month A; each deleted project is compared
+      // with itself, not with the other one
+      expect(projectRows()).toEqual([
+        ['Projet○', 'Août 2026▼', 'Septembre 2026○', 'Variation○'],
+        ['Production', '512,00€', '610,40€', '+19.2%'],
+        ['Staging', '190,00€', '220,00€', '+15.8%'],
+        ['Unknown', '40,00€', '0,00€', '-100.0%'],
+        ['Unknown', '0,00€', '15,00€', '—'],
+      ]);
+    });
+
+    it('sorts the projects of months A and B together (#55)', async () => {
+      const { user } = await renderDashboard({ ...account, ...threeBilledProjects });
+      await openTab(user, 'Comparaison');
+      await pickMonth(user, 'Août 2026', 'Juillet 2026');
+      // Staging and Sandbox were first billed in August, after month A
+      expect(projectRows()).toEqual([
+        ['Projet○', 'Juillet 2026▼', 'Septembre 2026○', 'Variation○'],
+        ['Production', '680,00€', '460,40€', '-32.3%'],
+        ['Staging', '0,00€', '250,00€', '—'],
+        ['Sandbox', '0,00€', '120,00€', '—'],
+      ]);
+
+      await sortTable(user, projectTable(), /^Septembre 2026/);
+      await sortTable(user, projectTable(), /^Septembre 2026/);
+
+      expect(header()).toEqual(['Projet○', 'Juillet 2026○', 'Septembre 2026▲', 'Variation○']);
+      expect(projects()).toEqual(['Sandbox', 'Staging', 'Production']);
+
+      await sortTable(user, projectTable(), /^Variation/);
+
+      // A variation that cannot be computed comes below any other
+      expect(header()).toEqual(['Projet○', 'Juillet 2026○', 'Septembre 2026○', 'Variation▼']);
+      expect(projects()).toEqual(['Production', 'Staging', 'Sandbox']);
+
+      await sortTable(user, projectTable(), /^Projet/);
+      await sortTable(user, projectTable(), /^Projet/);
+
+      expect(header()).toEqual(['Projet▲', 'Juillet 2026○', 'Septembre 2026○', 'Variation○']);
+      expect(projects()).toEqual(['Production', 'Sandbox', 'Staging']);
+      expect(projectComparisons())
+        .toEqual(['Production (Projet)', 'Sandbox (Projet)', 'Staging (Projet)']);
     });
 
     it('compares a project billed in month A only with nothing', async () => {
