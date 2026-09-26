@@ -26,7 +26,9 @@ describe('volumeCsvRows', () => {
   it('lists the instances a volume is attached to, separated by spaces', () => {
     const volume = { id: 'vol-1', name: 'data', attachedTo: ['inst-1', 'inst-2'] };
 
-    expect(volumeCsvRows([volume])).toEqual([{ ...volume, attached: 'inst-1 inst-2' }]);
+    expect(volumeCsvRows([volume])).toEqual([
+      { id: 'vol-1', name: 'data', attachedTo: ['inst-1', 'inst-2'], attached: 'inst-1 inst-2' },
+    ]);
   });
 
   it('lists none for a detached volume', () => {
