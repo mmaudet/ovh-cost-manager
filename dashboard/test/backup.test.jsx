@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { screen, within } from '@testing-library/react';
 import { api } from './support/api.js';
 import {
@@ -10,8 +10,6 @@ import {
   selectMonth,
   texts,
 } from './support/render.jsx';
-
-vi.mock('../src/services/api.js', async () => (await import('./support/api.js')).api);
 
 const backupCards = (firstLabel = 'Coût total backup') => cardOf(firstLabel).parentElement;
 const resourcesPanel = (heading = 'Ressources Backup') => cardOf(heading);

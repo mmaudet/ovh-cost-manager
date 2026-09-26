@@ -1,11 +1,8 @@
 import { vi } from 'vitest';
 
 // Stand-in for src/services/api.js, the only module of the page the tests
-// replace. Each test file installs it with:
-//
-//   vi.mock('../src/services/api.js', async () => (await import('./support/api.js')).api);
-//
-// and renderDashboard() makes it answer from a dataset (see fixtures/account.js).
+// replace. setup.js installs it for every test file, and renderDashboard()
+// makes it answer from a dataset (see fixtures/account.js).
 
 export const api = {
   fetchMonths: vi.fn(),

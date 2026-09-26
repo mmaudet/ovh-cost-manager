@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { screen, within } from '@testing-library/react';
 import { account } from './fixtures/account.js';
 import { sinceJuly2025 } from './fixtures/trends.js';
@@ -11,8 +11,6 @@ import {
   settle,
   texts,
 } from './support/render.jsx';
-
-vi.mock('../src/services/api.js', async () => (await import('./support/api.js')).api);
 
 // The period selector sits next to the tab bar
 const periodSelector = (label = 'Période:') =>

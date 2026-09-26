@@ -130,9 +130,10 @@ npm test --workspace=dashboard -- -t "closes with Escape"    # by name
 - They act like a user (open a tab, change the month, open a "show all"
   modal, export a CSV) and check what the user sees: text, amounts, table
   rows, file contents. No DOM snapshots, and nothing inside the charts.
-- Only the API service module (`dashboard/src/services/api.js`) is replaced:
-  it answers from the small, synthetic fixtures of `dashboard/test/fixtures/`.
-  Never put real billing data there.
+- Only the API service module (`dashboard/src/services/api.js`) is replaced,
+  once for every test file, in `dashboard/test/setup.js`. Its stand-in answers
+  from the small, synthetic fixtures of `dashboard/test/fixtures/`. Never put
+  real billing data there.
 - "Today" is frozen on 15 September 2026 and the timezone on Europe/Paris, so
   that dates read the same on every machine.
 

@@ -15,8 +15,6 @@ import {
   texts,
 } from './support/render.jsx';
 
-vi.mock('../src/services/api.js', async () => (await import('./support/api.js')).api);
-
 // The shell: the header, the KPI cards, the tab bar, the sync warning banner
 // and the footer, around whatever tab is open.
 describe('dashboard shell', () => {

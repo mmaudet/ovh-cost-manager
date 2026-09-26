@@ -3,6 +3,9 @@ import { cleanup } from '@testing-library/react';
 import { afterEach, beforeEach, vi } from 'vitest';
 import { TODAY } from './fixtures/calendar.js';
 
+// Every test file gets the stand-in of the API service module (support/api.js)
+vi.mock('../src/services/api.js', async () => (await import('./support/api.js')).api);
+
 // What jsdom lacks and the page needs:
 // - Recharts' ResponsiveContainer watches its size. Charts draw nothing
 //   meaningful without a layout anyway: tests read the text around them.

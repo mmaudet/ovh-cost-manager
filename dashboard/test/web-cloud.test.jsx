@@ -13,7 +13,6 @@ import {
   texts,
 } from './support/render.jsx';
 
-vi.mock('../src/services/api.js', async () => (await import('./support/api.js')).api);
 vi.mock('../src/utils/csv.js', async (importOriginal) => ({
   ...(await importOriginal()),
   downloadCSV: vi.fn(),
