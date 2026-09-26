@@ -10,7 +10,6 @@ import {
   InstancesTable, instanceCsvColumns, instanceCsvRows
 } from '../components/InstancesTable.jsx';
 import { downloadCSV } from '../utils/csv.js';
-import { fmtBytes } from '../utils/format.js';
 
 // The Public Cloud tab, which the shell renders while it is active: what usePublicCloudTab()
 // returns, with the shell's language, translations (t), amount format (fmt) and locale, the
@@ -232,7 +231,9 @@ const PublicCloudTab = ({
                                 </h4>
                                 {/* ~11 rows before scrolling */}
                                 <div className="overflow-y-auto max-h-[400px] bg-white rounded-lg">
-                                  <BucketsTable buckets={projectBuckets} language={language} t={t} fmt={fmt} fmtBytes={fmtBytes} />
+                                  <BucketsTable
+                                    buckets={projectBuckets} language={language} t={t} fmt={fmt}
+                                  />
                                 </div>
                               </div>
                             )}
@@ -404,7 +405,7 @@ const PublicCloudTabModals = ({
         </button>
       }
     >
-      <BucketsTable buckets={projectBuckets} language={language} t={t} fmt={fmt} fmtBytes={fmtBytes} />
+      <BucketsTable buckets={projectBuckets} language={language} t={t} fmt={fmt} />
     </Modal>
 
     <Modal

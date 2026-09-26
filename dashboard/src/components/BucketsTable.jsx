@@ -1,6 +1,8 @@
+import { fmtBytes } from '../utils/format.js';
+
 // Bucket table, shared by the inline panel and the "show all" modal.
 // Sorted by name so the list stays stable across period changes.
-const BucketsTable = ({ buckets, language, t, fmt, fmtBytes }) => (
+const BucketsTable = ({ buckets, language, t, fmt }) => (
   <table className="w-full text-sm">
     <thead>
       <tr className="border-b bg-gray-50">
