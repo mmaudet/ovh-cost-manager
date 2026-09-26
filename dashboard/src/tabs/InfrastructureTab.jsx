@@ -13,8 +13,8 @@ const INFRA_EXCLUDED_TYPES = ['cloud_project', 'domain', 'web_cloud'];
 // The Infrastructure tab, which the shell renders while it is active: what
 // useInfrastructureTab() returns, with the shell's language, translations (t), amount format
 // (fmt) and selected month, the month's costs by resource type, which load at page start,
-// and the resource type whose bill lines are open, with its setter: shared state, since the
-// Overview's link to this tab and the logo close it too (#56).
+// and the resource type whose bill lines are open, with its setter: shared state, see
+// docs/adr/0001-tab-state-lives-in-the-dashboard-shell.md.
 const InfrastructureTab = ({
   inventoryServers, inventoryVps, inventoryStorage, resourceTypeDetails, setShowAllServers,
   language, t, fmt, selectedMonth, byResourceType,

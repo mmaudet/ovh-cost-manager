@@ -15,10 +15,9 @@ import {
   texts,
 } from './support/render.jsx';
 
-// What each way of moving around the page keeps open, as decided in #56: the tab bar keeps
-// everything, the logo goes back to a clean Overview, and each link of the Overview opens
-// exactly its target. Two things can stay open: a Public Cloud project, its detail under
-// it, and a resource type of the Infrastructure tab, its bill lines under it.
+// What each way of moving around the page keeps open (#56): a Public Cloud project, its
+// detail under it, and a resource type of the Infrastructure tab, its bill lines under it.
+// The rule: docs/adr/0001-tab-state-lives-in-the-dashboard-shell.md
 
 // A link of the Overview's breakdown by resource type, to the Infrastructure or Web Cloud tab
 const breakdownLink = (name) => within(resourceTypeBreakdown()).getByRole('button', { name });
@@ -94,7 +93,7 @@ describe('navigation', () => {
     expect(projectDetailHeadings()).toEqual([]);
   });
 
-  // The user reaches the Overview through the tab bar, which keeps what is open
+  // The user goes to the Overview through the tab bar, then follows one of its links
   describe("through the Overview's link", () => {
     it('to Infrastructure closes the open resource type, not the project', async () => {
       const { user } = await openProjectAndResourceType();
