@@ -22,54 +22,11 @@ import Accordion from '../components/Accordion.jsx';
 import Modal from '../components/Modal.jsx';
 import TableActions from '../components/TableActions.jsx';
 import { downloadCSV } from '../utils/csv.js';
+import { formatCurrency, formatYearMonth } from '../utils/format.js';
+import { PERIOD_OPTIONS, monthsSince, WEB_CLOUD_MONTHS, shiftMonths } from '../utils/periods.js';
+import { parseSqliteDate } from '../utils/sqliteDate.js';
+import { generateMarkdownReport } from '../utils/markdownReport.js';
 import ProjectProductComparison from './ProjectProductComparison.jsx';
-
-// Format currency based on language
-const formatCurrency = (value, language = 'fr') => {
-  const locale = language === 'en' ? 'en-US' : 'fr-FR';
-  return new Intl.NumberFormat(locale, {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2
-  }).format(value);
-};
-
-// Format a 'YYYY-MM' string into a localized "short month + year" label.
-// Localization belongs on the client; the API sends the raw yearMonth.
-const formatYearMonth = (yearMonth, language = 'fr') => {
-  if (!yearMonth) return '';
-  const [year, month] = yearMonth.split('-').map(Number);
-  if (!year || !month) return yearMonth;
-  const locale = language === 'en' ? 'en-US' : 'fr-FR';
-  return new Date(year, month - 1, 1).toLocaleDateString(locale, { month: 'short', year: 'numeric' });
-};
-
-// Trend period options, expressed in months. The largest offered option is
-// derived from the oldest available month so users can never pick a range
-// emptier than their data.
-const PERIOD_OPTIONS = [
-  { months: 3, key: 'period3m' },
-  { months: 6, key: 'period6m' },
-  { months: 12, key: 'period1y' },
-  { months: 24, key: 'period2y' },
-  { months: 36, key: 'period3y' },
-  { months: 60, key: 'period5y' },
-  { months: 120, key: 'period10y' },
-  { months: 180, key: 'period15y' },
-  { months: 240, key: 'period20y' }
-];
-
-// Number of months from a 'YYYY-MM' up to the current month, inclusive.
-const monthsSince = (yearMonth) => {
-  if (!yearMonth) return 0;
-  const [y, m] = yearMonth.split('-').map(Number);
-  if (!y || !m) return 0;
-  const now = new Date();
-  return (now.getFullYear() - y) * 12 + (now.getMonth() + 1 - m) + 1;
-};
-
-// SQLite CURRENT_TIMESTAMP values ('YYYY-MM-DD HH:MM:SS') are UTC without a
-// timezone suffix: parse them as UTC so they display in local time.
-const parseSqliteDate = (value) => new Date(`${value.replace(' ', 'T')}Z`);
 
 // Translation keys for the import_log type and status values
 const IMPORT_TYPE_KEYS = {
@@ -84,56 +41,12 @@ const IMPORT_STATUS_KEYS = {
   partial: 'importStatusPartial'
 };
 
-// Generate markdown report
-const generateMarkdownReport = (summary, byService, byProject, selectedMonth, language = 'fr') => {
-  const locale = language === 'en' ? 'en-US' : 'fr-FR';
-  const fmt = (v) => formatCurrency(v, language);
-
-  let md = `# OVH Cost Report - ${selectedMonth?.label || 'N/A'}\n\n`;
-  md += `**${language === 'en' ? 'Period' : 'Période'}:** ${selectedMonth?.from} to ${selectedMonth?.to}\n\n`;
-  md += `## ${language === 'en' ? 'Summary' : 'Résumé'}\n\n`;
-  md += `| ${language === 'en' ? 'Metric' : 'Métrique'} | ${language === 'en' ? 'Value' : 'Valeur'} |\n|--------|-------|\n`;
-  md += `| ${language === 'en' ? 'Total Cost' : 'Coût Total'} | ${fmt(summary?.total || 0)}€ |\n`;
-  md += `| ${language === 'en' ? 'Cloud Total' : 'Cloud Total'} | ${fmt(summary?.cloudTotal || 0)}€ |\n`;
-  md += `| ${language === 'en' ? 'Non-Cloud Total' : 'Non-Cloud Total'} | ${fmt(summary?.nonCloudTotal || 0)}€ |\n`;
-  md += `| ${language === 'en' ? 'Daily Average' : 'Moyenne Journalière'} | ${fmt(summary?.dailyAverage || 0)}€ |\n`;
-  md += `| ${language === 'en' ? 'Active Projects' : 'Projets Actifs'} | ${summary?.projectsCount || 0} |\n\n`;
-
-  md += `## ${language === 'en' ? 'By Service Type' : 'Par Type de Service'}\n\n`;
-  md += `| Service | ${language === 'en' ? 'Cost' : 'Coût'} | % |\n|---------|------|---|\n`;
-  const totalService = byService.reduce((sum, s) => sum + s.value, 0);
-  byService.forEach(s => {
-    const pct = totalService ? ((s.value / totalService) * 100).toFixed(1) : 0;
-    md += `| ${s.name} | ${fmt(s.value)}€ | ${pct}% |\n`;
-  });
-
-  md += `\n## ${language === 'en' ? 'Top Projects' : 'Top Projets'}\n\n`;
-  md += `| ${language === 'en' ? 'Project' : 'Projet'} | ${language === 'en' ? 'Cost' : 'Coût'} |\n|---------|------|\n`;
-  byProject.slice(0, 10).forEach(p => {
-    md += `| ${p.projectName} | ${fmt(p.total)}€ |\n`;
-  });
-
-  md += `\n---\n*${language === 'en' ? 'Generated on' : 'Généré le'} ${new Date().toLocaleString(locale)}*\n`;
-  return md;
-};
-
 // Resource types the Infrastructure tab leaves out: Public Cloud has its own
 // tab, and domains moved to Web Cloud, .ovh ones included (web_cloud type).
 // Note that part of the 'other' type also shows up in Web Cloud (hosting
 // options, mail), it is kept here because the type is a catch-all and would
 // hide non Web Cloud lines.
 const INFRA_EXCLUDED_TYPES = ['cloud_project', 'domain', 'web_cloud'];
-
-// Web Cloud is billed on yearly renewals, so a single month only ever shows an
-// arbitrary slice of it: the tab reads the 12 months ending on the selected one.
-const WEB_CLOUD_MONTHS = 12;
-
-const shiftMonths = (isoDate, months) => {
-  if (!isoDate) return isoDate;
-  const [year, month] = isoDate.split('-').map(Number);
-  const shifted = new Date(Date.UTC(year, month - 1 + months, 1));
-  return `${shifted.getUTCFullYear()}-${String(shifted.getUTCMonth() + 1).padStart(2, '0')}-01`;
-};
 
 // Web Cloud families, in display order. Each one gets a card and a table.
 const WEB_CLOUD_CATEGORIES = [
