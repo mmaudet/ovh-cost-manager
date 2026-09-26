@@ -1077,6 +1077,28 @@ function allocateSwiftArchive(db, rows, projectId, fromDate, toDate) {
 
 // Cloud detail operations (Phase 4)
 const cloudDetailOps = {
+  // The first day of the month of the current consumption, which the readers show when no
+  // month is asked for: the month that the last import of the consumption covered, even
+  // with no usage yet. The consumption of every month is kept (#54). Before any import
+  // records its month, the latest month stored; null when there is none.
+  getCurrentConsumptionMonth: () => {
+    const db = getDb();
+    const recorded = db.prepare(
+      "SELECT value FROM import_state WHERE key = 'consumption_month'"
+    ).get();
+    if (recorded) return recorded.value;
+    return db.prepare('SELECT MAX(period_start) as month FROM project_consumption').get().month;
+  },
+
+  setCurrentConsumptionMonth: (periodStart) => {
+    const db = getDb();
+    db.prepare(`
+      INSERT INTO import_state (key, value, updated_at)
+      VALUES ('consumption_month', ?, CURRENT_TIMESTAMP)
+      ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = CURRENT_TIMESTAMP
+    `).run(periodStart);
+  },
+
   insertConsumption: (entry) => {
     const db = getDb();
     const stmt = db.prepare(`
@@ -1093,6 +1115,9 @@ const cloudDetailOps = {
     if (fromDate && toDate) {
       query += ' AND period_start >= ? AND period_end <= ?';
       params.push(fromDate, toDate);
+    } else {
+      query += ' AND period_start = ?';
+      params.push(cloudDetailOps.getCurrentConsumptionMonth());
     }
     query += ' ORDER BY period_start DESC';
     return db.prepare(query).all(...params);
@@ -1103,10 +1128,10 @@ const cloudDetailOps = {
     return db.prepare(`
       SELECT resource_type, SUM(total_price) as total, COUNT(*) as count
       FROM project_consumption
-      WHERE project_id = ?
+      WHERE project_id = ? AND period_start = ?
       GROUP BY resource_type
       ORDER BY total DESC
-    `).all(projectId);
+    `).all(projectId, cloudDetailOps.getCurrentConsumptionMonth());
   },
 
   upsertInstance: (instance) => {
@@ -1492,11 +1517,19 @@ const cloudDetailOps = {
     db.prepare('DELETE FROM object_storage_buckets WHERE project_id = ?').run(projectId);
   },
 
-  clearByProject: (projectId) => {
+  // A project's instances and quotas: inventories, which each import replaces
+  clearProjectInventory: (projectId) => {
     const db = getDb();
-    db.prepare('DELETE FROM project_consumption WHERE project_id = ?').run(projectId);
     db.prepare('DELETE FROM cloud_instances WHERE project_id = ?').run(projectId);
     db.prepare('DELETE FROM project_quotas WHERE project_id = ?').run(projectId);
+  },
+
+  // A project's consumption of the month that starts on `periodStart` (YYYY-MM-01). The
+  // consumption is kept month by month: an import replaces the month it imports only (#54)
+  clearConsumptionOfMonth: (projectId, periodStart) => {
+    const db = getDb();
+    db.prepare('DELETE FROM project_consumption WHERE project_id = ? AND period_start = ?')
+      .run(projectId, periodStart);
   },
 
   // Aggregate total cloud consumption across all projects for the current period
@@ -1509,7 +1542,8 @@ const cloudDetailOps = {
         SUM(total_price) as total,
         COUNT(DISTINCT project_id) as project_count
       FROM project_consumption
-    `).get();
+      WHERE period_start = ?
+    `).get(cloudDetailOps.getCurrentConsumptionMonth());
   },
 
   // GPU cost summary from bill_details (covers full history) + project_consumption (current month)
@@ -1591,12 +1625,13 @@ const cloudDetailOps = {
     const projectFlavors = db.prepare(`
       SELECT project_id, GROUP_CONCAT(DISTINCT resource_name) as gpu_flavors
       FROM project_consumption
-      WHERE resource_name LIKE 'l4-%' OR resource_name LIKE 'l40s-%'
+      WHERE period_start = ?
+        AND (resource_name LIKE 'l4-%' OR resource_name LIKE 'l40s-%'
         OR resource_name LIKE 'a100-%' OR resource_name LIKE 't1-%'
         OR resource_name LIKE 't2-%' OR resource_name LIKE 'h100-%'
-        OR resource_name LIKE 'v100-%'
+        OR resource_name LIKE 'v100-%')
       GROUP BY project_id
-    `).all();
+    `).all(cloudDetailOps.getCurrentConsumptionMonth());
     const flavorMap = {};
     for (const pf of projectFlavors) { flavorMap[pf.project_id] = pf.gpu_flavors; }
 
@@ -1642,19 +1677,22 @@ const cloudDetailOps = {
   }
 };
 
-// Clear all data (for full import)
+// Clear the imported data, for a full import. What the import cannot fetch again is kept:
+// the consumption of each project, of which OVH gives the current month only (#54), with
+// the month of its last import (import_state) and the projects it belongs to. The account
+// and consumption snapshots are cleared: only their latest is read, which the import
+// fetches again.
 function clearAll() {
   const db = getDb();
   // Supprimer d'abord toutes les tables qui référencent projects ou bills
   db.exec('DELETE FROM bill_details');
-  db.exec('DELETE FROM project_consumption');
   db.exec('DELETE FROM cloud_instances');
   db.exec('DELETE FROM project_quotas');
   db.exec('DELETE FROM object_storage_buckets');
   db.exec('DELETE FROM cloud_volumes');
   db.exec('DELETE FROM cloud_snapshots');
   db.exec('DELETE FROM bills');
-  db.exec('DELETE FROM projects');
+  db.exec('DELETE FROM projects WHERE id NOT IN (SELECT project_id FROM project_consumption)');
   // Optionnel : vider aussi les autres tables annexes si besoin
   db.exec('DELETE FROM import_log');
   db.exec('DELETE FROM consumption_snapshots');

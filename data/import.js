@@ -13,9 +13,11 @@
 
 const path = require('path');
 const os = require('os');
+const util = require('util');
 const Jsonfile = require('jsonfile');
 const db = require('./db');
 const { classifyService, classifyResourceTypeFromDomain } = require('./classify');
+const { monthBounds } = require('./months');
 
 // Skip this run if another import (cron or manual resync) is in progress.
 // Checked first, before --full clears the database.
@@ -72,19 +74,35 @@ function chunkArray(array, size) {
   return chunks;
 }
 
+// The HTTP status of a failed call: the ovh client puts it in `error`, other clients in
+// `statusCode`. Undefined when the call rejected with anything else, even with nothing.
+function errorStatus(err) {
+  return err?.statusCode ?? err?.error;
+}
+
+// Why a call failed, whatever it rejected with: the ovh client rejects with a plain object,
+// { error: HTTP status, message }, other code with an Error or a string
+function describeError(err) {
+  if (err === null || typeof err !== 'object') return String(err);
+  const reason = [errorStatus(err), err.message]
+    .filter(part => part !== undefined && part !== null && part !== '')
+    .join(' ');
+  return reason || util.inspect(err, { breakLength: Infinity });
+}
+
 // Retry a single async operation with exponential backoff
 async function withRetry(fn, retries = MAX_RETRIES, backoff = INITIAL_BACKOFF_MS) {
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
       return await fn();
     } catch (err) {
-      // The ovh client puts the HTTP status in `error`, other clients in `statusCode`
-      const status = err.statusCode ?? err.error;
+      const status = errorStatus(err);
       const isRateLimited = status === 429;
       const isRetryable = isRateLimited || status >= 500;
       if (attempt < retries && isRetryable) {
         const delay = isRateLimited ? backoff * 2 : backoff;
-        console.warn(`  [retry ${attempt + 1}/${retries}] ${err.message || err} — waiting ${delay}ms`);
+        const reason = describeError(err);
+        console.warn(`  [retry ${attempt + 1}/${retries}] ${reason} — waiting ${delay}ms`);
         await new Promise(resolve => setTimeout(resolve, delay));
         backoff *= 2;
       } else {
@@ -94,6 +112,9 @@ async function withRetry(fn, retries = MAX_RETRIES, backoff = INITIAL_BACKOFF_MS
   }
 }
 
+// The items that the import skipped after an error, bills included, for its summary
+let failedItemCount = 0;
+
 // Helper to run promises in parallel batches with retry and error logging
 async function runInBatches(items, asyncFn, batchSize = BATCH_SIZE) {
   const results = [];
@@ -101,7 +122,9 @@ async function runInBatches(items, asyncFn, batchSize = BATCH_SIZE) {
   for (const chunk of chunks) {
     const batchResults = await Promise.all(chunk.map(item =>
       withRetry(() => asyncFn(item)).catch(err => {
-        console.error(`  [batch] Error processing item ${JSON.stringify(item).substring(0, 80)}: ${err.message || err}`);
+        failedItemCount += 1;
+        const label = JSON.stringify(item).substring(0, 80);
+        console.error(`  [batch] Error processing item ${label}: ${describeError(err)}`);
         return { error: err };
       })
     ));
@@ -194,8 +217,11 @@ async function fetchBills(fromDate, toDate) {
 
 // Fetch bill details
 async function fetchBillDetails(billId) {
-  const bill = await ovh.requestPromised('GET', `/me/bill/${billId}`);
-  const detailIds = await ovh.requestPromised('GET', `/me/bill/${billId}/details`);
+  // Retried as the calls of the other items are
+  const bill = await withRetry(() => ovh.requestPromised('GET', `/me/bill/${billId}`));
+  const detailIds = await withRetry(
+    () => ovh.requestPromised('GET', `/me/bill/${billId}/details`),
+  );
 
   // Fetch details in parallel batches
   const detailResults = await runInBatches(detailIds, async (detailId) => {
@@ -579,13 +605,28 @@ async function importInventory(projectMap) {
         ips = await ovh.requestPromised('GET', `/vps/${name}/ips`);
       } catch (e) { /* optional */ }
 
+      // The operating system: the name of the image installed on the VPS
+      // (images/current, in beta), or else that of its distribution. The OVH API schema
+      // marks the distribution route deprecated, and removes it on 2026-10-15.
+      let osName = '';
+      try {
+        const image = await ovh.requestPromised('GET', `/vps/${name}/images/current`);
+        osName = image?.name || '';
+      } catch (e) { /* optional */ }
+      if (!osName) {
+        try {
+          const distribution = await ovh.requestPromised('GET', `/vps/${name}/distribution`);
+          osName = distribution?.name || distribution?.distribution || '';
+        } catch (e) { /* optional */ }
+      }
+
       db.inventory.upsertVps({
         id: name,
         display_name: info.displayName || info.name || name,
         model: info.model?.name || '',
         zone: info.zone || '',
         state: info.state || '',
-        os: info.model?.disk || '',
+        os: osName,
         vcpus: info.model?.vcore || 0,
         ram_mb: info.model?.memory || 0,
         disk_gb: info.model?.disk || 0,
@@ -824,8 +865,28 @@ async function fetchObjectStorageBuckets(projectId) {
   return buckets;
 }
 
+// The month that a project's usage covers, as its first day and the day the usage runs to,
+// YYYY-MM-DD. OVH gives the period with its own UTC offset: its dates are read from their
+// digits, as those of the bills are. Through the UTC clock, the first hours of a month in
+// Paris would replace the consumption of the previous month (#54). Without a period, the
+// month of the UTC clock.
+function usagePeriod(usage) {
+  const from = usage.period?.from?.split('T')[0];
+  if (!from) {
+    const today = new Date().toISOString().split('T')[0];
+    return { start: `${today.substring(0, 8)}01`, end: today };
+  }
+  const month = monthBounds(from.substring(0, 7));
+  // Within the month: the period may end on the first day of the next one
+  const to = usage.period.to?.split('T')[0];
+  return { start: month.from, end: to && to < month.to ? to : month.to };
+}
+
 async function importCloudDetails(projectIds) {
   console.log('\n--- Importing cloud project details ---');
+
+  // The month of the current consumption: the latest that the usage of a project reports
+  let consumptionMonth = null;
 
   for (const projectId of projectIds) {
     console.log(`  Project ${projectId}...`);
@@ -835,11 +896,12 @@ async function importCloudDetails(projectIds) {
       const usage = await ovh.requestPromised('GET', `/cloud/project/${projectId}/usage/current`);
 
       if (usage) {
-        // Clear old data for this project
-        db.cloudDetails.clearByProject(projectId);
+        const { start: periodStart, end: periodEnd } = usagePeriod(usage);
+        if (!consumptionMonth || periodStart > consumptionMonth) consumptionMonth = periodStart;
 
-        const now = new Date().toISOString().split('T')[0];
-        const monthStart = now.substring(0, 8) + '01';
+        // Clear old data for this project: its consumption of the other months is kept
+        db.cloudDetails.clearProjectInventory(projectId);
+        db.cloudDetails.clearConsumptionOfMonth(projectId, periodStart);
 
         // Process hourly usage
         if (usage.hourlyUsage) {
@@ -850,8 +912,8 @@ async function importCloudDetails(projectIds) {
               for (const detail of (item.details || [])) {
                 db.cloudDetails.insertConsumption({
                   project_id: projectId,
-                  period_start: monthStart,
-                  period_end: now,
+                  period_start: periodStart,
+                  period_end: periodEnd,
                   resource_type: rt,
                   resource_id: detail.instanceId || detail.resourceId || detail.volumeId || '',
                   resource_name: item.reference || '',
@@ -875,8 +937,8 @@ async function importCloudDetails(projectIds) {
               for (const detail of (item.details || [])) {
                 db.cloudDetails.insertConsumption({
                   project_id: projectId,
-                  period_start: monthStart,
-                  period_end: now,
+                  period_start: periodStart,
+                  period_end: periodEnd,
                   resource_type: rt + '_monthly',
                   resource_id: detail.instanceId || detail.resourceId || '',
                   resource_name: item.reference || '',
@@ -1008,11 +1070,15 @@ async function importCloudDetails(projectIds) {
       console.warn(`    Object storage fetch failed, keeping the stored buckets: ${err.message || err.error}`);
     }
   }
+
+  // Read as the current consumption, even when no project used anything yet this month
+  if (consumptionMonth) db.cloudDetails.setCurrentConsumptionMonth(consumptionMonth);
 }
 
 // Main import function
 async function runImport(params) {
   const stats = { bills: 0, details: 0, projects: 0 };
+  failedItemCount = 0;
 
   // Determine import type and dates
   let importType = 'period';
@@ -1024,7 +1090,8 @@ async function runImport(params) {
     fromDate = null;
     toDate = null;
     console.log('\n=== FULL IMPORT ===');
-    console.log('This will clear all existing data and reimport everything.\n');
+    console.log('This will clear the imported data and reimport it. The consumption of each');
+    console.log('project is kept: OVH cannot give its past months again.\n');
     // Clear all data in a transaction for atomicity
     db.transaction(() => {
       db.clearAll();
@@ -1151,7 +1218,9 @@ async function runImport(params) {
 
         console.log(` ${details.length} details`);
       } catch (err) {
-        console.log(` ERROR: ${err.message}`);
+        // The bill is skipped, as a failed item is
+        failedItemCount += 1;
+        console.log(` ERROR: ${describeError(err)}`);
       }
     }
 
@@ -1178,6 +1247,7 @@ async function runImport(params) {
     console.log(`Projects: ${stats.projects}`);
     console.log(`Bills: ${stats.bills}`);
     console.log(`Details: ${stats.details}`);
+    console.log(`Failed items: ${failedItemCount}`);
 
   } catch (err) {
     db.importLog.fail(importId, err.message);
@@ -1195,4 +1265,4 @@ if (require.main === module) {
   runImport(params);
 }
 
-module.exports = { importCloudDetails };
+module.exports = { importCloudDetails, importInventory, runImport };

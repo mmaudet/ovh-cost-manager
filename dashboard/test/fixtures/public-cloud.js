@@ -23,7 +23,8 @@ const projects = [
 ];
 
 // What a project consumed from the 1st of the month to the last import, by
-// cloud resource kind. The import keeps the current month only.
+// cloud resource kind. The import keeps that of each month from the upgrade on
+// (#54): here, September only.
 const usage = (fields) => ({
   period_start: '2026-09-01',
   period_end: '2026-09-15',
@@ -199,7 +200,7 @@ export const publicCloud = {
     }),
   },
 
-  // Without a period, all of it; for a month, what falls within it
+  // Without a period, that of the latest month imported; for a month, what falls within it
   projectConsumption: {
     [PRODUCTION]: { all: productionUsage, '2026-09': productionUsage },
     [STAGING]: { all: stagingUsage, '2026-09': stagingUsage },

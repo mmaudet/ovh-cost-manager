@@ -193,6 +193,14 @@ CREATE TABLE IF NOT EXISTS project_consumption (
 CREATE INDEX IF NOT EXISTS idx_project_consumption_project ON project_consumption(project_id);
 CREATE INDEX IF NOT EXISTS idx_project_consumption_period ON project_consumption(period_start, period_end);
 
+-- What the imports record for the readers, by key. 'consumption_month': the first day of
+-- the month that the last import of the project consumption covered
+CREATE TABLE IF NOT EXISTS import_state (
+  key TEXT PRIMARY KEY,
+  value TEXT,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
 -- Cloud instances per project
 CREATE TABLE IF NOT EXISTS cloud_instances (
   id TEXT PRIMARY KEY,
