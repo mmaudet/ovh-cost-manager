@@ -15,12 +15,24 @@ describe('importsEnabled', () => {
     expect(importsEnabled({ IMPORT_ENABLED: 'false' })).toBe(false);
   });
 
-  // As the cron reads it: only "false" turns the imports off, and an empty value is unset
-  it('is true with any other value', () => {
-    expect(importsEnabled({ IMPORT_ENABLED: 'true' })).toBe(true);
+  // As the other true/false settings, and the cron, read it: FALSE left the imports on
+  it.each([
+    ['true', true],
+    ['TRUE', true],
+    ['FALSE', false],
+    ['False', false],
+  ])('reads IMPORT_ENABLED=%s in any case', (value, expected) => {
+    expect(importsEnabled({ IMPORT_ENABLED: value })).toBe(expected);
+  });
+
+  it('is true with an empty IMPORT_ENABLED, as an unset one', () => {
     expect(importsEnabled({ IMPORT_ENABLED: '' })).toBe(true);
-    expect(importsEnabled({ IMPORT_ENABLED: 'FALSE' })).toBe(true);
-    expect(importsEnabled({ IMPORT_ENABLED: '0' })).toBe(true);
+  });
+
+  // The server checks it at startup, and stops on such a value
+  it.each(['0', 'no', 'off', 'disabled'])('refuses IMPORT_ENABLED=%s', (value) => {
+    expect(() => importsEnabled({ IMPORT_ENABLED: value }))
+      .toThrow(`IMPORT_ENABLED must be true or false, not "${value}"`);
   });
 
   it("reads the server's environment by default", () => {

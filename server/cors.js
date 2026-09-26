@@ -9,18 +9,46 @@
  */
 
 const { LOOPBACK_HOSTNAMES, firstValue, lastValue, parseHost } = require('./hostHeader');
+const { parseList } = require('./settings');
+
+/**
+ * The origins listed besides the dashboard's own: ALLOWED_ORIGINS, or else
+ * allowedOrigins in config.json, an array, or a comma-separated string as the
+ * environment gives, as for the allowed hosts. Both are read, so that a wrong
+ * value of config.json stops the server even where the environment
+ * overrides it.
+ *
+ * @param {object} fileConfig - the content of config.json
+ * @param {object} [env] - the environment variables
+ * @param {string} [source] - the path of config.json, for the errors
+ * @returns {string[]}
+ */
+function readAllowedOrigins(fileConfig, env = process.env, source = 'config.json') {
+  const fromFile = parseList(fileConfig?.allowedOrigins, {
+    name: `allowedOrigins in ${source}`,
+    fromFile: true,
+  });
+  const fromEnv = parseList(env.ALLOWED_ORIGINS, { name: 'ALLOWED_ORIGINS' });
+  return fromEnv ?? fromFile ?? [];
+}
 
 /**
  * Builds the check once, from the server's settings.
  *
  * @param {object} settings
- * @param {string[]} settings.allowedOrigins - ALLOWED_ORIGINS, or allowedOrigins in config.json
+ * @param {string[]} settings.allowedOrigins - from readAllowedOrigins: each
+ *   origin is compared whole, where a string, compared as a list, let through
+ *   any part of it
  * @param {boolean} settings.isDev - true unless NODE_ENV is 'production'
  * @param {boolean} settings.trustProxy - whether the server trusts its proxy (TRUST_PROXY)
  * @returns {function(string|undefined, RequestFacts): boolean} whether a request
  *   with this Origin header passes
  */
 function createOriginCheck({ allowedOrigins, isDev, trustProxy }) {
+  if (!Array.isArray(allowedOrigins)) {
+    throw new TypeError('the allowed origins must be an array, as readAllowedOrigins gives');
+  }
+  const listed = new Set(allowedOrigins);
   /**
    * @typedef {object} RequestFacts
    * @property {string} [host] - Host header
@@ -32,7 +60,7 @@ function createOriginCheck({ allowedOrigins, isDev, trustProxy }) {
    * @property {boolean} [encrypted] - whether the connection itself is TLS
    */
   return function isAllowedOrigin(origin, request) {
-    if (!origin || allowedOrigins.includes(origin)) {
+    if (!origin || listed.has(origin)) {
       return true;
     }
     const url = parseOrigin(origin);
@@ -82,4 +110,4 @@ function parseOrigin(origin) {
   return ['http:', 'https:'].includes(url.protocol) ? url : null;
 }
 
-module.exports = { createOriginCheck };
+module.exports = { createOriginCheck, readAllowedOrigins };

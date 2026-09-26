@@ -9,17 +9,16 @@
 # Environment variables:
 #   IMPORT_INTERVAL  — Seconds between imports (default: 86400)
 #   IMPORT_FLAGS     — Extra flags passed to import.js (default: --all)
-#   IMPORT_ENABLED   — Set to "false" to disable automatic imports
+#   IMPORT_ENABLED   — Set to "false", in any case, to disable automatic imports
 
 set -e
 
-# The choice of the first import, shared with its test
+# Whether to import, and the choice of the first import, shared with their test
 # shellcheck source-path=SCRIPTDIR source=import-decision.sh disable=SC1091
 . /app/scripts/import-decision.sh
 
 INTERVAL="${IMPORT_INTERVAL:-86400}"
 FLAGS="${IMPORT_FLAGS:---all}"
-ENABLED="${IMPORT_ENABLED:-true}"
 
 log() {
   echo "[cron-import] $(date -u '+%Y-%m-%d %H:%M:%S UTC') $*"
@@ -32,8 +31,12 @@ run_import() {
   node /app/data/import.js "$1" $FLAGS 2>&1 | while read -r line; do log "$line"; done
 }
 
+if ! ENABLED=$(imports_enabled "$IMPORT_ENABLED"); then
+  log "IMPORT_ENABLED must be true or false, not \"$IMPORT_ENABLED\": no automatic import"
+  exit 1
+fi
 if [ "$ENABLED" = "false" ]; then
-  log "Automatic imports disabled (IMPORT_ENABLED=false)"
+  log "Automatic imports disabled (IMPORT_ENABLED=$IMPORT_ENABLED)"
   exit 0
 fi
 

@@ -5,6 +5,7 @@ This guide covers Docker deployment options for OVH Cost Manager (OCM), includin
 ## Table of Contents
 
 - [Prerequisites](#prerequisites)
+- [Upgrading to 2.4.1](#upgrading-to-241)
 - [Simple Deployment (without SSO)](#simple-deployment-without-sso)
 - [SSO Deployment (with LemonLDAP-NG)](#sso-deployment-with-lemonldap-ng)
 - [LemonLDAP-NG Configuration](#lemonldap-ng-configuration)
@@ -21,6 +22,23 @@ This guide covers Docker deployment options for OVH Cost Manager (OCM), includin
 - Docker Compose >= 2.0
 - OVH API credentials (see main [README](../README.md#configuration))
 - For SSO: An identity provider (SAML or OIDC compatible)
+
+---
+
+## Upgrading to 2.4.1
+
+2.4.1 hardens authentication and reads the settings strictly. Before upgrading, check these points: those on sessions, sign-in, the provider and back-channel logout only concern a deployment that signs in with OIDC, the others every deployment.
+
+- **Everyone signs in again once**: the session cookie is now signed with `SESSION_SECRET`, and named `__Host-ocm.sid` when it is `Secure`, over HTTPS: the sessions of 2.4.0 are refused. From then on, changing `SESSION_SECRET` signs everyone out, and a secret shorter than 32 characters logs a warning at startup.
+- **Sign-in needs cookies**: `/auth/login` sets an `ocm.login.<state>` cookie (`__Host-ocm.login.<state>` over HTTPS) that the callback needs. A sign-in must start on the host of `OIDC_BASE_URL`, where the provider sends the browser back, and finish within 10 minutes.
+- **An https issuer needs all its endpoints on https**: plain HTTP to the provider is allowed only when `OIDC_ISSUER` is an `http://` URL, as in the demo stack, and then logs a warning in production.
+- **The settings accept only `true` or `false`**: in any case in the environment, as JSON booleans, without quotes, in `config.json`. `COOKIE_SECURE` and `auth.session.secure` also accept `auto`, their default. This holds for `OIDC_ENABLED`, `AUTH_REQUIRED`, `COOKIE_SECURE`, `auth.enabled`, `auth.session.secure` and `auth.backChannelLogout`, for `TRUST_PROXY` and `RATE_LIMIT_ENABLED`, or `rateLimit.trustProxy` and `rateLimit.enabled` in `config.json`, which drive the CORS, `ALLOWED_HOSTS` and rate limiting checks, and for `IMPORT_ENABLED`: any other value stops the server at startup, naming the setting, and the file for `config.json`. `TRUST_PROXY=TRUE`, read as `false` before, now trusts the proxy, and `IMPORT_ENABLED=FALSE`, read as `true`, now turns the imports off.
+- **The numbers and the sections of the settings are checked too**: the rate limits, `RATE_LIMIT_API_MAX`, `RATE_LIMIT_API_WINDOW_MS`, `RATE_LIMIT_AUTH_MAX` and `RATE_LIMIT_AUTH_WINDOW_MS` or `max` and `windowMs` under `rateLimit.api` and `rateLimit.auth` in `config.json`, and `auth.session.maxAge` take positive integers, digits in the environment and JSON numbers, without quotes, in `config.json`. `auth`, `auth.provider`, `auth.session`, `rateLimit`, `rateLimit.api` and `rateLimit.auth` must be objects, and `allowedOrigins` an array of strings or a comma-separated string, as `ALLOWED_ORIGINS`. Anything else stops the server at startup, naming the setting: a limit of `"abc"` limited nothing, `"auth": true` left authentication off, and an `allowedOrigins` string was compared by substring, so that `"https://ocm.example.com"` let `https://ocm.example` through.
+- **`OIDC_ENABLED=false` now overrides `auth.enabled: true`**: a leftover `OIDC_ENABLED=false` in the environment turns OIDC off, and header mode then serves the API to anyone, unless `AUTH_REQUIRED=true`.
+- **A missing OIDC setting, or a `config.json` that cannot be read as JSON, stops the server at startup**, with an error naming the setting or the file, rather than let it start without authentication.
+- **While the provider is unreachable**, sign-in and the API answer 503, and the server retries its discovery with backoff, instead of falling back to header mode. `/api/health` keeps answering: the container stays healthy.
+- **The log quotes the texts it did not write as JSON strings**: the provider's, such as `OIDC sign-in: session opened for "alice"`, the user of each request, `["alice"]` or `["anonymous"]` where it was `[alice]`, and the origin the CORS check blocks, so that a control character in a `sub`, an error description, an `Auth-User` or an `Origin` header cannot forge a line of the log. A tool that parses these lines may need its pattern updated.
+- **Back-channel logout now works**, and ends only the sessions of the token's `sid`, or of its `sub` when it has no `sid`. The provider's logout tokens must hold `exp`; a replay is refused, told by the token's `jti`, or by the token itself when it has none, as LemonLDAP-NG's may not.
 
 ---
 
@@ -66,7 +84,10 @@ Open http://localhost:3001
 | Variable                    | Description                          | Default           |
 | --------------------------- | ------------------------------------ | ----------------- |
 | `OCM_PORT`                  | Host port mapping                    | `3001`            |
-| `AUTH_REQUIRED`             | Require authentication headers       | `false`           |
+| `AUTH_REQUIRED`             | Require authentication headers, `true` or `false` | `false`           |
+| `OIDC_ENABLED`              | OIDC sign-in, `true` or `false`: overrides `auth.enabled` of `config.json` (see [OIDC settings](#oidc-settings)) | (`config.json`) |
+| `SESSION_SECRET`            | With OIDC, signs the session cookie: at least 32 random characters, such as the output of `openssl rand -hex 32` | (required with OIDC) |
+| `COOKIE_SECURE`             | With OIDC, the `Secure` flag of the session cookie: `true`, `false` or `auto` (see [OIDC settings](#oidc-settings)) | `auto` |
 | `NODE_ENV`                  | Node environment                     | `production`      |
 | `TRUST_PROXY`               | Trust X-Forwarded-For headers (required for K8s/reverse proxy), X-Forwarded-Host for the CORS check and `ALLOWED_HOSTS`, and X-Forwarded-Proto for the CORS check | `false` |
 | `RATE_LIMIT_ENABLED`        | Enable rate limiting                 | `true`            |
@@ -80,7 +101,7 @@ Open http://localhost:3001
 | `ALLOWED_ORIGINS`           | Comma-separated CORS allowed origins, only for other sites (see below) | (empty) |
 | `ALLOWED_HOSTS`             | Comma-separated host names, each with an optional port, that the server answers, against DNS rebinding (see below) | (empty: any host) |
 
-**The dashboard's own origin** is always accepted, so `ALLOWED_ORIGINS` only lists the other sites that call the API. The server compares the origin's host, without case or default port, with the request's `Host`, and with `TRUST_PROXY=true` with the last `X-Forwarded-Host` too, the one the nearest proxy set or appended, as `ALLOWED_HOSTS` reads it. Limits:
+**The dashboard's own origin** is always accepted, so `ALLOWED_ORIGINS` only lists the other sites that call the API. In `config.json`, `allowedOrigins` takes an array, or a comma-separated string as `ALLOWED_ORIGINS` does; each origin is compared whole, and any other value stops the server at startup. The server compares the origin's host, without case or default port, with the request's `Host`, and with `TRUST_PROXY=true` with the last `X-Forwarded-Host` too, the one the nearest proxy set or appended, as `ALLOWED_HOSTS` reads it. Limits:
 
 - A proxy that rewrites `Host` without sending `X-Forwarded-Host` (nginx sends none by default), or that sends it without the public port, still needs the dashboard's URL in `ALLOWED_ORIGINS`, or `proxy_set_header X-Forwarded-Host $http_host;` with `TRUST_PROXY=true`. So does a chain of proxies that each append the `Host` they received to `X-Forwarded-Host`.
 - The scheme is only compared when `TRUST_PROXY=true` makes it known, through `X-Forwarded-Proto`. Otherwise an `http://` page passes for an `https://` dashboard on the same host, so that the dashboard does not go blank behind a TLS-terminating proxy.
@@ -100,6 +121,16 @@ ALLOWED_HOSTS=ocm.example.com,ocm.lan:3001
 - With `TRUST_PROXY=true`, the last `X-Forwarded-Host`, the one the nearest proxy set or appended, must be listed too, and the loopback names never pass there. The proxy must set or overwrite that header, as nginx does with `proxy_set_header X-Forwarded-Host $http_host;`: one that passes the client's on lets a page choose it. And if the server can be reached without the proxy, `TRUST_PROXY` lets any client forge it.
 - Other callers need an allowed host too. Kubernetes probes send the pod's IP address: give them a `Host: localhost` header in `httpHeaders`. A back-channel logout from the identity provider to `http://ocm:3001` needs `ocm:3001` listed.
 - The log names each blocked host once an hour, for up to 100 hosts an hour, then says how many blocked requests it left out.
+
+#### OIDC settings
+
+As elsewhere, the environment overrides `config.json`. The true/false settings take `true` or `false`, in any case in the environment, and as JSON booleans, without quotes, in `config.json`: any other value stops the server at startup, naming the setting, and the file for `config.json`. So does a `config.json` that cannot be read as JSON.
+
+- **`OIDC_ENABLED`**: `false` turns OIDC off even when `auth.enabled` is `true` in `config.json`; unset or empty, `config.json` decides. With OIDC on, the server never falls back to header mode: a missing setting stops it at startup, and until the discovery of the provider succeeds, retried with backoff, `/api` and `/auth` answer 503, except `/api/health`.
+- **`SESSION_SECRET`** signs the session cookie, so changing it signs every user out. The server warns at startup when it is shorter than 32 characters.
+- **`COOKIE_SECURE`**: with `auto`, the default, the session cookie is `Secure` when the request comes over HTTPS, as the connection or, with `TRUST_PROXY=true`, the proxy's `X-Forwarded-Proto` says, or when `OIDC_BASE_URL` is `https`. On an HTTP stack it is not, as browsers would not store it. `COOKIE_SECURE=true` or `false`, or `"secure": true` or `false` under `auth.session` in `config.json`, forces it. A `Secure` session cookie is named `__Host-ocm.sid`, on `/`, which browsers accept from this host only: another host of the domain cannot plant a session cookie of its own. Otherwise it is `ocm.sid`, or the name `auth.session.name` sets, which the prefix then goes before.
+- **Sign-in**: `/auth/login` sets a cookie for each sign-in, named after its state, `ocm.login.<state>` on `/auth`, or `__Host-ocm.login.<state>` on `/` when it is `Secure`, which browsers then accept from this host only. The callback accepts a sign-in only with its cookie, within 10 minutes: start signing in on the host of `OIDC_BASE_URL`. A browser keeps the three newest sign-ins in progress, a new one clears the older ones, and the path to go back to after sign-in, `returnTo`, is dropped for `/` beyond 1 KB, so that these cookies stay small. The dashboard sends PKCE (S256) to the provider, and reaches it over plain HTTP only when `OIDC_ISSUER` is an `http://` URL.
+- **Back-channel logout**: the provider can end the dashboard's sessions when a user signs out, by posting a logout token to `/logout/backchannel`. The server checks the token's signature against the provider's `jwks_uri`, its issuer, its audience (the client id), that it was issued less than 5 minutes ago, that it holds `exp`, the back-channel logout event and a `sid` or a `sub`, and no `nonce`. It refuses a replay within that time, told by the token's issuer and `jti`, or, as the `jti` the specification requires may be missing, by the SHA-256 of its signed part, which a re-encoded signature leaves unchanged. A token with a `sid` ends the sessions of that `sid` only; one without ends every session of its `sub`. With rate limiting on, the endpoint answers 300 requests a minute per address. `"backChannelLogout": false` under `auth` in `config.json` leaves the endpoint out; the front-channel logout, `/auth/logout`, stays.
 
 ### Customization
 

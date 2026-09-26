@@ -31,9 +31,10 @@
 #   SSO_DOMAIN=localhost           # Portal on auth.${SSO_DOMAIN}, dashboard on ocm.${SSO_DOMAIN}
 #   OIDC_CLIENT_SECRET=change-me   # Must equal the client secret of demo/sso
 #   SESSION_SECRET=change-me-in-production
-#                                  # OCM turns OIDC on only when it is set, but neither
-#                                  # encrypts nor signs with it: its sessions are random
-#                                  # ids stored in its database
+#                                  # Signs OCM's session and sign-in cookies: set 32
+#                                  # random characters or more (openssl rand -hex 32),
+#                                  # as the default logs a warning. Changing it signs
+#                                  # everyone out
 #
 # ACCESS:
 #   Dashboard: http://ocm.${SSO_DOMAIN}/

@@ -32,8 +32,16 @@ OVH API ──> data/import.js ──> SQLite (ovh-bills.db) ──> server/inde
     stored in `bill_details.service_type`; the server reads the stored value, it does not
     re-classify. Changing classification rules requires a re-import to take effect on old data.
 - **`server/`** — read-only Express API over the DB. `index.js` is the single ~1300-line
-  route file. `auth/` is an optional OIDC module (openid-client v6) with SQLite-backed
-  sessions; it is bypassed entirely when auth is not enabled.
+  route file. `auth/` guards the API in one of two modes. With OIDC (openid-client v6):
+  PKCE sign-in bound to the browser by a signed cookie per state, SQLite-backed sessions
+  in cookies signed with `SESSION_SECRET`, back-channel logout tokens verified with
+  `jose`. Without it, header mode reads `Auth-User` from the SSO proxy, required with
+  `AUTH_REQUIRED`. It fails closed: with OIDC enabled it never falls back to header mode,
+  a missing or malformed setting stops the server, and `/api` and `/auth` answer 503
+  until the provider is discovered. Its decisions live in small pure modules
+  (`config.js`, `session-cookie.js`, `login-state.js`, `logout-token.js`, `provider.js`,
+  `health.js`…); only `oidc-client.js` and `routes.js` load `openid-client` and `jose`,
+  which are ES modules.
 - **`dashboard/`** — Vite + React SPA (Recharts, TanStack Query, Tailwind, axios). In dev,
   Vite proxies `/api` to `:3001` (see `dashboard/vite.config.js`). i18n is FR/EN
   (`src/i18n/translations.js`). The page, `src/pages/Dashboard.jsx`, is a shell: each tab
@@ -46,9 +54,18 @@ Two settings are resolved with the same priority pattern, used independently in 
 and `server/index.js` (each loads config on its own, there is no shared config module):
 
 - **config file**: `./config.json` first, then `~/my-ovh-bills/config.json`. Legacy flat
-  `credentials.json` is still accepted.
+  `credentials.json` is still accepted. The server stops when the first one that exists
+  cannot be parsed, rather than run without its settings.
 - **`dataDir`** (where `ovh-bills.db` lives): `DATA_DIR` env var > `config.json` `dataDir` > the `data/` directory.
 - **rate limiting / auth / etc.**: environment variables override `config.json` values.
+  These settings go through one strict parser (`server/settings.js`). The booleans of
+  authentication, rate limiting, `TRUST_PROXY` and `IMPORT_ENABLED` take `true` or
+  `false`, in any case in the environment, JSON booleans in `config.json`, and `auto` for
+  the cookie's `Secure` flag; the rate limits and `auth.session.maxAge`, positive
+  integers; the `auth` and `rateLimit` sections, and those under them, objects; the
+  lists, such as `allowedOrigins`, arrays of strings or comma-separated strings. Anything
+  else stops the server, naming the setting. The rate limiting settings are resolved in
+  `server/rate-limit-config.js`.
 
 When adding a configurable option, follow this same env-over-file pattern and apply it in
 the relevant workspace's own loader.
@@ -88,7 +105,12 @@ Two suites:
 
 - **Node tests**: Jest, limited to `tests/` (`jest.roots` in the root `package.json`).
   They exercise the pure logic layer (classification, validation, CSV export, inventory,
-  consumption), not the HTTP server.
+  consumption, the auth rules), not `server/index.js` itself. The auth middlewares are
+  tested on small Express apps (`tests/support/http.js`). Jest cannot load `openid-client`
+  and `jose`, ES modules: `tests/auth-oidc-flow.test.js` starts the real server in a child
+  process (`tests/support/ocm-server.js`, with a throwaway HOME and DATA_DIR, and the
+  repository's `config.json` hidden) against a fake OpenID provider served in the test's
+  process (`tests/support/fake-provider.js`), and signs in and out through it.
 - **Dashboard tests**: Vitest and Testing Library in jsdom, in `dashboard/test/`. The page
   tests render the whole dashboard with the API service module replaced by synthetic
   fixtures, act like a user and check what is visible. They pin the dashboard's behaviour:

@@ -13,93 +13,44 @@ const { monthBounds } = require('../data/months');
 
 // Import auth module
 const auth = require('./auth');
-const { createOriginCheck } = require('./cors');
+const { createOriginCheck, readAllowedOrigins } = require('./cors');
 const { createHostCheckMiddleware } = require('./hosts');
 const { importsEnabled } = require('./imports');
 const { trendWindowFromQuery } = require('./months');
+const { readConfigFile } = require('./config-file');
+const { buildRateLimitConfig } = require('./rate-limit-config');
+const { isHealthCheck } = require('./auth/health');
+const { requestLogLine, blockedOriginLogLine } = require('./request-log');
 
-// Load configuration
+// Load configuration: the first config.json that exists. One that cannot be
+// read stops the server, rather than let it run without its settings
 const CONFIG_PATHS = [
   path.resolve(__dirname, '..', 'config.json'),
   path.resolve(os.homedir(), 'my-ovh-bills', 'config.json')
 ];
 
 let config = { dashboard: { budget: 50000, currency: 'EUR' } };
+let configPath = null;
+// Rate limiting and TRUST_PROXY: a malformed setting stops the server too
+let rateLimitConfig;
+// The origins CORS allows besides the dashboard's own, as a list
+let allowedOrigins;
 
-for (const configPath of CONFIG_PATHS) {
-  try {
-    if (fs.existsSync(configPath)) {
-      const loadedConfig = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-      config = { ...config, ...loadedConfig };
-      break;
-    }
-  } catch (e) {
-    // Continue to next path
-  }
-}
-
-// Rate limit configuration helper
-function getRateLimitConfig() {
-  const defaults = {
-    enabled: true,
-    trustProxy: false,
-    api: {
-      windowMs: 15 * 60 * 1000,
-      max: 100
-    },
-    auth: {
-      windowMs: 15 * 60 * 1000,
-      max: 20
-    }
-  };
-
-  // Start with config.json values
-  const rateLimitConfig = config.rateLimit || {};
-
-  // Merge with defaults
-  const merged = {
-    enabled: rateLimitConfig.enabled !== undefined ? rateLimitConfig.enabled : defaults.enabled,
-    trustProxy: rateLimitConfig.trustProxy !== undefined ? rateLimitConfig.trustProxy : defaults.trustProxy,
-    api: {
-      windowMs: rateLimitConfig.api?.windowMs ?? defaults.api.windowMs,
-      max: rateLimitConfig.api?.max ?? defaults.api.max
-    },
-    auth: {
-      windowMs: rateLimitConfig.auth?.windowMs ?? defaults.auth.windowMs,
-      max: rateLimitConfig.auth?.max ?? defaults.auth.max
-    }
-  };
-
-  // Environment variables override config.json
-  if (process.env.RATE_LIMIT_ENABLED !== undefined) {
-    merged.enabled = process.env.RATE_LIMIT_ENABLED === 'true';
-  }
-  if (process.env.TRUST_PROXY !== undefined) {
-    merged.trustProxy = process.env.TRUST_PROXY === 'true';
-  }
-  if (process.env.RATE_LIMIT_API_WINDOW_MS) {
-    const val = parseInt(process.env.RATE_LIMIT_API_WINDOW_MS, 10);
-    if (!isNaN(val) && val > 0) merged.api.windowMs = val;
-  }
-  if (process.env.RATE_LIMIT_API_MAX) {
-    const val = parseInt(process.env.RATE_LIMIT_API_MAX, 10);
-    if (!isNaN(val) && val > 0) merged.api.max = val;
-  }
-  if (process.env.RATE_LIMIT_AUTH_WINDOW_MS) {
-    const val = parseInt(process.env.RATE_LIMIT_AUTH_WINDOW_MS, 10);
-    if (!isNaN(val) && val > 0) merged.auth.windowMs = val;
-  }
-  if (process.env.RATE_LIMIT_AUTH_MAX) {
-    const val = parseInt(process.env.RATE_LIMIT_AUTH_MAX, 10);
-    if (!isNaN(val) && val > 0) merged.auth.max = val;
-  }
-
-  return merged;
+try {
+  const loaded = readConfigFile(CONFIG_PATHS);
+  config = { ...config, ...loaded.config };
+  configPath = loaded.path;
+  rateLimitConfig = buildRateLimitConfig(config, process.env, configPath || undefined);
+  allowedOrigins = readAllowedOrigins(config, process.env, configPath || undefined);
+  // IMPORT_ENABLED too, which the routes read later
+  importsEnabled();
+} catch (err) {
+  console.error(`Failed to start server: ${err.message}`);
+  process.exit(1);
 }
 
 const app = express();
 const PORT = process.env.PORT || 3001;
-const rateLimitConfig = getRateLimitConfig();
 
 // Host check, against DNS rebinding (#78): none unless ALLOWED_HOSTS is set
 const hostCheck = createHostCheckMiddleware({
@@ -110,10 +61,8 @@ const hostCheck = createHostCheckMiddleware({
 
 // CORS configuration - restrict to allowed origins and the request's own
 const isAllowedOrigin = createOriginCheck({
-  // Allowed origins from config or environment
-  allowedOrigins: process.env.ALLOWED_ORIGINS
-    ? process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim())
-    : config.allowedOrigins || [],
+  // ALLOWED_ORIGINS, or allowedOrigins in config.json
+  allowedOrigins,
   isDev: process.env.NODE_ENV !== 'production',
   trustProxy: rateLimitConfig.trustProxy,
 });
@@ -134,7 +83,7 @@ function corsOptionsDelegate(req, callback) {
       credentials: true, // Allow cookies for authentication
     });
   } else {
-    console.warn(`CORS: Blocked request from origin: ${origin}`);
+    console.warn(blockedOriginLogLine(origin));
     callback(new Error('Not allowed by CORS'));
   }
 }
@@ -146,12 +95,9 @@ const apiLimiter = rateLimit({
   message: { error: 'Too many requests, please try again later' },
   standardHeaders: true, // Return rate limit info in `RateLimit-*` headers
   legacyHeaders: false, // Disable `X-RateLimit-*` headers
-  skip: (req) => {
-    // Skip rate limiting for health checks. Use originalUrl: this limiter is
-    // mounted on '/api/', so req.path here is '/health' (prefix stripped),
-    // which made the previous '/api/health' check never match.
-    return (req.originalUrl || req.url).split('?')[0] === '/api/health';
-  }
+  // Skip rate limiting for the health check, matched as every auth check
+  // matches it: /api/health in any case, with or without a trailing slash
+  skip: (req) => isHealthCheck(req)
 });
 
 // Stricter rate limit for auth endpoints (prevent brute-force)
@@ -159,6 +105,16 @@ const authLimiter = rateLimit({
   windowMs: rateLimitConfig.auth.windowMs,
   max: rateLimitConfig.auth.max,
   message: { error: 'Too many authentication attempts, please try again later' },
+  standardHeaders: true,
+  legacyHeaders: false
+});
+
+// Back-channel logout: the provider posts one request per sign-out. A flood
+// of tokens to verify, as a replay attack sends, is cut
+const backChannelLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 300,
+  message: 'Too many logout requests',
   standardHeaders: true,
   legacyHeaders: false
 });
@@ -248,21 +204,30 @@ let authConfig = { auth: { enabled: false } };
 // ========================
 
 async function initializeServer() {
-  // Initialize OIDC authentication
-  const authResult = await auth.initialize(app, db.getDb(), config);
+  // Initialize OIDC authentication: throws when it is enabled but incomplete
+  const authResult = await auth.initialize(app, db.getDb(), config, configPath);
   authConfig = authResult.config;
 
-  if (authResult.initialized) {
+  if (authConfig.auth.enabled) {
+    // Until the provider is discovered, the API and the sign-in routes answer
+    // 503, except /api/health for the container's healthcheck
+    app.use('/api', auth.awaitDiscovery());
+    app.use('/auth', auth.awaitDiscovery());
+
     // Mount auth routes with stricter rate limiting
     const authMiddleware = rateLimitConfig.enabled
       ? [authLimiter, auth.setupRoutes(authConfig)]
       : [auth.setupRoutes(authConfig)];
     app.use('/auth', ...authMiddleware);
 
-    // Back-channel logout endpoint
-    app.post('/logout/backchannel', express.urlencoded({ extended: false }), (req, res) => {
-      auth.backChannelLogout(req, res, authConfig);
-    });
+    // Back-channel logout endpoint, unless auth.backChannelLogout is false
+    if (authConfig.auth.backChannelLogout) {
+      const limits = rateLimitConfig.enabled ? [backChannelLimiter] : [];
+      app.post('/logout/backchannel', ...limits, express.urlencoded({ extended: false }),
+        (req, res) => {
+          auth.backChannelLogout(req, res, authConfig);
+        });
+    }
 
     // OIDC authentication middleware
     app.use(auth.createAuthMiddleware(authConfig));
@@ -290,33 +255,15 @@ async function initializeServer() {
       // Ignore - sessions table might not exist yet
     }
   } else {
-    // Fallback: header-based SSO (LemonLDAP headers via reverse proxy)
-    const AUTH_REQUIRED = process.env.AUTH_REQUIRED === 'true';
-    app.use((req, res, next) => {
-      const authUser = req.headers['auth-user'];
-      const authMail = req.headers['auth-mail'];
-      const authCn = req.headers['auth-cn'];
-
-      req.user = authUser ? {
-        id: authUser,
-        email: authMail || null,
-        name: authCn || authUser
-      } : null;
-
-      if (AUTH_REQUIRED && !authUser && req.path !== '/api/health') {
-        if (req.path.startsWith('/api/')) {
-          return res.status(401).json({ error: 'Authentication required' });
-        }
-      }
-
-      next();
-    });
+    // Without OIDC: header-based SSO (LemonLDAP headers via reverse proxy)
+    auth.mountHeaderMode(app, { required: authConfig.auth.required });
   }
 
   // Logging middleware (inside async to run after auth middleware)
   app.use((req, res, next) => {
-    const user = req.user?.id || 'anonymous';
-    console.log(`${new Date().toISOString()} [${user}] ${req.method} ${req.path}`);
+    console.log(requestLogLine({
+      at: new Date(), user: req.user?.id, method: req.method, path: req.path,
+    }));
     next();
   });
 
