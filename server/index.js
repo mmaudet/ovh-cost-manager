@@ -17,8 +17,10 @@ const { createOriginCheck } = require('./cors');
 const { createHostCheckMiddleware } = require('./hosts');
 const { importsEnabled } = require('./imports');
 const { trendWindowFromQuery } = require('./months');
+const { readConfigFile } = require('./config-file');
 
-// Load configuration
+// Load configuration: the first config.json that exists. One that cannot be
+// read stops the server, rather than let it run without its settings
 const CONFIG_PATHS = [
   path.resolve(__dirname, '..', 'config.json'),
   path.resolve(os.homedir(), 'my-ovh-bills', 'config.json')
@@ -26,16 +28,11 @@ const CONFIG_PATHS = [
 
 let config = { dashboard: { budget: 50000, currency: 'EUR' } };
 
-for (const configPath of CONFIG_PATHS) {
-  try {
-    if (fs.existsSync(configPath)) {
-      const loadedConfig = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-      config = { ...config, ...loadedConfig };
-      break;
-    }
-  } catch (e) {
-    // Continue to next path
-  }
+try {
+  config = { ...config, ...readConfigFile(CONFIG_PATHS).config };
+} catch (err) {
+  console.error(`Failed to start server: ${err.message}`);
+  process.exit(1);
 }
 
 // Rate limit configuration helper
