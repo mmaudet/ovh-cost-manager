@@ -5,6 +5,7 @@ This guide covers Docker deployment options for OVH Cost Manager (OCM), includin
 ## Table of Contents
 
 - [Prerequisites](#prerequisites)
+- [Upgrading to 2.4.1](#upgrading-to-241)
 - [Simple Deployment (without SSO)](#simple-deployment-without-sso)
 - [SSO Deployment (with LemonLDAP-NG)](#sso-deployment-with-lemonldap-ng)
 - [LemonLDAP-NG Configuration](#lemonldap-ng-configuration)
@@ -21,6 +22,21 @@ This guide covers Docker deployment options for OVH Cost Manager (OCM), includin
 - Docker Compose >= 2.0
 - OVH API credentials (see main [README](../README.md#configuration))
 - For SSO: An identity provider (SAML or OIDC compatible)
+
+---
+
+## Upgrading to 2.4.1
+
+2.4.1 hardens authentication. Before upgrading a deployment that signs in with OIDC, or reads `Auth-User` with `AUTH_REQUIRED`:
+
+- **Everyone signs in again once**: the session cookie is now signed with `SESSION_SECRET`, and the sessions of 2.4.0 are refused. From then on, changing `SESSION_SECRET` signs everyone out, and a secret shorter than 32 characters logs a warning at startup.
+- **Sign-in needs cookies**: `/auth/login` sets an `ocm.login.<state>` cookie (`__Host-ocm.login.<state>` over HTTPS) that the callback needs. A sign-in must start on the host of `OIDC_BASE_URL`, where the provider sends the browser back, and finish within 10 minutes.
+- **An https issuer needs all its endpoints on https**: plain HTTP to the provider is allowed only when `OIDC_ISSUER` is an `http://` URL, as in the demo stack, and then logs a warning in production.
+- **The settings accept only `true` or `false`**: in any case in the environment, as JSON booleans, without quotes, in `config.json`. `COOKIE_SECURE` and `auth.session.secure` also accept `auto`, their default. This holds for `OIDC_ENABLED`, `AUTH_REQUIRED`, `COOKIE_SECURE`, `auth.enabled`, `auth.session.secure` and `auth.backChannelLogout`: any other value stops the server at startup, naming the setting, and the file for `config.json`.
+- **`OIDC_ENABLED=false` now overrides `auth.enabled: true`**: a leftover `OIDC_ENABLED=false` in the environment turns OIDC off, and header mode then serves the API to anyone, unless `AUTH_REQUIRED=true`.
+- **A missing OIDC setting, or a `config.json` that cannot be read as JSON, stops the server at startup**, with an error naming the setting or the file, rather than let it start without authentication.
+- **While the provider is unreachable**, sign-in and the API answer 503, and the server retries its discovery with backoff, instead of falling back to header mode. `/api/health` keeps answering: the container stays healthy.
+- **Back-channel logout now works**, and ends only the sessions of the token's `sid`, or of its `sub` when it has no `sid`. The provider's logout tokens must hold `exp` and `jti`.
 
 ---
 
@@ -66,10 +82,10 @@ Open http://localhost:3001
 | Variable                    | Description                          | Default           |
 | --------------------------- | ------------------------------------ | ----------------- |
 | `OCM_PORT`                  | Host port mapping                    | `3001`            |
-| `AUTH_REQUIRED`             | Require authentication headers       | `false`           |
+| `AUTH_REQUIRED`             | Require authentication headers, `true` or `false` | `false`           |
 | `OIDC_ENABLED`              | OIDC sign-in, `true` or `false`: overrides `auth.enabled` of `config.json` (see [OIDC settings](#oidc-settings)) | (`config.json`) |
 | `SESSION_SECRET`            | With OIDC, signs the session cookie: at least 32 random characters, such as the output of `openssl rand -hex 32` | (required with OIDC) |
-| `COOKIE_SECURE`             | With OIDC, `true` or `false` forces the `Secure` flag of the session cookie (see [OIDC settings](#oidc-settings)) | (auto) |
+| `COOKIE_SECURE`             | With OIDC, the `Secure` flag of the session cookie: `true`, `false` or `auto` (see [OIDC settings](#oidc-settings)) | `auto` |
 | `NODE_ENV`                  | Node environment                     | `production`      |
 | `TRUST_PROXY`               | Trust X-Forwarded-For headers (required for K8s/reverse proxy), X-Forwarded-Host for the CORS check and `ALLOWED_HOSTS`, and X-Forwarded-Proto for the CORS check | `false` |
 | `RATE_LIMIT_ENABLED`        | Enable rate limiting                 | `true`            |
@@ -106,12 +122,13 @@ ALLOWED_HOSTS=ocm.example.com,ocm.lan:3001
 
 #### OIDC settings
 
-As elsewhere, the environment overrides `config.json`:
+As elsewhere, the environment overrides `config.json`. The true/false settings take `true` or `false`, in any case in the environment, and as JSON booleans, without quotes, in `config.json`: any other value stops the server at startup, naming the setting, and the file for `config.json`. So does a `config.json` that cannot be read as JSON.
 
-- **`OIDC_ENABLED`**: `false` turns OIDC off even when `auth.enabled` is `true` in `config.json`; unset or empty, `config.json` decides. Another value than `true` or `false` stops the server at startup. With OIDC on, the server never falls back to header mode: a missing setting stops it at startup, and until the discovery of the provider succeeds, retried with backoff, `/api` and `/auth` answer 503, except `/api/health`.
+- **`OIDC_ENABLED`**: `false` turns OIDC off even when `auth.enabled` is `true` in `config.json`; unset or empty, `config.json` decides. With OIDC on, the server never falls back to header mode: a missing setting stops it at startup, and until the discovery of the provider succeeds, retried with backoff, `/api` and `/auth` answer 503, except `/api/health`.
 - **`SESSION_SECRET`** signs the session cookie, so changing it signs every user out. The server warns at startup when it is shorter than 32 characters.
-- **`COOKIE_SECURE`**: unset, the session cookie is `Secure` when the request comes over HTTPS, as the connection or, with `TRUST_PROXY=true`, the proxy's `X-Forwarded-Proto` says, or when `OIDC_BASE_URL` is `https`. On an HTTP stack it is not, as browsers would not store it. `COOKIE_SECURE=true` or `false`, or `"secure": true` or `false` under `auth.session` in `config.json`, forces it. Another value of `COOKIE_SECURE` stops the server at startup.
-- **Back-channel logout**: the provider can end the dashboard's sessions when a user signs out, by posting a logout token to `/logout/backchannel`. The server checks the token's signature against the provider's `jwks_uri`, its issuer, its audience (the client id), that it was issued less than 5 minutes ago, that it holds the back-channel logout event and a `sid` or a `sub`, and no `nonce`. `"backChannelLogout": false` under `auth` in `config.json` leaves the endpoint out; the front-channel logout, `/auth/logout`, stays.
+- **`COOKIE_SECURE`**: with `auto`, the default, the session cookie is `Secure` when the request comes over HTTPS, as the connection or, with `TRUST_PROXY=true`, the proxy's `X-Forwarded-Proto` says, or when `OIDC_BASE_URL` is `https`. On an HTTP stack it is not, as browsers would not store it. `COOKIE_SECURE=true` or `false`, or `"secure": true` or `false` under `auth.session` in `config.json`, forces it.
+- **Sign-in**: `/auth/login` sets a cookie for each sign-in, named after its state, `ocm.login.<state>` on `/auth`, or `__Host-ocm.login.<state>` on `/` when it is `Secure`, which browsers then accept from this host only. The callback accepts a sign-in only with its cookie, within 10 minutes: start signing in on the host of `OIDC_BASE_URL`. The dashboard sends PKCE (S256) to the provider, and reaches it over plain HTTP only when `OIDC_ISSUER` is an `http://` URL.
+- **Back-channel logout**: the provider can end the dashboard's sessions when a user signs out, by posting a logout token to `/logout/backchannel`. The server checks the token's signature against the provider's `jwks_uri`, its issuer, its audience (the client id), that it was issued less than 5 minutes ago, that it holds `exp`, `jti`, the back-channel logout event and a `sid` or a `sub`, and no `nonce`, and refuses a replayed `jti`. A token with a `sid` ends the sessions of that `sid` only; one without ends every session of its `sub`. `"backChannelLogout": false` under `auth` in `config.json` leaves the endpoint out; the front-channel logout, `/auth/logout`, stays.
 
 ### Customization
 
