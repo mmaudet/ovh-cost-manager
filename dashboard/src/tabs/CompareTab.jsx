@@ -3,7 +3,7 @@ import {
 } from 'recharts';
 import Accordion from '../components/Accordion.jsx';
 import { SortIcon } from '../components/SortIcon.jsx';
-import ProjectProductComparison from '../pages/ProjectProductComparison.jsx';
+import ProjectProductComparison from '../components/ProjectProductComparison.jsx';
 
 // The Compare tab, which the shell renders while it is active: what useCompareTab() returns,
 // with the shell's language, translations (t), amount format (fmt) and months list, and the
