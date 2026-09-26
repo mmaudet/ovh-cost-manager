@@ -175,6 +175,24 @@ export function rowTextsOf(table) {
   return [...table.querySelectorAll('tr')].map((row) => texts(row));
 }
 
+// Sorts a table on a column, as the user does: with a click on its header
+export async function sortTable(user, table, column) {
+  await user.click(within(table).getByRole('columnheader', { name: column }));
+}
+
+// The header of a table: the label of each column, with its sort mark
+export function headerOf(table) {
+  return rowsOf(table)[0];
+}
+
+// The first cell of each row of a table, header and footer left out: the
+// order the rows are sorted in
+export function firstColumnOf(table) {
+  return [...table.tBodies]
+    .flatMap((body) => [...body.rows])
+    .map((row) => normalize(row.cells[0].textContent));
+}
+
 // The card or panel that shows a label, or holds an element: the page draws
 // them as white blocks with rounded corners.
 export function cardOf(labelOrElement) {
@@ -199,6 +217,16 @@ export function panelOf(heading) {
 // once open, like a comparison of the Compare tab
 export function accordionOf(toggle) {
   return toggle.parentElement;
+}
+
+// The Public Cloud projects, each showing its detail under it on a click
+export function cloudProjects() {
+  return cardOf(screen.getByRole('heading', { name: /^(Projets Cloud|Cloud Projects)$/ }));
+}
+
+// The row of a Public Cloud project, found by its name
+export function cloudProjectRow(name) {
+  return within(cloudProjects()).getByRole('row', { name: new RegExp(`^${name}`) });
 }
 
 // A badge of the header: a count and its label

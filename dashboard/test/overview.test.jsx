@@ -6,21 +6,33 @@ import { api } from './support/api.js';
 import {
   cardOf,
   cardRowOf,
+  cloudProjectRow,
+  firstColumnOf,
   headerBadge,
+  headerOf,
   openTab,
   renderDashboard,
   rowsOf,
   selectLanguage,
   selectMonth,
   settle,
+  sortTable,
   texts,
 } from './support/render.jsx';
 
+// What the Overview shows of the selected month, as the page requests it
+const figuresOfTheMonth = [
+  api.fetchByService,
+  api.fetchByProject,
+  api.fetchByResourceType,
+  api.fetchGpuSummary,
+];
 const serviceTypes = (heading = 'Répartition par service') => cardOf(heading);
 const resourceTypes = (heading = 'Répartition par type de ressource') => cardOf(heading);
 const gpuCosts = (heading = 'Coûts GPU') => cardOf(heading);
 const projectBreakdown = (heading = 'Répartition par projet') => cardOf(heading);
-const projectRows = () => rowsOf(within(projectBreakdown()).getByRole('table'));
+const projectTable = () => within(projectBreakdown()).getByRole('table');
+const projectRows = () => rowsOf(projectTable());
 const budget = (heading = 'Consommation du budget') => cardOf(heading);
 const budgetInput = () => within(budget()).getByRole('spinbutton');
 const typeBudget = async (user, amount) => {
@@ -34,10 +46,6 @@ const infrastructureDetailButton = () =>
   screen.getByRole('button', { name: 'Voir le détail infrastructure →' });
 const webCloudDetailButton = () =>
   screen.queryByRole('button', { name: 'Voir le détail Web Cloud (domaines) →' });
-// The projects of the Public Cloud tab, and one of them by its name
-const cloudProjectRow = (name) =>
-  within(cardOf(screen.getByRole('heading', { name: 'Projets Cloud' })))
-    .getByRole('row', { name: new RegExp(`^${name}`) });
 
 // Six services of the inventory that expire within 30 days, as
 // /api/inventory/expiring answers: the servers, then the VPS, then the
@@ -61,12 +69,7 @@ describe('Overview tab', () => {
   it('loads everything it shows with the page', async () => {
     await renderDashboard();
 
-    for (const fetchFigures of [
-      api.fetchByService,
-      api.fetchByProject,
-      api.fetchByResourceType,
-      api.fetchGpuSummary,
-    ]) {
+    for (const fetchFigures of figuresOfTheMonth) {
       expect(fetchFigures).toHaveBeenCalledWith('2026-09-01', '2026-09-30');
     }
     expect(api.fetchExpiringServices).toHaveBeenCalledWith(30);
@@ -80,12 +83,7 @@ describe('Overview tab', () => {
 
     await selectMonth(user, 'Juillet 2026');
 
-    for (const fetchFigures of [
-      api.fetchByService,
-      api.fetchByProject,
-      api.fetchByResourceType,
-      api.fetchGpuSummary,
-    ]) {
+    for (const fetchFigures of figuresOfTheMonth) {
       expect(fetchFigures).toHaveBeenCalledWith('2026-07-01', '2026-07-31');
     }
   });
@@ -232,6 +230,10 @@ describe('Overview tab', () => {
   });
 
   describe('project breakdown', () => {
+    // The columns with their sort marks, and the projects in the order shown
+    const header = () => headerOf(projectTable());
+    const projects = () => firstColumnOf(projectTable());
+
     it('breaks the Cloud total down by project, most expensive first', async () => {
       await renderDashboard();
 
@@ -245,12 +247,6 @@ describe('Overview tab', () => {
 
     it('sorts the projects by amount or by name, each way in turn', async () => {
       const { user } = await renderDashboard({ ...account, ...threeBilledProjects });
-      const sortBy = async (column) => {
-        await user.click(within(projectBreakdown())
-          .getByRole('columnheader', { name: column }));
-      };
-      const header = () => projectRows()[0];
-      const projects = () => projectRows().slice(1, -1).map(([project]) => project);
       expect(projectRows()).toEqual([
         ['Projet○', 'Montant▼', '%'],
         ['Production', '460,40€', '55.4%'],
@@ -259,22 +255,22 @@ describe('Overview tab', () => {
         ['Total Cloud', '830,40€', '100%'],
       ]);
 
-      await sortBy(/^Montant/);
+      await sortTable(user, projectTable(), /^Montant/);
 
       expect(header()).toEqual(['Projet○', 'Montant▲', '%']);
       expect(projects()).toEqual(['Sandbox', 'Staging', 'Production']);
 
-      await sortBy(/^Projet/);
+      await sortTable(user, projectTable(), /^Projet/);
 
       expect(header()).toEqual(['Projet▼', 'Montant○', '%']);
       expect(projects()).toEqual(['Staging', 'Sandbox', 'Production']);
 
-      await sortBy(/^Projet/);
+      await sortTable(user, projectTable(), /^Projet/);
 
       expect(header()).toEqual(['Projet▲', 'Montant○', '%']);
       expect(projects()).toEqual(['Production', 'Sandbox', 'Staging']);
 
-      await sortBy(/^Montant/);
+      await sortTable(user, projectTable(), /^Montant/);
 
       expect(header()).toEqual(['Projet○', 'Montant▼', '%']);
       expect(projects()).toEqual(['Production', 'Staging', 'Sandbox']);
@@ -282,7 +278,7 @@ describe('Overview tab', () => {
 
     it('keeps its sort order when the user comes back to the tab', async () => {
       const { user } = await renderDashboard();
-      await user.click(within(projectBreakdown()).getByRole('columnheader', { name: /^Projet/ }));
+      await sortTable(user, projectTable(), /^Projet/);
 
       await openTab(user, 'Tendances');
       await openTab(user, "Vue d'ensemble");

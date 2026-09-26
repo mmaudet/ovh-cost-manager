@@ -10,8 +10,9 @@ import {
 } from './support/downloads.js';
 import {
   backdropOf,
-  cardOf,
   cardRowOf,
+  cloudProjectRow,
+  cloudProjects,
   openTab,
   panelOf,
   renderDashboard,
@@ -25,17 +26,12 @@ import {
 
 // The Public Cloud figures of the month, one card each
 const figures = () => cardRowOf('Kubernetes');
-// The projects, each showing its detail under it on a click
-const projectList = () =>
-  cardOf(screen.getByRole('heading', { name: /^(Projets Cloud|Cloud Projects)$/ }));
-const projectRow = (name) =>
-  within(projectList()).getByRole('row', { name: new RegExp(`^${name}`) });
 const openProject = async (user, name) => {
-  await user.click(within(projectList()).getByText(name));
+  await user.click(within(cloudProjects()).getByText(name));
   await settle();
 };
 // The headings of the detail of the open project: one per part it shows
-const detailHeadings = () => within(projectList())
+const detailHeadings = () => within(cloudProjects())
   .queryAllByRole('heading', { level: 4 })
   .map((heading) => texts(heading));
 // The panel of a resource table of the open project, found by its heading:
@@ -145,7 +141,7 @@ describe('Public Cloud tab', () => {
 
       await openTab(user, 'Public Cloud');
 
-      expect(rowTextsOf(within(projectList()).getByRole('table'))).toEqual([
+      expect(rowTextsOf(within(cloudProjects()).getByRole('table'))).toEqual([
         ['Nom', 'État', 'Instances', 'Consommation en cours'],
         ['Production', 'Customer-facing services', 'ok', '5', '350,00€', '▼'],
         ['Staging', 'ok', '0', '52,35€', '▼'],
@@ -158,7 +154,7 @@ describe('Public Cloud tab', () => {
     it('show the detail of a project under it on a click, until a second click', async () => {
       const { user } = await openProduction();
 
-      expect(texts(projectRow('Production'))).toContain('▲');
+      expect(texts(cloudProjectRow('Production'))).toContain('▲');
       expect(detailHeadings()).toEqual([
         ['Consommation par ressource'],
         ['Instances (5)', '538,90€', 'Tout afficher', 'CSV'],
@@ -171,7 +167,7 @@ describe('Public Cloud tab', () => {
 
       await openProject(user, 'Production');
 
-      expect(texts(projectRow('Production'))).toContain('▼');
+      expect(texts(cloudProjectRow('Production'))).toContain('▼');
       expect(detailHeadings()).toEqual([]);
     });
 
@@ -180,8 +176,8 @@ describe('Public Cloud tab', () => {
 
       await openProject(user, 'Staging');
 
-      expect(texts(projectRow('Production'))).toContain('▼');
-      expect(texts(projectRow('Staging'))).toContain('▲');
+      expect(texts(cloudProjectRow('Production'))).toContain('▼');
+      expect(texts(cloudProjectRow('Staging'))).toContain('▲');
       expect(detailHeadings()).toEqual([
         ['Consommation par ressource'],
         ['Instances (0)', '180,00€', 'Tout afficher', 'CSV'],
@@ -194,7 +190,7 @@ describe('Public Cloud tab', () => {
       await openTab(user, "Vue d'ensemble");
       await openTab(user, 'Public Cloud');
 
-      expect(texts(projectRow('Production'))).toContain('▲');
+      expect(texts(cloudProjectRow('Production'))).toContain('▲');
       expect(detailHeadings()[1]).toEqual(['Instances (5)', '538,90€', 'Tout afficher', 'CSV']);
     });
 
@@ -275,9 +271,9 @@ describe('Public Cloud tab', () => {
 
       await openProject(user, 'Sandbox');
 
-      expect(within(projectList()).getByText('Pas de données de consommation'))
+      expect(within(cloudProjects()).getByText('Pas de données de consommation'))
         .toBeInTheDocument();
-      expect(within(projectList()).getByText('Aucune instance')).toBeInTheDocument();
+      expect(within(cloudProjects()).getByText('Aucune instance')).toBeInTheDocument();
       // No amount, no action, and no buckets, volumes, snapshots, savings
       // plans or quotas
       expect(detailHeadings()).toEqual([['Instances (0)']]);
@@ -564,7 +560,7 @@ describe('Public Cloud tab', () => {
     const { user } = await renderDashboard();
     await selectLanguage(user, 'en');
     await openTab(user, 'Public Cloud');
-    expect(rowTextsOf(within(projectList()).getByRole('table'))[0])
+    expect(rowTextsOf(within(cloudProjects()).getByRole('table'))[0])
       .toEqual(['Name', 'State', 'Instances', 'Current consumption']);
 
     await openProject(user, 'Production');

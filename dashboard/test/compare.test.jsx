@@ -8,12 +8,15 @@ import {
   accordionOf,
   cardOf,
   dropdown,
+  firstColumnOf,
+  headerOf,
   openTab,
   renderDashboard,
   rowTextsOf,
   rowsOf,
   selectLanguage,
   settle,
+  sortTable,
   texts,
 } from './support/render.jsx';
 
@@ -141,7 +144,11 @@ describe('Compare tab', () => {
   });
 
   describe('project comparison', () => {
-    const projectRows = () => rowsOf(comparisonTable(PROJECTS));
+    const projectTable = () => comparisonTable(PROJECTS);
+    const projectRows = () => rowsOf(projectTable());
+    // The columns with their sort marks, and the projects in the order shown
+    const header = () => headerOf(projectTable());
+    const projects = () => firstColumnOf(projectTable());
 
     it('compares the cost of each project, most expensive in month A first', async () => {
       const { user } = await renderDashboard();
@@ -159,12 +166,6 @@ describe('Compare tab', () => {
     it('sorts the projects by name, month A, month B or variation, each way in turn', async () => {
       const { user } = await renderDashboard({ ...account, ...threeBilledProjects });
       await openTab(user, 'Comparaison');
-      const sortBy = async (column) => {
-        await user.click(within(comparisonTable(PROJECTS))
-          .getByRole('columnheader', { name: column }));
-      };
-      const header = () => projectRows()[0];
-      const projects = () => projectRows().slice(1).map(([project]) => project);
       expect(projectRows()).toEqual([
         ['Projet○', 'Août 2026▼', 'Septembre 2026○', 'Variation○'],
         ['Production', '412,00€', '460,40€', '+11.7%'],
@@ -172,37 +173,37 @@ describe('Compare tab', () => {
         ['Staging', '110,00€', '250,00€', '+127.3%'],
       ]);
 
-      await sortBy(/^Août 2026/);
+      await sortTable(user, projectTable(), /^Août 2026/);
 
       expect(header()).toEqual(['Projet○', 'Août 2026▲', 'Septembre 2026○', 'Variation○']);
       expect(projects()).toEqual(['Staging', 'Sandbox', 'Production']);
 
-      await sortBy(/^Septembre 2026/);
+      await sortTable(user, projectTable(), /^Septembre 2026/);
 
       expect(header()).toEqual(['Projet○', 'Août 2026○', 'Septembre 2026▼', 'Variation○']);
       expect(projects()).toEqual(['Production', 'Staging', 'Sandbox']);
 
-      await sortBy(/^Septembre 2026/);
+      await sortTable(user, projectTable(), /^Septembre 2026/);
 
       expect(header()).toEqual(['Projet○', 'Août 2026○', 'Septembre 2026▲', 'Variation○']);
       expect(projects()).toEqual(['Sandbox', 'Staging', 'Production']);
 
-      await sortBy(/^Variation/);
+      await sortTable(user, projectTable(), /^Variation/);
 
       expect(header()).toEqual(['Projet○', 'Août 2026○', 'Septembre 2026○', 'Variation▼']);
       expect(projects()).toEqual(['Staging', 'Production', 'Sandbox']);
 
-      await sortBy(/^Variation/);
+      await sortTable(user, projectTable(), /^Variation/);
 
       expect(header()).toEqual(['Projet○', 'Août 2026○', 'Septembre 2026○', 'Variation▲']);
       expect(projects()).toEqual(['Sandbox', 'Production', 'Staging']);
 
-      await sortBy(/^Projet/);
+      await sortTable(user, projectTable(), /^Projet/);
 
       expect(header()).toEqual(['Projet▼', 'Août 2026○', 'Septembre 2026○', 'Variation○']);
       expect(projects()).toEqual(['Staging', 'Sandbox', 'Production']);
 
-      await sortBy(/^Projet/);
+      await sortTable(user, projectTable(), /^Projet/);
 
       expect(header()).toEqual(['Projet▲', 'Août 2026○', 'Septembre 2026○', 'Variation○']);
       expect(projects()).toEqual(['Production', 'Sandbox', 'Staging']);
@@ -214,8 +215,7 @@ describe('Compare tab', () => {
     it('keeps its sort order when the user comes back to the tab', async () => {
       const { user } = await renderDashboard();
       await openTab(user, 'Comparaison');
-      await user.click(within(comparisonTable(PROJECTS))
-        .getByRole('columnheader', { name: /^Projet/ }));
+      await sortTable(user, projectTable(), /^Projet/);
 
       await openTab(user, "Vue d'ensemble");
       await openTab(user, 'Comparaison');
