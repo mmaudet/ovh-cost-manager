@@ -8,6 +8,7 @@
   <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
   <a href="https://nodejs.org/"><img src="https://img.shields.io/badge/Node.js-%3E%3D22-green.svg" alt="Node.js"></a>
   <a href="https://hub.docker.com/r/mmaudet/ovh-cost-manager"><img src="https://img.shields.io/docker/v/mmaudet/ovh-cost-manager?label=Docker&logo=docker" alt="Docker"></a>
+  <a href="CHANGELOG.md"><img src="https://img.shields.io/github/v/release/mmaudet/ovh-cost-manager?label=Release" alt="Release"></a>
 </p>
 
 <p align="center">
@@ -532,6 +533,21 @@ For production with SSO:
 | `GET /api/health`                   | Health check endpoint              |
 | `GET /api/export/bills?from=&to=`   | CSV export of bills                |
 | `GET /api/export/details?from=&to=` | CSV export of bill details         |
+
+## Releases and Changelog
+
+Each release lists its new features, security fixes, bug fixes and maintenance
+changes (dependency upgrades, CI, documentation) in the [changelog](CHANGELOG.md)
+and on the [releases page](https://github.com/mmaudet/ovh-cost-manager/releases),
+and publishes a Docker image on [Docker Hub](https://hub.docker.com/r/mmaudet/ovh-cost-manager).
+
+To follow the project:
+
+- on GitHub, **Watch → Custom → Releases** notifies you of each release;
+- the [releases feed](https://github.com/mmaudet/ovh-cost-manager/releases.atom)
+  works in any RSS reader, or in a Slack or Matrix channel.
+
+To report a vulnerability, see [SECURITY.md](SECURITY.md).
 
 ## Contributing
 

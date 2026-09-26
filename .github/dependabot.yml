@@ -1,0 +1,27 @@
+# Weekly dependency upgrades. Their pull requests are labelled `dependencies`,
+# which lists them under Maintenance in the release notes. Minor and patch npm
+# upgrades come in a single pull request; major ones get their own.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    labels:
+      - dependencies
+    groups:
+      npm-minor-and-patch:
+        update-types:
+          - minor
+          - patch
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    labels:
+      - dependencies
+    groups:
+      github-actions:
+        patterns:
+          - "*"

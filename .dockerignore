@@ -48,6 +48,7 @@ docker-compose*.yml
 .github
 .planning
 demo
+scripts/release.sh
 tests
 CLAUDE.md
 CONTRIBUTING.md
