@@ -46,7 +46,7 @@ const usePublicCloudTab = ({ selectedMonth, activeTab, selectedProject }) => {
     enabled: !!selectedProject
   });
 
-  // Project buckets (filtered by selected month)
+  // The project's volumes, snapshots, savings plans and buckets (filtered by selected month)
   const { data: projectVolumes = [] } = useQuery({
     queryKey: ['projectVolumes', selectedProject?.id, selectedMonth?.from, selectedMonth?.to],
     queryFn: () => fetchProjectVolumes(selectedProject.id, selectedMonth.from, selectedMonth.to),

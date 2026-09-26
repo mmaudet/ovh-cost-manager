@@ -54,6 +54,9 @@ export default function Dashboard() {
   const fmt = (value) => formatCurrency(value, language);
   const locale = language === 'en' ? 'en-US' : 'fr-FR';
 
+  // What loads at page start: the header, the KPI cards, the footer and several tabs read
+  // it, and the tabs get it as props (ADR 0001)
+
   // Fetch config (budget)
   const { data: configData } = useQuery({
     queryKey: ['config'],
@@ -97,7 +100,7 @@ export default function Dashboard() {
     enabled: !!selectedMonth
   });
 
-  // GPU cost summary — filtered by selected month (for overview)
+  // GPU costs of the selected month, for the Overview and the Public Cloud tab
   const { data: gpuSummary } = useQuery({
     queryKey: ['gpuSummary', selectedMonth?.from, selectedMonth?.to],
     queryFn: () => fetchGpuSummary(selectedMonth.from, selectedMonth.to),
@@ -113,7 +116,7 @@ export default function Dashboard() {
     refetchInterval: (query) => (query.state.data?.running ? 30000 : false)
   });
 
-  // Phase 1: Consumption data
+  // The current month's consumption so far and its month-end forecast, for the KPI cards
   const { data: consumptionCurrent } = useQuery({
     queryKey: ['consumptionCurrent'],
     queryFn: fetchConsumptionCurrent
@@ -128,6 +131,9 @@ export default function Dashboard() {
     queryKey: ['expiringServices'],
     queryFn: () => fetchExpiringServices(30)
   });
+
+  // Each tab's state and queries, in the order of the tab bar: its hook runs on every render,
+  // before the loading screen, so that the tab keeps them while another one is open (ADR 0001)
 
   const overviewTab = useOverviewTab();
 
@@ -396,7 +402,7 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Phase 1: Consumption KPI Cards */}
+        {/* Consumption KPI Cards */}
         {(consumptionCurrent || byResourceType.length > 0) && (
           <div className="grid grid-cols-3 gap-4">
             {consumptionCurrent && (

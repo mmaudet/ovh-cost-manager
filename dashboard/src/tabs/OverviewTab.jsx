@@ -84,7 +84,7 @@ const OverviewTab = ({
         </div>
       </div>
 
-      {/* Resource Type Breakdown (Phase 3) */}
+      {/* Resource Type Breakdown */}
       {byResourceType.length > 0 && (
         <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100 lg:col-span-2">
           <h3 className="font-semibold text-gray-900 mb-4">{t('resourceTypeBreakdown')}</h3>
@@ -331,7 +331,7 @@ const OverviewTab = ({
         </div>
       </div>
 
-      {/* Expiration Alerts (Phase 5) */}
+      {/* Expiration Alerts */}
       {expiringServices.length > 0 && (
         <div className="bg-white rounded-xl p-5 shadow-sm border border-orange-200 lg:col-span-2">
           <h3 className="font-semibold text-orange-700 mb-4">{t('expiringSoon')}</h3>
