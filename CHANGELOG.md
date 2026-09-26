@@ -12,6 +12,33 @@ sections were written afterwards from the git history.
 
 <!-- scripts/release.sh inserts each new version above the first version heading. -->
 
+## 2.4.0 - 2026-09-26
+
+<!-- Upgrade notes and highlights of this release, if any. -->
+
+### Bug fixes
+* fix: stop the CORS check from blanking the dashboard in production by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/79
+* fix: make the logo and the tab bar reset navigation consistently by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/82
+* fix: make a trend period of N months cover N months, ending on the selected month by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/83
+* fix: show unbilled months at 0 € and no growth over a first month at 0 € or below by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/84
+### Maintenance
+* build: update development dependencies with known vulnerabilities (Vite 6) by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/31
+* docs: add the domain glossary, ADR 0001 and the agent skills setup by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/37
+* test: add a dashboard test harness and pin down the shell, Web Cloud, Trends and Backup tabs by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/52
+* test: pin down the Infrastructure, Compare, Public Cloud and Overview tabs by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/58
+* test: compare the dashboard before and after a change on a real-data snapshot by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/53
+* refactor: move the pure helpers and the resource tables out of the dashboard page by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/61
+* refactor: move the Web Cloud tab into its own module by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/63
+* refactor: move the Backup tab into its own module by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/67
+* refactor: move the Trends tab into its own module by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/68
+* refactor: move the Infrastructure tab into its own module by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/69
+* refactor: move the Public Cloud tab into its own module by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/72
+* refactor: move the Compare tab into its own module by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/73
+* refactor: move the Overview tab into its own module by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/75
+* refactor: reduce the dashboard page to its shell by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/77
+
+**Full Changelog**: https://github.com/mmaudet/ovh-cost-manager/compare/v2.3.1...v2.4.0
+
 ## 2.3.1 - 2026-09-26
 
 Security release. It updates the production dependencies that had known
