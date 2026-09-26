@@ -23,6 +23,7 @@
     "oidcRPMetaDataOptionsLogoutType": "back",
     "oidcRPMetaDataOptionsLogoutUrl": "http://ocm.localhost/logout/backchannel",
     "oidcRPMetaDataOptionsNoJwtHeader": 0,
+    "oidcRPMetaDataOptionsPostLogoutRedirectUris": "http://ocm.localhost",
     "oidcRPMetaDataOptionsPublic": 0,
     "oidcRPMetaDataOptionsRedirectUris": "http://ocm.localhost/auth/callback",
     "oidcRPMetaDataOptionsRefreshToken": 0,

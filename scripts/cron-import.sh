@@ -3,6 +3,8 @@
 #
 # Runs a differential import every IMPORT_INTERVAL seconds (default: 86400 = 24h).
 # On first run, if the database has no bills, performs a full import instead.
+# A full import clears the imported data, so it never runs when the bills
+# cannot be counted: a differential import runs instead.
 #
 # Environment variables:
 #   IMPORT_INTERVAL  — Seconds between imports (default: 86400)
@@ -10,6 +12,10 @@
 #   IMPORT_ENABLED   — Set to "false" to disable automatic imports
 
 set -e
+
+# The choice of the first import, shared with its test
+# shellcheck source-path=SCRIPTDIR source=import-decision.sh disable=SC1091
+. /app/scripts/import-decision.sh
 
 INTERVAL="${IMPORT_INTERVAL:-86400}"
 FLAGS="${IMPORT_FLAGS:---all}"
@@ -19,6 +25,13 @@ log() {
   echo "[cron-import] $(date -u '+%Y-%m-%d %H:%M:%S UTC') $*"
 }
 
+# Run import.js in the given mode (--full or --diff) with IMPORT_FLAGS
+run_import() {
+  # IMPORT_FLAGS may hold several flags: split it on purpose
+  # shellcheck disable=SC2086
+  node /app/data/import.js "$1" $FLAGS 2>&1 | while read -r line; do log "$line"; done
+}
+
 if [ "$ENABLED" = "false" ]; then
   log "Automatic imports disabled (IMPORT_ENABLED=false)"
   exit 0
@@ -26,24 +39,40 @@ fi
 
 log "Starting periodic import (interval: ${INTERVAL}s, flags: ${FLAGS})"
 
-# Wait for the server to be ready before first import
+# Wait for the server to be ready before first import (/api/health needs no
+# login, with or without authentication)
 log "Waiting for server to be ready..."
 until wget -q --spider http://localhost:3001/api/health 2>/dev/null; do
   sleep 5
 done
 log "Server is ready"
 
-# Check if this is a fresh database (no bills yet)
-BILL_COUNT=$(wget -qO- http://localhost:3001/api/months 2>/dev/null | grep -c '"value"' || true)
-BILL_COUNT=${BILL_COUNT:-0}
+# Count the bills in the database itself: the API needs a login once
+# authentication is on. import-decision.sh picks the first import from it.
+# The errors of the count come with its output, to go through log; Node's
+# warnings are silenced, as they would mix with the count.
+COUNT_STATUS=0
+COUNT_OUTPUT=$(node --no-warnings /app/data/count-bills.js 2>&1) || COUNT_STATUS=$?
 
-if [ "$BILL_COUNT" -eq 0 ]; then
-  log "No existing data found — running full import"
-  node /app/data/import.js --full $FLAGS 2>&1 | while read -r line; do log "$line"; done
-  log "Full import completed"
-else
-  log "Existing data found ($BILL_COUNT months) — skipping initial import"
-fi
+case "$(first_import_mode "$COUNT_STATUS" "$COUNT_OUTPUT")" in
+  full)
+    log "No existing data found — running full import"
+    run_import --full
+    log "Full import completed"
+    ;;
+  none)
+    log "Existing data found ($COUNT_OUTPUT bills) — skipping initial import"
+    ;;
+  *)
+    if [ -n "$COUNT_OUTPUT" ]; then
+      printf '%s\n' "$COUNT_OUTPUT" | while read -r line; do log "$line"; done
+    fi
+    log "Could not count the bills in the database (exit status $COUNT_STATUS)" \
+      "— running differential import"
+    run_import --diff
+    log "Differential import completed"
+    ;;
+esac
 
 # Periodic differential imports
 while true; do
@@ -51,6 +80,6 @@ while true; do
   sleep "$INTERVAL"
 
   log "Starting differential import"
-  node /app/data/import.js --diff $FLAGS 2>&1 | while read -r line; do log "$line"; done
+  run_import --diff
   log "Differential import completed"
 done
