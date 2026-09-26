@@ -4,47 +4,6 @@ import { vi } from 'vitest';
 // replace. setup.js installs it for every test file, and renderDashboard()
 // makes it answer from a dataset (see fixtures/account.js).
 
-export const api = {
-  fetchMonths: vi.fn(),
-  fetchSummary: vi.fn(),
-  fetchProjects: vi.fn(),
-  fetchProjectsEnriched: vi.fn(),
-  fetchByProject: vi.fn(),
-  fetchByService: vi.fn(),
-  fetchDailyTrend: vi.fn(),
-  fetchMonthlyTrend: vi.fn(),
-  fetchMonthlyTrendByCategory: vi.fn(),
-  fetchImportStatus: vi.fn(),
-  triggerImport: vi.fn(),
-  fetchConfig: vi.fn(),
-  fetchUser: vi.fn(),
-  fetchConsumptionCurrent: vi.fn(),
-  fetchConsumptionForecast: vi.fn(),
-  fetchConsumptionHistory: vi.fn(),
-  fetchAccountBalance: vi.fn(),
-  fetchAccountCredits: vi.fn(),
-  fetchInventoryServers: vi.fn(),
-  fetchInventoryVps: vi.fn(),
-  fetchInventoryStorage: vi.fn(),
-  fetchInventorySummary: vi.fn(),
-  fetchExpiringServices: vi.fn(),
-  fetchByResourceType: vi.fn(),
-  fetchResourceTypeDetails: vi.fn(),
-  fetchProjectConsumption: vi.fn(),
-  fetchProjectInstances: vi.fn(),
-  fetchProjectVolumes: vi.fn(),
-  fetchProjectSnapshots: vi.fn(),
-  fetchProjectSavingsPlans: vi.fn(),
-  fetchWebCloudSummary: vi.fn(),
-  fetchWebCloudItems: vi.fn(),
-  fetchProjectQuotas: vi.fn(),
-  fetchProjectBuckets: vi.fn(),
-  fetchProjectInstanceTotal: vi.fn(),
-  fetchGpuSummary: vi.fn(),
-  fetchPublicCloudStats: vi.fn(),
-  fetchBackupStats: vi.fn(),
-};
-
 // The period a request covers, as the fixtures key it:
 //   ('2026-09-01', '2026-09-30') -> '2026-09'
 //   ('2025-10-01', '2026-09-30') -> '2025-10/2026-09'
@@ -62,7 +21,7 @@ export function periodKey(from, to) {
 }
 
 // What the server answers when there is nothing to show
-const nothing = {
+const emptyAnswers = {
   summary: (from, to) => ({
     period: { from, to },
     total: 0,
@@ -111,53 +70,67 @@ const nothing = {
   list: () => [],
 };
 
-// Makes every API function answer from the dataset.
-export function serve(data) {
-  const answer = (fn, respond) => fn.mockImplementation(async (...args) => respond(...args));
-  const whole = (key, empty) => () => data[key] ?? empty();
-  const perPeriod = (key, empty) => (from, to) =>
-    data[key]?.[periodKey(from, to)] ?? empty(from, to);
-  const perProject = (key, empty) => (projectId, from, to) =>
-    data[key]?.[projectId]?.[periodKey(from, to)] ?? empty();
+// Answers that read the entry of a key in the dataset: all of it, the part
+// for the period of the request, or the part for its project and period.
+// Without one, the empty answer.
+const entry = (key, empty) => (data) => data[key] ?? empty();
+const entryForPeriod = (key, empty) => (data, from, to) =>
+  data[key]?.[periodKey(from, to)] ?? empty(from, to);
+const entryForProject = (key, empty) => (data, projectId, from, to) =>
+  data[key]?.[projectId]?.[periodKey(from, to)] ?? empty();
 
-  answer(api.fetchMonths, whole('months', nothing.list));
-  answer(api.fetchSummary, perPeriod('summary', nothing.summary));
-  answer(api.fetchProjects, whole('projects', nothing.list));
-  answer(api.fetchProjectsEnriched, whole('projectsEnriched', nothing.list));
-  answer(api.fetchByProject, perPeriod('byProject', nothing.list));
-  answer(api.fetchByService, perPeriod('byService', nothing.list));
-  answer(api.fetchDailyTrend, perPeriod('dailyTrend', nothing.list));
-  answer(api.fetchMonthlyTrend, (months) => data.monthlyTrend?.[months] ?? nothing.list());
-  answer(api.fetchMonthlyTrendByCategory,
-    (months) => data.monthlyTrendByCategory?.[months] ?? nothing.trendByCategory());
-  answer(api.fetchImportStatus, whole('importStatus', nothing.importStatus));
-  answer(api.triggerImport, () => ({ started: true }));
-  answer(api.fetchConfig, whole('config', nothing.config));
-  answer(api.fetchUser, whole('user', nothing.user));
-  answer(api.fetchConsumptionCurrent, whole('consumptionCurrent', nothing.consumptionCurrent));
-  answer(api.fetchConsumptionForecast, whole('consumptionForecast', nothing.consumptionForecast));
-  answer(api.fetchConsumptionHistory, perPeriod('consumptionHistory', nothing.list));
-  answer(api.fetchAccountBalance, whole('accountBalance', nothing.accountBalance));
-  answer(api.fetchAccountCredits, whole('accountCredits', nothing.list));
-  answer(api.fetchInventoryServers, whole('inventoryServers', nothing.list));
-  answer(api.fetchInventoryVps, whole('inventoryVps', nothing.list));
-  answer(api.fetchInventoryStorage, whole('inventoryStorage', nothing.list));
-  answer(api.fetchInventorySummary, whole('inventorySummary', nothing.inventorySummary));
-  answer(api.fetchExpiringServices, whole('expiringServices', nothing.list));
-  answer(api.fetchByResourceType, perPeriod('byResourceType', nothing.list));
-  answer(api.fetchResourceTypeDetails,
-    (type, from, to) => data.resourceTypeDetails?.[type]?.[periodKey(from, to)] ?? nothing.list());
-  answer(api.fetchProjectConsumption, perProject('projectConsumption', nothing.list));
-  answer(api.fetchProjectInstances, perProject('projectInstances', nothing.list));
-  answer(api.fetchProjectVolumes, perProject('projectVolumes', nothing.list));
-  answer(api.fetchProjectSnapshots, perProject('projectSnapshots', nothing.list));
-  answer(api.fetchProjectSavingsPlans, perProject('projectSavingsPlans', nothing.list));
-  answer(api.fetchWebCloudSummary, perPeriod('webCloudSummary', nothing.webCloudSummary));
-  answer(api.fetchWebCloudItems, perPeriod('webCloudItems', nothing.list));
-  answer(api.fetchProjectQuotas, (projectId) => data.projectQuotas?.[projectId] ?? nothing.list());
-  answer(api.fetchProjectBuckets, perProject('projectBuckets', nothing.list));
-  answer(api.fetchProjectInstanceTotal, perProject('projectInstanceTotal', nothing.instanceTotal));
-  answer(api.fetchGpuSummary, perPeriod('gpuSummary', nothing.gpuSummary));
-  answer(api.fetchPublicCloudStats, perPeriod('publicCloudStats', nothing.publicCloudStats));
-  answer(api.fetchBackupStats, perPeriod('backupStats', nothing.backupStats));
+// Every function of src/services/api.js, with how it answers:
+// (dataset, ...arguments of the call) => answer
+const answers = {
+  fetchMonths: entry('months', emptyAnswers.list),
+  fetchSummary: entryForPeriod('summary', emptyAnswers.summary),
+  fetchProjects: entry('projects', emptyAnswers.list),
+  fetchProjectsEnriched: entry('projectsEnriched', emptyAnswers.list),
+  fetchByProject: entryForPeriod('byProject', emptyAnswers.list),
+  fetchByService: entryForPeriod('byService', emptyAnswers.list),
+  fetchDailyTrend: entryForPeriod('dailyTrend', emptyAnswers.list),
+  fetchMonthlyTrend: (data, months) => data.monthlyTrend?.[months] ?? emptyAnswers.list(),
+  fetchMonthlyTrendByCategory: (data, months) =>
+    data.monthlyTrendByCategory?.[months] ?? emptyAnswers.trendByCategory(),
+  fetchImportStatus: entry('importStatus', emptyAnswers.importStatus),
+  triggerImport: () => ({ started: true }),
+  fetchConfig: entry('config', emptyAnswers.config),
+  fetchUser: entry('user', emptyAnswers.user),
+  fetchConsumptionCurrent: entry('consumptionCurrent', emptyAnswers.consumptionCurrent),
+  fetchConsumptionForecast: entry('consumptionForecast', emptyAnswers.consumptionForecast),
+  fetchConsumptionHistory: entryForPeriod('consumptionHistory', emptyAnswers.list),
+  fetchAccountBalance: entry('accountBalance', emptyAnswers.accountBalance),
+  fetchAccountCredits: entry('accountCredits', emptyAnswers.list),
+  fetchInventoryServers: entry('inventoryServers', emptyAnswers.list),
+  fetchInventoryVps: entry('inventoryVps', emptyAnswers.list),
+  fetchInventoryStorage: entry('inventoryStorage', emptyAnswers.list),
+  fetchInventorySummary: entry('inventorySummary', emptyAnswers.inventorySummary),
+  fetchExpiringServices: entry('expiringServices', emptyAnswers.list),
+  fetchByResourceType: entryForPeriod('byResourceType', emptyAnswers.list),
+  fetchResourceTypeDetails: (data, type, from, to) =>
+    data.resourceTypeDetails?.[type]?.[periodKey(from, to)] ?? emptyAnswers.list(),
+  fetchProjectConsumption: entryForProject('projectConsumption', emptyAnswers.list),
+  fetchProjectInstances: entryForProject('projectInstances', emptyAnswers.list),
+  fetchProjectVolumes: entryForProject('projectVolumes', emptyAnswers.list),
+  fetchProjectSnapshots: entryForProject('projectSnapshots', emptyAnswers.list),
+  fetchProjectSavingsPlans: entryForProject('projectSavingsPlans', emptyAnswers.list),
+  fetchWebCloudSummary: entryForPeriod('webCloudSummary', emptyAnswers.webCloudSummary),
+  fetchWebCloudItems: entryForPeriod('webCloudItems', emptyAnswers.list),
+  fetchProjectQuotas: (data, projectId) => data.projectQuotas?.[projectId] ?? emptyAnswers.list(),
+  fetchProjectBuckets: entryForProject('projectBuckets', emptyAnswers.list),
+  fetchProjectInstanceTotal: entryForProject('projectInstanceTotal', emptyAnswers.instanceTotal),
+  fetchGpuSummary: entryForPeriod('gpuSummary', emptyAnswers.gpuSummary),
+  fetchPublicCloudStats: entryForPeriod('publicCloudStats', emptyAnswers.publicCloudStats),
+  fetchBackupStats: entryForPeriod('backupStats', emptyAnswers.backupStats),
+};
+
+// One mock per function: what setup.js hands over to the page
+export const api = Object.fromEntries(Object.keys(answers).map((name) => [name, vi.fn()]));
+
+// Makes every function answer from the dataset. Called again, it changes what
+// the server says from then on.
+export function serve(data) {
+  for (const [name, answer] of Object.entries(answers)) {
+    api[name].mockImplementation(async (...args) => answer(data, ...args));
+  }
 }
