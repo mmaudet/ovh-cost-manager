@@ -6,7 +6,7 @@
 
 <p align="center">
   <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
-  <a href="https://nodejs.org/"><img src="https://img.shields.io/badge/Node.js-%3E%3D18.0.0-green.svg" alt="Node.js"></a>
+  <a href="https://nodejs.org/"><img src="https://img.shields.io/badge/Node.js-%3E%3D22-green.svg" alt="Node.js"></a>
   <a href="https://hub.docker.com/r/mmaudet/ovh-cost-manager"><img src="https://img.shields.io/docker/v/mmaudet/ovh-cost-manager?label=Docker&logo=docker" alt="Docker"></a>
 </p>
 
@@ -121,7 +121,7 @@ ovh-cost-manager/
 
 ## Prerequisites
 
-- [Node.js](https://nodejs.org/) >= 18.0.0 (for local development)
+- [Node.js](https://nodejs.org/) >= 22 for local development (24 recommended, the version of the Docker image and the CI)
 - [Docker](https://www.docker.com/) and Docker Compose (for containerized deployment)
 - OVH API credentials (see [Configuration](#configuration))
 
