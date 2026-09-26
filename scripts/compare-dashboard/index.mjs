@@ -338,11 +338,10 @@ function describeSnapshot(snapshot, clock, now) {
       + `${lastImport.error_message ? `: ${lastImport.error_message}` : ''}`);
   }
   if (realDate.slice(0, 7) !== latestBill.slice(0, 7)) {
-    // SQLite's date('now') for the Trends months, JavaScript's for the services to expire
+    // JavaScript's date on the server, for the services to expire
     warnings.push(`the latest bill is from ${latestBill.slice(0, 7)} but the real month is `
-      + `${realDate.slice(0, 7)}: the server takes the months of the Trends tab and the services `
-      + 'about to expire from the real date, so the Trends tab shows fewer months of the snapshot '
-      + 'as time passes');
+      + `${realDate.slice(0, 7)}: the server takes the services about to expire from the real `
+      + 'date, so more of the snapshot\'s services show as about to expire as time passes');
   }
   const empty = Object.entries(emptyTables)
     .map(([dataset, tables]) => `${dataset} (${tables.join(', ')})`);
