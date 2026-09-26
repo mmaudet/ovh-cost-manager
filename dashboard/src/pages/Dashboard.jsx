@@ -13,15 +13,13 @@ import {
   fetchByResourceType, fetchResourceTypeDetails, fetchProjectsEnriched, fetchProjectConsumption,
   fetchProjectInstances, fetchProjectQuotas, fetchGpuSummary, fetchPublicCloudStats, fetchBackupStats,
   fetchProjectBuckets, fetchProjectInstanceTotal, triggerImport, fetchMonthlyTrendByCategory,
-  fetchProjectVolumes, fetchProjectSnapshots, fetchProjectSavingsPlans,
-  fetchWebCloudSummary, fetchWebCloudItems
+  fetchProjectVolumes, fetchProjectSnapshots, fetchProjectSavingsPlans
 } from '../services/api';
 import { useLanguage } from '../hooks/useLanguage.jsx';
 import Logo from '../components/Logo';
 import Accordion from '../components/Accordion.jsx';
 import Modal from '../components/Modal.jsx';
 import TableActions from '../components/TableActions.jsx';
-import { WebCloudTable, webCloudCsvColumns } from '../components/WebCloudFamilyTable.jsx';
 import { BucketsTable, bucketCsvColumns, sortBucketsByName } from '../components/BucketsTable.jsx';
 import { SavingsPlansTable, savingsPlanCsvColumns } from '../components/SavingsPlansTable.jsx';
 import { VolumesTable, volumeCsvColumns, volumeCsvRows } from '../components/VolumesTable.jsx';
@@ -36,7 +34,8 @@ import { formatCurrency, formatYearMonth } from '../utils/format.js';
 import { PERIOD_OPTIONS, monthsSince } from '../utils/trendPeriods.js';
 import { parseSqliteDate } from '../utils/sqliteDate.js';
 import { generateMarkdownReport } from '../utils/markdownReport.js';
-import { WEB_CLOUD_MONTHS, shiftMonths } from '../utils/webCloudPeriod.js';
+import { useWebCloudTab } from '../tabs/useWebCloudTab.js';
+import { WebCloudTab, WebCloudTabModals } from '../tabs/WebCloudTab.jsx';
 import ProjectProductComparison from './ProjectProductComparison.jsx';
 
 // Translation keys for the import_log type and status values
@@ -59,15 +58,6 @@ const IMPORT_STATUS_KEYS = {
 // hide non Web Cloud lines.
 const INFRA_EXCLUDED_TYPES = ['cloud_project', 'domain', 'web_cloud'];
 
-// Web Cloud families, in display order. Each one gets a card and a table.
-const WEB_CLOUD_CATEGORIES = [
-  { key: 'domain', labelKey: 'domains', color: 'text-violet-600' },
-  { key: 'dns_zone', labelKey: 'dnsZones', color: 'text-sky-600' },
-  { key: 'hosting', labelKey: 'webHosting', color: 'text-blue-600' },
-  { key: 'email', labelKey: 'emails', color: 'text-pink-600' },
-  { key: 'option', labelKey: 'hostingOptions', color: 'text-gray-600' }
-];
-
 export default function Dashboard() {
   const { language, setLanguage, t } = useLanguage();
   const [selectedMonth, setSelectedMonth] = useState(null);
@@ -81,7 +71,6 @@ export default function Dashboard() {
   const [syncWarningDismissed, setSyncWarningDismissed] = useState(false);
   const [selectedProject, setSelectedProject] = useState(null);
   const [selectedResourceType, setSelectedResourceType] = useState(null);
-  const [showAllWebCloud, setShowAllWebCloud] = useState(null); // category key, null when closed
   const [showAllBuckets, setShowAllBuckets] = useState(false);
   const [showAllInstances, setShowAllInstances] = useState(false);
   const [showAllServers, setShowAllServers] = useState(false);
@@ -376,24 +365,7 @@ export default function Dashboard() {
     queryFn: () => fetchExpiringServices(30)
   });
 
-  // Domains, hosting and mail renew yearly, so the Web Cloud tab reads the 12
-  // months ending on the selected one rather than that single month.
-  const webCloudPeriod = selectedMonth ? {
-    from: shiftMonths(selectedMonth.from, -(WEB_CLOUD_MONTHS - 1)),
-    to: selectedMonth.to
-  } : null;
-
-  const { data: webCloudSummary } = useQuery({
-    queryKey: ['webCloudSummary', webCloudPeriod?.from, webCloudPeriod?.to],
-    queryFn: () => fetchWebCloudSummary(webCloudPeriod.from, webCloudPeriod.to),
-    enabled: !!webCloudPeriod && activeTab === 'webcloud'
-  });
-
-  const { data: webCloudItems = [] } = useQuery({
-    queryKey: ['webCloudItems', webCloudPeriod?.from, webCloudPeriod?.to],
-    queryFn: () => fetchWebCloudItems(webCloudPeriod.from, webCloudPeriod.to),
-    enabled: !!webCloudPeriod && activeTab === 'webcloud'
-  });
+  const webCloudTab = useWebCloudTab({ selectedMonth, activeTab });
 
   const { data: byResourceType = [] } = useQuery({
     queryKey: ['byResourceType', selectedMonth?.from, selectedMonth?.to],
@@ -1602,75 +1574,7 @@ export default function Dashboard() {
 
         {/* Tab Content - Web Cloud */}
         {activeTab === 'webcloud' && (
-          <div className="space-y-6">
-            <div className="text-sm text-gray-500">
-              {language === 'en' ? 'Rolling 12 months' : '12 mois glissants'}
-              {webCloudPeriod && (
-                <span className="ml-1 text-gray-400">
-                  ({formatYearMonth(webCloudPeriod.from.slice(0, 7), language)} → {formatYearMonth(webCloudPeriod.to.slice(0, 7), language)})
-                </span>
-              )}
-              <span className="ml-2 text-gray-400">
-                {language === 'en'
-                  ? '· domains and hosting renew yearly, a single month would only show a slice'
-                  : '· domaines et hébergements se renouvellent à l\'année, un seul mois n\'en montrerait qu\'une partie'}
-              </span>
-            </div>
-
-            {/* Web Cloud summary cards */}
-            <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
-              {WEB_CLOUD_CATEGORIES.map(cat => (
-                <div key={cat.key} className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
-                  <span className="text-gray-500 text-sm">{t(cat.labelKey)}</span>
-                  <div className={`text-3xl font-bold ${cat.color} mt-2`}>{webCloudSummary?.[cat.key]?.count || 0}</div>
-                  {webCloudSummary?.[cat.key]?.total > 0 && (
-                    <p className="text-xs text-gray-400">{fmt(webCloudSummary[cat.key].total)}€</p>
-                  )}
-                </div>
-              ))}
-              <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
-                <span className="text-gray-500 text-sm">Total</span>
-                <div className="text-3xl font-bold text-gray-900 mt-2">{fmt(webCloudSummary?.total || 0)}€</div>
-              </div>
-            </div>
-
-            {/* Web Cloud is read from the bills: the domain, hosting and email
-                API routes are not granted to the credentials this project asks for. */}
-            {webCloudItems.length === 0 ? (
-              <div className="bg-white rounded-xl p-8 shadow-sm border border-gray-100 text-center text-gray-400">
-                {language === 'en' ? 'No Web Cloud service billed over this period' : 'Aucun service Web Cloud facturé sur cette période'}
-              </div>
-            ) : (
-              WEB_CLOUD_CATEGORIES.map(cat => {
-                const items = webCloudItems.filter(i => i.category === cat.key);
-                if (!items.length) return null;
-                const total = items.reduce((sum, i) => sum + (i.total || 0), 0);
-                return (
-                  <div key={cat.key} className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
-                    <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                      <span>
-                        {t(cat.labelKey)} ({items.length})
-                        <span className={`ml-2 text-sm font-normal ${cat.color}`}>{fmt(total)}€</span>
-                      </span>
-                      <TableActions
-                        language={language}
-                        onShowAll={() => setShowAllWebCloud(cat.key)}
-                        onExport={() => downloadCSV(
-                          items,
-                          webCloudCsvColumns(language),
-                          `ovh-${cat.key}-${webCloudPeriod ? webCloudPeriod.from.slice(0, 7) + '-to-' + webCloudPeriod.to.slice(0, 7) : 'export'}`
-                        )}
-                      />
-                    </h3>
-                    {/* ~11 rows before scrolling, the full list is one click away */}
-                    <div className="overflow-auto max-h-[430px]">
-                      <WebCloudTable items={items} language={language} fmt={fmt} />
-                    </div>
-                  </div>
-                );
-              })
-            )}
-          </div>
+          <WebCloudTab {...webCloudTab} language={language} t={t} fmt={fmt} />
         )}
 
         {/* Tab Content - Public Cloud */}
@@ -2335,37 +2239,7 @@ export default function Dashboard() {
           </details>
         </div>
       </div>
-      {(() => {
-        const cat = WEB_CLOUD_CATEGORIES.find(c => c.key === showAllWebCloud);
-        const items = cat ? webCloudItems.filter(i => i.category === cat.key) : [];
-        return (
-          <Modal
-            open={!!cat}
-            onClose={() => setShowAllWebCloud(null)}
-            maxWidth="max-w-5xl"
-            title={cat ? (
-              <>
-                {t(cat.labelKey)} ({items.length})
-                <span className={`ml-2 text-sm font-normal ${cat.color}`}>
-                  {fmt(items.reduce((sum, i) => sum + (i.total || 0), 0))}€
-                </span>
-              </>
-            ) : ''}
-            actions={cat && (
-              <TableActions
-                language={language}
-                onExport={() => downloadCSV(
-                  items,
-                  webCloudCsvColumns(language),
-                  `ovh-${cat.key}-${webCloudPeriod ? webCloudPeriod.from.slice(0, 7) + '-to-' + webCloudPeriod.to.slice(0, 7) : 'export'}`
-                )}
-              />
-            )}
-          >
-            <WebCloudTable items={items} language={language} fmt={fmt} />
-          </Modal>
-        );
-      })()}
+      <WebCloudTabModals {...webCloudTab} language={language} t={t} fmt={fmt} />
 
       <Modal
         open={showAllBuckets}

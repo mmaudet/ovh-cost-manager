@@ -224,7 +224,10 @@ npm test --workspace=dashboard -- -t "closes with Escape"    # by name
 
 Besides these page tests, the pure helpers split out of the page have unit
 tests in `dashboard/test/unit/`: each helper is called through what its module
-exports, and checked against literal values.
+exports, and checked against literal values. So does the hook of each tab, in
+`dashboard/test/unit/use-*-tab.test.jsx`: `renderTabHook()` calls it as the
+shell does, with the API stand-in, and the tests check what it requests and
+returns.
 
 ## Style Guide
 

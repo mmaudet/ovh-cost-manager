@@ -9,4 +9,14 @@ const shiftMonths = (isoDate, months) => {
   return `${shifted.getUTCFullYear()}-${String(shifted.getUTCMonth() + 1).padStart(2, '0')}-01`;
 };
 
-export { WEB_CLOUD_MONTHS, shiftMonths };
+// Domains, hosting and mail renew yearly, so the Web Cloud tab reads the 12
+// months ending on the selected one rather than that single month.
+const webCloudPeriodEndingOn = (selectedMonth) => {
+  const webCloudPeriod = selectedMonth ? {
+    from: shiftMonths(selectedMonth.from, -(WEB_CLOUD_MONTHS - 1)),
+    to: selectedMonth.to
+  } : null;
+  return webCloudPeriod;
+};
+
+export { shiftMonths, webCloudPeriodEndingOn };
