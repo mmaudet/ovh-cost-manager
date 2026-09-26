@@ -35,6 +35,24 @@ describe('createOriginCheck', () => {
     expect(production('https://ocm.example.com:8443', { host: 'ocm.example.com' })).toBe(false);
   });
 
+  // Hosts compare as URL writes them: lowercase, without the scheme's default port
+  test.each([
+    ['https://ocm.example.com', 'ocm.example.com:443'],
+    ['https://ocm.example.com', 'OCM.example.com'],
+    // What the LemonLDAP relay of docker-compose.sso.yml sends
+    ['http://ocm.example.com', 'ocm.example.com:80'],
+  ])('allows %s with Host %s', (origin, host) => {
+    expect(production(origin, { host })).toBe(true);
+  });
+
+  test('rejects http://ocm.example.com with Host ocm.example.com:443, the https port', () => {
+    expect(production('http://ocm.example.com', { host: 'ocm.example.com:443' })).toBe(false);
+  });
+
+  test('rejects an origin when the request has no Host header, not reading it as a host', () => {
+    expect(production('http://undefined', {})).toBe(false);
+  });
+
   // 'ocm.example.com:3001' parses, but as the scheme 'ocm.example.com:' without a host
   test.each(['ocm.example.com', 'ocm.example.com:3001', 'null'])(
     'rejects the malformed Origin %s without throwing',
@@ -92,6 +110,11 @@ describe('createOriginCheck', () => {
 
     test('ignores X-Forwarded-Host when the proxy is not trusted', () => {
       expect(production(origin, proxied)).toBe(false);
+    });
+
+    test('compares X-Forwarded-Host as it compares Host', () => {
+      expect(behindTrustedProxy(origin, { ...proxied, forwardedHost: 'OCM.example.com:443' }))
+        .toBe(true);
     });
 
     test('reads the first host of an X-Forwarded-Host list', () => {

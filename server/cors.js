@@ -44,9 +44,22 @@ function createOriginCheck({ allowedOrigins, isDev, trustProxy }) {
     if (trustProxy && forwardedHost) {
       ownHosts.push(forwardedHost.split(',')[0].trim());
     }
-    // Hostname and port, the default port left out as in the Host header
-    return ownHosts.includes(url.host);
+    return ownHosts.some((ownHost) => normalizeHost(ownHost, url.protocol) === url.host);
   };
+}
+
+// A host header as URL writes the host of the origin's scheme: lowercase,
+// without the scheme's default port (ocm.example.com:443 for https is
+// ocm.example.com). null when it is no host.
+function normalizeHost(host, protocol) {
+  if (!host) {
+    return null;
+  }
+  try {
+    return new URL(`${protocol}//${host}`).host;
+  } catch (e) {
+    return null;
+  }
 }
 
 // The Origin header as an http(s) URL, which always has a host, or null: when
