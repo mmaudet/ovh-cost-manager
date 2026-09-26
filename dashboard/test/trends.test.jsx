@@ -10,6 +10,7 @@ import {
   optionsOf,
   renderDashboard,
   selectLanguage,
+  selectMonth,
   settle,
   swatchOf,
   texts,
@@ -76,6 +77,22 @@ describe('Trends tab', () => {
         .toBeInTheDocument();
     });
 
+    it('goes no further than the billed months up to the selected one allow', async () => {
+      const { user } = await renderDashboard({ ...account, ...sinceJuly2025 });
+      await openTab(user, 'Tendances');
+      expect(periodSelector()).toHaveDisplayValue('6 mois');
+
+      await selectMonth(user, 'Juillet 2025');
+
+      // July 2025 is the first billed month: 3 months cover it
+      expect(optionsOf(periodSelector())).toEqual(['3 mois']);
+      expect(periodSelector()).toHaveDisplayValue('3 mois');
+      expect(screen.getByRole('heading', { name: 'Évolution des coûts (total) sur 3 mois' }))
+        .toBeInTheDocument();
+      expect(texts(cardOf('Mois le plus coûteux')))
+        .toEqual(['Mois le plus coûteux', 'juil. 2025', '450,00€']);
+    });
+
     it('reloads the trends over the period the user picks', async () => {
       const { user } = await renderDashboard({ ...account, ...sinceJuly2025 });
       await openTab(user, 'Tendances');
@@ -104,6 +121,33 @@ describe('Trends tab', () => {
     // 12 times the last month
     expect(texts(cardOf('Projection annuelle')))
       .toEqual(['Projection annuelle', '~15 004,80€', 'Basé sur le dernier mois']);
+  });
+
+  it('ends on the month selected in the header', async () => {
+    const { user } = await renderDashboard();
+    await openTab(user, 'Tendances');
+
+    await selectMonth(user, 'Août 2026');
+
+    // June to August
+    expect(api.fetchMonthlyTrend).toHaveBeenCalledWith(3, '2026-08');
+    expect(api.fetchMonthlyTrendByCategory).toHaveBeenCalledWith(3, '2026-08');
+    expect(api.fetchGpuSummary).toHaveBeenCalledWith('2026-06-01', '2026-08-31');
+    expect(periodSelector()).toHaveDisplayValue('3 mois');
+    // June was not billed: (1 042 - 980) / 980
+    expect(texts(cardOf('Croissance sur la période')))
+      .toEqual(['Croissance sur la période', '+6.3%', 'Sur 3 mois']);
+    expect(texts(cardOf('Mois le plus coûteux')))
+      .toEqual(['Mois le plus coûteux', 'août 2026', '1 042,00€']);
+    expect(texts(cardOf('Projection annuelle')))
+      .toEqual(['Projection annuelle', '~12 504,00€', 'Basé sur le dernier mois']);
+    // No licence was billed before September
+    expect(texts(cardOf('Évolution par catégorie'))).toEqual([
+      'Évolution par catégorie',
+      'Public Cloud', 'Dedicated Servers', 'Domains', 'Backup',
+    ]);
+    // Over those months, GPUs were billed in August alone: no trend to draw
+    expect(screen.queryByText('Évolution des coûts GPU')).not.toBeInTheDocument();
   });
 
   describe('cost trend by resource type', () => {

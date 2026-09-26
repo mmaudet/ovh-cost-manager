@@ -93,14 +93,29 @@ const gpuInMonth = (month, total) => ({
 
 export const trends = {
   // The page asks for 6 months, then for 3: the longest period that three
-  // billed months allow. Both periods cover the same bills.
-  monthlyTrend: { '2026-09': { 3: lastThreeMonths, 6: lastThreeMonths } },
-  monthlyTrendByCategory: { '2026-09': { 3: costByResourceType, 6: costByResourceType } },
+  // billed months allow. Both periods cover the same bills. With August
+  // selected, the 3 months run from June, which was not billed.
+  monthlyTrend: {
+    '2026-09': { 3: lastThreeMonths, 6: lastThreeMonths },
+    '2026-08': { 3: julyAndAugust },
+  },
+  monthlyTrendByCategory: {
+    '2026-09': { 3: costByResourceType, 6: costByResourceType },
+    '2026-08': { 3: costByResourceTypeUpToAugust },
+  },
   gpuSummary: {
     '2026-07/2026-09': gpuFromJulyToSeptember,
+    '2026-06/2026-08': gpuInMonth('2026-08', 310),
     '2026-08': gpuInMonth('2026-08', 310),
     '2026-09': gpuInMonth('2026-09', 420.5),
   },
+};
+
+// The first month billed to the variant below, alone: Public Cloud only
+const july2025 = { month: 'Jul', yearMonth: '2025-07', cost: 450 };
+const costByResourceTypeInJuly2025 = {
+  categories: [costByResourceType.categories[0]],
+  data: [{ yearMonth: '2025-07', cloud_project: 450 }],
 };
 
 // A variant of the account, first billed in July 2025: 15 months of history.
@@ -113,9 +128,11 @@ export const sinceJuly2025 = {
     '2026-09': {
       6: lastThreeMonths,
       12: lastThreeMonths,
-      24: [{ month: 'Jul', yearMonth: '2025-07', cost: 450 }, ...lastThreeMonths],
+      24: [july2025, ...lastThreeMonths],
     },
     '2026-08': { 6: julyAndAugust },
+    // The period picked, 6 months, then the 3 months that the first billed month allows
+    '2025-07': { 3: [july2025], 6: [july2025] },
   },
   monthlyTrendByCategory: {
     '2026-09': {
@@ -131,5 +148,6 @@ export const sinceJuly2025 = {
       },
     },
     '2026-08': { 6: costByResourceTypeUpToAugust },
+    '2025-07': { 3: costByResourceTypeInJuly2025, 6: costByResourceTypeInJuly2025 },
   },
 };
