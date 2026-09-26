@@ -10,92 +10,72 @@ const oidcClient = require('./oidc-client');
 const sessionStore = require('./session-store');
 const routes = require('./routes');
 const { createAuthMiddleware } = require('./middleware');
+const { buildAuthConfig, missingSettings } = require('./config');
+const { discoveryRetryDelay, createDiscoveryGate } = require('./discovery');
 
 /**
- * Build auth configuration from environment variables and config file
- */
-function buildAuthConfig(fileConfig) {
-  const envEnabled = process.env.OIDC_ENABLED === 'true';
-  const fileEnabled = fileConfig?.auth?.enabled === true;
-
-  if (!envEnabled && !fileEnabled) {
-    return { enabled: false };
-  }
-
-  return {
-    enabled: true,
-    provider: {
-      issuer: process.env.OIDC_ISSUER || fileConfig?.auth?.provider?.issuer,
-      clientId: process.env.OIDC_CLIENT_ID || fileConfig?.auth?.provider?.clientId,
-      clientSecret: process.env.OIDC_CLIENT_SECRET || fileConfig?.auth?.provider?.clientSecret,
-      scopes: (process.env.OIDC_SCOPES?.split(',') || fileConfig?.auth?.provider?.scopes || ['openid', 'profile', 'email'])
-    },
-    session: {
-      secret: process.env.SESSION_SECRET || fileConfig?.auth?.session?.secret,
-      maxAge: fileConfig?.auth?.session?.maxAge || 86400000, // 24h
-      name: fileConfig?.auth?.session?.name || 'ocm.sid'
-    },
-    baseUrl: process.env.OIDC_BASE_URL || fileConfig?.auth?.baseUrl,
-    backChannelLogout: fileConfig?.auth?.backChannelLogout !== false
-  };
-}
-
-/**
- * Initialize OIDC authentication
+ * Initialize OIDC authentication. When it is enabled, the server never falls
+ * back to header mode: it refuses to start without the required settings, and
+ * discovers the provider in the background, retrying until it succeeds.
  */
 async function initialize(app, db, fileConfig) {
   const config = { auth: buildAuthConfig(fileConfig) };
 
   if (!config.auth.enabled) {
     console.log('OIDC authentication disabled');
-    return { config, initialized: false };
+    return { config };
   }
 
-  // Validate required config
-  const { provider, session, baseUrl } = config.auth;
-  if (!provider.issuer || !provider.clientId || !provider.clientSecret) {
-    console.error('OIDC: Missing required configuration (issuer, clientId, clientSecret)');
-    config.auth.enabled = false;
-    return { config, initialized: false };
+  const missing = missingSettings(config.auth);
+  if (missing.length > 0) {
+    throw new Error(`OIDC is enabled, but these settings are missing: ${missing.join('; ')}`);
   }
 
-  if (!baseUrl) {
-    console.error('OIDC: Missing baseUrl configuration');
-    config.auth.enabled = false;
-    return { config, initialized: false };
-  }
+  // Initialize session store
+  sessionStore.init(db);
 
-  if (!session.secret) {
-    console.error('OIDC: Missing session secret');
-    config.auth.enabled = false;
-    return { config, initialized: false };
-  }
+  const { provider, baseUrl } = config.auth;
+  console.log('OIDC authentication enabled');
+  console.log(`  Issuer: ${provider.issuer}`);
+  console.log(`  Client ID: ${provider.clientId}`);
+  console.log(`  Base URL: ${baseUrl}`);
 
-  try {
-    // Initialize session store
-    sessionStore.init(db);
+  discover(config);
 
-    // Initialize OIDC client
-    await oidcClient.initialize(config);
+  return { config };
+}
 
-    console.log('OIDC authentication enabled');
-    console.log(`  Issuer: ${provider.issuer}`);
-    console.log(`  Client ID: ${provider.clientId}`);
-    console.log(`  Base URL: ${baseUrl}`);
+// Discovers the provider, retrying with backoff until it succeeds. Meanwhile,
+// the gates of awaitDiscovery answer 503.
+function discover(config, failures = 0) {
+  oidcClient.initialize(config).then(
+    () => console.log('OIDC: provider discovered, sign-in is available'),
+    (err) => {
+      const delay = discoveryRetryDelay(failures);
+      const cause = err.cause?.code || err.cause?.message;
+      const reason = cause ? `${err.message} (${cause})` : err.message;
+      console.error(`OIDC: discovery of ${config.auth.provider.issuer} failed: ${reason}. `
+        + `/api and /auth answer 503 until it succeeds; next attempt in ${delay / 1000} s`);
+      setTimeout(() => discover(config, failures + 1), delay);
+    },
+  );
+}
 
-    return { config, initialized: true };
-  } catch (err) {
-    console.error('OIDC initialization failed:', err.message);
-    config.auth.enabled = false;
-    return { config, initialized: false };
-  }
+/**
+ * A middleware that answers 503 until the provider is discovered.
+ *
+ * @param {object} [options] - see createDiscoveryGate
+ */
+function awaitDiscovery(options) {
+  return createDiscoveryGate(() => oidcClient.getConfig() !== null, options);
 }
 
 module.exports = {
   buildAuthConfig,
   initialize,
+  awaitDiscovery,
   createAuthMiddleware,
   setupRoutes: routes.setup,
   backChannelLogout: routes.backChannelLogout,
-  sessionStore
+  sessionStore,
 };

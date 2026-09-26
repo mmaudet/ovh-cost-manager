@@ -248,11 +248,16 @@ let authConfig = { auth: { enabled: false } };
 // ========================
 
 async function initializeServer() {
-  // Initialize OIDC authentication
+  // Initialize OIDC authentication: throws when it is enabled but incomplete
   const authResult = await auth.initialize(app, db.getDb(), config);
   authConfig = authResult.config;
 
-  if (authResult.initialized) {
+  if (authConfig.auth.enabled) {
+    // Until the provider is discovered, the API and the sign-in routes answer
+    // 503, except /api/health for the container's healthcheck
+    app.use('/api', auth.awaitDiscovery({ except: '/health' }));
+    app.use('/auth', auth.awaitDiscovery());
+
     // Mount auth routes with stricter rate limiting
     const authMiddleware = rateLimitConfig.enabled
       ? [authLimiter, auth.setupRoutes(authConfig)]
@@ -290,7 +295,7 @@ async function initializeServer() {
       // Ignore - sessions table might not exist yet
     }
   } else {
-    // Fallback: header-based SSO (LemonLDAP headers via reverse proxy)
+    // Without OIDC: header-based SSO (LemonLDAP headers via reverse proxy)
     const AUTH_REQUIRED = process.env.AUTH_REQUIRED === 'true';
     app.use((req, res, next) => {
       const authUser = req.headers['auth-user'];

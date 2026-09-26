@@ -131,9 +131,10 @@ function setup(config) {
 
 // POST /logout/backchannel - Back-channel logout (called by OP)
 async function backChannelLogout(req, res, config) {
+  // Until the provider is discovered, as awaitDiscovery does for /api and /auth
   const oidcConfig = oidcClient.getConfig();
   if (!oidcConfig) {
-    return res.status(501).send('OIDC not configured');
+    return res.status(503).send('Authentication provider unavailable, try again later');
   }
 
   try {
