@@ -9,8 +9,11 @@
 #      Comment out "build:" section and uncomment "image:" line below
 #      docker-compose up -d
 #
-# For SSO deployment, use:
-#   docker-compose -f docker-compose.yml -f docker-compose.sso.yml up -d
+# For SSO deployment, use docker-compose.sso.yml on its own (see its header):
+#   docker compose -f docker-compose.sso.yml up -d
+# Do not stack both files: OCM would also be published on port 3001, around
+# the SSO relay, and the TRUST_PROXY=true of the SSO file would then let any
+# client choose the address that rate limiting sees.
 
 services:
   ocm:
