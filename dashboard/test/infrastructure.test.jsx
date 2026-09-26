@@ -3,7 +3,12 @@ import { screen, within } from '@testing-library/react';
 import { account } from './fixtures/account.js';
 import { everyResourceType } from './fixtures/infrastructure.js';
 import { api } from './support/api.js';
-import { captureFileDownloads } from './support/downloads.js';
+import {
+  BOM,
+  captureFileDownloads,
+  csvFile,
+  downloadFromPanelAndModal,
+} from './support/downloads.js';
 import {
   backdropOf,
   cardOf,
@@ -35,9 +40,6 @@ const serverRows = [
   // Just delivered: its RAM, expiration and renewal are not known yet
   ['ns3000002.ip-198-51-100.eu', 'gra3', 'AMD EPYC 4344P', '-', 'error', '-', '-'],
 ];
-// The byte order mark that starts the CSV files, so that Excel reads their
-// accents as UTF-8
-const BOM = '﻿';
 
 describe('Infrastructure tab', () => {
   it('loads the inventory when the tab opens, the resource types with the page', async () => {
@@ -294,27 +296,19 @@ describe('Infrastructure tab', () => {
     it('downloads the servers as CSV, from the panel and from the modal', async () => {
       const { user } = await renderDashboard();
       await openTab(user, 'Infrastructure');
-      const downloadedFiles = captureFileDownloads();
 
-      await user.click(serversButton('CSV'));
-      await user.click(serversButton('Tout afficher'));
-      await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'CSV' }));
+      const [fromPanel, fromModal] = await downloadFromPanelAndModal(user, serversPanel());
 
-      const [fromPanel, fromModal] = await downloadedFiles();
       expect(fromModal).toEqual(fromPanel);
-      expect(fromPanel).toEqual({
-        name: 'ovh-dedicated-servers.csv',
-        type: 'text/csv;charset=utf-8',
-        content: BOM + [
-          '"Nom";"ID";"Datacentre";"CPU";"RAM (MB)";"OS";"État";"Date d\'expiration";'
-            + '"Renouvellement"',
-          '"backup-server";"ns3000001.ip-203-0-113.eu";"rbx8";"Intel Xeon-E 2388G";65536;'
-            + '"debian12_64";"ok";"2026-09-20";"automatic"',
-          // No expiration date: an empty cell; no renewal: an empty text
-          '"ns3000002.ip-198-51-100.eu";"ns3000002.ip-198-51-100.eu";"gra3";"AMD EPYC 4344P";0;'
-            + '"none_64";"error";;""',
-        ].join('\n'),
-      });
+      expect(fromPanel).toEqual(csvFile('ovh-dedicated-servers.csv', [
+        '"Nom";"ID";"Datacentre";"CPU";"RAM (MB)";"OS";"État";"Date d\'expiration";'
+          + '"Renouvellement"',
+        '"backup-server";"ns3000001.ip-203-0-113.eu";"rbx8";"Intel Xeon-E 2388G";65536;'
+          + '"debian12_64";"ok";"2026-09-20";"automatic"',
+        // No expiration date: an empty cell; no renewal: an empty text
+        '"ns3000002.ip-198-51-100.eu";"ns3000002.ip-198-51-100.eu";"gra3";"AMD EPYC 4344P";0;'
+          + '"none_64";"error";;""',
+      ]));
     });
   });
 

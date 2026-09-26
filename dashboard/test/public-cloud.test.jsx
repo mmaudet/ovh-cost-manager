@@ -2,7 +2,12 @@ import { describe, it, expect } from 'vitest';
 import { screen, within } from '@testing-library/react';
 import { account } from './fixtures/account.js';
 import { api } from './support/api.js';
-import { captureFileDownloads } from './support/downloads.js';
+import {
+  BOM,
+  captureFileDownloads,
+  csvFile,
+  downloadFromPanelAndModal,
+} from './support/downloads.js';
 import {
   backdropOf,
   cardOf,
@@ -58,24 +63,6 @@ const PRO_RATA_SHARE =
   "Quote-part d'une ligne de facture agrégée par région, au prorata de la taille";
 const costsWith = (table, tooltip) =>
   within(table).getAllByTitle(tooltip).map((cell) => cell.textContent);
-
-// The byte order mark that starts the CSV files, so that Excel reads their
-// accents as UTF-8
-const BOM = '﻿';
-const csvFile = (name, lines) => ({
-  name,
-  type: 'text/csv;charset=utf-8',
-  content: BOM + lines.join('\n'),
-});
-// Downloads the CSV file of a resource table, from its panel then from its
-// "show all" modal
-const downloadFromPanelAndModal = async (user, kind) => {
-  const downloadedFiles = captureFileDownloads();
-  await user.click(resourceButton(kind, 'CSV'));
-  await user.click(resourceButton(kind, 'Tout afficher'));
-  await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'CSV' }));
-  return downloadedFiles();
-};
 
 const instanceRows = [
   ['Nom', 'Flavor', 'Région', 'État', 'Coût'],
@@ -364,7 +351,8 @@ describe('Public Cloud tab', () => {
     it('are downloaded as CSV in the server order, from the panel and the modal', async () => {
       const { user } = await openProduction();
 
-      const [fromPanel, fromModal] = await downloadFromPanelAndModal(user, 'Instances');
+      const [fromPanel, fromModal] =
+        await downloadFromPanelAndModal(user, resources('Instances'));
 
       expect(fromModal).toEqual(fromPanel);
       expect(fromPanel).toEqual(csvFile('ovh-instances-Production.csv', [
@@ -415,7 +403,8 @@ describe('Public Cloud tab', () => {
     it('are downloaded as CSV by name, from the panel and the modal', async () => {
       const { user } = await openProduction();
 
-      const [fromPanel, fromModal] = await downloadFromPanelAndModal(user, 'Buckets');
+      const [fromPanel, fromModal] =
+        await downloadFromPanelAndModal(user, resources('Buckets'));
 
       expect(fromModal).toEqual(fromPanel);
       expect(fromPanel).toEqual(csvFile('ovh-buckets-2026-09.csv', [
@@ -457,7 +446,8 @@ describe('Public Cloud tab', () => {
     it('are downloaded as CSV, from the panel and the modal', async () => {
       const { user } = await openProduction();
 
-      const [fromPanel, fromModal] = await downloadFromPanelAndModal(user, 'Volumes');
+      const [fromPanel, fromModal] =
+        await downloadFromPanelAndModal(user, resources('Volumes'));
 
       expect(fromModal).toEqual(fromPanel);
       expect(fromPanel).toEqual(csvFile('ovh-volumes-2026-09.csv', [
@@ -500,7 +490,8 @@ describe('Public Cloud tab', () => {
     it('are downloaded as CSV, from the panel and the modal', async () => {
       const { user } = await openProduction();
 
-      const [fromPanel, fromModal] = await downloadFromPanelAndModal(user, 'Snapshots');
+      const [fromPanel, fromModal] =
+        await downloadFromPanelAndModal(user, resources('Snapshots'));
 
       expect(fromModal).toEqual(fromPanel);
       expect(fromPanel).toEqual(csvFile('ovh-snapshots-2026-09.csv', [
@@ -543,7 +534,8 @@ describe('Public Cloud tab', () => {
     it('are downloaded as CSV, from the panel and the modal', async () => {
       const { user } = await openProduction();
 
-      const [fromPanel, fromModal] = await downloadFromPanelAndModal(user, 'Savings plans');
+      const [fromPanel, fromModal] =
+        await downloadFromPanelAndModal(user, resources('Savings plans'));
 
       expect(fromModal).toEqual(fromPanel);
       expect(fromPanel).toEqual(csvFile('ovh-savings-plans-2026-09.csv', [
