@@ -93,6 +93,91 @@ version: review it and add upgrade notes if needed. Pushing the tag builds and
 publishes the Docker image, then creates the GitHub release from the
 `CHANGELOG.md` section.
 
+## Checking the dashboard on real data
+
+A change that must not change what users see, such as a step of a refactoring,
+can be checked on the maintainer's own data: a script builds the dashboard
+before and after the change, serves both on the same frozen snapshot of the
+database, and reports every difference in what they show. It runs on the
+maintainer's machine only, never in CI.
+
+### Taking a snapshot
+
+A snapshot is a complete import, every dataset included, into a data directory
+of its own:
+
+```bash
+DATA_DIR=~/ovh-cost-manager-snapshots/2026-09-26 node data/import.js --full --all
+```
+
+The import calls the OVH API with the credentials of your `config.json`. Take
+the snapshot once, before the refactoring starts, and never import into it
+again while the refactoring is in progress: every step must be compared on the
+same data. The comparison only reads the snapshot, and works on copies.
+
+### Running the comparison
+
+```bash
+npm run compare:dashboard -- --data ~/ovh-cost-manager-snapshots/2026-09-26
+```
+
+This compares `main` with your working tree, uncommitted changes included. Use
+`--base` and `--head` to compare two refs, and `--help` for all the options. The
+script:
+
+- copies the snapshot database once: as plain files when nothing has it open,
+  or with SQLite's backup API when an import may be writing to it (a `-shm`
+  file exists), which updates the snapshot's `-shm` index, never its data.
+  Each side gets its own copy, which its server migrates as it starts;
+- builds the base in a temporary git worktree (`npm ci`, native binaries of
+  better-sqlite3 and esbuild, `npm run build`), and the working tree in place;
+- serves each side with imports turned off (`IMPORT_ENABLED=false`), without
+  authentication or rate limiting, and lets the page read only: any other
+  request, such as a resync, is refused and recorded as a section of its own.
+  Nothing calls the OVH API, even with older commits that ignore
+  `IMPORT_ENABLED`;
+- opens both in Google Chrome, or in Playwright's Chromium if Chrome is missing
+  (`npx playwright install chromium`), with the clock frozen at the date of the
+  latest bill (`--clock`) and the page in French (`--lang en` or `--lang both`);
+- for the month the page opens on and the same month a year earlier
+  (`--months`), captures the visible text of the shell (header, KPI cards, tab
+  bar, footer), of every tab and of every "show all" modal, and the content of
+  the CSV exports and of the Markdown report; it also opens the Compare
+  accordions, every Public Cloud project (`--projects 3` for the first three
+  only) and every resource type of the Infrastructure tab, then the Compare tab
+  again, which only lists the dedicated servers once the Infrastructure tab has
+  loaded them;
+- compares the two captures section by section, normalising nothing but runs
+  of spaces, tabs and line breaks (the no-break spaces of amounts are kept),
+  prints the differences, and exits with 1 when there is any, 0 otherwise, or
+  2 when it could not complete. The one exception is the section of the page's
+  console errors: each message keeps its first line only, with the server's
+  address and the bundle's file names replaced, and its number of occurrences;
+- ends the report with its coverage: every table the page can show in full and
+  export, flagged when no capture reached its modal or its CSV, as for a table
+  the snapshot never fills (savings plans, or dedicated servers without an
+  inventory), then the sections empty on both sides, which were not compared.
+
+A run takes about two and a half minutes, twice that with `--lang both`. The
+captures (`base.json`, `head.json`), the report and the logs go to the
+temporary directory it prints, or to `--out`. A refactoring step is ready to
+merge only when the comparison finds no difference.
+
+The comparison does not see everything: styles, tooltips and chart shapes are
+not captured. Nor is the server's clock frozen: the months of the Trends tab
+(SQLite's `date('now')`) and the services about to expire follow the real
+date. Both sides see the same, but as real time passes during a refactoring,
+the Trends tab shows fewer and fewer months of the snapshot. The report starts
+with the state of the snapshot (bills, last import, empty datasets) and both
+dates, and warns when an import is running or has failed, and when the real
+month is past the latest bill. When the working tree holds a `config.json`, the
+base reads it too, so that both show the same budget.
+
+Snapshots, database copies and captures hold real billing data: never commit
+them, nor attach them to an issue or a pull request. The script refuses an
+output directory in the snapshot, or in the work tree of any repository where
+git does not ignore it, symbolic links followed.
+
 ## Development Setup
 
 1. Clone your fork:

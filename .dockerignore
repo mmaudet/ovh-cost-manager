@@ -49,6 +49,7 @@ docker-compose*.yml
 .planning
 demo
 scripts/release.sh
+scripts/compare-dashboard
 tests
 dashboard/test
 dashboard/vitest.config.js

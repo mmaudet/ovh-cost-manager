@@ -34,4 +34,24 @@ export default [
     },
     rules,
   },
+  {
+    files: ['scripts/**/*.mjs'],
+    ignores: ['scripts/compare-dashboard/in-page.mjs'],
+    languageOptions: {
+      ecmaVersion: 'latest',
+      sourceType: 'module',
+      globals: globals.node,
+    },
+    rules,
+  },
+  {
+    // Run inside the dashboard page by Playwright: browser globals only
+    files: ['scripts/compare-dashboard/in-page.mjs'],
+    languageOptions: {
+      ecmaVersion: 'latest',
+      sourceType: 'module',
+      globals: globals.browser,
+    },
+    rules,
+  },
 ];
