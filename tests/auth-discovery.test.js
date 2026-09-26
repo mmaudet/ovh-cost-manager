@@ -54,6 +54,7 @@ describe('createDiscoveryGate, mounted as server/index.js mounts it', () => {
       '/api/months/',
       '/api/healthz',
       '/api/health/x',
+      '/api//health',
       '/auth/login',
       '/AUTH/login',
       '/auth/callback?code=x&state=y',

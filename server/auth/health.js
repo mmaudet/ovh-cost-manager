@@ -8,15 +8,18 @@
 const HEALTH_PATH = /^\/api\/health\/?$/i;
 
 /**
- * Whether a request is for the health check, from any middleware: whether it
- * is mounted on /api or on the app, req.baseUrl followed by req.path is the
- * path the request writes.
+ * Whether a request is for the health check, from any middleware, mounted on
+ * /api or on the app: on the path the request writes, req.originalUrl
+ * without its query. Not on req.baseUrl followed by req.path: mounted on
+ * /api, a middleware sees /api//health as /api and /health, while no route
+ * serves the health check at /api//health.
  *
  * @param {object} req - the request
  * @returns {boolean}
  */
 function isHealthCheck(req) {
-  return HEALTH_PATH.test(req.baseUrl + req.path);
+  const [path] = (req.originalUrl ?? req.url).split('?');
+  return HEALTH_PATH.test(path);
 }
 
 module.exports = { isHealthCheck };

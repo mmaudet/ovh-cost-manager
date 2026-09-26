@@ -34,3 +34,10 @@ test('limits the rest of the API', async () => {
   }
   expect(statuses).toEqual([200, 200, 429]);
 });
+
+// Mounted on /api, the limiter saw /api//health as the health check, which no
+// route serves there: it is limited as the rest of the API, whose quota the
+// test above spent
+test('limits /api//health, which is not the health check', async () => {
+  expect(await status('/api//health')).toBe(429);
+});

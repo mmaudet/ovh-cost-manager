@@ -52,6 +52,8 @@ describe('header mode with AUTH_REQUIRED=true', () => {
     // Neither the health check
     '/api/healthz',
     '/api/health/x',
+    '/api//health',
+    '/API//HEALTH/',
   ])('answers 401 on GET %s without Auth-User', async (path) => {
     const res = await server.request('GET', path);
     expect(res.status).toBe(401);
