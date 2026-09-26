@@ -11,16 +11,15 @@ const formatCurrency = (value, language = 'fr') => {
 };
 
 // Format a share (0.092) as a percentage, based on language: 9,2 % in French, 9.2% in
-// English. With one decimal unless told otherwise, and signed on request, as a variation is:
-// an increase reads +20,0 %, a decrease -16,7 % either way. A share of 0 out of a negative
-// total, which is -0, reads 0,0 % as any 0 does.
-const formatPercent = (share, language = 'fr', { decimals = 1, signed = false } = {}) => {
+// English, with one decimal unless told otherwise. A share of 0 out of a negative total,
+// which is -0, reads 0,0 % as any 0 does. A variation has a sign of its own: see
+// variationDisplay() in variation.js.
+const formatPercent = (share, language = 'fr', { decimals = 1 } = {}) => {
   const locale = localeOf(language);
   return new Intl.NumberFormat(locale, {
     style: 'percent',
     minimumFractionDigits: decimals,
     maximumFractionDigits: decimals,
-    signDisplay: signed && share > 0 ? 'always' : 'auto',
   }).format(share === 0 ? 0 : share);
 };
 

@@ -1,9 +1,18 @@
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line,
 } from 'recharts';
-import { formatPercent, formatYearMonth } from '../utils/format.js';
+import { formatYearMonth } from '../utils/format.js';
 import { growthOverPeriod } from '../utils/periodGrowth.js';
 import { PERIOD_OPTIONS } from '../utils/trendPeriods.js';
+import { variationDisplay } from '../utils/variation.js';
+
+// The colours of each tone of the growth over the period: red when it grows, green when it
+// shrinks, grey when it rounds to 0 (#87)
+const GROWTH_TONES = {
+  increase: 'text-red-600',
+  decrease: 'text-green-600',
+  neutral: 'text-gray-600',
+};
 
 // The Trends tab, which the shell renders while it is active: what useTrendsTab() returns,
 // with the shell's language, translations (t) and amount format (fmt).
@@ -12,14 +21,17 @@ const TrendsTab = ({
   language, t, fmt,
 }) => {
   const currentPeriodLabel = (PERIOD_OPTIONS.find(o => o.months === trendPeriod) || {}).key;
-  // The growth over the period, in percent, from its first month to its last. Two states
-  // show none (#65):
+  // The growth over the period, in percent, from its first month to its last, as the page
+  // shows it: its text and its tone (#87). Two states show none (#65):
   // - N/A, without two months to compare: with no months at all, as when nothing was billed
   //   over the period, since the trend routes give every month of a period with a bill;
   // - "—", with a tooltip, when the first month, at 0 € or less, leaves none to compute.
   const spansTwoMonths = monthlyTrend.length > 1;
   const growth = spansTwoMonths
-    ? growthOverPeriod(monthlyTrend[0].cost, monthlyTrend[monthlyTrend.length - 1].cost)
+    ? variationDisplay(
+      growthOverPeriod(monthlyTrend[0].cost, monthlyTrend[monthlyTrend.length - 1].cost),
+      language,
+    )
     : null;
   const growthNotComputable = spansTwoMonths && growth === null;
 
@@ -145,13 +157,12 @@ const TrendsTab = ({
           <div
             className={`text-3xl font-bold mt-2 ${growth === null
               ? 'text-gray-400'
-              : (growth > 0 ? 'text-red-600' : 'text-green-600')}`}
+              : GROWTH_TONES[growth.tone]}`}
             title={growthNotComputable ? t('periodGrowthNotComputable') : undefined}
           >
             {!spansTwoMonths && 'N/A'}
             {growthNotComputable && '—'}
-            {/* In the number format of the language (#87) */}
-            {growth !== null && formatPercent(growth / 100, language, { signed: true })}
+            {growth?.text}
           </div>
           <p className="text-sm text-gray-500 mt-1">{t('overPeriod')} {t(currentPeriodLabel)}</p>
         </div>

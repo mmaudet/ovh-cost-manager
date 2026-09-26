@@ -17,6 +17,7 @@ import {
   settle,
   sortTable,
   texts,
+  toneOf,
 } from './support/render.jsx';
 
 // Months A and B both offer every month: the one they show tells them apart
@@ -647,6 +648,59 @@ describe('Compare tab', () => {
         ['Hôtes Private Cloud', '0,00€', '0,00€', '—'],
         ['Datastores Private Cloud', '0,00€', '0,00€', '—'],
       ]);
+    });
+  });
+
+  describe('tones of the variations (#87)', () => {
+    it('show an increase in red, and a decrease in green', async () => {
+      const { user } = await renderDashboard({
+        ...account,
+        summary: { ...account.summary, '2026-08': { ...account.summary['2026-08'], total: 1300 } },
+      });
+      await openTab(user, 'Comparaison');
+
+      // (1 250.40 - 1 300) / 1 300
+      expect(toneOf(within(comparedTotals()).getByText('-3,8 %'))).toBe('decrease');
+      // (610.40 - 512) / 512
+      expect(toneOf(within(comparisonTable(PROJECTS)).getByText('+19,2 %'))).toBe('increase');
+    });
+
+    // "+0,0 %" in red read as an increase that does not show
+    it('show a variation that rounds to 0, either way, unsigned and neutral', async () => {
+      const [production, staging] = account.byProject['2026-08'];
+      const { user } = await renderDashboard({
+        ...account,
+        summary: { ...account.summary, '2026-08': { ...account.summary['2026-08'], total: 1250 } },
+        byProject: {
+          ...account.byProject,
+          '2026-08': [{ ...production, total: 610.3 }, { ...staging, total: 220.05 }],
+        },
+      });
+      await openTab(user, 'Comparaison');
+
+      // (1 250.40 - 1 250) / 1 250 is 0.03 %
+      expect(texts(comparedTotals()).slice(5)).toEqual([
+        '1 250,00€', 'Août 2026', '0,0 %', '1 250,40€', 'Septembre 2026',
+      ]);
+      expect(toneOf(within(comparedTotals()).getByText('0,0 %'))).toBe('neutral');
+      // (610.40 - 610.30) / 610.30 is 0.02 %, (220 - 220.05) / 220.05 -0.02 %
+      expect(rowsOf(comparisonTable(PROJECTS))).toEqual([
+        ['Projet○', 'Août 2026▼', 'Septembre 2026○', 'Variation○'],
+        ['Production', '610,30€', '610,40€', '0,0 %'],
+        ['Staging', '220,05€', '220,00€', '0,0 %'],
+      ]);
+      for (const variation of within(comparisonTable(PROJECTS)).getAllByText('0,0 %')) {
+        expect(toneOf(variation)).toBe('neutral');
+      }
+
+      await selectLanguage(user, 'en');
+
+      expect(toneOf(within(comparedTotals()).getByText('0.0%'))).toBe('neutral');
+      const projects = comparisonTable(/^Comparison by project/);
+      expect(rowsOf(projects).slice(1).map((row) => row[3])).toEqual(['0.0%', '0.0%']);
+      for (const variation of within(projects).getAllByText('0.0%')) {
+        expect(toneOf(variation)).toBe('neutral');
+      }
     });
   });
 

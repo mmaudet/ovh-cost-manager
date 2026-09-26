@@ -298,3 +298,10 @@ export function backdropOf(dialog) {
 export function swatchOf(legendItem) {
   return legendItem.querySelector('span');
 }
+
+// The tone of a variation, as the colour of its text shows it: an increase in red, a
+// decrease in green, and neither in grey (#87)
+export function toneOf(variation) {
+  const colour = variation.className.match(/\btext-(red|green|gray)-\d+\b/)?.[1];
+  return { red: 'increase', green: 'decrease', gray: 'neutral' }[colour];
+}

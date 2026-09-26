@@ -14,6 +14,7 @@ import {
   settle,
   swatchOf,
   texts,
+  toneOf,
 } from './support/render.jsx';
 
 // The period selector, next to the tab bar, always offers the shortest period
@@ -166,6 +167,43 @@ describe('Trends tab', () => {
 
       expect(within(cardOf('Growth over period'))
         .getByTitle('cannot be computed: first month at €0 or below')).toHaveTextContent('—');
+    });
+
+    it('shows an increase in red, and a decrease in green (#87)', async () => {
+      const { user } = await renderDashboard();
+      await openTab(user, 'Tendances');
+
+      expect(toneOf(within(growthCard()).getByText('+27,6 %'))).toBe('increase');
+    });
+
+    it('shows a decrease with its minus, in green (#87)', async () => {
+      const { user } = await renderDashboard(julyAt(1300));
+
+      await openTab(user, 'Tendances');
+
+      // (1 250.40 - 1 300) / 1 300
+      expect(texts(growthCard())).toEqual(['Croissance sur la période', '-3,8 %', 'Sur 3 mois']);
+      expect(toneOf(within(growthCard()).getByText('-3,8 %'))).toBe('decrease');
+    });
+
+    // "+0,0 %" in red read as an increase that does not show (#87)
+    it.each([
+      ['an increase', 1250],
+      ['a decrease', 1250.8],
+    ])('shows %s that rounds to 0 unsigned and neutral (#87)', async (_, julyCost) => {
+      const { user } = await renderDashboard(julyAt(julyCost));
+
+      await openTab(user, 'Tendances');
+
+      // (1 250.40 - 1 250) / 1 250 is 0.03 %, (1 250.40 - 1 250.80) / 1 250.80 -0.03 %
+      expect(texts(growthCard())).toEqual(['Croissance sur la période', '0,0 %', 'Sur 3 mois']);
+      expect(toneOf(within(growthCard()).getByText('0,0 %'))).toBe('neutral');
+
+      await selectLanguage(user, 'en');
+
+      const card = cardOf('Growth over period');
+      expect(texts(card)).toEqual(['Growth over period', '0.0%', 'Over 3 months']);
+      expect(toneOf(within(card).getByText('0.0%'))).toBe('neutral');
     });
 
     // Its credits exceed its costs: the growth would have the wrong sign

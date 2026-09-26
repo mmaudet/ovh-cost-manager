@@ -81,32 +81,11 @@ describe('formatPercent', () => {
     expect(formatPercent(0.735, 'fr', { decimals: 1 })).toBe(`73,5${NBSP}%`);
   });
 
-  it('leaves a share unsigned unless asked, a negative one keeping its minus (#87)', () => {
+  // A variation has a sign of its own: see variationDisplay()
+  it('leaves a share unsigned, a negative one keeping its minus (#87)', () => {
     expect(formatPercent(0.2, 'fr')).toBe(`20,0${NBSP}%`);
     expect(formatPercent(-0.05, 'fr')).toBe(`-5,0${NBSP}%`);
     expect(formatPercent(-0.05, 'en')).toBe('-5.0%');
-  });
-
-  // The variations of the KPI card, the Compare tab and the Trends growth
-  it('signs an increase with a plus on request, the French way (#87)', () => {
-    expect(formatPercent(0.2, 'fr', { signed: true })).toBe(`+20,0${NBSP}%`);
-    expect(formatPercent(1.2727, 'fr', { signed: true })).toBe(`+127,3${NBSP}%`);
-    expect(formatPercent(-0.1667, 'fr', { signed: true })).toBe(`-16,7${NBSP}%`);
-    expect(formatPercent(-1, 'fr', { signed: true })).toBe(`-100,0${NBSP}%`);
-    expect(formatPercent(0, 'fr', { signed: true })).toBe(`0,0${NBSP}%`);
-  });
-
-  it('signs an increase with a plus on request, the English way (#87)', () => {
-    expect(formatPercent(0.2, 'en', { signed: true })).toBe('+20.0%');
-    expect(formatPercent(1.2727, 'en', { signed: true })).toBe('+127.3%');
-    expect(formatPercent(-0.1667, 'en', { signed: true })).toBe('-16.7%');
-    expect(formatPercent(0, 'en', { signed: true })).toBe('0.0%');
-  });
-
-  // As the variations of the Compare tab and the Trends growth were written
-  it('signs any increase or decrease, even one that rounds to 0 % (#87)', () => {
-    expect(formatPercent(0.0004, 'fr', { signed: true })).toBe(`+0,0${NBSP}%`);
-    expect(formatPercent(-0.0004, 'fr', { signed: true })).toBe(`-0,0${NBSP}%`);
   });
 });
 

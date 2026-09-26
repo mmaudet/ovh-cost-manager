@@ -22,6 +22,7 @@ import {
   selectMonth,
   settle,
   texts,
+  toneOf,
 } from './support/render.jsx';
 
 // The month selector of the header offers every billed month
@@ -295,6 +296,52 @@ describe('dashboard shell', () => {
 
       expect(texts(totalCostCard()))
         .toEqual(['Coût total du mois', '980,00€', 'Pas de données précédentes']);
+    });
+
+    it('shows an increase in red (#87)', async () => {
+      await renderDashboard();
+
+      expect(toneOf(within(totalCostCard()).getByText('+20,0 % vs mois précédent')))
+        .toBe('increase');
+    });
+
+    it('shows a decrease with its minus, in green (#87)', async () => {
+      await renderDashboard({
+        ...account,
+        summary: { ...account.summary, '2026-08': { ...account.summary['2026-08'], total: 1300 } },
+      });
+
+      // (1 250.40 - 1 300) / 1 300
+      expect(texts(totalCostCard()))
+        .toEqual(['Coût total du mois', '1 250,40€', '-3,8 % vs mois précédent']);
+      expect(toneOf(within(totalCostCard()).getByText('-3,8 % vs mois précédent')))
+        .toBe('decrease');
+    });
+
+    // "+0,0 %" in red read as an increase that does not show (#87)
+    it.each([
+      ['an increase', 1250],
+      ['a decrease', 1250.8],
+    ])('shows %s that rounds to 0 unsigned and neutral (#87)', async (_, augustTotal) => {
+      const { user } = await renderDashboard({
+        ...account,
+        summary: {
+          ...account.summary,
+          '2026-08': { ...account.summary['2026-08'], total: augustTotal },
+        },
+      });
+
+      // (1 250.40 - 1 250) / 1 250 is 0.03 %, (1 250.40 - 1 250.80) / 1 250.80 -0.03 %
+      expect(texts(totalCostCard()))
+        .toEqual(['Coût total du mois', '1 250,40€', '0,0 % vs mois précédent']);
+      expect(toneOf(within(totalCostCard()).getByText('0,0 % vs mois précédent')))
+        .toBe('neutral');
+
+      await selectLanguage(user, 'en');
+
+      const card = cardOf('Total monthly cost');
+      expect(texts(card)).toEqual(['Total monthly cost', '1,250.40€', '0.0% vs previous month']);
+      expect(toneOf(within(card).getByText('0.0% vs previous month'))).toBe('neutral');
     });
   });
 
