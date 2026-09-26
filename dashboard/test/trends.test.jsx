@@ -31,12 +31,12 @@ describe('Trends tab', () => {
     expect(api.fetchMonthlyTrend).toHaveBeenCalledWith(3, '2026-09');
     expect(api.fetchMonthlyTrendByCategory).toHaveBeenCalledWith(3, '2026-09');
     // Only the GPU costs of the selected month so far, for the Overview
-    expect(api.fetchGpuSummary).not.toHaveBeenCalledWith();
+    expect(api.fetchGpuSummary).not.toHaveBeenCalledWith('2026-07-01', '2026-09-30');
 
     await openTab(user, 'Tendances');
 
-    // All months: no period
-    expect(api.fetchGpuSummary).toHaveBeenCalledWith();
+    // The same 3 months, from July to September
+    expect(api.fetchGpuSummary).toHaveBeenCalledWith('2026-07-01', '2026-09-30');
     expect(periodSelector()).toHaveDisplayValue('3 mois');
     expect(screen.getByRole('heading', { name: 'Évolution des coûts (total) sur 3 mois' }))
       .toBeInTheDocument();
@@ -151,7 +151,7 @@ describe('Trends tab', () => {
   });
 
   describe('GPU trend', () => {
-    it('shows the GPU costs over all the billed months', async () => {
+    it('shows the GPU costs over the period', async () => {
       const { user } = await renderDashboard();
 
       await openTab(user, 'Tendances');
@@ -160,13 +160,17 @@ describe('Trends tab', () => {
         .toEqual(['Évolution des coûts GPU', 'Total: 730,50€']);
     });
 
-    it('is left out when GPUs were billed in a single month', async () => {
+    it('is left out when GPUs were billed in a single month of the period', async () => {
+      const threeMonths = '2026-07/2026-09';
       const singleMonth = {
-        ...account.gpuSummary.all,
+        ...account.gpuSummary[threeMonths],
         total: 420.5,
         monthlyTrend: [{ month: '2026-09', total: 420.5 }],
       };
-      const { user } = await renderDashboard({ ...account, gpuSummary: { all: singleMonth } });
+      const { user } = await renderDashboard({
+        ...account,
+        gpuSummary: { [threeMonths]: singleMonth },
+      });
 
       await openTab(user, 'Tendances');
 

@@ -48,8 +48,9 @@ const costByResourceTypeUpToAugust = {
 };
 
 // GPU instances of the Production project, billed in August and September.
-// The Trends tab asks /api/gpu/summary for no period: all months.
-const gpuOverAllMonths = {
+// The Trends tab asks /api/gpu/summary for the months of its period: July to
+// September.
+const gpuFromJulyToSeptember = {
   total: 730.5,
   project_count: 1,
   byModel: [{ gpu_model: 'NVIDIA L4', total: 730.5, count: 1, color: '#22c55e' }],
@@ -87,7 +88,7 @@ const gpuInMonth = (month, total) => ({
       total, gpu_flavors: 'l4-90' },
   ],
   monthlyTrend: [{ month, total }],
-  instances: gpuOverAllMonths.instances,
+  instances: gpuFromJulyToSeptember.instances,
 });
 
 export const trends = {
@@ -96,7 +97,7 @@ export const trends = {
   monthlyTrend: { '2026-09': { 3: lastThreeMonths, 6: lastThreeMonths } },
   monthlyTrendByCategory: { '2026-09': { 3: costByResourceType, 6: costByResourceType } },
   gpuSummary: {
-    all: gpuOverAllMonths,
+    '2026-07/2026-09': gpuFromJulyToSeptember,
     '2026-08': gpuInMonth('2026-08', 310),
     '2026-09': gpuInMonth('2026-09', 420.5),
   },

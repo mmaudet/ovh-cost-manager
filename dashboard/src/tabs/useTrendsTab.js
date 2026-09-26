@@ -6,7 +6,9 @@ import { useQuery } from '@tanstack/react-query';
 import {
   fetchMonthlyTrend, fetchMonthlyTrendByCategory, fetchGpuSummary,
 } from '../services/api.js';
-import { monthsSince, availablePeriodsFor } from '../utils/trendPeriods.js';
+import {
+  monthsSince, availablePeriodsFor, trendWindowEndingOn,
+} from '../utils/trendPeriods.js';
 
 const useTrendsTab = ({ months, selectedMonth, activeTab }) => {
   const [trendPeriod, setTrendPeriod] = useState(6); // Months for trend
@@ -44,11 +46,12 @@ const useTrendsTab = ({ months, selectedMonth, activeTab }) => {
     return next;
   });
 
-  // GPU cost trend — all-time (for trends tab)
+  // GPU cost trend, over the same months (for trends tab)
+  const gpuTrendWindow = trendWindowEndingOn(selectedMonth, trendPeriod);
   const { data: gpuTrend } = useQuery({
-    queryKey: ['gpuTrend'],
-    queryFn: () => fetchGpuSummary(),
-    enabled: activeTab === 'trends'
+    queryKey: ['gpuTrend', gpuTrendWindow?.from, gpuTrendWindow?.to],
+    queryFn: () => fetchGpuSummary(gpuTrendWindow.from, gpuTrendWindow.to),
+    enabled: !!gpuTrendWindow && activeTab === 'trends'
   });
 
   return {

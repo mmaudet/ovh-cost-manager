@@ -33,13 +33,17 @@ describe('useTrendsTab', () => {
 
       expect(api.fetchMonthlyTrend).not.toHaveBeenCalled();
       expect(api.fetchMonthlyTrendByCategory).not.toHaveBeenCalled();
-      // Both wait for the month their period ends on, rather than failing for the lack of it
+      expect(api.fetchGpuSummary).not.toHaveBeenCalled();
+      // They wait for the month their period ends on, rather than failing for the lack of it
       expect(queryClient.getQueryState(['monthlyTrend', 6, undefined])).toMatchObject(WAITING);
       expect(queryClient.getQueryState(['monthlyTrendByCategory', 6, undefined]))
+        .toMatchObject(WAITING);
+      expect(queryClient.getQueryState(['gpuTrend', undefined, undefined]))
         .toMatchObject(WAITING);
       expect(result.current.trendPeriod).toBe(6);
       expect(result.current.monthlyTrend).toEqual([]);
       expect(result.current.trendByCategory).toEqual({ categories: [], data: [] });
+      expect(result.current.gpuTrend).toBeUndefined();
     });
 
   it.each(TAB_IDS)('requests the trends that end on the selected month on the %s tab',
@@ -67,6 +71,7 @@ describe('useTrendsTab', () => {
 
       expect(api.fetchMonthlyTrend).toHaveBeenLastCalledWith(6, '2026-08');
       expect(api.fetchMonthlyTrendByCategory).toHaveBeenLastCalledWith(6, '2026-08');
+      expect(api.fetchGpuSummary).toHaveBeenLastCalledWith('2026-03-01', '2026-08-31');
       expect(result.current.trendPeriod).toBe(6);
       // March to August: only July and August were billed
       expect(costs(result.current.monthlyTrend)).toEqual([['2026-07', 980], ['2026-08', 1042]]);
@@ -85,15 +90,15 @@ describe('useTrendsTab', () => {
     },
   );
 
-  it('requests the GPU trend over all the billed months once the tab opens', async () => {
+  it('requests the GPU trend over the period once the tab opens', async () => {
     const { result, rerender } = await renderTabHook(useTrendsTab,
       { months, selectedMonth: september, activeTab: 'overview' });
     expect(api.fetchGpuSummary).not.toHaveBeenCalled();
 
     await rerender({ months, selectedMonth: september, activeTab: 'trends' });
 
-    // No period: every month
-    expect(api.fetchGpuSummary).toHaveBeenCalledWith();
+    // The same 3 months as the cost trends, from their first day to their last
+    expect(api.fetchGpuSummary).toHaveBeenCalledWith('2026-07-01', '2026-09-30');
     expect(result.current.gpuTrend.total).toBe(730.5);
     expect(result.current.gpuTrend.monthlyTrend).toEqual([
       { month: '2026-08', total: 310 },
@@ -121,8 +126,12 @@ describe('useTrendsTab', () => {
         ['monthlyTrendByCategory', 24, '2026-09'],
         ['monthlyTrendByCategory', 24, '2026-08'],
       ]);
-      // Every month, whatever the period
-      expect(keysOf('gpuTrend')).toEqual([['gpuTrend']]);
+      // The same months, as dates
+      expect(keysOf('gpuTrend')).toEqual([
+        ['gpuTrend', '2026-04-01', '2026-09-30'],
+        ['gpuTrend', '2024-10-01', '2026-09-30'],
+        ['gpuTrend', '2024-09-01', '2026-08-31'],
+      ]);
     });
 
   describe('period', () => {

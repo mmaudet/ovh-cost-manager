@@ -1,6 +1,8 @@
 import { describe, it, expect, vi } from 'vitest';
 import { translations } from '../../src/i18n/translations.js';
-import { PERIOD_OPTIONS, monthsSince, availablePeriodsFor } from '../../src/utils/trendPeriods.js';
+import {
+  PERIOD_OPTIONS, monthsSince, availablePeriodsFor, trendWindowEndingOn,
+} from '../../src/utils/trendPeriods.js';
 
 // "Today" is 15 September 2026 (see setup.js)
 
@@ -89,5 +91,41 @@ describe('availablePeriodsFor', () => {
   it('offers every period, up to 20 years, for more than 240 months', () => {
     expect(lengths(availablePeriodsFor(241))).toEqual([3, 6, 12, 24, 36, 60, 120, 180, 240]);
     expect(lengths(availablePeriodsFor(600))).toEqual([3, 6, 12, 24, 36, 60, 120, 180, 240]);
+  });
+});
+
+// The first and last day of a period of that many months that ends on the selected month,
+// that month included: the dates the GPU trend is requested for.
+describe('trendWindowEndingOn', () => {
+  // Months as /api/months lists them
+  const september = {
+    value: '2026-09', label: 'Septembre 2026', from: '2026-09-01', to: '2026-09-30',
+  };
+  const january = {
+    value: '2026-01', label: 'Janvier 2026', from: '2026-01-01', to: '2026-01-31',
+  };
+  const leapFebruary = {
+    value: '2024-02', label: 'Février 2024', from: '2024-02-01', to: '2024-02-29',
+  };
+
+  it('starts in July for 3 months that end on a September', () => {
+    expect(trendWindowEndingOn(september, 3)).toEqual({ from: '2026-07-01', to: '2026-09-30' });
+  });
+
+  it('starts in the year before for 12 months that end on a January', () => {
+    expect(trendWindowEndingOn(january, 12)).toEqual({ from: '2025-02-01', to: '2026-01-31' });
+  });
+
+  it('starts in the October two years before for 2 years that end on a September', () => {
+    expect(trendWindowEndingOn(september, 24)).toEqual({ from: '2024-10-01', to: '2026-09-30' });
+  });
+
+  it('ends on the last day of a leap February', () => {
+    expect(trendWindowEndingOn(leapFebruary, 3))
+      .toEqual({ from: '2023-12-01', to: '2024-02-29' });
+  });
+
+  it('covers no period before a month is selected', () => {
+    expect(trendWindowEndingOn(null, 3)).toBeNull();
   });
 });

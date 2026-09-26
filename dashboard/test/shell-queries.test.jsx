@@ -57,7 +57,9 @@ describe('query keys', () => {
       ['monthlyTrend', 3, '2026-09'],
       ['monthlyTrendByCategory', 6, undefined],
       ['monthlyTrendByCategory', 3, '2026-09'],
-      ['gpuTrend'],
+      // And the GPU trend over those months, which only runs on the tab
+      ['gpuTrend', undefined, undefined],
+      ['gpuTrend', '2026-07-01', '2026-09-30'],
       // The Public Cloud tab's, while no project is selected
       ['projectsEnriched'],
       ['projectConsumption', undefined],
