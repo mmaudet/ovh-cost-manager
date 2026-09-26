@@ -27,9 +27,12 @@ const CONFIG_PATHS = [
 ];
 
 let config = { dashboard: { budget: 50000, currency: 'EUR' } };
+let configPath = null;
 
 try {
-  config = { ...config, ...readConfigFile(CONFIG_PATHS).config };
+  const loaded = readConfigFile(CONFIG_PATHS);
+  config = { ...config, ...loaded.config };
+  configPath = loaded.path;
 } catch (err) {
   console.error(`Failed to start server: ${err.message}`);
   process.exit(1);
@@ -246,7 +249,7 @@ let authConfig = { auth: { enabled: false } };
 
 async function initializeServer() {
   // Initialize OIDC authentication: throws when it is enabled but incomplete
-  const authResult = await auth.initialize(app, db.getDb(), config);
+  const authResult = await auth.initialize(app, db.getDb(), config, configPath);
   authConfig = authResult.config;
 
   if (authConfig.auth.enabled) {
@@ -295,7 +298,7 @@ async function initializeServer() {
     }
   } else {
     // Without OIDC: header-based SSO (LemonLDAP headers via reverse proxy)
-    auth.mountHeaderMode(app, { required: process.env.AUTH_REQUIRED === 'true' });
+    auth.mountHeaderMode(app, { required: authConfig.auth.required });
   }
 
   // Logging middleware (inside async to run after auth middleware)

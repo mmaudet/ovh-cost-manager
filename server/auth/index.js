@@ -20,9 +20,10 @@ const { plainHttpWarning } = require('./provider');
  * Initialize OIDC authentication. When it is enabled, the server never falls
  * back to header mode: it refuses to start without the required settings, and
  * discovers the provider in the background, retrying until it succeeds.
+ * configPath, the path of config.json, names the file in the errors.
  */
-async function initialize(app, db, fileConfig) {
-  const config = { auth: buildAuthConfig(fileConfig) };
+async function initialize(app, db, fileConfig, configPath) {
+  const config = { auth: buildAuthConfig(fileConfig, process.env, configPath || undefined) };
 
   if (!config.auth.enabled) {
     console.log('OIDC authentication disabled');

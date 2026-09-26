@@ -5,51 +5,75 @@
 const DEFAULT_SCOPES = ['openid', 'profile', 'email'];
 
 /**
- * A true/false setting of the environment, which overrides config.json.
+ * Reads a true/false setting of authentication, the one way for every one of
+ * them: from the environment, the text true or false, in any case; from
+ * config.json, the JSON booleans true or false. auto too where allowed.
+ * Anything else throws, naming the setting, rather than turn a check off.
  *
- * @param {object} env - the environment variables
- * @param {string} name - the variable
- * @returns {boolean|undefined} undefined when unset or empty, for the file's
- *   value to apply
- * @throws {Error} on any other value than true or false, rather than guess
+ * @param {*} value - the variable's text, or the value in config.json
+ * @param {object} setting
+ * @param {string} setting.name - the setting, as the error names it
+ * @param {boolean} [setting.fromFile] - whether the value comes from config.json
+ * @param {boolean} [setting.auto] - whether auto is allowed, as for the Secure flag
+ * @returns {boolean|string|undefined} true, false or 'auto', or undefined when
+ *   unset, or empty in the environment
  */
-function envBoolean(env, name) {
-  const value = env[name];
-  if (value === undefined || value === '') {
+function parseBoolean(value, { name, fromFile = false, auto = false }) {
+  if (value === undefined || (!fromFile && value === '')) {
     return undefined;
   }
-  if (value !== 'true' && value !== 'false') {
-    throw new Error(`${name} must be true or false, not '${value}'`);
+  if (fromFile && typeof value === 'boolean') {
+    return value;
   }
-  return value === 'true';
-}
-
-// The Secure flag of the session cookie: true or false when COOKIE_SECURE or
-// auth.session.secure forces it, 'auto' to follow the request's scheme
-function cookieSecureSetting(env, fileSession) {
-  const fromFile = typeof fileSession?.secure === 'boolean' ? fileSession.secure : 'auto';
-  return envBoolean(env, 'COOKIE_SECURE') ?? fromFile;
+  const text = typeof value === 'string' ? value.toLowerCase() : null;
+  if (!fromFile && (text === 'true' || text === 'false')) {
+    return text === 'true';
+  }
+  if (auto && text === 'auto') {
+    return 'auto';
+  }
+  const expected = fromFile
+    ? `true or false (JSON booleans)${auto ? ', or "auto"' : ''}`
+    : `true${auto ? ', false or auto' : ' or false'}`;
+  throw new Error(`${name} must be ${expected}, not ${JSON.stringify(value)}`);
 }
 
 /**
  * Builds the auth settings from environment variables and the config file:
- * the environment overrides the file.
+ * the environment overrides the file. Every boolean is read, whatever the
+ * mode, so that a mistake in one stops the server.
  *
  * @param {object} fileConfig - the content of config.json
  * @param {object} [env] - the environment variables
- * @returns {object} { enabled: false }, or every setting when OIDC is enabled
+ * @param {string} [source] - the path of config.json, for the errors
+ * @returns {object} { enabled: false, required }, or every setting when OIDC
+ *   is enabled
  */
-function buildAuthConfig(fileConfig, env = process.env) {
+function buildAuthConfig(fileConfig, env = process.env, source = 'config.json') {
   const file = fileConfig?.auth || {};
+  const fromEnv = (name, options) => parseBoolean(env[name], { name, ...options });
+  const fromFile = (key, value, options) => parseBoolean(value, {
+    name: `auth.${key} in ${source}`,
+    fromFile: true,
+    ...options,
+  });
+
+  const fileEnabled = fromFile('enabled', file.enabled);
+  const fileSecure = fromFile('session.secure', file.session?.secure, { auto: true });
+  const backChannelLogout = fromFile('backChannelLogout', file.backChannelLogout) ?? true;
+  const envSecure = fromEnv('COOKIE_SECURE', { auto: true });
+  // Header mode: whether Auth-User is required on the API
+  const required = fromEnv('AUTH_REQUIRED') ?? false;
   // OIDC_ENABLED overrides auth.enabled, whichever way
-  const enabled = envBoolean(env, 'OIDC_ENABLED') ?? file.enabled === true;
+  const enabled = fromEnv('OIDC_ENABLED') ?? fileEnabled ?? false;
 
   if (!enabled) {
-    return { enabled: false };
+    return { enabled: false, required };
   }
 
   return {
     enabled: true,
+    required,
     provider: {
       issuer: env.OIDC_ISSUER || file.provider?.issuer,
       clientId: env.OIDC_CLIENT_ID || file.provider?.clientId,
@@ -60,10 +84,12 @@ function buildAuthConfig(fileConfig, env = process.env) {
       secret: env.SESSION_SECRET || file.session?.secret,
       maxAge: file.session?.maxAge || 86400000, // 24h
       name: file.session?.name || 'ocm.sid',
-      secure: cookieSecureSetting(env, file.session),
+      // The Secure flag of the session cookie: true or false when forced,
+      // 'auto' to follow the request's scheme
+      secure: envSecure ?? fileSecure ?? 'auto',
     },
     baseUrl: env.OIDC_BASE_URL || file.baseUrl,
-    backChannelLogout: file.backChannelLogout !== false,
+    backChannelLogout,
   };
 }
 

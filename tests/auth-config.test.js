@@ -20,12 +20,21 @@ describe('OIDC_ENABLED', () => {
   const disabledInFile = { auth: { enabled: false } };
 
   test('false disables OIDC, even when config.json enables it', () => {
-    expect(buildAuthConfig(enabledInFile, { ...OIDC_ENV, OIDC_ENABLED: 'false' }))
-      .toEqual({ enabled: false });
+    expect(buildAuthConfig(enabledInFile, { ...OIDC_ENV, OIDC_ENABLED: 'false' }).enabled)
+      .toBe(false);
   });
 
   test('true enables OIDC, even when config.json disables it', () => {
     expect(buildAuthConfig(disabledInFile, OIDC_ENV).enabled).toBe(true);
+  });
+
+  test.each([
+    ['TRUE', true],
+    ['True', true],
+    ['FALSE', false],
+  ])('reads %s in any case', (value, expected) => {
+    expect(buildAuthConfig(disabledInFile, { ...OIDC_ENV, OIDC_ENABLED: value }).enabled)
+      .toBe(expected);
   });
 
   test.each([
@@ -40,9 +49,71 @@ describe('OIDC_ENABLED', () => {
 
   // Rather than guess: with config.json enabling OIDC, reading 1 as false
   // would disable it
-  test.each(['1', 'yes', 'TRUE', 'on'])('refuses %s', (value) => {
+  test.each(['1', 'yes', 'on', 'enabled'])('refuses %s', (value) => {
     expect(() => buildAuthConfig(enabledInFile, { ...OIDC_ENV, OIDC_ENABLED: value }))
-      .toThrow(`OIDC_ENABLED must be true or false, not '${value}'`);
+      .toThrow(`OIDC_ENABLED must be true or false, not "${value}"`);
+  });
+});
+
+// AUTH_REQUIRED, of header mode: read whatever the mode, so that a mistake
+// stops the server rather than leave the API open
+describe('AUTH_REQUIRED', () => {
+  const required = (value, env = {}) => buildAuthConfig({}, { ...env, AUTH_REQUIRED: value })
+    .required;
+
+  test.each([undefined, ''])('is false when %p', (value) => {
+    expect(required(value)).toBe(false);
+  });
+
+  test.each([
+    ['true', true],
+    ['TRUE', true],
+    ['False', false],
+  ])('reads %s in any case', (value, expected) => {
+    expect(required(value)).toBe(expected);
+  });
+
+  test.each(['1', 'yes', 'required'])('refuses %s', (value) => {
+    expect(() => required(value)).toThrow(`AUTH_REQUIRED must be true or false, not "${value}"`);
+  });
+
+  test('refuses a wrong value with OIDC too', () => {
+    expect(() => required('1', OIDC_ENV)).toThrow('AUTH_REQUIRED must be true or false');
+  });
+});
+
+// config.json holds JSON: its booleans are true or false without quotes
+describe('the booleans of config.json', () => {
+  const SOURCE = '/etc/ocm/config.json';
+
+  test.each([
+    ['auth.enabled', { enabled: 'true' }, '"true"'],
+    ['auth.enabled', { enabled: 1 }, '1'],
+    ['auth.enabled', { enabled: null }, 'null'],
+    ['auth.backChannelLogout', { backChannelLogout: 'no' }, '"no"'],
+    ['auth.session.secure', { session: { secure: 'yes' } }, '"yes"'],
+    ['auth.session.secure', { session: { secure: 0 } }, '0'],
+  ])('refuses %s: %j, naming the file and the key', (key, auth, shown) => {
+    expect(() => buildAuthConfig({ auth }, OIDC_ENV, SOURCE))
+      .toThrow(new RegExp(`^${key} in ${SOURCE} must be .*, not ${shown}$`));
+  });
+
+  test('refuses a wrong value that the environment overrides', () => {
+    expect(() => buildAuthConfig({ auth: { enabled: 'yes' } }, { OIDC_ENABLED: 'false' }, SOURCE))
+      .toThrow(`auth.enabled in ${SOURCE}`);
+  });
+
+  test('refuses a wrong value of OIDC settings when OIDC is disabled', () => {
+    expect(() => buildAuthConfig({ auth: { backChannelLogout: 'false' } }, {}, SOURCE))
+      .toThrow(`auth.backChannelLogout in ${SOURCE}`);
+  });
+
+  test.each([
+    [{}, true],
+    [{ backChannelLogout: true }, true],
+    [{ backChannelLogout: false }, false],
+  ])('reads backChannelLogout from %j', (auth, expected) => {
+    expect(buildAuthConfig({ auth }, OIDC_ENV).backChannelLogout).toBe(expected);
   });
 });
 
@@ -96,13 +167,22 @@ describe('the Secure flag of the session cookie', () => {
   test.each([
     ['true', true],
     ['false', false],
+    ['TRUE', true],
   ])('is forced by COOKIE_SECURE=%s', (value, expected) => {
     expect(secureSetting({}, { ...OIDC_ENV, COOKIE_SECURE: value })).toBe(expected);
   });
 
-  test.each([true, false])('is forced by auth.session.secure: %s in config.json', (value) => {
-    expect(secureSetting(fileWith(value), OIDC_ENV)).toBe(value);
+  // auto, the default, can be written too, as the documentation names it
+  test.each(['auto', 'Auto'])('is auto with COOKIE_SECURE=%s', (value) => {
+    expect(secureSetting(fileWith(true), { ...OIDC_ENV, COOKIE_SECURE: value })).toBe('auto');
   });
+
+  test.each([true, false, 'auto'])(
+    'is set by auth.session.secure: %p in config.json',
+    (value) => {
+      expect(secureSetting(fileWith(value), OIDC_ENV)).toBe(value);
+    }
+  );
 
   test.each([
     ['false', true, false],
@@ -116,8 +196,8 @@ describe('the Secure flag of the session cookie', () => {
     expect(secureSetting(fileWith(true), { ...OIDC_ENV, COOKIE_SECURE: '' })).toBe(true);
   });
 
-  test.each(['yes', '1', 'TRUE', 'auto'])('refuses COOKIE_SECURE=%s', (value) => {
+  test.each(['yes', '1', 'on'])('refuses COOKIE_SECURE=%s', (value) => {
     expect(() => buildAuthConfig({}, { ...OIDC_ENV, COOKIE_SECURE: value }))
-      .toThrow(`COOKIE_SECURE must be true or false, not '${value}'`);
+      .toThrow(`COOKIE_SECURE must be true, false or auto, not "${value}"`);
   });
 });
