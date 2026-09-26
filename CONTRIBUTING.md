@@ -215,8 +215,9 @@ npm test --workspace=dashboard -- -t "closes with Escape"    # by name
 - They act like a user (open a tab, change the month, open a "show all"
   modal, export a CSV) and check what the user sees: text, amounts, table
   rows, file contents. No DOM snapshots, and nothing inside the charts.
-  One exception, `shell-queries.test.jsx`, looks behind the page: it pins
-  the key of every query the page caches once loaded.
+  Some also check when the page calls the API stand-in, such as a tab that
+  loads its data only once opened, and `shell-queries.test.jsx` pins the key
+  of every query the page caches once loaded.
 - Only the API service module (`dashboard/src/services/api.js`) is replaced,
   once for every test file, in `dashboard/test/setup.js`. Its stand-in answers
   from the small, synthetic fixtures of `dashboard/test/fixtures/`. Never put

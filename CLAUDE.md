@@ -89,11 +89,12 @@ Two suites:
 - **Node tests**: Jest, limited to `tests/` (`jest.roots` in the root `package.json`).
   They exercise the pure logic layer (classification, validation, CSV export, inventory,
   consumption), not the HTTP server.
-- **Dashboard tests**: Vitest and Testing Library in jsdom, in `dashboard/test/`. They
-  render the whole dashboard page with the API service module replaced by synthetic
-  fixtures, act like a user and check what is visible. They pin down the page's behaviour
-  while it is split into modules (#36): change them only when the behaviour is meant to
-  change. "Today" is frozen on 15 September 2026, in Europe/Paris time.
+- **Dashboard tests**: Vitest and Testing Library in jsdom, in `dashboard/test/`. The page
+  tests render the whole dashboard with the API service module replaced by synthetic
+  fixtures, act like a user and check what is visible. They pin the dashboard's behaviour:
+  change them only when the behaviour is meant to change. The hook and unit tests, in
+  `dashboard/test/unit/`, pin the modules. "Today" is frozen on 15 September 2026, in
+  Europe/Paris time.
 
 ```bash
 npm test
