@@ -68,6 +68,12 @@ describe('projectComparisonRows', () => {
       .toEqual([['project-production', 'Production', 0, 0, null]]);
   });
 
+  // It would have the wrong sign, -766.7 % from -15 € to 100 € (#65)
+  it('gives no variation to a project whose credits exceed its costs in month A', () => {
+    expect(rows([production(-15)], [production(100)]))
+      .toEqual([['project-production', 'Production', -15, 100, null]]);
+  });
+
   it('keeps the projects of month A in their order, then those of month B only in theirs', () => {
     const archive = project('project-archive', 'Archive', 50);
 

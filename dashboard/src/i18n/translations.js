@@ -51,7 +51,7 @@ export const translations = {
     serviceComparison: 'Comparaison par service',
     projectComparison: 'Comparaison par projet',
     variation: 'Variation',
-    variationNotComputable: 'non calculable : mois A à 0 €',
+    variationNotComputable: 'non calculable : mois A à 0 € ou moins',
 
     // Trends
     evolutionOver: 'Évolution sur',
@@ -240,7 +240,7 @@ export const translations = {
     serviceComparison: 'Comparison by service',
     projectComparison: 'Comparison by project',
     variation: 'Variation',
-    variationNotComputable: 'cannot be computed: month A at €0',
+    variationNotComputable: 'cannot be computed: month A at €0 or below',
 
     // Trends
     evolutionOver: 'Evolution over',

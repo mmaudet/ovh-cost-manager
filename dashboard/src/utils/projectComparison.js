@@ -1,8 +1,10 @@
+import { variationPercent } from './variation.js';
+
 // The rows of the project comparison of the Compare tab, from the projects of months A and B
 // as /api/analysis/by-project lists them: every project billed in either month (#55), with
 // its cost in month A (totalA) and in month B (totalB), 0 € in a month it was not billed in,
-// and its variation from A to B in percent (variation). The variation is null from 0 € in
-// month A, which leaves none to compute: it would be infinite.
+// and its variation from A to B in percent (variation): null from 0 € or less in month A,
+// which leaves none to compute (#65).
 //
 // A project of month A and one of month B are the same when they have the same id, or when
 // either has none, the same name: a project renamed between the two months stays one row,
@@ -24,7 +26,7 @@ const row = (projectA, projectB) => {
     projectName: projectA?.projectName ?? projectB?.projectName,
     totalA,
     totalB,
-    variation: totalA ? ((totalB - totalA) / totalA) * 100 : null,
+    variation: variationPercent(totalA, totalB),
   };
 };
 

@@ -4,6 +4,7 @@ import {
 import Accordion from '../components/Accordion.jsx';
 import { SortIcon } from '../components/SortIcon.jsx';
 import ProjectProductComparison from '../components/ProjectProductComparison.jsx';
+import { Variation } from '../components/Variation.jsx';
 import { projectComparisonRows } from '../utils/projectComparison.js';
 
 // The Compare tab, which the shell renders while it is active: what useCompareTab() returns,
@@ -51,10 +52,6 @@ const CompareTab = ({
     };
   });
 
-  const totalVariation = compareDataA && compareDataB && compareDataA.total
-    ? ((compareDataB.total - compareDataA.total) / compareDataA.total * 100).toFixed(1)
-    : 0;
-
   return (
     <div className="space-y-6">
       <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
@@ -96,9 +93,12 @@ const CompareTab = ({
             <div className="text-gray-500 mt-1 text-sm">{compareMonthA?.label}</div>
           </div>
           <div className="flex flex-col items-center">
-            <span className={`px-4 py-2 rounded-full text-lg font-bold ${Number(totalVariation) > 0 ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
-              {Number(totalVariation) > 0 ? '+' : ''}{totalVariation}%
-            </span>
+            {/* From the total of month A to that of month B, once both are in */}
+            {compareDataA && compareDataB && (
+              <Variation
+                from={compareDataA.total} to={compareDataB.total} t={t} size="headline"
+              />
+            )}
           </div>
           <div className="text-center">
             <div className="text-3xl md:text-4xl font-bold text-gray-400">
@@ -163,15 +163,7 @@ const CompareTab = ({
                 <td className="p-3 text-right font-medium">{fmt(p.totalA)}€</td>
                 <td className="p-3 text-right text-gray-500">{fmt(p.totalB)}€</td>
                 <td className="p-3 text-right">
-                  {p.variation !== null ? (
-                    <span className={`px-2 py-1 rounded text-xs font-medium ${p.variation > 0 ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
-                      {p.variation > 0 ? '+' : ''}{p.variation.toFixed(1)}%
-                    </span>
-                  ) : (
-                    // None to compute from 0 € in month A (#55), as for the growth of the
-                    // Trends tab from a first month at 0 € (#65)
-                    <span className="text-gray-400" title={t('variationNotComputable')}>—</span>
-                  )}
+                  <Variation from={p.totalA} to={p.totalB} t={t} />
                 </td>
               </tr>
             ))}
@@ -217,7 +209,6 @@ const CompareTab = ({
               const b = byResourceTypeB.find(r => r.resource_type === row.key) || {};
               const valA = a.value || 0;
               const valB = b.value || 0;
-              const diff = valA ? ((valB - valA) / valA * 100) : null;
               return (
                 <tr key={row.key} className="border-b hover:bg-gray-50 transition-colors">
                   <td className="p-3 font-medium">
@@ -227,11 +218,7 @@ const CompareTab = ({
                   <td className="p-3 text-right font-medium">{fmt(valA)}€</td>
                   <td className="p-3 text-right text-gray-500">{fmt(valB)}€</td>
                   <td className="p-3 text-right">
-                    {diff !== null && (
-                      <span className={`px-2 py-1 rounded text-xs font-medium ${diff > 0 ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
-                        {diff > 0 ? '+' : ''}{diff.toFixed(1)}%
-                      </span>
-                    )}
+                    <Variation from={valA} to={valB} t={t} />
                   </td>
                 </tr>
               );
@@ -277,18 +264,13 @@ const CompareTab = ({
               const countB = row.getB();
               const valA = row.getValA();
               const valB = row.getValB();
-              const diff = valA ? ((valB - valA) / valA * 100) : null;
               return (
                 <tr key={row.key} className="border-b hover:bg-gray-50 transition-colors">
                   <td className="p-3 font-medium">{row.label}</td>
                   <td className="p-3 text-right font-medium">{countA} / {fmt(valA)}€</td>
                   <td className="p-3 text-right text-gray-500">{countB} / {fmt(valB)}€</td>
                   <td className="p-3 text-right">
-                    {diff !== null && (
-                      <span className={`px-2 py-1 rounded text-xs font-medium ${diff > 0 ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
-                        {diff > 0 ? '+' : ''}{diff.toFixed(1)}%
-                      </span>
-                    )}
+                    <Variation from={valA} to={valB} t={t} />
                   </td>
                 </tr>
               );
@@ -319,18 +301,13 @@ const CompareTab = ({
               const b = byResourceTypeB.find(r => r.resource_type === row.key) || {};
               const valA = a.value || 0;
               const valB = b.value || 0;
-              const diff = valA ? ((valB - valA) / valA * 100) : null;
               return (
                 <tr key={row.key} className="border-b hover:bg-gray-50 transition-colors">
                   <td className="p-3 font-medium">{row.label}</td>
                   <td className="p-3 text-right font-medium">{fmt(valA)}€</td>
                   <td className="p-3 text-right text-gray-500">{fmt(valB)}€</td>
                   <td className="p-3 text-right">
-                    {diff !== null && (
-                      <span className={`px-2 py-1 rounded text-xs font-medium ${diff > 0 ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
-                        {diff > 0 ? '+' : ''}{diff.toFixed(1)}%
-                      </span>
-                    )}
+                    <Variation from={valA} to={valB} t={t} />
                   </td>
                 </tr>
               );
@@ -341,7 +318,10 @@ const CompareTab = ({
       {/* One accordion per Public Cloud project: detailed comparison of products/services */}
       {getSortedCompareProjects().map((proj) => (
         <Accordion key={proj.projectId} title={`${proj.projectName} (${t('project')})`}>
-          <ProjectProductComparison projectId={proj.projectId} monthA={compareMonthA} monthB={compareMonthB} fmt={fmt} language={language} />
+          <ProjectProductComparison
+            projectId={proj.projectId} monthA={compareMonthA} monthB={compareMonthB}
+            fmt={fmt} language={language} t={t}
+          />
         </Accordion>
       ))}
     </div>
