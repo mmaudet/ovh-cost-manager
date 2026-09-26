@@ -12,6 +12,48 @@ sections were written afterwards from the git history.
 
 <!-- scripts/release.sh inserts each new version above the first version heading. -->
 
+## 2.3.0 - 2026-09-26
+
+### Upgrade notes
+
+- **Docker volume.** The `ocm-data` volume moves from `/app/data` to `/data`
+  (`DATA_DIR=/data`). Mounted on `/app/data`, it had frozen a copy of the
+  data-layer code at the first start, so later images never updated that code.
+  With the compose files of this release, the existing database is picked up as
+  is: recreate the container. If you run the image with your own `docker run`
+  command or compose file, make the same change (see
+  [Volume Mounts](https://github.com/mmaudet/ovh-cost-manager/blob/v2.3.0/README.md#volume-mounts)).
+- **Docker image tags** now start with `v`: pull `v2.3.0`, `v2.3`, `v2` or
+  `latest`. The tags without `v` (`2`, `2.2`...) no longer move.
+- **Reclassify past bills.** Classification fixes only apply to bills imported
+  afterwards. Re-import the history once:
+  `docker exec ovh-cost-manager node /app/data/import.js --from 2025-01-01 --all`.
+- **New inventories.** Object Storage buckets, volumes, snapshots and Swift
+  containers appear after the next import with `--include-cloud-details` or
+  `--all`, which the Docker cron uses by default.
+- **Node 24.** The image now runs Node 24. Local development needs Node 22 or
+  later.
+
+### New features
+* Trends: month i18n, cost-by-category chart, manual resync by @guillaume-gambs in https://github.com/mmaudet/ovh-cost-manager/pull/10
+* Object Storage inventory and per-resource cost across Public Cloud by @guillaume-gambs in https://github.com/mmaudet/ovh-cost-manager/pull/12
+* Web Cloud tab: domains, DNS zones, hosting, email by @guillaume-gambs in https://github.com/mmaudet/ovh-cost-manager/pull/13
+### Bug fixes
+* Fix BILL_COUNT check by @albundy83 in https://github.com/mmaudet/ovh-cost-manager/pull/7
+* Fix for missing v in the version on docker hub by @albundy83 in https://github.com/mmaudet/ovh-cost-manager/pull/8
+* Fixes: dead code, Cloud Disk Array classification, health rate-limit, DB volume shadowing by @guillaume-gambs in https://github.com/mmaudet/ovh-cost-manager/pull/9
+* Pre-release fixes: OVH 5xx retries, month bounds, CI by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/14
+### Maintenance
+* chore/docs: rewrite CLAUDE.md, untrack credentials.json template by @guillaume-gambs in https://github.com/mmaudet/ovh-cost-manager/pull/11
+* Move to Node 24 (Docker image and CI) by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/15
+* Changelog, release notes by category and Dependabot by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/16
+
+### New contributors
+* @guillaume-gambs made their first contribution in https://github.com/mmaudet/ovh-cost-manager/pull/11
+* @mmaudet made their first contribution in https://github.com/mmaudet/ovh-cost-manager/pull/14
+
+**Full Changelog**: https://github.com/mmaudet/ovh-cost-manager/compare/v2.2.2...v2.3.0
+
 ## 2.2.2 - 2026-03-02
 
 ### Bug fixes
