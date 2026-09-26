@@ -28,8 +28,11 @@ function createOriginCheck({ allowedOrigins, isDev, trustProxy }) {
    * @property {string} [host] - Host header
    * @property {string} [forwardedHost] - X-Forwarded-Host header, read only
    *   behind a trusted proxy: its first host counts as the request's own too
+   * @property {string} [forwardedProto] - X-Forwarded-Proto header, read only
+   *   behind a trusted proxy: its first scheme is the request's
+   * @property {boolean} [encrypted] - whether the connection itself is TLS
    */
-  return function isAllowedOrigin(origin, { host, forwardedHost }) {
+  return function isAllowedOrigin(origin, request) {
     if (!origin || allowedOrigins.includes(origin)) {
       return true;
     }
@@ -40,12 +43,48 @@ function createOriginCheck({ allowedOrigins, isDev, trustProxy }) {
     if (isDev && LOOPBACK_HOSTNAMES.includes(url.hostname)) {
       return true;
     }
-    const ownHosts = [host];
-    if (trustProxy && forwardedHost) {
-      ownHosts.push(forwardedHost.split(',')[0].trim());
+    // When the server does not know the request's scheme, hosts alone are
+    // compared: an http page then passes for an https dashboard on the same
+    // host, but the dashboard does not go blank behind a TLS-terminating proxy
+    // that is not trusted, or that sends no X-Forwarded-Proto.
+    const scheme = knownScheme(request, trustProxy);
+    if (scheme && url.protocol !== `${scheme}:`) {
+      return false;
+    }
+    const ownHosts = [request.host];
+    if (trustProxy && request.forwardedHost) {
+      ownHosts.push(firstValue(request.forwardedHost));
     }
     return ownHosts.some((ownHost) => normalizeHost(ownHost, url.protocol) === url.host);
   };
+}
+
+// The request's scheme when the server knows it, or null. Behind a
+// TLS-terminating proxy, the connection is plain HTTP whatever the page's
+// scheme: only a trusted proxy's X-Forwarded-Proto, or a TLS connection, tells.
+function knownScheme({ forwardedProto, encrypted }, trustProxy) {
+  if (trustProxy && forwardedProto) {
+    return firstValue(forwardedProto);
+  }
+  return encrypted ? 'https' : null;
+}
+
+// The first value of a header that may hold a list, as Express reads it
+function firstValue(header) {
+  return header.split(',')[0].trim();
+}
+
+// The Origin header as an http(s) URL, which always has a host, or null: when
+// it is malformed, 'null', or of another scheme. 'ocm.example.com:3001' parses,
+// but as the scheme 'ocm.example.com:' without a host.
+function parseOrigin(origin) {
+  let url;
+  try {
+    url = new URL(origin);
+  } catch (e) {
+    return null;
+  }
+  return ['http:', 'https:'].includes(url.protocol) ? url : null;
 }
 
 // A host header as URL writes the host of the origin's scheme: lowercase,
@@ -60,19 +99,6 @@ function normalizeHost(host, protocol) {
   } catch (e) {
     return null;
   }
-}
-
-// The Origin header as an http(s) URL, which always has a host, or null: when
-// it is malformed, 'null', or of another scheme. 'ocm.example.com:3001' parses,
-// but as the scheme 'ocm.example.com:' without a host.
-function parseOrigin(origin) {
-  let url;
-  try {
-    url = new URL(origin);
-  } catch (e) {
-    return null;
-  }
-  return ['http:', 'https:'].includes(url.protocol) ? url : null;
 }
 
 module.exports = { createOriginCheck };

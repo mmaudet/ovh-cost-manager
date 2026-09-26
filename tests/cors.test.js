@@ -128,4 +128,46 @@ describe('createOriginCheck', () => {
       expect(behindTrustedProxy(origin, { host: 'ovh-cost-manager:3001' })).toBe(false);
     });
   });
+
+  // Behind a TLS-terminating proxy, the connection is plain HTTP whatever the
+  // page's scheme: the server only knows the scheme from the X-Forwarded-Proto of
+  // a trusted proxy, or from a TLS connection, and compares hosts only otherwise
+  describe('scheme', () => {
+    const host = 'ocm.example.com';
+
+    test('rejects an http page on https behind a trusted proxy', () => {
+      expect(behindTrustedProxy('http://ocm.example.com', { host, forwardedProto: 'https' }))
+        .toBe(false);
+    });
+
+    test('allows an https page on https behind a trusted proxy', () => {
+      expect(behindTrustedProxy('https://ocm.example.com', { host, forwardedProto: 'https' }))
+        .toBe(true);
+    });
+
+    test('reads the first scheme of an X-Forwarded-Proto list', () => {
+      expect(behindTrustedProxy('https://ocm.example.com', {
+        host,
+        forwardedProto: 'https, http',
+      })).toBe(true);
+    });
+
+    test('rejects an http page on a TLS connection', () => {
+      expect(production('http://ocm.example.com', { host, encrypted: true })).toBe(false);
+    });
+
+    test('allows an https page on a TLS connection', () => {
+      expect(production('https://ocm.example.com', { host, encrypted: true })).toBe(true);
+    });
+
+    test('compares hosts only when the proxy is not trusted', () => {
+      expect(production('http://ocm.example.com', { host, forwardedProto: 'https' })).toBe(true);
+    });
+
+    // As the LemonLDAP relay of docker-compose.sso.yml does, with TLS
+    test('compares hosts only when the trusted proxy sends no X-Forwarded-Proto', () => {
+      expect(behindTrustedProxy('https://ocm.example.com', { host: 'ocm.example.com:443' }))
+        .toBe(true);
+    });
+  });
 });

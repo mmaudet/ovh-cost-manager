@@ -114,6 +114,8 @@ function corsOptionsDelegate(req, callback) {
   const allowed = isAllowedOrigin(origin, {
     host: req.headers.host,
     forwardedHost: req.headers['x-forwarded-host'],
+    forwardedProto: req.headers['x-forwarded-proto'],
+    encrypted: Boolean(req.socket.encrypted),
   });
 
   if (allowed) {
