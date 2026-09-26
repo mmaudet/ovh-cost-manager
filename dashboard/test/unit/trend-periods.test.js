@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { translations } from '../../src/i18n/translations.js';
-import { PERIOD_OPTIONS, monthsSince } from '../../src/utils/trendPeriods.js';
+import { PERIOD_OPTIONS, monthsSince, availablePeriodsFor } from '../../src/utils/trendPeriods.js';
 
 // "Today" is 15 September 2026 (see setup.js)
 
@@ -56,5 +56,38 @@ describe('monthsSince', () => {
     expect(monthsSince('2026')).toBe(0);
     expect(monthsSince('2026-00')).toBe(0);
     expect(monthsSince('N/A')).toBe(0);
+  });
+});
+
+// The periods offered for that many months of data: every period up to the first one that
+// covers them all.
+describe('availablePeriodsFor', () => {
+  // The periods offered, as their lengths in months
+  const lengths = (periods) => periods.map(({ months }) => months);
+
+  it('offers 3 months when there is no month of data', () => {
+    expect(availablePeriodsFor(0)).toEqual([{ months: 3, key: 'period3m' }]);
+  });
+
+  it.each([
+    [1, [3]],
+    [3, [3]],
+    [6, [3, 6]],
+    [13, [3, 6, 12, 24]],
+  ])('offers up to the first period that covers %i months: %j', (maxMonths, offered) => {
+    expect(lengths(availablePeriodsFor(maxMonths))).toEqual(offered);
+  });
+
+  it('stops at 1 year for exactly 12 months', () => {
+    expect(availablePeriodsFor(12)).toEqual([
+      { months: 3, key: 'period3m' },
+      { months: 6, key: 'period6m' },
+      { months: 12, key: 'period1y' },
+    ]);
+  });
+
+  it('offers every period, up to 20 years, for more than 240 months', () => {
+    expect(lengths(availablePeriodsFor(241))).toEqual([3, 6, 12, 24, 36, 60, 120, 180, 240]);
+    expect(lengths(availablePeriodsFor(600))).toEqual([3, 6, 12, 24, 36, 60, 120, 180, 240]);
   });
 });
