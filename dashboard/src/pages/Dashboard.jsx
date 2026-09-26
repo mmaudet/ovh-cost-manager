@@ -237,7 +237,7 @@ export default function Dashboard() {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 flex items-center justify-center">
         <div className="text-center">
-          <div className="text-4xl mb-4">Loading...</div>
+          <div className="text-4xl mb-4">{t('loadingTitle')}</div>
           <p className="text-gray-500">{t('loading')}</p>
         </div>
       </div>
@@ -583,7 +583,7 @@ export default function Dashboard() {
         {/* Tab Content - Backup */}
         {activeTab === 'backup' && (
           <BackupTab
-            {...backupTab} language={language} fmt={fmt}
+            {...backupTab} language={language} t={t} fmt={fmt}
             selectedMonth={selectedMonth} summary={summary} byResourceType={byResourceType}
           />
         )}

@@ -72,6 +72,7 @@ export const translations = {
     bills: 'factures',
 
     // Loading
+    loadingTitle: 'Chargement...',
     loading: 'Chargement des données...',
     // Nothing billed yet (#51)
     noDataYet: 'Pas encore de données',
@@ -253,6 +254,7 @@ export const translations = {
     bills: 'bills',
 
     // Loading
+    loadingTitle: 'Loading...',
     loading: 'Loading data...',
     // Nothing billed yet (#51)
     noDataYet: 'No data yet',

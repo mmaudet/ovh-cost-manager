@@ -10,6 +10,7 @@ import {
   emptyState,
   fakeTimers,
   headerBadge,
+  loadingScreen,
   openTab,
   optionsOf,
   passTime,
@@ -35,6 +36,21 @@ describe('dashboard shell', () => {
 
       await loading;
       expect(screen.queryByText('Chargement des données...')).not.toBeInTheDocument();
+    });
+
+    it.each([
+      ['fr', ['Chargement...', 'Chargement des données...']],
+      ['en', ['Loading...', 'Loading data...']],
+    ])('says that it is loading in the language of the page (%s)', async (language, shown) => {
+      // The language the page remembers from an earlier visit
+      localStorage.setItem('ovh-dashboard-language', language);
+
+      const loading = renderDashboard();
+      // Read before the answers arrive, checked once they did
+      const loadingTexts = texts(loadingScreen());
+      await loading;
+
+      expect(loadingTexts).toEqual(shown);
     });
 
     // A new account, or one whose first import has not run yet: no month to select, so no

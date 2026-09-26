@@ -251,6 +251,11 @@ export function headerBadge(label) {
   return screen.getByText(label, { selector: 'span' }).parentElement;
 }
 
+// The screen the page shows until it has a month and its figures to show
+export function loadingScreen() {
+  return screen.getByText(/^(Chargement des données|Loading data)\.\.\.$/).parentElement;
+}
+
 // The resync, in the header or on the page shown when no month was billed: its button, and
 // under it what the server answered
 export function resync() {
