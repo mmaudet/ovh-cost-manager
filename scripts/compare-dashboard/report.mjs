@@ -68,8 +68,9 @@ export function describeCoverage(base, head) {
   for (const [name, file] of TABLES) {
     const modal = modalFiles.some((f) => file.test(f));
     const csv = tabFiles.some((f) => file.test(f));
-    lines.push(`  ${modal && csv ? '✓' : '✗'} ${name}: "show all" modal ${modal ? 'captured' : 'NOT REACHED'}, `
-      + `CSV export ${csv ? 'captured' : 'NOT REACHED'}`);
+    const state = (reached) => (reached ? 'captured' : 'NOT REACHED');
+    lines.push(`  ${modal && csv ? '✓' : '✗'} ${name}: "show all" modal ${state(modal)}, `
+      + `CSV export ${state(csv)}`);
   }
   const report = tabFiles.some((f) => f.startsWith('ovh-report-'));
   lines.push(`  ${report ? '✓' : '✗'} Markdown report: ${report ? 'captured' : 'NOT REACHED'}`);
@@ -103,7 +104,9 @@ export function formatDifferences(differences, maxLines = Infinity) {
     out.push(`✗ ${difference.key}: ${summary}`);
     const lines = body.split('\n');
     out.push(...lines.slice(0, maxLines).map((line) => `  ${line}`));
-    if (lines.length > maxLines) out.push(`  … ${lines.length - maxLines} more lines in the report file`);
+    if (lines.length > maxLines) {
+      out.push(`  … ${lines.length - maxLines} more lines in the report file`);
+    }
   }
   return out.join('\n');
 }

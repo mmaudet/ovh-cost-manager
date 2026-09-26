@@ -26,7 +26,8 @@ const childEnvironment = () => ({
 });
 
 export function git(args, cwd) {
-  return execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
+  const stdio = ['ignore', 'pipe', 'pipe'];
+  return execFileSync('git', args, { cwd, encoding: 'utf8', stdio }).trim();
 }
 
 /** Starts a child process whose output goes to `log`, stopped on cleanup if still running. */
@@ -49,13 +50,19 @@ function run(command, args, { cwd, log }) {
     child.on('error', (error) => reject(new Error(`${command} could not start: ${error.message}`)));
     child.on('exit', (code, signal) => {
       if (code === 0) resolve();
-      else reject(new Error(`${command} ${args.join(' ')} failed (${signal ?? `exit code ${code}`}), `
-        + `end of ${log}:\n${tail(log)}`));
+      else {
+        reject(new Error(`${command} ${args.join(' ')} failed (${signal ?? `exit code ${code}`}), `
+          + `end of ${log}:\n${tail(log)}`));
+      }
     });
   });
 }
 
-const tail = (file, lines = 15) => fs.readFileSync(file, 'utf8').trimEnd().split('\n').slice(-lines).join('\n');
+const tail = (file, lines = 15) => fs.readFileSync(file, 'utf8')
+  .trimEnd()
+  .split('\n')
+  .slice(-lines)
+  .join('\n');
 
 /** Stops the commands still running, as on an interruption, and any later one. */
 export async function stopChildren() {
@@ -90,7 +97,9 @@ const DATASETS = {
  */
 export async function freezeSnapshot(dataDir, destination, Database) {
   const source = path.join(dataDir, DB_FILE);
-  if (!fs.existsSync(source)) throw new Error(`${source} not found: --data takes a data directory holding ${DB_FILE}`);
+  if (!fs.existsSync(source)) {
+    throw new Error(`${source} not found: --data takes a data directory holding ${DB_FILE}`);
+  }
   const journal = `${source}-wal`;
   if (fs.existsSync(`${source}-shm`) && fs.existsSync(journal)) {
     // An open connection keeps a -shm index next to its -wal journal: an import may be
@@ -109,17 +118,22 @@ export async function freezeSnapshot(dataDir, destination, Database) {
     // or rewrite the -shm and -wal files; plain copies of the database and of its journal
     // leave the directory untouched, and opening the copies reads the journal back.
     fs.copyFileSync(source, destination, fs.constants.COPYFILE_EXCL);
-    if (fs.existsSync(journal)) fs.copyFileSync(journal, `${destination}-wal`, fs.constants.COPYFILE_EXCL);
+    if (fs.existsSync(journal)) {
+      fs.copyFileSync(journal, `${destination}-wal`, fs.constants.COPYFILE_EXCL);
+    }
   }
   // Read-write on purpose: closing the copy folds its journal back into the file
   const copy = new Database(destination);
   try {
     const check = copy.pragma('quick_check', { simple: true });
     if (check !== 'ok') throw new Error(`the copy of ${source} is damaged: ${check}`);
-    const { bills, latest } = copy.prepare('SELECT COUNT(*) AS bills, MAX(date) AS latest FROM bills').get();
+    const { bills, latest } = copy
+      .prepare('SELECT COUNT(*) AS bills, MAX(date) AS latest FROM bills')
+      .get();
     if (!bills) throw new Error(`${source} holds no bill`);
     // The same list as the dashboard's month selector (GET /api/months)
-    const months = copy.prepare(`SELECT DISTINCT strftime('%Y-%m', date) AS month FROM bills ORDER BY month DESC`)
+    const months = copy
+      .prepare('SELECT DISTINCT strftime(\'%Y-%m\', date) AS month FROM bills ORDER BY month DESC')
       .all()
       .map((row) => row.month);
     const lastImport = copy.prepare(`SELECT type, status, started_at, completed_at, error_message
@@ -151,13 +165,17 @@ export function loadBetterSqlite(dir) {
  */
 export async function ensureNativeBinaries(dir, log, { esbuild = true } = {}) {
   if (!(await betterSqliteLoads(dir))) {
-    const pkg = path.dirname(createRequire(path.join(dir, 'server', 'package.json')).resolve('better-sqlite3/package.json'));
+    const server = createRequire(path.join(dir, 'server', 'package.json'));
+    const pkg = path.dirname(server.resolve('better-sqlite3/package.json'));
     await run('npx', ['--yes', 'prebuild-install'], { cwd: pkg, log });
-    if (!(await betterSqliteLoads(dir))) throw new Error(`better-sqlite3 has no working binary in ${pkg}, see ${log}`);
+    if (!(await betterSqliteLoads(dir))) {
+      throw new Error(`better-sqlite3 has no working binary in ${pkg}, see ${log}`);
+    }
   }
   if (esbuild) {
     // Vite's bundler: its install script checks its platform binary and sets it up
-    const vite = createRequire(path.join(dir, 'dashboard', 'package.json')).resolve('vite/package.json');
+    const dashboard = createRequire(path.join(dir, 'dashboard', 'package.json'));
+    const vite = dashboard.resolve('vite/package.json');
     const pkg = path.dirname(createRequire(vite).resolve('esbuild/package.json'));
     await run(process.execPath, ['install.js'], { cwd: pkg, log });
   }
@@ -166,7 +184,8 @@ export async function ensureNativeBinaries(dir, log, { esbuild = true } = {}) {
 // In a child process: a missing binary throws on first use, and would stay cached here
 function betterSqliteLoads(dir) {
   return new Promise((resolve) => {
-    const child = spawn(process.execPath, ['-e', "new (require('better-sqlite3'))(':memory:').close()"], {
+    const load = 'new (require("better-sqlite3"))(":memory:").close()';
+    const child = spawn(process.execPath, ['-e', load], {
       cwd: path.join(dir, 'server'),
       stdio: 'ignore',
     });
@@ -202,7 +221,8 @@ export function build(dir, log) {
 
 // What the server reads from its environment that could change the page or start an
 // import: dropped, then set for a local, read-only run
-const SERVER_VARIABLES = /^(PORT|DATA_DIR|NODE_ENV|AUTH_REQUIRED|SESSION_SECRET|ALLOWED_ORIGINS|TRUST_PROXY|OIDC_\w+|RATE_LIMIT_\w+|IMPORT_\w+)$/;
+const SERVER_VARIABLES = new RegExp('^(PORT|DATA_DIR|NODE_ENV|AUTH_REQUIRED|SESSION_SECRET|'
+  + 'ALLOWED_ORIGINS|TRUST_PROXY|OIDC_\\w+|RATE_LIMIT_\\w+|IMPORT_\\w+)$');
 
 /**
  * Serves the built dashboard of `dir` on the database of `dataDir`.
@@ -210,7 +230,8 @@ const SERVER_VARIABLES = /^(PORT|DATA_DIR|NODE_ENV|AUTH_REQUIRED|SESSION_SECRET|
  */
 export async function startServer({ dir, dataDir, log, defer }) {
   const port = await freePort();
-  const environment = Object.fromEntries(Object.entries(childEnvironment()).filter(([name]) => !SERVER_VARIABLES.test(name)));
+  const environment = Object.fromEntries(Object.entries(childEnvironment())
+    .filter(([name]) => !SERVER_VARIABLES.test(name)));
   Object.assign(environment, {
     PORT: String(port),
     DATA_DIR: dataDir,
@@ -231,7 +252,8 @@ export async function startServer({ dir, dataDir, log, defer }) {
   const url = `http://127.0.0.1:${port}`;
   await waitFor(async () => {
     if (server.exitCode !== null) {
-      throw new Error(`the server stopped (exit code ${server.exitCode}), end of ${log}:\n${tail(log)}`);
+      throw new Error(`the server stopped (exit code ${server.exitCode}), `
+        + `end of ${log}:\n${tail(log)}`);
     }
     try {
       return (await fetch(`${url}/api/health`)).ok;
@@ -244,7 +266,8 @@ export async function startServer({ dir, dataDir, log, defer }) {
     failure: () => `the server did not answer within 60 s, end of ${log}:\n${tail(log)}`,
   });
   if ((await fetch(`${url}/api/config`)).status === 401) {
-    throw new Error('the server asks for a login: the comparison needs OIDC turned off in the config.json it reads');
+    throw new Error('the server asks for a login: the comparison needs OIDC turned off in the '
+      + 'config.json it reads');
   }
   return url;
 }

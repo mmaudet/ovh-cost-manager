@@ -10,7 +10,8 @@
  *
  * @param {{ tabLabels: string[] }} options  the labels of the tab buttons, in page order
  * @returns {{ ok: false, reason: string }
- *   | { ok: true, tabBar: string, tab: string|null, shell: string, view: string, rowLabels: string[] }}
+ *   | { ok: true, tabBar: string, tab: string|null, shell: string, view: string,
+ *     rowLabels: string[] }}
  *   the CSS paths of the tab bar and of the active tab, the text of the shell and of the
  *   tab, and the label of every collapsed row (marked ▼) of the tab, in page order
  */
@@ -48,7 +49,8 @@ export function readPage({ tabLabels }) {
         steps.unshift(`#${CSS.escape(node.id)}`);
         break;
       }
-      steps.unshift(`${node.localName}:nth-child(${[...node.parentElement.children].indexOf(node) + 1})`);
+      const position = [...node.parentElement.children].indexOf(node) + 1;
+      steps.unshift(`${node.localName}:nth-child(${position})`);
     }
     return steps.join(' > ');
   };
@@ -59,11 +61,14 @@ export function readPage({ tabLabels }) {
   };
 
   const buttons = [...document.querySelectorAll('button')];
-  const tabButtons = tabLabels.map((label) => buttons.find((button) => button.innerText.trim() === label));
+  const tabButtons = tabLabels
+    .map((label) => buttons.find((button) => button.innerText.trim() === label));
   const missing = tabLabels.filter((label, i) => !tabButtons[i]);
   if (missing.length) return failure(`no tab ${missing.map((label) => `"${label}"`).join(', ')}`);
   const tabBar = tabButtons[0].parentElement;
-  if (tabButtons.some((button) => button.parentElement !== tabBar)) return failure('the tabs are not in one bar');
+  if (tabButtons.some((button) => button.parentElement !== tabBar)) {
+    return failure('the tabs are not in one bar');
+  }
 
   const heading = document.querySelector('h1');
   let column = tabBar.parentElement;
@@ -81,11 +86,11 @@ export function readPage({ tabLabels }) {
     .filter((span) => span.textContent.trim() === '▼')
     .map((span) => {
       let row = span;
-      while (row.parentElement !== tab && getComputedStyle(row.parentElement).cursor === 'pointer') {
-        row = row.parentElement;
-      }
+      const clickable = (element) => getComputedStyle(element).cursor === 'pointer';
+      while (row.parentElement !== tab && clickable(row.parentElement)) row = row.parentElement;
       // The first cell of the first line: a project or resource type name
-      return row.innerText.split('\n').map((line) => line.split('\t')[0].trim()).find(Boolean) ?? '';
+      const cells = row.innerText.split('\n').map((line) => line.split('\t')[0].trim());
+      return cells.find(Boolean) ?? '';
     });
 
   return {
@@ -122,10 +127,10 @@ export function stillFor({ frames, animations, maxFrames }) {
   const counter = window.__compareDashboardFrames;
   return new Promise((resolve) => {
     let changed = false;
+    const animated = (mutation) => mutation.type === 'attributes'
+      && mutation.target instanceof SVGElement;
     const observer = new MutationObserver((mutations) => {
-      if (animations || mutations.some((m) => m.type !== 'attributes' || !(m.target instanceof SVGElement))) {
-        changed = true;
-      }
+      if (animations || !mutations.every(animated)) changed = true;
     });
     observer.observe(document.documentElement, {
       subtree: true, childList: true, attributes: true, characterData: true,

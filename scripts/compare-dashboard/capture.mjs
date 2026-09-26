@@ -9,7 +9,7 @@ import { waitFor } from './wait.mjs';
 // The labels users see. A pull request that renames one on purpose shows up as a
 // difference; update the label here once it is merged.
 const TABS = [
-  { id: 'overview', label: { fr: "Vue d'ensemble", en: 'Overview' } },
+  { id: 'overview', label: { fr: 'Vue d\'ensemble', en: 'Overview' } },
   { id: 'compare', label: { fr: 'Comparaison', en: 'Compare' } },
   { id: 'trends', label: { fr: 'Tendances', en: 'Trends' } },
   { id: 'inventory', label: { fr: 'Public Cloud', en: 'Public Cloud' } },
@@ -74,13 +74,17 @@ const LAUNCH_OPTIONS = { handleSIGINT: false, handleSIGTERM: false, handleSIGHUP
  */
 export async function launchBrowser() {
   try {
-    return { browser: await chromium.launch({ ...LAUNCH_OPTIONS, channel: 'chrome' }), name: 'Google Chrome' };
+    return {
+      browser: await chromium.launch({ ...LAUNCH_OPTIONS, channel: 'chrome' }),
+      name: 'Google Chrome',
+    };
   } catch (chromeError) {
     try {
       return {
         browser: await chromium.launch(LAUNCH_OPTIONS),
-        name: "Playwright's Chromium",
-        note: `Google Chrome did not start (${firstLine(chromeError)}), using Playwright's Chromium.`,
+        name: 'Playwright\'s Chromium',
+        note: `Google Chrome did not start (${firstLine(chromeError)}), `
+          + 'using Playwright\'s Chromium.',
       };
     } catch {
       throw new Error(
@@ -105,7 +109,8 @@ export async function launchBrowser() {
  * @param {(step: string, sections: number) => void} [options.onProgress]  after each month
  * @returns {Promise<{ sections: Record<string, string>, failures: string[] }>}
  */
-export async function captureDashboard(browser, { url, clock, languages, months, openingMonth, projects, onProgress }) {
+export async function captureDashboard(browser, options) {
+  const { url, clock, languages, months, openingMonth, projects, onProgress } = options;
   const capture = new Capture();
   for (const language of languages) {
     const context = await browser.newContext({ viewport: VIEWPORT, locale: LOCALES[language] });
@@ -189,7 +194,8 @@ class Walker {
           reload = false;
         } catch (error) {
           for (const skipped of VISITS.slice(index)) {
-            this.capture.fail(`${prefix}/${skipped.name}`, `the dashboard did not load again: ${firstLine(error)}`);
+            this.capture.fail(`${prefix}/${skipped.name}`,
+              `the dashboard did not load again: ${firstLine(error)}`);
           }
           break;
         }
@@ -205,7 +211,8 @@ class Walker {
     // Sorted by message: which errors occurred and how often, not when
     if (this.errors.size) {
       const byMessage = [...this.errors].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
-      this.capture.add(`${prefix}/errors`, byMessage.map(([message, n]) => `${n} × ${message}`).join('\n'));
+      const lines = byMessage.map(([message, n]) => `${n} × ${message}`);
+      this.capture.add(`${prefix}/errors`, lines.join('\n'));
     }
   }
 
@@ -238,7 +245,8 @@ class Walker {
         await route.fulfill({ response: await route.fetch() });
         await (await route.request().response())?.finished();
         // Rendered once the page keeps still, the chart animations it may start aside
-        await this.page.evaluate(stillFor, { frames: STILL_FRAMES, animations: false, maxFrames: MAX_FRAMES });
+        await this.page.evaluate(stillFor,
+          { frames: STILL_FRAMES, animations: false, maxFrames: MAX_FRAMES });
       } catch {
         // The page went away (a reload), or the server did: the call fails
         await route.abort().catch(() => {});
@@ -262,18 +270,25 @@ class Walker {
         + `${(await look()).reason}`,
     });
     if (month !== this.openingMonth) {
-      const selector = this.page.locator('select').filter({ has: this.page.locator(`option[value="${month}"]`) }).first();
+      const option = this.page.locator(`option[value="${month}"]`);
+      const selector = this.page.locator('select').filter({ has: option }).first();
       await selector.selectOption(month);
-      if ((await selector.inputValue()) !== month) throw new Error(`month ${month} could not be selected`);
+      if ((await selector.inputValue()) !== month) {
+        throw new Error(`month ${month} could not be selected`);
+      }
     }
     const closedHistory = this.page.locator('details:not([open]) > summary');
-    for (let i = 0; i < 10 && (await closedHistory.count()); i++) await closedHistory.first().click();
+    for (let i = 0; i < 10 && (await closedHistory.count()); i++) {
+      await closedHistory.first().click();
+    }
     await this.settle();
   }
 
   async captureTab(tab, key, prefix) {
     const { tabBar } = await this.read();
-    await this.page.locator(tabBar).getByRole('button', { name: tab.label[this.language], exact: true }).click();
+    await this.page.locator(tabBar)
+      .getByRole('button', { name: tab.label[this.language], exact: true })
+      .click();
     await this.settle();
     const state = await this.read();
     // The shell on every tab: parts of it depend on the tab (the month selector) or on
@@ -324,7 +339,8 @@ class Walker {
 
   /** The Markdown report of the header's export menu. */
   async captureReport(prefix) {
-    const format = this.page.locator('select').filter({ has: this.page.locator('option[value="md"]') });
+    const markdown = this.page.locator('option[value="md"]');
+    const format = this.page.locator('select').filter({ has: markdown });
     await this.captureDownload(prefix, () => format.selectOption('md'));
   }
 
@@ -358,7 +374,8 @@ class Walker {
       const tab = await this.tabLocator();
       await tab.locator('span').filter({ hasText: /^▼$/ }).nth(i).click();
       await this.settle();
-      const rowKey = this.capture.add(`${key}/${kind}:${rowLabels[i]}`, normalize((await this.read()).view));
+      const { view } = await this.read();
+      const rowKey = this.capture.add(`${key}/${kind}:${rowLabels[i]}`, normalize(view));
       if (withTableActions) await this.captureTableActions(rowKey);
       await tab.locator('span').filter({ hasText: /^▲$/ }).first().click();
       await this.settle();

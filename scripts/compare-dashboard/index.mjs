@@ -119,16 +119,19 @@ async function main(argv) {
   const { months, openingMonth } = resolveMonths(options.months, snapshot.months);
 
   const state = describeSnapshot(snapshot, clock, new Date());
-  const monthList = months.map((month) => (month === openingMonth ? `${month} (the page opens on it)` : month));
+  const monthList = months
+    .map((month) => (month === openingMonth ? `${month} (the page opens on it)` : month));
+  const projects = options.projects === Infinity ? 'all' : `the first ${options.projects}`;
   const header = [
     `Snapshot  ${options.data}: ${snapshot.bills} bills, the latest on ${snapshot.latestBill}`,
     `Import    ${state.lastImport}`,
     `Empty     ${state.empty}`,
-    `Clock     ${clock.toISOString()} in the browser, frozen; the real date is ${state.realDate} (UTC)`,
+    `Clock     ${clock.toISOString()} in the browser, frozen; `
+      + `the real date is ${state.realDate} (UTC)`,
     `Base      ${sides[0].label}`,
     `Head      ${sides[1].label}`,
     `Captures  ${options.languages.join(', ')}; months ${monthList.join(', ')}; `
-      + `${options.projects === Infinity ? 'all' : `the first ${options.projects}`} Public Cloud projects`,
+      + `${projects} Public Cloud projects`,
     `Output    ${out}`,
     ...state.warnings.map((warning) => `Warning   ${warning}`),
   ];
@@ -142,7 +145,8 @@ async function main(argv) {
     const dataDir = path.join(work, `${side.name}-data`);
     fs.mkdirSync(dataDir);
     fs.copyFileSync(frozen, path.join(dataDir, DB_FILE));
-    side.url = await startServer({ dir: side.dir, dataDir, log: path.join(logs, `${side.name}-server.log`), defer });
+    const log = path.join(logs, `${side.name}-server.log`);
+    side.url = await startServer({ dir: side.dir, dataDir, log, defer });
   }
   const prepared = Date.now();
 
@@ -162,7 +166,8 @@ async function main(argv) {
       openingMonth,
       projects: options.projects,
       onProgress: (step, count) => {
-        if (!interrupted) console.log(`[${side.name}] ${step}: ${count} sections (${duration(Date.now() - start)})`);
+        if (interrupted) return;
+        console.log(`[${side.name}] ${step}: ${count} sections (${duration(Date.now() - start)})`);
       },
     });
     return {
@@ -183,16 +188,19 @@ async function main(argv) {
   stopIfInterrupted();
   const captured = Date.now();
   for (const capture of captures) {
-    fs.writeFileSync(path.join(out, `${capture.side}.json`), `${JSON.stringify(capture, null, 2)}\n`);
+    const file = path.join(out, `${capture.side}.json`);
+    fs.writeFileSync(file, `${JSON.stringify(capture, null, 2)}\n`);
   }
 
   const { total, differences } = compareCaptures(captures[0], captures[1]);
-  const failures = captures.flatMap((capture) => capture.failures.map((failure) => `[${capture.side}] ${failure}`));
+  const failures = captures
+    .flatMap((capture) => capture.failures.map((failure) => `[${capture.side}] ${failure}`));
   const verdict = differences.length
     ? `${differences.length} of ${total} sections differ.`
     : `No difference in ${total} sections.`;
   const incomplete = failures.length
-    ? [`${failures.length} capture step(s) failed, the comparison is incomplete:`, ...failures.map((f) => `  ${f}`)]
+    ? [`${failures.length} capture step(s) failed, the comparison is incomplete:`,
+      ...failures.map((failure) => `  ${failure}`)]
     : [];
   const coverage = describeCoverage(captures[0], captures[1]);
   fs.writeFileSync(path.join(out, 'report.txt'), [
@@ -206,8 +214,8 @@ async function main(argv) {
   ].join('\n'));
   if (differences.length) console.log(`\n${formatDifferences(differences, 40)}`);
   for (const line of ['', ...incomplete, ...coverage, verdict]) console.log(line);
-  console.log(`Prepared in ${duration(prepared - started)}, captured in ${duration(captured - prepared)}, `
-    + `${duration(Date.now() - started)} in all.`);
+  console.log(`Prepared in ${duration(prepared - started)}, `
+    + `captured in ${duration(captured - prepared)}, ${duration(Date.now() - started)} in all.`);
   console.log(`Captures and report: ${out}`);
   if (differences.length) return 1;
   return failures.length ? 2 : 0;
@@ -244,13 +252,16 @@ function parseOptions(argv) {
   return { ...values, data: path.resolve(expandHome(values.data)), languages, projects };
 }
 
-const expandHome = (value) => (value === '~' || value.startsWith('~/') ? path.join(os.homedir(), value.slice(1)) : value);
+const expandHome = (value) => (value === '~' || value.startsWith('~/')
+  ? path.join(os.homedir(), value.slice(1))
+  : value);
 
 function describeSide(name, ref, repo) {
   if (!ref) {
     const commit = git(['rev-parse', 'HEAD'], repo);
     const changed = git(['status', '--porcelain'], repo) !== '';
-    return { name, commit, label: `working tree (${commit.slice(0, 7)}${changed ? ' + uncommitted changes' : ''})` };
+    const changes = changed ? ' + uncommitted changes' : '';
+    return { name, commit, label: `working tree (${commit.slice(0, 7)}${changes})` };
   }
   let commit;
   try {
@@ -333,7 +344,8 @@ function describeSnapshot(snapshot, clock, now) {
       + 'about to expire from the real date, so the Trends tab shows fewer months of the snapshot '
       + 'as time passes');
   }
-  const empty = Object.entries(emptyTables).map(([dataset, tables]) => `${dataset} (${tables.join(', ')})`);
+  const empty = Object.entries(emptyTables)
+    .map(([dataset, tables]) => `${dataset} (${tables.join(', ')})`);
   return {
     lastImport: lastImport
       ? `${lastImport.type} import, ${lastImport.status}, started ${lastImport.started_at} UTC`
@@ -373,10 +385,12 @@ function resolveMonths(option, available) {
     // A year earlier, or the closest older month with bills, or the oldest one
     : [openingMonth, available.find((m) => m <= yearBefore) ?? available.at(-1)];
   for (const item of requested) {
-    if (!/^\d{4}-\d{2}$/.test(item)) throw new UsageError(`--months: ${item} is neither "default" nor YYYY-MM.`);
+    if (!/^\d{4}-\d{2}$/.test(item)) {
+      throw new UsageError(`--months: ${item} is neither "default" nor YYYY-MM.`);
+    }
     if (!available.includes(item)) {
-      throw new UsageError(`--months: no bill in ${item}, the snapshot has bills from ${available.at(-1)} `
-        + `to ${available[0]}.`);
+      throw new UsageError(`--months: no bill in ${item}, the snapshot has bills from `
+        + `${available.at(-1)} to ${available[0]}.`);
     }
   }
   return { months: [...new Set(requested)], openingMonth };
@@ -392,7 +406,8 @@ async function prepare(side, { repo, work, logs }) {
   };
   if (side.ref) {
     side.dir = path.join(work, side.name);
-    await step(`worktree and npm ci`, () => createWorktree({ repo, dir: side.dir, commit: side.commit, log, defer }));
+    await step('worktree and npm ci',
+      () => createWorktree({ repo, dir: side.dir, commit: side.commit, log, defer }));
   } else {
     side.dir = repo;
   }
@@ -405,7 +420,9 @@ async function prepare(side, { repo, work, logs }) {
 function shareSettings(sides, repo) {
   const settings = path.join(repo, 'config.json');
   if (sides.every((side) => side.ref) || !fs.existsSync(settings)) return;
-  for (const side of sides.filter((s) => s.ref)) fs.symlinkSync(settings, path.join(side.dir, 'config.json'));
+  for (const side of sides.filter((s) => s.ref)) {
+    fs.symlinkSync(settings, path.join(side.dir, 'config.json'));
+  }
   console.log(`Both servers read ${settings}.`);
 }
 
