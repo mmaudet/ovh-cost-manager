@@ -1,8 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { formatCurrency, formatYearMonth } from '../../src/utils/format.js';
-
-// French amounts separate thousands with a narrow no-break space
-const NNBSP = '\u202f';
+import { NNBSP } from '../support/amounts.js';
 
 describe('formatCurrency', () => {
   it('writes an amount the French way', () => {

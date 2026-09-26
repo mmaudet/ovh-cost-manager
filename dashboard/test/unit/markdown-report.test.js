@@ -1,8 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { generateMarkdownReport } from '../../src/utils/markdownReport.js';
-
-// French amounts separate thousands with a narrow no-break space
-const NNBSP = '\u202f';
+import { NNBSP } from '../support/amounts.js';
 
 // A month as /api/months lists it: labels always in French (#33)
 const january = { value: '2026-01', label: 'Janvier 2026', from: '2026-01-01', to: '2026-01-31' };
