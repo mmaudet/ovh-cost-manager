@@ -32,12 +32,18 @@ describe('useWebCloudTab', () => {
   );
 
   it('requests nothing before a month is selected', async () => {
-    const { result } = await renderTabHook(useWebCloudTab,
+    const { result, queryClient } = await renderTabHook(useWebCloudTab,
       { selectedMonth: null, activeTab: 'webcloud' });
 
     expect(api.fetchWebCloudSummary).not.toHaveBeenCalled();
     expect(api.fetchWebCloudItems).not.toHaveBeenCalled();
     expect(result.current.webCloudPeriod).toBeNull();
+    // Both queries wait for a month, rather than failing for the lack of one
+    const waiting = { status: 'pending', fetchStatus: 'idle', error: null };
+    expect(queryClient.getQueryState(['webCloudSummary', undefined, undefined]))
+      .toMatchObject(waiting);
+    expect(queryClient.getQueryState(['webCloudItems', undefined, undefined]))
+      .toMatchObject(waiting);
   });
 
   it('requests the 12 months that end on the selected month once the tab opens', async () => {
