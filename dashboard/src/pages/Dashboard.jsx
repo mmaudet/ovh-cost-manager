@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, Fragment } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -9,25 +9,12 @@ import {
   fetchImportStatus, fetchConfig, fetchUser,
   fetchConsumptionCurrent, fetchConsumptionForecast,
   fetchExpiringServices,
-  fetchByResourceType, fetchProjectsEnriched, fetchProjectConsumption,
-  fetchProjectInstances, fetchProjectQuotas, fetchGpuSummary, fetchPublicCloudStats,
-  fetchProjectBuckets, fetchProjectInstanceTotal, triggerImport,
-  fetchProjectVolumes, fetchProjectSnapshots, fetchProjectSavingsPlans
+  fetchByResourceType, fetchGpuSummary, triggerImport
 } from '../services/api';
 import { useLanguage } from '../hooks/useLanguage.jsx';
 import Logo from '../components/Logo';
 import Accordion from '../components/Accordion.jsx';
-import Modal from '../components/Modal.jsx';
-import TableActions from '../components/TableActions.jsx';
-import { BucketsTable, bucketCsvColumns, sortBucketsByName } from '../components/BucketsTable.jsx';
-import { SavingsPlansTable, savingsPlanCsvColumns } from '../components/SavingsPlansTable.jsx';
-import { VolumesTable, volumeCsvColumns, volumeCsvRows } from '../components/VolumesTable.jsx';
-import { SnapshotsTable, snapshotCsvColumns } from '../components/SnapshotsTable.jsx';
-import {
-  InstancesTable, instanceCsvColumns, instanceCsvRows
-} from '../components/InstancesTable.jsx';
 import { SortIcon } from '../components/SortIcon.jsx';
-import { downloadCSV } from '../utils/csv.js';
 import { formatCurrency } from '../utils/format.js';
 import { parseSqliteDate } from '../utils/sqliteDate.js';
 import { generateMarkdownReport } from '../utils/markdownReport.js';
@@ -39,6 +26,8 @@ import { useTrendsTab } from '../tabs/useTrendsTab.js';
 import { TrendsTab, TrendsPeriodSelector } from '../tabs/TrendsTab.jsx';
 import { useInfrastructureTab } from '../tabs/useInfrastructureTab.js';
 import { InfrastructureTab, InfrastructureTabModals } from '../tabs/InfrastructureTab.jsx';
+import { usePublicCloudTab } from '../tabs/usePublicCloudTab.js';
+import { PublicCloudTab, PublicCloudTabModals } from '../tabs/PublicCloudTab.jsx';
 import ProjectProductComparison from './ProjectProductComparison.jsx';
 
 // Translation keys for the import_log type and status values
@@ -66,25 +55,10 @@ export default function Dashboard() {
   const [syncWarningDismissed, setSyncWarningDismissed] = useState(false);
   const [selectedProject, setSelectedProject] = useState(null);
   const [selectedResourceType, setSelectedResourceType] = useState(null);
-  const [showAllBuckets, setShowAllBuckets] = useState(false);
-  const [showAllInstances, setShowAllInstances] = useState(false);
-  const [showAllVolumes, setShowAllVolumes] = useState(false);
-  const [showAllSnapshots, setShowAllSnapshots] = useState(false);
-  const [showAllSavingsPlans, setShowAllSavingsPlans] = useState(false);
 
   // Helper to format currency with current language
   const fmt = (value) => formatCurrency(value, language);
   const locale = language === 'en' ? 'en-US' : 'fr-FR';
-
-  // Human-readable byte size (decimal units, like the OVH manager)
-  const fmtBytes = (bytes) => {
-    if (bytes === null || bytes === undefined) return '-';
-    if (bytes === 0) return '0 B';
-    const units = ['B', 'KB', 'MB', 'GB', 'TB', 'PB'];
-    const i = Math.min(Math.floor(Math.log10(bytes) / 3), units.length - 1);
-    const value = bytes / Math.pow(1000, i);
-    return `${value.toFixed(value < 10 && i > 0 ? 1 : 0)} ${units[i]}`;
-  };
 
   // Sort projects helper
   const sortProjects = (projects, sortConfig) => {
@@ -323,78 +297,13 @@ export default function Dashboard() {
     enabled: !!selectedMonth
   });
 
-  // Enriched projects for inventory tab
-  const { data: projectsEnriched = [] } = useQuery({
-    queryKey: ['projectsEnriched'],
-    queryFn: fetchProjectsEnriched,
-    enabled: activeTab === 'inventory'
-  });
-
-  // Project detail queries
-  const { data: projectConsumption = [] } = useQuery({
-    queryKey: ['projectConsumption', selectedProject?.id],
-    queryFn: () => fetchProjectConsumption(selectedProject.id),
-    enabled: !!selectedProject
-  });
-
-  const { data: projectInstances = [] } = useQuery({
-    queryKey: ['projectInstances', selectedProject?.id, selectedMonth?.from, selectedMonth?.to],
-    queryFn: () => fetchProjectInstances(selectedProject.id, selectedMonth?.from, selectedMonth?.to),
-    enabled: !!selectedProject
-  });
-  // The unallocated row is not an instance
-  const instanceCount = projectInstances.filter(i => !i.unallocated).length;
-
-  const { data: projectQuotas = [] } = useQuery({
-    queryKey: ['projectQuotas', selectedProject?.id],
-    queryFn: () => fetchProjectQuotas(selectedProject.id),
-    enabled: !!selectedProject
-  });
-
-  // Project buckets (filtered by selected month)
-  const { data: projectVolumes = [] } = useQuery({
-    queryKey: ['projectVolumes', selectedProject?.id, selectedMonth?.from, selectedMonth?.to],
-    queryFn: () => fetchProjectVolumes(selectedProject.id, selectedMonth.from, selectedMonth.to),
-    enabled: !!selectedProject?.id && !!selectedMonth
-  });
-
-  const { data: projectSnapshots = [] } = useQuery({
-    queryKey: ['projectSnapshots', selectedProject?.id, selectedMonth?.from, selectedMonth?.to],
-    queryFn: () => fetchProjectSnapshots(selectedProject.id, selectedMonth.from, selectedMonth.to),
-    enabled: !!selectedProject?.id && !!selectedMonth
-  });
-
-  const { data: projectSavingsPlans = [] } = useQuery({
-    queryKey: ['projectSavingsPlans', selectedProject?.id, selectedMonth?.from, selectedMonth?.to],
-    queryFn: () => fetchProjectSavingsPlans(selectedProject.id, selectedMonth.from, selectedMonth.to),
-    enabled: !!selectedProject?.id && !!selectedMonth
-  });
-
-  const { data: projectBuckets = [] } = useQuery({
-    queryKey: ['projectBuckets', selectedProject?.id, selectedMonth?.from, selectedMonth?.to],
-    queryFn: () => fetchProjectBuckets(selectedProject.id, selectedMonth.from, selectedMonth.to),
-    enabled: !!selectedProject && !!selectedMonth
-  });
-
-  // Project instance total cost (filtered by selected month)
-  const { data: projectInstanceTotal } = useQuery({
-    queryKey: ['projectInstanceTotal', selectedProject?.id, selectedMonth?.from, selectedMonth?.to],
-    queryFn: () => fetchProjectInstanceTotal(selectedProject.id, selectedMonth.from, selectedMonth.to),
-    enabled: !!selectedProject && !!selectedMonth
-  });
+  const publicCloudTab = usePublicCloudTab({ selectedMonth, activeTab, selectedProject });
 
   // GPU cost summary — filtered by selected month (for overview)
   const { data: gpuSummary } = useQuery({
     queryKey: ['gpuSummary', selectedMonth?.from, selectedMonth?.to],
     queryFn: () => fetchGpuSummary(selectedMonth.from, selectedMonth.to),
     enabled: !!selectedMonth
-  });
-
-  // Public Cloud stats (Kubernetes, S3, Registry, etc.)
-  const { data: publicCloudStats } = useQuery({
-    queryKey: ['publicCloudStats', selectedMonth?.from, selectedMonth?.to],
-    queryFn: () => fetchPublicCloudStats(selectedMonth.from, selectedMonth.to),
-    enabled: !!selectedMonth && activeTab === 'inventory'
   });
 
   const backupTab = useBackupTab({ selectedMonth, activeTab });
@@ -1352,344 +1261,12 @@ export default function Dashboard() {
 
         {/* Tab Content - Public Cloud */}
         {activeTab === 'inventory' && (
-          <div className="space-y-6">
-            {/* Cloud Summary Cards */}
-            <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
-              <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
-                <span className="text-gray-500 text-sm">{t('cloudProjects')}</span>
-                <div className="text-3xl font-bold text-blue-600 mt-2">{byResourceType.find(r => r.resource_type === 'cloud_project')?.serviceCount || 0}</div>
-              </div>
-              <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
-                <span className="text-gray-500 text-sm">{t('instances')}</span>
-                <div className="text-3xl font-bold text-indigo-600 mt-2">
-                  {projectsEnriched.reduce((sum, p) => sum + (p.instance_count || 0), 0)}
-                </div>
-                {publicCloudStats?.instances?.total > 0 && (
-                  <p className="text-xs text-gray-400">{fmt(publicCloudStats.instances.total)}€</p>
-                )}
-              </div>
-              <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
-                <span className="text-gray-500 text-sm">{language === 'en' ? 'GPU Instances' : 'Instances GPU'}</span>
-                <div className="text-3xl font-bold text-purple-600 mt-2">{gpuSummary?.instances?.length || 0}</div>
-              </div>
-              <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
-                <span className="text-gray-500 text-sm">Kubernetes</span>
-                <div className="text-3xl font-bold text-cyan-600 mt-2">{publicCloudStats?.kubernetes?.count || 0}</div>
-                {publicCloudStats?.kubernetes?.total > 0 && (
-                  <p className="text-xs text-gray-400">{fmt(publicCloudStats.kubernetes.total)}€</p>
-                )}
-              </div>
-              <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
-                <span className="text-gray-500 text-sm">{language === 'en' ? 'Object Storage' : 'Stockage Objet'}</span>
-                <div className="text-3xl font-bold text-green-600 mt-2">{publicCloudStats?.objectStorage?.count || 0}</div>
-                {publicCloudStats?.objectStorage?.total > 0 && (
-                  <p className="text-xs text-gray-400">{fmt(publicCloudStats.objectStorage.total)}€</p>
-                )}
-              </div>
-              <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
-                <span className="text-gray-500 text-sm">{language === 'en' ? 'Volumes' : 'Volumes'}</span>
-                <div className="text-3xl font-bold text-teal-600 mt-2">{publicCloudStats?.volumes?.count || 0}</div>
-                {publicCloudStats?.volumes?.total > 0 && (
-                  <p className="text-xs text-gray-400">{fmt(publicCloudStats.volumes.total)}€</p>
-                )}
-              </div>
-              <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
-                <span className="text-gray-500 text-sm">Snapshots</span>
-                <div className="text-3xl font-bold text-amber-600 mt-2">{publicCloudStats?.snapshots?.count || 0}</div>
-                {publicCloudStats?.snapshots?.total > 0 && (
-                  <p className="text-xs text-gray-400">{fmt(publicCloudStats.snapshots.total)}€</p>
-                )}
-              </div>
-              <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
-                <span className="text-gray-500 text-sm">{language === 'en' ? 'Savings plans' : 'Savings plans'}</span>
-                <div className="text-3xl font-bold text-rose-600 mt-2">{publicCloudStats?.savingsPlans?.count || 0}</div>
-                {publicCloudStats?.savingsPlans?.total > 0 && (
-                  <p className="text-xs text-gray-400">{fmt(publicCloudStats.savingsPlans.total)}€</p>
-                )}
-              </div>
-              <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
-                <span className="text-gray-500 text-sm">{language === 'en' ? 'Container Registry' : 'Registre'}</span>
-                <div className="text-3xl font-bold text-orange-600 mt-2">{publicCloudStats?.registry?.count || 0}</div>
-                {publicCloudStats?.registry?.total > 0 && (
-                  <p className="text-xs text-gray-400">{fmt(publicCloudStats.registry.total)}€</p>
-                )}
-              </div>
-            </div>
-
-            {/* Cloud Projects Table with inline detail */}
-            {projectsEnriched.length > 0 && (
-              <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
-                <h3 className="font-semibold text-gray-900 mb-4">{t('cloudProjects')}</h3>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b bg-gray-50">
-                        <th className="p-3 text-left font-medium">{language === 'en' ? 'Name' : 'Nom'}</th>
-                        <th className="p-3 text-left font-medium">{t('state')}</th>
-                        <th className="p-3 text-right font-medium">{t('instances')}</th>
-                        <th className="p-3 text-right font-medium">{language === 'en' ? 'Current consumption' : 'Consommation en cours'}</th>
-                        <th className="p-3 text-center font-medium"></th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {projectsEnriched.map(p => (
-                        <Fragment key={p.id}>
-                          <tr
-                            className={`border-b hover:bg-gray-50 cursor-pointer ${selectedProject?.id === p.id ? 'bg-blue-50' : ''}`}
-                            onClick={() => setSelectedProject(selectedProject?.id === p.id ? null : p)}
-                          >
-                            <td className="p-3 font-medium">
-                              <span className="text-blue-600">{p.name || p.id}</span>
-                              {p.description && <div className="text-xs text-gray-400">{p.description}</div>}
-                            </td>
-                            <td className="p-3">
-                              <span className={`px-2 py-0.5 rounded text-xs font-medium ${p.status === 'ok' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'}`}>
-                                {p.status}
-                              </span>
-                            </td>
-                            <td className="p-3 text-right">{p.instance_count || 0}</td>
-                            <td className="p-3 text-right font-medium">
-                              {p.consumption_total > 0 ? `${fmt(p.consumption_total)}€` : '-'}
-                            </td>
-                            <td className="p-3 text-center">
-                              <span className="text-gray-400 text-lg">
-                                {selectedProject?.id === p.id ? '▲' : '▼'}
-                              </span>
-                            </td>
-                          </tr>
-                          {selectedProject?.id === p.id && (
-                            <tr>
-                              <td colSpan="5" className="p-0">
-                                <div className="bg-blue-50 border-l-4 border-blue-400 p-5">
-                                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                                    {/* Consumption by resource type */}
-                                    {(() => {
-                                      const byType = {};
-                                      projectConsumption.forEach(c => {
-                                        const key = c.resource_type || 'other';
-                                        byType[key] = (byType[key] || 0) + (c.total_price || 0);
-                                      });
-                                      const chartData = Object.entries(byType)
-                                        .map(([name, value]) => ({ name, value: Math.round(value * 100) / 100 }))
-                                        .sort((a, b) => b.value - a.value);
-                                      const typeColors = ['#3b82f6', '#ef4444', '#f59e0b', '#10b981', '#8b5cf6', '#ec4899', '#6b7280'];
-
-                                      return chartData.length > 0 ? (
-                                        <div>
-                                          <h4 className="font-medium text-gray-700 mb-3">
-                                            {language === 'en' ? 'Consumption by resource' : 'Consommation par ressource'}
-                                          </h4>
-                                          <ResponsiveContainer width="100%" height={220}>
-                                            <PieChart>
-                                              <Pie
-                                                data={chartData}
-                                                cx="50%"
-                                                cy="50%"
-                                                outerRadius={80}
-                                                innerRadius={35}
-                                                dataKey="value"
-                                                nameKey="name"
-                                                label={({ name, value }) => `${name}: ${fmt(value)}€`}
-                                              >
-                                                {chartData.map((_, i) => (
-                                                  <Cell key={i} fill={typeColors[i % typeColors.length]} />
-                                                ))}
-                                              </Pie>
-                                              <Tooltip formatter={(v) => `${fmt(v)}€`} />
-                                            </PieChart>
-                                          </ResponsiveContainer>
-                                        </div>
-                                      ) : (
-                                        <div className="flex items-center justify-center h-32 text-gray-400 text-sm">
-                                          {language === 'en' ? 'No consumption data' : 'Pas de données de consommation'}
-                                        </div>
-                                      );
-                                    })()}
-
-                                    {/* Instances list */}
-                                    <div>
-                                      <h4 className="font-medium text-gray-700 mb-3 flex items-center gap-2">
-                                        <span>
-                                          {t('instances')} ({instanceCount})
-                                          {projectInstanceTotal?.total > 0 && (
-                                            <span className="ml-2 text-sm font-normal text-indigo-600">{fmt(projectInstanceTotal.total)}€</span>
-                                          )}
-                                        </span>
-                                        {projectInstances.length > 0 && (
-                                          <TableActions
-                                            language={language}
-                                            onShowAll={() => setShowAllInstances(true)}
-                                            onExport={() => downloadCSV(
-                                              instanceCsvRows(projectInstances, language),
-                                              instanceCsvColumns(language),
-                                              `ovh-instances-${selectedProject?.name || 'export'}`
-                                            )}
-                                          />
-                                        )}
-                                      </h4>
-                                      {projectInstances.length > 0 ? (
-                                        <div className="overflow-y-auto max-h-52 bg-white rounded-lg">
-                                          <InstancesTable instances={projectInstances} language={language} t={t} fmt={fmt} />
-                                        </div>
-                                      ) : (
-                                        <div className="flex items-center justify-center h-16 text-gray-400 text-sm">
-                                          {language === 'en' ? 'No instances' : 'Aucune instance'}
-                                        </div>
-                                      )}
-                                    </div>
-
-                                    {/* Buckets list */}
-                                    {projectBuckets.length > 0 && (
-                                      <div className="lg:col-span-2">
-                                        <h4 className="font-medium text-gray-700 mb-3 flex items-center gap-2">
-                                          <span>
-                                            Buckets ({projectBuckets.length})
-                                            <span className="ml-2 text-sm font-normal text-green-600">
-                                              {fmt(projectBuckets.reduce((sum, b) => sum + (b.total || 0), 0))}€
-                                            </span>
-                                          </span>
-                                          <TableActions
-                                            language={language}
-                                            onShowAll={() => setShowAllBuckets(true)}
-                                            onExport={() => downloadCSV(
-                                              sortBucketsByName(projectBuckets),
-                                              bucketCsvColumns(language),
-                                              `ovh-buckets-${selectedMonth?.value || 'export'}`
-                                            )}
-                                          />
-                                        </h4>
-                                        {/* ~11 rows before scrolling */}
-                                        <div className="overflow-y-auto max-h-[400px] bg-white rounded-lg">
-                                          <BucketsTable buckets={projectBuckets} language={language} t={t} fmt={fmt} fmtBytes={fmtBytes} />
-                                        </div>
-                                      </div>
-                                    )}
-
-                                    {/* Volumes */}
-                                    {projectVolumes.length > 0 && (
-                                      <div>
-                                        <h4 className="font-medium text-gray-700 mb-3 flex items-center gap-2">
-                                          <span>
-                                            Volumes ({projectVolumes.length})
-                                            <span className="ml-2 text-sm font-normal text-teal-600">
-                                              {fmt(projectVolumes.reduce((sum, v) => sum + (v.total || 0), 0))}€
-                                            </span>
-                                          </span>
-                                          <TableActions
-                                            language={language}
-                                            onShowAll={() => setShowAllVolumes(true)}
-                                            onExport={() => downloadCSV(
-                                              volumeCsvRows(projectVolumes),
-                                              volumeCsvColumns(language),
-                                              `ovh-volumes-${selectedMonth?.value || 'export'}`
-                                            )}
-                                          />
-                                        </h4>
-                                        <div className="overflow-y-auto max-h-[400px] bg-white rounded-lg">
-                                          <VolumesTable volumes={projectVolumes} language={language} t={t} fmt={fmt} />
-                                        </div>
-                                      </div>
-                                    )}
-
-                                    {/* Snapshots */}
-                                    {projectSnapshots.length > 0 && (
-                                      <div>
-                                        <h4 className="font-medium text-gray-700 mb-3 flex items-center gap-2">
-                                          <span>
-                                            Snapshots ({projectSnapshots.length})
-                                            <span className="ml-2 text-sm font-normal text-amber-600">
-                                              {fmt(projectSnapshots.reduce((sum, sn) => sum + (sn.total || 0), 0))}€
-                                            </span>
-                                          </span>
-                                          <TableActions
-                                            language={language}
-                                            onShowAll={() => setShowAllSnapshots(true)}
-                                            onExport={() => downloadCSV(
-                                              projectSnapshots,
-                                              snapshotCsvColumns(language),
-                                              `ovh-snapshots-${selectedMonth?.value || 'export'}`
-                                            )}
-                                          />
-                                        </h4>
-                                        <div className="overflow-y-auto max-h-[400px] bg-white rounded-lg">
-                                          <SnapshotsTable snapshots={projectSnapshots} language={language} t={t} fmt={fmt} locale={locale} />
-                                        </div>
-                                      </div>
-                                    )}
-
-                                    {/* Savings plans */}
-                                    {projectSavingsPlans.length > 0 && (
-                                      <div className="lg:col-span-2">
-                                        <h4 className="font-medium text-gray-700 mb-3 flex items-center gap-2">
-                                          <span>
-                                            Savings plans ({projectSavingsPlans.length})
-                                            <span className="ml-2 text-sm font-normal text-rose-600">
-                                              {fmt(projectSavingsPlans.reduce((sum, p) => sum + (p.total || 0), 0))}€
-                                            </span>
-                                          </span>
-                                          <TableActions
-                                            language={language}
-                                            onShowAll={() => setShowAllSavingsPlans(true)}
-                                            onExport={() => downloadCSV(
-                                              projectSavingsPlans,
-                                              savingsPlanCsvColumns(language),
-                                              `ovh-savings-plans-${selectedMonth?.value || 'export'}`
-                                            )}
-                                          />
-                                        </h4>
-                                        <div className="overflow-y-auto max-h-[400px] bg-white rounded-lg">
-                                          <SavingsPlansTable plans={projectSavingsPlans} language={language} fmt={fmt} />
-                                        </div>
-                                      </div>
-                                    )}
-                                  </div>
-
-                                  {/* Quotas — only regions with capacity */}
-                                  {(() => {
-                                    const activeQuotas = projectQuotas.filter(q => q.used_cores > 0 || q.used_instances > 0);
-                                    return activeQuotas.length > 0 ? (
-                                      <div className="mt-4">
-                                        <h4 className="font-medium text-gray-700 mb-3">
-                                          {language === 'en' ? 'Quotas by region' : 'Quotas par région'}
-                                        </h4>
-                                        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-                                          {activeQuotas.map(q => {
-                                            const coreUsage = q.max_cores > 0 ? Math.round((q.used_cores / q.max_cores) * 100) : 0;
-                                            return (
-                                              <div key={`${q.project_id}-${q.region}`} className="bg-white rounded-lg p-3">
-                                                <div className="font-medium text-xs text-gray-700 mb-2">{q.region}</div>
-                                                <div className="text-xs text-gray-500">
-                                                  vCPU: {q.used_cores}/{q.max_cores}
-                                                </div>
-                                                <div className="w-full bg-gray-200 rounded-full h-1.5 mt-1">
-                                                  <div
-                                                    className={`h-1.5 rounded-full transition-all ${coreUsage > 80 ? 'bg-red-500' : coreUsage > 50 ? 'bg-amber-500' : 'bg-blue-500'}`}
-                                                    style={{ width: `${Math.min(coreUsage, 100)}%` }}
-                                                  />
-                                                </div>
-                                                <div className="text-xs text-gray-500 mt-1">
-                                                  {t('instances')}: {q.used_instances}/{q.max_instances}
-                                                </div>
-                                              </div>
-                                            );
-                                          })}
-                                        </div>
-                                      </div>
-                                    ) : null;
-                                  })()}
-                                </div>
-                              </td>
-                            </tr>
-                          )}
-                        </Fragment>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
-
-          </div>
+          <PublicCloudTab
+            {...publicCloudTab} language={language} t={t} fmt={fmt} locale={locale}
+            selectedMonth={selectedMonth} selectedProject={selectedProject}
+            setSelectedProject={setSelectedProject} byResourceType={byResourceType}
+            gpuSummary={gpuSummary}
+          />
         )}
 
         {/* Tab Content - Infrastructure */}
@@ -1773,145 +1350,12 @@ export default function Dashboard() {
       </div>
       <WebCloudTabModals {...webCloudTab} language={language} t={t} fmt={fmt} />
 
-      <Modal
-        open={showAllBuckets}
-        onClose={() => setShowAllBuckets(false)}
-        maxWidth="max-w-5xl"
-        title={
-          <>
-            Buckets ({projectBuckets.length})
-            <span className="ml-2 text-sm font-normal text-green-600">
-              {fmt(projectBuckets.reduce((sum, b) => sum + (b.total || 0), 0))}€
-            </span>
-            {selectedMonth?.label && (
-              <span className="ml-2 text-sm font-normal text-gray-400">{selectedMonth.label}</span>
-            )}
-          </>
-        }
-        actions={
-          <button
-            onClick={() => downloadCSV(
-              sortBucketsByName(projectBuckets),
-              bucketCsvColumns(language),
-              `ovh-buckets-${selectedMonth?.value || 'export'}`
-            )}
-            className="px-2 py-0.5 text-xs border border-gray-200 rounded hover:bg-gray-100"
-          >
-            CSV
-          </button>
-        }
-      >
-        <BucketsTable buckets={projectBuckets} language={language} t={t} fmt={fmt} fmtBytes={fmtBytes} />
-      </Modal>
-
-      <Modal
-        open={showAllInstances}
-        onClose={() => setShowAllInstances(false)}
-        maxWidth="max-w-4xl"
-        title={
-          <>
-            {t('instances')} ({instanceCount})
-            {projectInstanceTotal?.total > 0 && (
-              <span className="ml-2 text-sm font-normal text-indigo-600">{fmt(projectInstanceTotal.total)}€</span>
-            )}
-            {selectedProject?.name && (
-              <span className="ml-2 text-sm font-normal text-gray-400">{selectedProject.name}</span>
-            )}
-          </>
-        }
-        actions={
-          <TableActions
-            language={language}
-            onExport={() => downloadCSV(
-              instanceCsvRows(projectInstances, language),
-              instanceCsvColumns(language),
-              `ovh-instances-${selectedProject?.name || 'export'}`
-            )}
-          />
-        }
-      >
-        <InstancesTable instances={projectInstances} language={language} t={t} fmt={fmt} />
-      </Modal>
+      <PublicCloudTabModals
+        {...publicCloudTab} language={language} t={t} fmt={fmt} locale={locale}
+        selectedMonth={selectedMonth} selectedProject={selectedProject}
+      />
 
       <InfrastructureTabModals {...infrastructureTab} language={language} t={t} />
-
-      <Modal
-        open={showAllVolumes}
-        onClose={() => setShowAllVolumes(false)}
-        maxWidth="max-w-5xl"
-        title={
-          <>
-            Volumes ({projectVolumes.length})
-            <span className="ml-2 text-sm font-normal text-teal-600">
-              {fmt(projectVolumes.reduce((sum, v) => sum + (v.total || 0), 0))}€
-            </span>
-          </>
-        }
-        actions={
-          <TableActions
-            language={language}
-            onExport={() => downloadCSV(
-              volumeCsvRows(projectVolumes),
-              volumeCsvColumns(language),
-              `ovh-volumes-${selectedMonth?.value || 'export'}`
-            )}
-          />
-        }
-      >
-        <VolumesTable volumes={projectVolumes} language={language} t={t} fmt={fmt} />
-      </Modal>
-
-      <Modal
-        open={showAllSnapshots}
-        onClose={() => setShowAllSnapshots(false)}
-        maxWidth="max-w-5xl"
-        title={
-          <>
-            Snapshots ({projectSnapshots.length})
-            <span className="ml-2 text-sm font-normal text-amber-600">
-              {fmt(projectSnapshots.reduce((sum, sn) => sum + (sn.total || 0), 0))}€
-            </span>
-          </>
-        }
-        actions={
-          <TableActions
-            language={language}
-            onExport={() => downloadCSV(
-              projectSnapshots,
-              snapshotCsvColumns(language),
-              `ovh-snapshots-${selectedMonth?.value || 'export'}`
-            )}
-          />
-        }
-      >
-        <SnapshotsTable snapshots={projectSnapshots} language={language} t={t} fmt={fmt} locale={locale} />
-      </Modal>
-
-      <Modal
-        open={showAllSavingsPlans}
-        onClose={() => setShowAllSavingsPlans(false)}
-        maxWidth="max-w-4xl"
-        title={
-          <>
-            Savings plans ({projectSavingsPlans.length})
-            <span className="ml-2 text-sm font-normal text-rose-600">
-              {fmt(projectSavingsPlans.reduce((sum, p) => sum + (p.total || 0), 0))}€
-            </span>
-          </>
-        }
-        actions={
-          <TableActions
-            language={language}
-            onExport={() => downloadCSV(
-              projectSavingsPlans,
-              savingsPlanCsvColumns(language),
-              `ovh-savings-plans-${selectedMonth?.value || 'export'}`
-            )}
-          />
-        }
-      >
-        <SavingsPlansTable plans={projectSavingsPlans} language={language} fmt={fmt} />
-      </Modal>
     </div>
   );
 }
