@@ -112,8 +112,8 @@ async function withRetry(fn, retries = MAX_RETRIES, backoff = INITIAL_BACKOFF_MS
   }
 }
 
-// The items that runInBatches skipped after an error, for the summary of the import
-let failedItems = 0;
+// The items that the import skipped after an error, bills included, for its summary
+let failedItemCount = 0;
 
 // Helper to run promises in parallel batches with retry and error logging
 async function runInBatches(items, asyncFn, batchSize = BATCH_SIZE) {
@@ -122,7 +122,7 @@ async function runInBatches(items, asyncFn, batchSize = BATCH_SIZE) {
   for (const chunk of chunks) {
     const batchResults = await Promise.all(chunk.map(item =>
       withRetry(() => asyncFn(item)).catch(err => {
-        failedItems += 1;
+        failedItemCount += 1;
         const label = JSON.stringify(item).substring(0, 80);
         console.error(`  [batch] Error processing item ${label}: ${describeError(err)}`);
         return { error: err };
@@ -900,7 +900,7 @@ async function importCloudDetails(projectIds) {
         if (!consumptionMonth || periodStart > consumptionMonth) consumptionMonth = periodStart;
 
         // Clear old data for this project: its consumption of the other months is kept
-        db.cloudDetails.clearByProject(projectId);
+        db.cloudDetails.clearProjectInventory(projectId);
         db.cloudDetails.clearConsumptionOfMonth(projectId, periodStart);
 
         // Process hourly usage
@@ -1078,7 +1078,7 @@ async function importCloudDetails(projectIds) {
 // Main import function
 async function runImport(params) {
   const stats = { bills: 0, details: 0, projects: 0 };
-  failedItems = 0;
+  failedItemCount = 0;
 
   // Determine import type and dates
   let importType = 'period';
@@ -1219,7 +1219,7 @@ async function runImport(params) {
         console.log(` ${details.length} details`);
       } catch (err) {
         // The bill is skipped, as a failed item is
-        failedItems += 1;
+        failedItemCount += 1;
         console.log(` ERROR: ${describeError(err)}`);
       }
     }
@@ -1247,7 +1247,7 @@ async function runImport(params) {
     console.log(`Projects: ${stats.projects}`);
     console.log(`Bills: ${stats.bills}`);
     console.log(`Details: ${stats.details}`);
-    console.log(`Failed items: ${failedItems}`);
+    console.log(`Failed items: ${failedItemCount}`);
 
   } catch (err) {
     db.importLog.fail(importId, err.message);

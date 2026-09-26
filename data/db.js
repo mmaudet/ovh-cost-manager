@@ -1518,7 +1518,7 @@ const cloudDetailOps = {
   },
 
   // A project's instances and quotas: inventories, which each import replaces
-  clearByProject: (projectId) => {
+  clearProjectInventory: (projectId) => {
     const db = getDb();
     db.prepare('DELETE FROM cloud_instances WHERE project_id = ?').run(projectId);
     db.prepare('DELETE FROM project_quotas WHERE project_id = ?').run(projectId);
