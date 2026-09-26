@@ -41,12 +41,25 @@ describe('createOriginCheck', () => {
     ['https://ocm.example.com', 'OCM.example.com'],
     // What the LemonLDAP relay of docker-compose.sso.yml sends
     ['http://ocm.example.com', 'ocm.example.com:80'],
+    // What the same relay passes behind a TLS terminator: the port it listens
+    // on, 80, which an https origin on its default port matches too
+    ['https://ocm.example.com', 'ocm.example.com:80'],
+    // The same with an IPv6 address, which URL writes in brackets
+    ['https://[2001:db8::1]', '[2001:db8::1]:80'],
   ])('allows %s with Host %s', (origin, host) => {
     expect(production(origin, { host })).toBe(true);
   });
 
   test('rejects http://ocm.example.com with Host ocm.example.com:443, the https port', () => {
     expect(production('http://ocm.example.com', { host: 'ocm.example.com:443' })).toBe(false);
+  });
+
+  // Other ports still differ: port 80 stands only for an https origin's default port
+  test.each([
+    ['https://ocm.example.com:8443', 'ocm.example.com:80'],
+    ['https://ocm.example.com', 'ocm.example.com:8080'],
+  ])('rejects %s with Host %s, on another port', (origin, host) => {
+    expect(production(origin, { host })).toBe(false);
   });
 
   test('rejects an origin when the request has no Host header, not reading it as a host', () => {
@@ -120,6 +133,19 @@ describe('createOriginCheck', () => {
     test('compares X-Forwarded-Host as it compares Host', () => {
       expect(behindTrustedProxy(origin, { ...proxied, forwardedHost: 'OCM.example.com:443' }))
         .toBe(true);
+    });
+
+    test('allows the origin with X-Forwarded-Host on port 80, as with Host', () => {
+      expect(behindTrustedProxy(origin, { ...proxied, forwardedHost: 'ocm.example.com:80' }))
+        .toBe(true);
+    });
+
+    test('rejects the origin with X-Forwarded-Host on port 80 and X-Forwarded-Proto http', () => {
+      expect(behindTrustedProxy(origin, {
+        ...proxied,
+        forwardedHost: 'ocm.example.com:80',
+        forwardedProto: 'http',
+      })).toBe(false);
     });
 
     // As the Host check reads it: the last host is the one the nearest proxy
