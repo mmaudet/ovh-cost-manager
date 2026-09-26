@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  PieChart, Pie, Cell, Legend
+  PieChart, Pie, Cell
 } from 'recharts';
 import {
   fetchMonths, fetchSummary, fetchByProject, fetchByService,
@@ -13,7 +13,6 @@ import {
 } from '../services/api';
 import { useLanguage } from '../hooks/useLanguage.jsx';
 import Logo from '../components/Logo';
-import Accordion from '../components/Accordion.jsx';
 import { SortIcon } from '../components/SortIcon.jsx';
 import { formatCurrency } from '../utils/format.js';
 import { parseSqliteDate } from '../utils/sqliteDate.js';
@@ -28,7 +27,8 @@ import { useInfrastructureTab } from '../tabs/useInfrastructureTab.js';
 import { InfrastructureTab, InfrastructureTabModals } from '../tabs/InfrastructureTab.jsx';
 import { usePublicCloudTab } from '../tabs/usePublicCloudTab.js';
 import { PublicCloudTab, PublicCloudTabModals } from '../tabs/PublicCloudTab.jsx';
-import ProjectProductComparison from './ProjectProductComparison.jsx';
+import { useCompareTab } from '../tabs/useCompareTab.js';
+import { CompareTab } from '../tabs/CompareTab.jsx';
 
 // Translation keys for the import_log type and status values
 const IMPORT_TYPE_KEYS = {
@@ -46,12 +46,9 @@ const IMPORT_STATUS_KEYS = {
 export default function Dashboard() {
   const { language, setLanguage, t } = useLanguage();
   const [selectedMonth, setSelectedMonth] = useState(null);
-  const [compareMonthA, setCompareMonthA] = useState(null);
-  const [compareMonthB, setCompareMonthB] = useState(null);
   const [activeTab, setActiveTab] = useState('overview');
   const [budget, setBudget] = useState(50000); // Default budget
   const [projectSort, setProjectSort] = useState({ column: 'total', direction: 'desc' });
-  const [compareSort, setCompareSort] = useState({ column: 'totalA', direction: 'desc' });
   const [syncWarningDismissed, setSyncWarningDismissed] = useState(false);
   const [selectedProject, setSelectedProject] = useState(null);
   const [selectedResourceType, setSelectedResourceType] = useState(null);
@@ -85,43 +82,6 @@ export default function Dashboard() {
     }));
   };
 
-  const handleCompareSort = (column) => {
-    setCompareSort(prev => ({
-      column,
-      direction: prev.column === column && prev.direction === 'desc' ? 'asc' : 'desc'
-    }));
-  };
-
-  // Merge and sort comparison data
-  const getSortedCompareProjects = () => {
-    if (!byProjectA.length) return [];
-    const merged = byProjectA.map(p => {
-      const pB = byProjectB.find(proj => proj.projectName === p.projectName) || { total: 0 };
-      // Variation: how MoisB changed compared to MoisA (reference)
-      const diff = p.total ? ((pB.total - p.total) / p.total * 100) : null;
-      return { ...p, totalB: pB.total, diff };
-    });
-    return merged.sort((a, b) => {
-      let aVal, bVal;
-      if (compareSort.column === 'name') {
-        aVal = a.projectName?.toLowerCase() || '';
-        bVal = b.projectName?.toLowerCase() || '';
-      } else if (compareSort.column === 'totalA') {
-        aVal = a.total || 0;
-        bVal = b.total || 0;
-      } else if (compareSort.column === 'totalB') {
-        aVal = a.totalB || 0;
-        bVal = b.totalB || 0;
-      } else if (compareSort.column === 'diff') {
-        aVal = a.diff ?? -Infinity;
-        bVal = b.diff ?? -Infinity;
-      }
-      if (aVal < bVal) return compareSort.direction === 'asc' ? -1 : 1;
-      if (aVal > bVal) return compareSort.direction === 'asc' ? 1 : -1;
-      return 0;
-    });
-  };
-
   // Fetch config (budget)
   const { data: configData } = useQuery({
     queryKey: ['config'],
@@ -151,15 +111,6 @@ export default function Dashboard() {
   useEffect(() => {
     if (months.length > 0 && !selectedMonth) {
       setSelectedMonth(months[0]);
-      // Pour la comparaison :
-      // A = mois précédent, B = mois courant
-      if (months.length > 1) {
-        setCompareMonthA(months[1]);
-        setCompareMonthB(months[0]);
-      } else {
-        setCompareMonthA(months[0]);
-        setCompareMonthB(months[0]);
-      }
     }
   }, [months, selectedMonth]);
 
@@ -184,42 +135,10 @@ export default function Dashboard() {
 
   const trendsTab = useTrendsTab({ months, activeTab });
 
-  // Comparison data
-  const { data: compareDataA } = useQuery({
-    queryKey: ['summary', compareMonthA?.from, compareMonthA?.to],
-    queryFn: () => fetchSummary(compareMonthA.from, compareMonthA.to),
-    enabled: !!compareMonthA && activeTab === 'compare'
-  });
-
-  const { data: compareDataB } = useQuery({
-    queryKey: ['summary', compareMonthB?.from, compareMonthB?.to],
-    queryFn: () => fetchSummary(compareMonthB.from, compareMonthB.to),
-    enabled: !!compareMonthB && activeTab === 'compare'
-  });
-
-  const { data: byServiceA = [] } = useQuery({
-    queryKey: ['byService', compareMonthA?.from, compareMonthA?.to],
-    queryFn: () => fetchByService(compareMonthA.from, compareMonthA.to),
-    enabled: !!compareMonthA && activeTab === 'compare'
-  });
-
-  const { data: byServiceB = [] } = useQuery({
-    queryKey: ['byService', compareMonthB?.from, compareMonthB?.to],
-    queryFn: () => fetchByService(compareMonthB.from, compareMonthB.to),
-    enabled: !!compareMonthB && activeTab === 'compare'
-  });
-
-  const { data: byProjectA = [] } = useQuery({
-    queryKey: ['byProject', compareMonthA?.from, compareMonthA?.to],
-    queryFn: () => fetchByProject(compareMonthA.from, compareMonthA.to),
-    enabled: !!compareMonthA && activeTab === 'compare'
-  });
-
-  const { data: byProjectB = [] } = useQuery({
-    queryKey: ['byProject', compareMonthB?.from, compareMonthB?.to],
-    queryFn: () => fetchByProject(compareMonthB.from, compareMonthB.to),
-    enabled: !!compareMonthB && activeTab === 'compare'
-  });
+  const compareTab = useCompareTab({ months, selectedMonth, activeTab });
+  // The "vs previous month" KPI reads the summary of month B, which only loads on the
+  // Compare tab (#50)
+  const { compareDataB } = compareTab;
 
   const { data: importStatus } = useQuery({
     queryKey: ['importStatus'],
@@ -318,16 +237,6 @@ export default function Dashboard() {
   const variation = previousMonthExists && previousTotal ? ((total - previousTotal) / previousTotal * 100).toFixed(1) : null;
   const budgetUsage = budget ? (total / budget * 100).toFixed(0) : 0;
 
-  // Comparison chart data
-  const comparisonChartData = byServiceA.map((s) => {
-    const matchB = byServiceB.find(b => b.name === s.name);
-    return {
-      name: s.name,
-      moisA: s.value,
-      moisB: matchB?.value || 0
-    };
-  });
-
   // Loading state
   if (!selectedMonth || loadingSummary) {
     return (
@@ -339,10 +248,6 @@ export default function Dashboard() {
       </div>
     );
   }
-
-  const totalVariation = compareDataA && compareDataB && compareDataA.total
-    ? ((compareDataB.total - compareDataA.total) / compareDataA.total * 100).toFixed(1)
-    : 0;
 
   // Calculate days since last import
   const daysSinceLastImport = importStatus?.latest?.completed_at
@@ -966,287 +871,10 @@ export default function Dashboard() {
 
         {/* Tab Content - Compare */}
         {activeTab === 'compare' && (
-          <div className="space-y-6">
-            <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
-              <div className="flex items-center justify-center gap-4 md:gap-6 flex-wrap">
-                <div className="flex items-center gap-2">
-                  <span className="font-medium text-gray-700 text-sm">{t('monthA')} :</span>
-                  <select
-                    value={compareMonthA?.value || ''}
-                    onChange={(e) => {
-                      const month = months.find(m => m.value === e.target.value);
-                      setCompareMonthA(month);
-                    }}
-                    className="px-3 py-2 bg-blue-50 border border-blue-200 rounded-lg text-sm font-medium text-blue-700"
-                  >
-                    {months.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
-                  </select>
-                </div>
-                <span className="text-2xl font-bold text-gray-300">{t('vs')}</span>
-                <div className="flex items-center gap-2">
-                  <span className="font-medium text-gray-700 text-sm">{t('monthB')} :</span>
-                  <select
-                    value={compareMonthB?.value || ''}
-                    onChange={(e) => {
-                      const month = months.find(m => m.value === e.target.value);
-                      setCompareMonthB(month);
-                    }}
-                    className="px-3 py-2 bg-gray-100 border border-gray-200 rounded-lg text-sm"
-                  >
-                    {months.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
-                  </select>
-                </div>
-              </div>
-
-              <div className="flex items-center justify-center gap-6 md:gap-8 mt-8">
-                <div className="text-center">
-                  <div className="text-3xl md:text-4xl font-bold text-blue-600">
-                    {fmt(compareDataA?.total || 0)}€
-                  </div>
-                  <div className="text-gray-500 mt-1 text-sm">{compareMonthA?.label}</div>
-                </div>
-                <div className="flex flex-col items-center">
-                  <span className={`px-4 py-2 rounded-full text-lg font-bold ${Number(totalVariation) > 0 ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
-                    {Number(totalVariation) > 0 ? '+' : ''}{totalVariation}%
-                  </span>
-                </div>
-                <div className="text-center">
-                  <div className="text-3xl md:text-4xl font-bold text-gray-400">
-                    {fmt(compareDataB?.total || 0)}€
-                  </div>
-                  <div className="text-gray-500 mt-1 text-sm">{compareMonthB?.label}</div>
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
-              <h3 className="font-semibold text-gray-900 mb-4">{t('serviceComparison')}</h3>
-              <div className="h-72">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={comparisonChartData}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="name" tick={{ fontSize: 10 }} />
-                    <YAxis tickFormatter={(v) => `${v}€`} />
-                    <Tooltip formatter={(v) => `${fmt(v)}€`} />
-                    <Legend />
-                    <Bar dataKey="moisA" fill="#3b82f6" name={compareMonthA?.label} />
-                    <Bar dataKey="moisB" fill="#94a3b8" name={compareMonthB?.label} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-
-            <Accordion title={t('projectComparison')} defaultOpen>
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b text-left bg-gray-50">
-                    <th
-                      className="p-3 font-medium rounded-tl-lg cursor-pointer hover:bg-gray-100 select-none"
-                      onClick={() => handleCompareSort('name')}
-                    >
-                      {t('project')}<SortIcon column="name" current={compareSort} />
-                    </th>
-                    <th
-                      className="p-3 font-medium text-right cursor-pointer hover:bg-gray-100 select-none"
-                      onClick={() => handleCompareSort('totalA')}
-                    >
-                      {compareMonthA?.label}<SortIcon column="totalA" current={compareSort} />
-                    </th>
-                    <th
-                      className="p-3 font-medium text-right cursor-pointer hover:bg-gray-100 select-none"
-                      onClick={() => handleCompareSort('totalB')}
-                    >
-                      {compareMonthB?.label}<SortIcon column="totalB" current={compareSort} />
-                    </th>
-                    <th
-                      className="p-3 font-medium text-right rounded-tr-lg cursor-pointer hover:bg-gray-100 select-none"
-                      onClick={() => handleCompareSort('diff')}
-                    >
-                      {t('variation')}<SortIcon column="diff" current={compareSort} />
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {getSortedCompareProjects().map((p) => (
-                    <tr key={p.projectId} className="border-b hover:bg-gray-50 transition-colors">
-                      <td className="p-3 font-medium">{p.projectName}</td>
-                      <td className="p-3 text-right font-medium">{fmt(p.total)}€</td>
-                      <td className="p-3 text-right text-gray-500">{fmt(p.totalB)}€</td>
-                      <td className="p-3 text-right">
-                        {p.diff !== null && (
-                          <span className={`px-2 py-1 rounded text-xs font-medium ${p.diff > 0 ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
-                            {p.diff > 0 ? '+' : ''}{p.diff.toFixed(1)}%
-                          </span>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </Accordion>
-
-            {/* Accordéon pour l'infrastructure (serveurs dédiés, VPS, stockage, etc.) */}
-            <Accordion title={language === 'en' ? 'Infrastructure Comparison' : 'Comparaison Infrastructure'}>
-              {/* Tableau comparatif infrastructure */}
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b text-left bg-gray-50">
-                    <th className="p-3 font-medium rounded-tl-lg">{language === 'en' ? 'Type' : 'Type'}</th>
-                    <th className="p-3 font-medium text-right">{compareMonthA?.label}</th>
-                    <th className="p-3 font-medium text-right">{compareMonthB?.label}</th>
-                    <th className="p-3 font-medium text-right rounded-tr-lg">{t('variation')}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {[
-                    { key: 'dedicated_server', label: language === 'en'
-                      ? `List of Dedicated Servers present on ${new Date().toLocaleDateString('en-GB')}`
-                      : `Liste des Serveurs dédiés présents au ${new Date().toLocaleDateString('fr-FR')}`,
-                      renderNames: () => (
-                        <ul className="text-xs text-gray-500 mt-1">
-                          {inventoryServers.map(srv => (
-                            <li key={srv.id}>{srv.display_name || srv.id}</li>
-                          ))}
-                        </ul>
-                      )
-                    },
-                    { key: 'vps', label: 'VPS' },
-                    { key: 'storage', label: language === 'en' ? 'Storage' : 'Stockage' },
-                    { key: 'load_balancer', label: language === 'en' ? 'Load Balancer' : 'Load Balancer' },
-                    { key: 'ip_service', label: language === 'en' ? 'IP Addresses' : 'Adresses IP' },
-                    { key: 'domain', label: language === 'en' ? 'Domains' : 'Noms de domaine' },
-                    { key: 'private_cloud_host', label: language === 'en' ? 'Private Cloud Hosts' : 'Hôtes Private Cloud' },
-                    { key: 'private_cloud_datastore', label: language === 'en' ? 'Private Cloud Datastores' : 'Datastores Private Cloud' },
-                  ].map(row => {
-                    const a = byServiceA.find(s => s.key === row.key) || {};
-                    const b = byServiceB.find(s => s.key === row.key) || {};
-                    const valA = a.value || 0;
-                    const valB = b.value || 0;
-                    const diff = valA ? ((valB - valA) / valA * 100) : null;
-                    return (
-                      <tr key={row.key} className="border-b hover:bg-gray-50 transition-colors">
-                        <td className="p-3 font-medium">
-                          {row.label}
-                          {row.key === 'dedicated_server' && row.renderNames && inventoryServers.length > 0 && row.renderNames()}
-                        </td>
-                        <td className="p-3 text-right font-medium">{fmt(valA)}€</td>
-                        <td className="p-3 text-right text-gray-500">{fmt(valB)}€</td>
-                        <td className="p-3 text-right">
-                          {diff !== null && (
-                            <span className={`px-2 py-1 rounded text-xs font-medium ${diff > 0 ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
-                              {diff > 0 ? '+' : ''}{diff.toFixed(1)}%
-                            </span>
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </Accordion>
-
-            {/* Accordéon pour le backup */}
-            <Accordion title={language === 'en' ? 'Backup Comparison' : 'Comparaison Backup'}>
-              {/* Tableau comparatif backup */}
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b text-left bg-gray-50">
-                    <th className="p-3 font-medium rounded-tl-lg">{language === 'en' ? 'Category' : 'Catégorie'}</th>
-                    <th className="p-3 font-medium text-right">{compareMonthA?.label}</th>
-                    <th className="p-3 font-medium text-right">{compareMonthB?.label}</th>
-                    <th className="p-3 font-medium text-right rounded-tr-lg">{t('variation')}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {[
-                    {
-                      key: 'backup_vms',
-                      label: language === 'en' ? 'Veeam Backup VMs' : 'VMs Veeam Backup',
-                      getA: () => (byServiceA.find(s => s.key === 'backup')?.count || 0),
-                      getB: () => (byServiceB.find(s => s.key === 'backup')?.count || 0),
-                      getValA: () => (byServiceA.find(s => s.key === 'backup')?.value || 0),
-                      getValB: () => (byServiceB.find(s => s.key === 'backup')?.value || 0),
-                    },
-                    {
-                      key: 'backup_enterprise',
-                      label: language === 'en' ? 'Veeam Enterprise License' : 'Licence Veeam Enterprise',
-                      getA: () => (byServiceA.find(s => s.key === 'backup_enterprise')?.count || 0),
-                      getB: () => (byServiceB.find(s => s.key === 'backup_enterprise')?.count || 0),
-                      getValA: () => (byServiceA.find(s => s.key === 'backup_enterprise')?.value || 0),
-                      getValB: () => (byServiceB.find(s => s.key === 'backup_enterprise')?.value || 0),
-                    },
-                  ].map(row => {
-                    const countA = row.getA();
-                    const countB = row.getB();
-                    const valA = row.getValA();
-                    const valB = row.getValB();
-                    const diff = valA ? ((valB - valA) / valA * 100) : null;
-                    return (
-                      <tr key={row.key} className="border-b hover:bg-gray-50 transition-colors">
-                        <td className="p-3 font-medium">{row.label}</td>
-                        <td className="p-3 text-right font-medium">{countA} / {fmt(valA)}€</td>
-                        <td className="p-3 text-right text-gray-500">{countB} / {fmt(valB)}€</td>
-                        <td className="p-3 text-right">
-                          {diff !== null && (
-                            <span className={`px-2 py-1 rounded text-xs font-medium ${diff > 0 ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
-                              {diff > 0 ? '+' : ''}{diff.toFixed(1)}%
-                            </span>
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </Accordion>
-
-            {/* Accordéon pour le Private Cloud */}
-            <Accordion title={language === 'en' ? 'Private Cloud Comparison' : 'Comparaison Private Cloud'}>
-              {/* Tableau comparatif Private Cloud */}
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b text-left bg-gray-50">
-                    <th className="p-3 font-medium rounded-tl-lg">{language === 'en' ? 'Type' : 'Type'}</th>
-                    <th className="p-3 font-medium text-right">{compareMonthA?.label}</th>
-                    <th className="p-3 font-medium text-right">{compareMonthB?.label}</th>
-                    <th className="p-3 font-medium text-right rounded-tr-lg">{t('variation')}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {[
-                    { key: 'private_cloud_host', label: language === 'en' ? 'Private Cloud Hosts' : 'Hôtes Private Cloud' },
-                    { key: 'private_cloud_datastore', label: language === 'en' ? 'Private Cloud Datastores' : 'Datastores Private Cloud' },
-                  ].map(row => {
-                    const a = byServiceA.find(s => s.key === row.key) || {};
-                    const b = byServiceB.find(s => s.key === row.key) || {};
-                    const valA = a.value || 0;
-                    const valB = b.value || 0;
-                    const diff = valA ? ((valB - valA) / valA * 100) : null;
-                    return (
-                      <tr key={row.key} className="border-b hover:bg-gray-50 transition-colors">
-                        <td className="p-3 font-medium">{row.label}</td>
-                        <td className="p-3 text-right font-medium">{fmt(valA)}€</td>
-                        <td className="p-3 text-right text-gray-500">{fmt(valB)}€</td>
-                        <td className="p-3 text-right">
-                          {diff !== null && (
-                            <span className={`px-2 py-1 rounded text-xs font-medium ${diff > 0 ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
-                              {diff > 0 ? '+' : ''}{diff.toFixed(1)}%
-                            </span>
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </Accordion>
-            {/* Accordéons par projet public cloud : comparaison détaillée produits/services */}
-            {getSortedCompareProjects().map((proj) => (
-              <Accordion key={proj.projectId} title={`${proj.projectName} (${t('project')})`}>
-                <ProjectProductComparison projectId={proj.projectId} monthA={compareMonthA} monthB={compareMonthB} fmt={fmt} language={language} />
-              </Accordion>
-            ))}
-          </div>
+          <CompareTab
+            {...compareTab} language={language} t={t} fmt={fmt}
+            months={months} inventoryServers={inventoryServers}
+          />
         )}
 
         {/* Tab Content - Trends */}
