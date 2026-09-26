@@ -493,7 +493,7 @@ For production with SSO:
 | `GET /api/analysis/public-cloud-stats?from=&to=`          | Public Cloud stats (K8s, S3, Registry)        |
 | `GET /api/analysis/backup-stats?from=&to=`                | Backup stats (Veeam VMs, Enterprise licenses) |
 | `GET /api/analysis/daily-trend?from=&to=`                 | Daily cost trend                              |
-| `GET /api/analysis/monthly-trend?months=6`                | Monthly cost trend                            |
+| `GET /api/analysis/monthly-trend?months=6&end=`           | Monthly cost trend, `months` ending on `end`  |
 
 ### Consumption & Account
 

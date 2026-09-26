@@ -13,7 +13,7 @@ const db = require('../data/db');
 // Import auth module
 const auth = require('./auth');
 const { createOriginCheck } = require('./cors');
-const { monthBounds, trendWindow } = require('./months');
+const { monthBounds, trendWindowFromQuery } = require('./months');
 
 // Load configuration
 const CONFIG_PATHS = [
@@ -343,7 +343,7 @@ async function initializeServer() {
     console.log(`  GET /api/analysis/by-project?from=YYYY-MM-DD&to=YYYY-MM-DD`);
     console.log(`  GET /api/analysis/by-service?from=YYYY-MM-DD&to=YYYY-MM-DD`);
     console.log(`  GET /api/analysis/daily-trend?from=YYYY-MM-DD&to=YYYY-MM-DD`);
-    console.log(`  GET /api/analysis/monthly-trend?months=6`);
+    console.log(`  GET /api/analysis/monthly-trend?months=6&end=YYYY-MM`);
     console.log(`  GET /api/summary?from=YYYY-MM-DD&to=YYYY-MM-DD`);
     console.log(`  GET /api/months`);
     console.log(`  GET /api/import/status`);
@@ -605,11 +605,15 @@ function registerRoutes() {
     }
   });
 
+  // The trend over the `months` months that end on the `end` month (YYYY-MM), that one
+  // included: 6 months, and the current month, by default
   app.get('/api/analysis/monthly-trend', (req, res) => {
     try {
-      const months = parseInt(req.query.months) || 6;
-      // The months that end on the current one, in UTC as SQLite's date('now') reads it
-      const { from, to } = trendWindow(new Date().toISOString().slice(0, 7), months);
+      const { valid, error, from, to } = trendWindowFromQuery(req.query);
+      if (!valid) {
+        return res.status(400).json({ error });
+      }
+
       const data = db.analysis.monthlyTrend(from, to);
 
       // Month names in French
@@ -632,11 +636,14 @@ function registerRoutes() {
 
   // Monthly trend broken down by resource type, shaped for a multi-line chart:
   // { categories: [{key, label, color}], data: [{ yearMonth, <key>: total, ... }] }
+  // Over the same months as /api/analysis/monthly-trend, from the same parameters.
   app.get('/api/analysis/monthly-trend-by-category', (req, res) => {
     try {
-      const months = parseInt(req.query.months) || 6;
-      // The months that end on the current one, in UTC as SQLite's date('now') reads it
-      const { from, to } = trendWindow(new Date().toISOString().slice(0, 7), months);
+      const { valid, error, from, to } = trendWindowFromQuery(req.query);
+      if (!valid) {
+        return res.status(400).json({ error });
+      }
+
       const rows = db.analysis.monthlyTrendByResourceType(from, to);
 
       // Total per resource_type to order categories by spend.

@@ -30,6 +30,10 @@ function trendWindowInTimezone(endMonth, months, timezone) {
   return callInTimezone(timezone, 'trendWindow', endMonth, months);
 }
 
+function trendWindowFromQueryInTimezone(query, now, timezone) {
+  return callInTimezone(timezone, 'trendWindowFromQuery', query, now);
+}
+
 describe('monthBounds', () => {
   test.each(['UTC', 'America/New_York', 'Europe/Paris', 'Pacific/Kiritimati'])(
     'ends February 2026 on the 28th in %s',
@@ -91,5 +95,50 @@ describe('trendWindow', () => {
   test('goes back 20 years for 240 months', () => {
     expect(trendWindowInTimezone('2026-09', 240, 'Europe/Paris'))
       .toEqual({ from: '2006-10-01', to: '2026-09-30' });
+  });
+});
+
+// The window that the trend routes read from their query: ?months=3&end=2026-09
+describe('trendWindowFromQuery', () => {
+  // 30 September 2026, 23:30 UTC: 1 October already in Paris
+  const lastHourOfSeptember = Date.parse('2026-09-30T23:30:00Z');
+  const windowOf = (query) =>
+    trendWindowFromQueryInTimezone(query, lastHourOfSeptember, 'Europe/Paris');
+
+  test('ends on the month the query names', () => {
+    expect(windowOf({ months: '3', end: '2026-08' }))
+      .toEqual({ valid: true, from: '2026-06-01', to: '2026-08-31' });
+  });
+
+  test('covers 6 months when the query names no number of months', () => {
+    expect(windowOf({ end: '2026-08' }))
+      .toEqual({ valid: true, from: '2026-03-01', to: '2026-08-31' });
+  });
+
+  // As SQLite's date('now') did before the end month was sent
+  test.each(['UTC', 'America/New_York', 'Europe/Paris', 'Pacific/Kiritimati'])(
+    'ends on the current month in UTC when the query names no end month, in %s',
+    (timezone) => {
+      expect(trendWindowFromQueryInTimezone({ months: '3' }, lastHourOfSeptember, timezone))
+        .toEqual({ valid: true, from: '2026-07-01', to: '2026-09-30' });
+    }
+  );
+
+  test('reads an empty end month as none', () => {
+    expect(windowOf({ months: '3', end: '' }))
+      .toEqual({ valid: true, from: '2026-07-01', to: '2026-09-30' });
+  });
+
+  test.each(['2026-9', '09-2026', '2026-09-01', 'september'])(
+    'refuses an end month written %s',
+    (end) => {
+      expect(windowOf({ months: '3', end }))
+        .toEqual({ valid: false, error: `Invalid 'end' month format: ${end}. Expected YYYY-MM` });
+    }
+  );
+
+  test.each(['2026-00', '2026-13'])('refuses %s, which is no month', (end) => {
+    expect(windowOf({ months: '3', end }))
+      .toEqual({ valid: false, error: `Invalid 'end' month: ${end}` });
   });
 });
