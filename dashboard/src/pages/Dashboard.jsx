@@ -1,14 +1,15 @@
 import { useState, useEffect, useRef } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   fetchMonths, fetchSummary, fetchByProject, fetchByService,
   fetchImportStatus, fetchConfig, fetchUser,
   fetchConsumptionCurrent, fetchConsumptionForecast,
   fetchExpiringServices,
-  fetchByResourceType, fetchGpuSummary, triggerImport
+  fetchByResourceType, fetchGpuSummary,
 } from '../services/api';
 import { useLanguage } from '../hooks/useLanguage.jsx';
 import Logo from '../components/Logo';
+import { ResyncButton } from '../components/ResyncButton.jsx';
 import { formatCurrency, formatMonthLabel, yearMonthOf } from '../utils/format.js';
 import { parseSqliteDate } from '../utils/sqliteDate.js';
 import { generateMarkdownReport } from '../utils/markdownReport.js';
@@ -50,7 +51,6 @@ export default function Dashboard() {
   const [syncWarningDismissed, setSyncWarningDismissed] = useState(false);
   const [selectedProject, setSelectedProject] = useState(null);
   const [selectedResourceType, setSelectedResourceType] = useState(null);
-  const [syncFeedback, setSyncFeedback] = useState(null); // { type: 'ok'|'error', msg }
 
   // Helper to format currency with current language
   const fmt = (value) => formatCurrency(value, language);
@@ -184,41 +184,7 @@ export default function Dashboard() {
     }
   }, [months, selectedMonth]);
 
-  // Manual resync
   const queryClient = useQueryClient();
-  const resync = useMutation({
-    mutationFn: triggerImport,
-    onSuccess: () => {
-      setSyncFeedback({ type: 'ok', msg: t('syncStarted') });
-      // The import runs in the background; refresh status a bit later.
-      setTimeout(() => queryClient.invalidateQueries({ queryKey: ['importStatus'] }), 8000);
-    },
-    onError: (err) => {
-      const status = err?.response?.status;
-      const key = status === 429 ? 'syncRateLimited'
-        : err?.response?.data?.error === 'syncDisabled' ? 'syncDisabled'
-        : status === 409 ? 'syncRunning'
-        : 'syncError';
-      setSyncFeedback({ type: 'error', msg: t(key) });
-    }
-  });
-
-  // The resync button: in the header, and on the page shown when no month was billed (#51)
-  const resyncButton = (
-    <button
-      onClick={() => { setSyncFeedback(null); resync.mutate(); }}
-      disabled={resync.isPending}
-      title={t('resync')}
-      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium border ${
-        resync.isPending
-          ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
-          : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50 cursor-pointer'
-      } transition-colors`}
-    >
-      <span className={resync.isPending ? 'animate-spin' : ''}>⟳</span>
-      <span>{resync.isPending ? t('syncing') : t('resync')}</span>
-    </button>
-  );
 
   // Once the latest import has finished, refresh every query built from
   // imported data (all of them but config, user and the import status).
@@ -257,16 +223,7 @@ export default function Dashboard() {
         <div className="m-auto max-w-md text-center space-y-4">
           <h2 className="text-2xl font-bold text-gray-900">{t('noDataYet')}</h2>
           <p className="text-gray-500">{t('noDataYetHint')}</p>
-          {configData?.importEnabled && (
-            <div className="flex justify-center">{resyncButton}</div>
-          )}
-          {syncFeedback && (
-            <p className={`text-sm font-medium ${
-              syncFeedback.type === 'ok' ? 'text-green-600' : 'text-red-600'
-            }`}>
-              {syncFeedback.msg}
-            </p>
-          )}
+          {configData?.importEnabled && <ResyncButton t={t} />}
         </div>
       </div>
     );
@@ -344,7 +301,7 @@ export default function Dashboard() {
           </div>
           <div className="flex items-center gap-3">
             {/* Manual resync */}
-            {resyncButton}
+            <ResyncButton t={t} />
             {/* Expiration badge */}
             {expiringServices.length > 0 && (
               <div className="flex items-center gap-1 px-3 py-1.5 bg-orange-100 text-orange-700 rounded-lg text-sm font-medium">
@@ -630,11 +587,6 @@ export default function Dashboard() {
 
         {/* Footer */}
         <div className="text-center text-sm text-gray-400 pt-4 pb-2">
-          {syncFeedback && (
-            <p className={`mb-2 text-sm font-medium ${syncFeedback.type === 'ok' ? 'text-green-600' : 'text-red-600'}`}>
-              {syncFeedback.msg}
-            </p>
-          )}
           <p>{t('syncedVia')}</p>
           {importStatus?.latest && (
             <p className="mt-1">

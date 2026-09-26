@@ -14,6 +14,7 @@ import {
   optionsOf,
   passTime,
   renderDashboard,
+  resync,
   rowsOf,
   selectLanguage,
   selectMonth,
@@ -420,7 +421,7 @@ describe('dashboard shell', () => {
   });
 
   describe('resync', () => {
-    it('starts an import and says so in the footer', async () => {
+    it('starts an import and says so under its button', async () => {
       const { user } = await renderDashboard();
       let started;
       api.triggerImport.mockImplementation(() => new Promise((resolve) => {
@@ -435,9 +436,12 @@ describe('dashboard shell', () => {
       await settle();
 
       expect(screen.getByRole('button', { name: /Synchroniser/ })).toBeEnabled();
-      expect(screen.getByText(
+      // Under the button, as on the page shown when no month was billed, rather than in the
+      // footer: one component for both (#51)
+      expect(texts(resync())).toEqual([
+        '⟳', 'Synchroniser',
         'Synchronisation lancée. Les données se mettront à jour dans quelques instants.',
-      )).toBeInTheDocument();
+      ]);
     });
 
     // As axios rejects: the answer of the server under "response"
@@ -462,7 +466,8 @@ describe('dashboard shell', () => {
       await user.click(screen.getByRole('button', { name: /Synchroniser/ }));
       await settle();
 
-      expect(screen.getByText(message)).toBeInTheDocument();
+      // Under the button too (#51)
+      expect(texts(resync())).toEqual(['⟳', 'Synchroniser', message]);
     });
   });
 

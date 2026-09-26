@@ -251,6 +251,13 @@ export function headerBadge(label) {
   return screen.getByText(label, { selector: 'span' }).parentElement;
 }
 
+// The resync, in the header or on the page shown when no month was billed: its button, and
+// under it what the server answered
+export function resync() {
+  return screen.getByRole('button', { name: /Synchroniser|Synchronisation|Resync|Syncing/ })
+    .parentElement;
+}
+
 // What the page shows in place of the dashboard when no month was billed (#51): its
 // heading, what to do, and the resync when the server runs imports
 export function emptyState() {
