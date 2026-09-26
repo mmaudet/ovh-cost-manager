@@ -498,7 +498,7 @@ For production with SSO:
 The monthly trend covers `months` calendar months, from 1 to 240, 6 by
 default, that end on the `end` month, that one included: `?months=3&end=2026-09`
 covers July to September 2026. Without `end`, it ends on the month of the
-latest bill.
+latest bill. It gives each of those months, at 0 for a month without any bill.
 
 ### Consumption & Account
 

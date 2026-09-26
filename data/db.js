@@ -1,5 +1,6 @@
 const Database = require('better-sqlite3');
 const { classifyWebCloud, WEB_CLOUD_FAMILIES } = require('./classify');
+const { monthsOfWindow } = require('./months');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
@@ -316,9 +317,11 @@ const analysisOps = {
     `).all(fromDate, toDate);
   },
 
+  // The cost of every month between two dates, both included, 0 for a month without any
+  // bill: a trend over N months gives N months (#65)
   monthlyTrend: (fromDate, toDate) => {
     const db = getDb();
-    return db.prepare(`
+    const billed = db.prepare(`
       SELECT
         strftime('%Y-%m', b.date) as month,
         SUM(d.total_price) as total
@@ -328,11 +331,17 @@ const analysisOps = {
       GROUP BY strftime('%Y-%m', b.date)
       ORDER BY month
     `).all(fromDate, toDate);
+    const totals = new Map(billed.map(({ month, total }) => [month, total]));
+    return monthsOfWindow(fromDate, toDate)
+      .map((month) => ({ month, total: totals.get(month) ?? 0 }));
   },
 
+  // The cost of each resource type billed between two dates, both included, in every month
+  // between them, 0 for a month it was not billed in: each resource type's trend gives
+  // every month, as the monthly trend does (#65)
   monthlyTrendByResourceType: (fromDate, toDate) => {
     const db = getDb();
-    return db.prepare(`
+    const billed = db.prepare(`
       SELECT
         strftime('%Y-%m', b.date) as month,
         COALESCE(d.resource_type, 'other') as resource_type,
@@ -343,6 +352,15 @@ const analysisOps = {
       GROUP BY strftime('%Y-%m', b.date), COALESCE(d.resource_type, 'other')
       ORDER BY month
     `).all(fromDate, toDate);
+    const totals = new Map(billed.map((row) => [`${row.month} ${row.resource_type}`, row.total]));
+    // In the order the query first gives them, which orders the resource types of equal cost
+    // on the chart
+    const resourceTypes = [...new Set(billed.map((row) => row.resource_type))];
+    return monthsOfWindow(fromDate, toDate).flatMap((month) => resourceTypes.map((type) => ({
+      month,
+      resource_type: type,
+      total: totals.get(`${month} ${type}`) ?? 0,
+    })));
   },
 
   summary: (fromDate, toDate) => {

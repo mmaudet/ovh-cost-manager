@@ -1,6 +1,6 @@
 /**
- * Tests for the month bounds behind /api/months, and for the months that a
- * trend covers.
+ * Tests for the month bounds behind /api/months, for the months that a trend
+ * covers, and for the months it lists.
  *
  * The bounds must not depend on the server timezone. Jest ignores TZ changes
  * made at runtime, hence a child process per timezone.
@@ -9,6 +9,7 @@
 const path = require('path');
 const { execFileSync } = require('child_process');
 const { trendWindowFromQuery } = require('../server/months');
+const { monthsOfWindow } = require('../data/months');
 
 // Calls a function of server/months.js in a Node process of its own, run in a
 // timezone
@@ -139,5 +140,46 @@ describe('trendWindowFromQuery', () => {
   test.each(['2026-00', '2026-13'])('refuses %s, which is no month', (end) => {
     expect(windowOf({ months: '3', end }))
       .toEqual({ valid: false, error: `Invalid 'end' month: ${end}` });
+  });
+});
+
+// The months that a trend lists, each one, billed or not (#65), from the first and last day
+// of its window. It counts on the digits of the dates, not on Date: no timezone to run it in.
+describe('monthsOfWindow', () => {
+  test('lists the months from the first day to the last, both included', () => {
+    expect(monthsOfWindow('2026-07-01', '2026-09-30'))
+      .toEqual(['2026-07', '2026-08', '2026-09']);
+  });
+
+  test('lists a single month for a window within it', () => {
+    expect(monthsOfWindow('2026-09-01', '2026-09-30')).toEqual(['2026-09']);
+  });
+
+  test('ends on December', () => {
+    expect(monthsOfWindow('2025-10-01', '2025-12-31'))
+      .toEqual(['2025-10', '2025-11', '2025-12']);
+  });
+
+  test('crosses New Year', () => {
+    expect(monthsOfWindow('2025-11-01', '2026-01-31'))
+      .toEqual(['2025-11', '2025-12', '2026-01']);
+    expect(monthsOfWindow('2025-10-01', '2026-09-30')).toEqual([
+      '2025-10', '2025-11', '2025-12', '2026-01', '2026-02', '2026-03',
+      '2026-04', '2026-05', '2026-06', '2026-07', '2026-08', '2026-09',
+    ]);
+  });
+
+  // The longest period that the Trends tab offers, 20 years
+  test('lists the 240 months of 20 years', () => {
+    const months = monthsOfWindow('2006-10-01', '2026-09-30');
+
+    expect(months).toHaveLength(240);
+    expect(months.slice(0, 4)).toEqual(['2006-10', '2006-11', '2006-12', '2007-01']);
+    expect(months.slice(-2)).toEqual(['2026-08', '2026-09']);
+  });
+
+  // As for an account with no bill, where trendWindowFromQuery() gives no window
+  test('lists no months without a window', () => {
+    expect(monthsOfWindow(null, null)).toEqual([]);
   });
 });

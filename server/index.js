@@ -609,7 +609,8 @@ function registerRoutes() {
   const latestBilledMonth = () => db.bills.getLatestDate()?.slice(0, 7);
 
   // The trend over the `months` months that end on the `end` month (YYYY-MM), that one
-  // included: 6 months, and the month of the latest bill, by default
+  // included: 6 months, and the month of the latest bill, by default. Each of them, at 0
+  // for a month without any bill (#65).
   app.get('/api/analysis/monthly-trend', (req, res) => {
     try {
       const { valid, error, from, to } = trendWindowFromQuery(req.query, latestBilledMonth());
