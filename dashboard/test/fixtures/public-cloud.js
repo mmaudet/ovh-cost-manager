@@ -246,3 +246,22 @@ export const publicCloud = {
     ],
   },
 };
+
+// A variant of the account where Sandbox was billed too, in August and
+// September, as /api/analysis/by-project answers. The three projects rank
+// differently by name, by the cost of each month and by variation, which
+// tells the sort orders apart.
+export const threeBilledProjects = {
+  byProject: {
+    '2026-08': [
+      { projectId: PRODUCTION, projectName: 'Production', total: 412, detailsCount: 22 },
+      { projectId: SANDBOX, projectName: 'Sandbox', total: 180, detailsCount: 8 },
+      { projectId: STAGING, projectName: 'Staging', total: 110, detailsCount: 5 },
+    ],
+    '2026-09': [
+      { projectId: PRODUCTION, projectName: 'Production', total: 460.4, detailsCount: 24 },
+      { projectId: STAGING, projectName: 'Staging', total: 250, detailsCount: 11 },
+      { projectId: SANDBOX, projectName: 'Sandbox', total: 120, detailsCount: 6 },
+    ],
+  },
+};

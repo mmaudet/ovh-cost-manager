@@ -1,0 +1,409 @@
+import { describe, it, expect } from 'vitest';
+import { screen, within } from '@testing-library/react';
+import { account } from './fixtures/account.js';
+import { months } from './fixtures/calendar.js';
+import { threeBilledProjects } from './fixtures/public-cloud.js';
+import { api } from './support/api.js';
+import {
+  cardOf,
+  dropdown,
+  openTab,
+  renderDashboard,
+  rowTextsOf,
+  rowsOf,
+  sectionOf,
+  selectLanguage,
+  settle,
+  texts,
+} from './support/render.jsx';
+
+// Months A and B both offer every month: the one they show tells them apart
+const pickMonth = async (user, showing, month) => {
+  await user.selectOptions(dropdown('Juillet 2026', showing), month);
+  await settle();
+};
+// The months A and B, with their totals and the variation between them
+const comparedTotals = () => cardOf(screen.getByText(/^(Mois|Month) A :$/));
+
+// The comparisons, each shown or hidden by a click on its title
+const PROJECTS = /^Comparaison par projet/;
+const INFRASTRUCTURE = /^Comparaison Infrastructure/;
+const BACKUP = /^Comparaison Backup/;
+const PRIVATE_CLOUD = /^Comparaison Private Cloud/;
+const PRODUCTION = /^Production \(Projet\)/;
+const toggle = (title) => screen.getByRole('button', { name: title });
+const comparison = (title) => sectionOf(toggle(title));
+const comparisonTable = (title) => within(comparison(title)).queryByRole('table');
+const openComparison = async (user, title) => {
+  await user.click(toggle(title));
+  await settle();
+};
+// The comparisons of the consumption of each project, by their titles
+const projectComparisons = () => screen
+  .getAllByRole('button', { name: /\(Projet\)/ })
+  .map((button) => texts(button)[0]);
+
+describe('Compare tab', () => {
+  it('loads the figures of months A and B when the tab opens, not before', async () => {
+    const figures = [api.fetchSummary, api.fetchByService, api.fetchByProject];
+    const { user } = await renderDashboard();
+    // Month B is the selected month, whose figures load with the page
+    for (const fetchFigures of figures) {
+      expect(fetchFigures).not.toHaveBeenCalledWith('2026-08-01', '2026-08-31');
+    }
+
+    await openTab(user, 'Comparaison');
+
+    for (const fetchFigures of figures) {
+      expect(fetchFigures).toHaveBeenCalledWith('2026-08-01', '2026-08-31');
+      expect(fetchFigures).toHaveBeenCalledWith('2026-09-01', '2026-09-30');
+    }
+    // The consumption of a project waits until its comparison opens, and the
+    // dedicated servers until the Infrastructure tab opens (#35)
+    expect(api.fetchProjectConsumption).not.toHaveBeenCalled();
+    expect(api.fetchInventoryServers).not.toHaveBeenCalled();
+  });
+
+  describe('months A and B', () => {
+    it('are the month before the latest one, and the latest one', async () => {
+      const { user } = await renderDashboard();
+
+      await openTab(user, 'Comparaison');
+
+      // (1 250.40 - 1 042) / 1 042
+      expect(texts(comparedTotals())).toEqual([
+        'Mois A :', 'Août 2026', 'VS', 'Mois B :', 'Septembre 2026',
+        '1 042,00€', 'Août 2026', '+20.0%', '1 250,40€', 'Septembre 2026',
+      ]);
+    });
+
+    it('are the months the user picks, compared either way', async () => {
+      const { user } = await renderDashboard();
+      await openTab(user, 'Comparaison');
+
+      await pickMonth(user, 'Août 2026', 'Juillet 2026');
+      await pickMonth(user, 'Septembre 2026', 'Août 2026');
+
+      expect(api.fetchSummary).toHaveBeenCalledWith('2026-07-01', '2026-07-31');
+      // (1 042 - 980) / 980
+      expect(texts(comparedTotals())).toEqual([
+        'Mois A :', 'Juillet 2026', 'VS', 'Mois B :', 'Août 2026',
+        '980,00€', 'Juillet 2026', '+6.3%', '1 042,00€', 'Août 2026',
+      ]);
+
+      await pickMonth(user, 'Juillet 2026', 'Septembre 2026');
+
+      // (1 042 - 1 250.40) / 1 250.40
+      expect(texts(comparedTotals())).toEqual([
+        'Mois A :', 'Septembre 2026', 'VS', 'Mois B :', 'Août 2026',
+        '1 250,40€', 'Septembre 2026', '-16.7%', '1 042,00€', 'Août 2026',
+      ]);
+    });
+
+    it('stay picked when the user comes back to the tab', async () => {
+      const { user } = await renderDashboard();
+      await openTab(user, 'Comparaison');
+      await pickMonth(user, 'Août 2026', 'Juillet 2026');
+
+      await openTab(user, "Vue d'ensemble");
+      await openTab(user, 'Comparaison');
+
+      expect(texts(comparedTotals())).toEqual([
+        'Mois A :', 'Juillet 2026', 'VS', 'Mois B :', 'Septembre 2026',
+        '980,00€', 'Juillet 2026', '+27.6%', '1 250,40€', 'Septembre 2026',
+      ]);
+    });
+
+    it('are the same month when a single month was billed', async () => {
+      const { user } = await renderDashboard({ ...account, months: [months[0]] });
+
+      await openTab(user, 'Comparaison');
+
+      expect(texts(comparedTotals())).toEqual([
+        'Mois A :', 'Septembre 2026', 'VS', 'Mois B :', 'Septembre 2026',
+        '1 250,40€', 'Septembre 2026', '0.0%', '1 250,40€', 'Septembre 2026',
+      ]);
+    });
+  });
+
+  it('draws the service types of months A and B in a chart', async () => {
+    const { user } = await renderDashboard();
+    await openTab(user, 'Comparaison');
+
+    await pickMonth(user, 'Août 2026', 'Juillet 2026');
+
+    // The chart draws nothing without a layout: what it is drawn from
+    expect(screen.getByRole('heading', { name: 'Comparaison par service' }))
+      .toBeInTheDocument();
+    expect(api.fetchByService).toHaveBeenCalledWith('2026-07-01', '2026-07-31');
+    expect(api.fetchByService).toHaveBeenCalledWith('2026-09-01', '2026-09-30');
+  });
+
+  describe('project comparison', () => {
+    const projectRows = () => rowsOf(comparisonTable(PROJECTS));
+
+    it('compares the cost of each project, most expensive in month A first', async () => {
+      const { user } = await renderDashboard();
+
+      await openTab(user, 'Comparaison');
+
+      // Open from the start
+      expect(projectRows()).toEqual([
+        ['Projet○', 'Août 2026▼', 'Septembre 2026○', 'Variation○'],
+        ['Production', '512,00€', '610,40€', '+19.2%'],
+        ['Staging', '190,00€', '220,00€', '+15.8%'],
+      ]);
+    });
+
+    it('sorts the projects by name, month A, month B or variation, each way in turn', async () => {
+      const { user } = await renderDashboard({ ...account, ...threeBilledProjects });
+      await openTab(user, 'Comparaison');
+      const sortBy = async (column) => {
+        await user.click(within(comparisonTable(PROJECTS))
+          .getByRole('columnheader', { name: column }));
+      };
+      const header = () => projectRows()[0];
+      const projects = () => projectRows().slice(1).map(([project]) => project);
+      expect(projectRows()).toEqual([
+        ['Projet○', 'Août 2026▼', 'Septembre 2026○', 'Variation○'],
+        ['Production', '412,00€', '460,40€', '+11.7%'],
+        ['Sandbox', '180,00€', '120,00€', '-33.3%'],
+        ['Staging', '110,00€', '250,00€', '+127.3%'],
+      ]);
+
+      await sortBy(/^Août 2026/);
+
+      expect(header()).toEqual(['Projet○', 'Août 2026▲', 'Septembre 2026○', 'Variation○']);
+      expect(projects()).toEqual(['Staging', 'Sandbox', 'Production']);
+
+      await sortBy(/^Septembre 2026/);
+
+      expect(header()).toEqual(['Projet○', 'Août 2026○', 'Septembre 2026▼', 'Variation○']);
+      expect(projects()).toEqual(['Production', 'Staging', 'Sandbox']);
+
+      await sortBy(/^Septembre 2026/);
+
+      expect(header()).toEqual(['Projet○', 'Août 2026○', 'Septembre 2026▲', 'Variation○']);
+      expect(projects()).toEqual(['Sandbox', 'Staging', 'Production']);
+
+      await sortBy(/^Variation/);
+
+      expect(header()).toEqual(['Projet○', 'Août 2026○', 'Septembre 2026○', 'Variation▼']);
+      expect(projects()).toEqual(['Staging', 'Production', 'Sandbox']);
+
+      await sortBy(/^Variation/);
+
+      expect(header()).toEqual(['Projet○', 'Août 2026○', 'Septembre 2026○', 'Variation▲']);
+      expect(projects()).toEqual(['Sandbox', 'Production', 'Staging']);
+
+      await sortBy(/^Projet/);
+
+      expect(header()).toEqual(['Projet▼', 'Août 2026○', 'Septembre 2026○', 'Variation○']);
+      expect(projects()).toEqual(['Staging', 'Sandbox', 'Production']);
+
+      await sortBy(/^Projet/);
+
+      expect(header()).toEqual(['Projet▲', 'Août 2026○', 'Septembre 2026○', 'Variation○']);
+      expect(projects()).toEqual(['Production', 'Sandbox', 'Staging']);
+      // The comparisons of each project follow the same order
+      expect(projectComparisons())
+        .toEqual(['Production (Projet)', 'Sandbox (Projet)', 'Staging (Projet)']);
+    });
+
+    it('keeps its sort order when the user comes back to the tab', async () => {
+      const { user } = await renderDashboard();
+      await openTab(user, 'Comparaison');
+      await user.click(within(comparisonTable(PROJECTS))
+        .getByRole('columnheader', { name: /^Projet/ }));
+
+      await openTab(user, "Vue d'ensemble");
+      await openTab(user, 'Comparaison');
+
+      expect(projectRows()).toEqual([
+        ['Projet▼', 'Août 2026○', 'Septembre 2026○', 'Variation○'],
+        ['Staging', '190,00€', '220,00€', '+15.8%'],
+        ['Production', '512,00€', '610,40€', '+19.2%'],
+      ]);
+    });
+
+    it('leaves out the projects billed in month B only', async () => {
+      const { user } = await renderDashboard();
+      await openTab(user, 'Comparaison');
+
+      await pickMonth(user, 'Août 2026', 'Juillet 2026');
+
+      // Staging was first billed in August
+      expect(projectRows()).toEqual([
+        ['Projet○', 'Juillet 2026▼', 'Septembre 2026○', 'Variation○'],
+        ['Production', '680,00€', '610,40€', '-10.2%'],
+      ]);
+      expect(projectComparisons()).toEqual(['Production (Projet)']);
+    });
+
+    it('compares a project billed in month A only with nothing', async () => {
+      const { user } = await renderDashboard();
+      await openTab(user, 'Comparaison');
+
+      await pickMonth(user, 'Septembre 2026', 'Juillet 2026');
+      await pickMonth(user, 'Août 2026', 'Septembre 2026');
+
+      expect(projectRows()).toEqual([
+        ['Projet○', 'Septembre 2026▼', 'Juillet 2026○', 'Variation○'],
+        ['Production', '610,40€', '680,00€', '+11.4%'],
+        ['Staging', '220,00€', '0,00€', '-100.0%'],
+      ]);
+    });
+  });
+
+  describe('infrastructure, backup and Private Cloud comparisons', () => {
+    it('show nothing billed, whatever months A and B cost (#32)', async () => {
+      const { user } = await renderDashboard();
+      await openTab(user, 'Comparaison');
+      // Closed from the start
+      expect(comparisonTable(INFRASTRUCTURE)).not.toBeInTheDocument();
+      expect(comparisonTable(BACKUP)).not.toBeInTheDocument();
+      expect(comparisonTable(PRIVATE_CLOUD)).not.toBeInTheDocument();
+
+      await openComparison(user, INFRASTRUCTURE);
+      await openComparison(user, BACKUP);
+      await openComparison(user, PRIVATE_CLOUD);
+
+      // August and September were each billed 270 € of dedicated servers, and
+      // 40 € then 90 € of backups (see the costs by resource type of the
+      // account). The rows look them up by a key, and count them, in the
+      // service type breakdown, whose answer has neither: all read 0 (#32).
+      expect(rowsOf(comparisonTable(INFRASTRUCTURE))).toEqual([
+        ['Type', 'Août 2026', 'Septembre 2026', 'Variation'],
+        ['Liste des Serveurs dédiés présents au 15/09/2026', '0,00€', '0,00€', ''],
+        ['VPS', '0,00€', '0,00€', ''],
+        ['Stockage', '0,00€', '0,00€', ''],
+        ['Load Balancer', '0,00€', '0,00€', ''],
+        ['Adresses IP', '0,00€', '0,00€', ''],
+        ['Noms de domaine', '0,00€', '0,00€', ''],
+        ['Hôtes Private Cloud', '0,00€', '0,00€', ''],
+        ['Datastores Private Cloud', '0,00€', '0,00€', ''],
+      ]);
+      expect(rowsOf(comparisonTable(BACKUP))).toEqual([
+        ['Catégorie', 'Août 2026', 'Septembre 2026', 'Variation'],
+        ['VMs Veeam Backup', '0 / 0,00€', '0 / 0,00€', ''],
+        ['Licence Veeam Enterprise', '0 / 0,00€', '0 / 0,00€', ''],
+      ]);
+      expect(rowsOf(comparisonTable(PRIVATE_CLOUD))).toEqual([
+        ['Type', 'Août 2026', 'Septembre 2026', 'Variation'],
+        ['Hôtes Private Cloud', '0,00€', '0,00€', ''],
+        ['Datastores Private Cloud', '0,00€', '0,00€', ''],
+      ]);
+    });
+
+    it('list the dedicated servers only once the Infrastructure tab was opened (#35)', async () => {
+      const { user } = await renderDashboard();
+      await openTab(user, 'Comparaison');
+      await openComparison(user, INFRASTRUCTURE);
+      expect(rowTextsOf(comparisonTable(INFRASTRUCTURE))[1])
+        .toEqual(['Liste des Serveurs dédiés présents au 15/09/2026', '0,00€', '0,00€']);
+
+      await openTab(user, 'Infrastructure');
+      await openTab(user, 'Comparaison');
+
+      // Closed again, as every comparison but the projects' when the tab opens
+      expect(comparisonTable(INFRASTRUCTURE)).not.toBeInTheDocument();
+
+      await openComparison(user, INFRASTRUCTURE);
+
+      // The servers the Infrastructure tab loaded, the costs still 0 (#32)
+      expect(rowTextsOf(comparisonTable(INFRASTRUCTURE))[1]).toEqual([
+        'Liste des Serveurs dédiés présents au 15/09/2026',
+        'backup-server', 'ns3000002.ip-198-51-100.eu',
+        '0,00€', '0,00€',
+      ]);
+    });
+  });
+
+  describe('project consumption comparisons', () => {
+    it('are closed, one per project of the project comparison', async () => {
+      const { user } = await renderDashboard();
+
+      await openTab(user, 'Comparaison');
+
+      expect(projectComparisons()).toEqual(['Production (Projet)', 'Staging (Projet)']);
+      expect(comparisonTable(PRODUCTION)).not.toBeInTheDocument();
+    });
+
+    it('compare what a project consumed by cloud resource kind, once opened', async () => {
+      const { user } = await renderDashboard();
+      await openTab(user, 'Comparaison');
+
+      await openComparison(user, PRODUCTION);
+
+      expect(api.fetchProjectConsumption)
+        .toHaveBeenCalledWith('project-production', '2026-08-01', '2026-08-31');
+      expect(api.fetchProjectConsumption)
+        .toHaveBeenCalledWith('project-production', '2026-09-01', '2026-09-30');
+      // The import keeps the consumption of the current month only: nothing
+      // in August, so no variation
+      expect(rowsOf(comparisonTable(PRODUCTION))).toEqual([
+        ['Produit/Type', 'Août 2026', 'Septembre 2026', 'Variation'],
+        ['instance', '0,00€', '234,25€', ''],
+        ['instance_monthly', '0,00€', '64,00€', ''],
+        ['volume', '0,00€', '7,50€', ''],
+        ['snapshot', '0,00€', '3,25€', ''],
+        ['objectStorage', '0,00€', '41,00€', ''],
+      ]);
+    });
+
+    it('say when a project consumed nothing in months A and B', async () => {
+      const { user } = await renderDashboard();
+      await openTab(user, 'Comparaison');
+      await pickMonth(user, 'Août 2026', 'Juillet 2026');
+      await pickMonth(user, 'Septembre 2026', 'Août 2026');
+
+      await openComparison(user, PRODUCTION);
+
+      expect(within(comparison(PRODUCTION)).getByText('Aucune donnée pour ce projet'))
+        .toBeInTheDocument();
+      expect(comparisonTable(PRODUCTION)).not.toBeInTheDocument();
+    });
+  });
+
+  it('speaks English when the page does', async () => {
+    const { user } = await renderDashboard();
+    await selectLanguage(user, 'en');
+
+    await openTab(user, 'Compare');
+
+    // Month labels come from the API, in French only (#33)
+    expect(texts(comparedTotals())).toEqual([
+      'Month A :', 'Août 2026', 'VS', 'Month B :', 'Septembre 2026',
+      '1,042.00€', 'Août 2026', '+20.0%', '1,250.40€', 'Septembre 2026',
+    ]);
+    expect(screen.getByRole('heading', { name: 'Comparison by service' })).toBeInTheDocument();
+    expect(rowsOf(comparisonTable(/^Comparison by project/))).toEqual([
+      ['Project○', 'Août 2026▼', 'Septembre 2026○', 'Variation○'],
+      ['Production', '512.00€', '610.40€', '+19.2%'],
+      ['Staging', '190.00€', '220.00€', '+15.8%'],
+    ]);
+
+    await openComparison(user, /^Infrastructure Comparison/);
+    await openComparison(user, /^Backup Comparison/);
+    await openComparison(user, /^Private Cloud Comparison/);
+    await openComparison(user, /^Production \(Project\)/);
+
+    expect(rowsOf(comparisonTable(/^Infrastructure Comparison/)).map(([type]) => type)).toEqual([
+      'Type',
+      'List of Dedicated Servers present on 15/09/2026',
+      'VPS', 'Storage', 'Load Balancer', 'IP Addresses', 'Domains',
+      'Private Cloud Hosts', 'Private Cloud Datastores',
+    ]);
+    expect(rowsOf(comparisonTable(/^Backup Comparison/))).toEqual([
+      ['Category', 'Août 2026', 'Septembre 2026', 'Variation'],
+      ['Veeam Backup VMs', '0 / 0.00€', '0 / 0.00€', ''],
+      ['Veeam Enterprise License', '0 / 0.00€', '0 / 0.00€', ''],
+    ]);
+    expect(rowsOf(comparisonTable(/^Private Cloud Comparison/)).map(([type]) => type))
+      .toEqual(['Type', 'Private Cloud Hosts', 'Private Cloud Datastores']);
+    expect(rowsOf(comparisonTable(/^Production \(Project\)/)).slice(0, 2)).toEqual([
+      ['Product/Type', 'Août 2026', 'Septembre 2026', 'Variation'],
+      ['instance', '0.00€', '234.25€', ''],
+    ]);
+  });
+});
