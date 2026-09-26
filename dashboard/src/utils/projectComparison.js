@@ -6,49 +6,33 @@ import { variationPercent } from './variation.js';
 // and its variation from A to B in percent (variation): null from 0 € or less in month A,
 // which leaves none to compute (#65).
 //
-// A project of month A and one of month B are the same when they have the same id, or when
-// either has none, the same name: a project renamed between the two months stays one row,
-// under its name in month A, and projects of the same name, like those the server cannot
-// name, all "Unknown", stay apart. The projects of month A come first, in their order, then
-// those billed in month B only, in theirs.
+// A project of month A and one of month B are the same when they have the same id: a
+// project renamed between the two months stays one row, under its name in month A, and the
+// projects the server cannot name, all "Unknown", stay apart. The server gives every project
+// its id; a project without one is known by its name. The projects of month A come first, in
+// their order, then those billed in month B only, in theirs.
 
-const hasId = (project) => project.projectId != null;
+// What makes a project of month A and one of month B the same: its id, or its name without one
+const identity = ({ projectId, projectName }) => (
+  projectId != null ? `id ${projectId}` : `name ${projectName}`
+);
 
-const sameId = (a, b) => hasId(a) && hasId(b) && a.projectId === b.projectId;
-
-const sameNameWithoutId = (a, b) => !(hasId(a) && hasId(b)) && a.projectName === b.projectName;
-
+// The row of a project, as month A lists it, or as month B does when month A does not
 const row = (projectA, projectB) => {
+  const { projectId, projectName } = projectA ?? projectB;
   const totalA = projectA?.total ?? 0;
   const totalB = projectB?.total ?? 0;
-  return {
-    projectId: projectA?.projectId ?? projectB?.projectId,
-    projectName: projectA?.projectName ?? projectB?.projectName,
-    totalA,
-    totalB,
-    variation: variationPercent(totalA, totalB),
-  };
+  return { projectId, projectName, totalA, totalB, variation: variationPercent(totalA, totalB) };
 };
 
 const projectComparisonRows = (projectsA, projectsB) => {
-  const pairs = new Map();
-  const unpairedB = new Set(projectsB);
-  const pair = (projectA, same) => {
-    const projectB = [...unpairedB].find((candidate) => same(projectA, candidate));
-    if (projectB) {
-      pairs.set(projectA, projectB);
-      unpairedB.delete(projectB);
-    }
-  };
-  // By id first, so that a project without an id only pairs with one left over
-  projectsA.forEach((projectA) => pair(projectA, sameId));
-  projectsA
-    .filter((projectA) => !pairs.has(projectA))
-    .forEach((projectA) => pair(projectA, sameNameWithoutId));
-  return [
-    ...projectsA.map((projectA) => row(projectA, pairs.get(projectA))),
-    ...[...unpairedB].map((projectB) => row(undefined, projectB)),
-  ];
+  const unpairedB = [...projectsB];
+  const rowsOfMonthA = projectsA.map((projectA) => {
+    const index = unpairedB.findIndex((projectB) => identity(projectB) === identity(projectA));
+    const [projectB] = index === -1 ? [] : unpairedB.splice(index, 1);
+    return row(projectA, projectB);
+  });
+  return [...rowsOfMonthA, ...unpairedB.map((projectB) => row(undefined, projectB))];
 };
 
 export { projectComparisonRows };

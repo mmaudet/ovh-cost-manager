@@ -3,7 +3,8 @@ import { projectComparisonRows } from '../../src/utils/projectComparison.js';
 
 // The rows of the project comparison of the Compare tab, from the projects of months A and B
 // as /api/analysis/by-project lists them: most expensive first, each with its id, its name,
-// "Unknown" when the server cannot name it, and its cost (#55)
+// "Unknown" when the server cannot name it, and its cost (#55). The server gives every
+// project its id, those it cannot name included.
 const project = (projectId, projectName, total) => ({
   projectId, projectName, total, detailsCount: 1,
 });
@@ -90,40 +91,31 @@ describe('projectComparisonRows', () => {
     )).toEqual([['project-staging', 'Staging', 200, 250, 25]]);
   });
 
-  // As the projects the server cannot name, all "Unknown"
-  it('keeps apart the projects of the same name with different ids', () => {
+  // The projects the server cannot name, all "Unknown", each with the id of its bill lines:
+  // 40 € and 15 € are not one project down 62.5 %
+  it('keeps apart the projects the server cannot name, by their ids', () => {
     expect(rows(
-      [project('project-deleted-1', 'Unknown', 50), project('project-deleted-2', 'Unknown', 30)],
-      [project('project-deleted-2', 'Unknown', 45), project('project-deleted-3', 'Unknown', 10)],
+      [project('project-gone-1', 'Unknown', 40), project('project-gone-2', 'Unknown', 30)],
+      [project('project-gone-3', 'Unknown', 15), project('project-gone-2', 'Unknown', 45)],
     )).toEqual([
-      ['project-deleted-1', 'Unknown', 50, 0, -100],
-      ['project-deleted-2', 'Unknown', 30, 45, 50],
-      ['project-deleted-3', 'Unknown', 0, 10, null],
+      ['project-gone-1', 'Unknown', 40, 0, -100],
+      ['project-gone-2', 'Unknown', 30, 45, 50],
+      ['project-gone-3', 'Unknown', 0, 15, null],
     ]);
   });
 
-  describe('a project without an id', () => {
-    const legacy = (total) => ({ projectName: 'Legacy', total });
+  // As the server listed them before it gave every project its id
+  it('pairs the projects by name when none has an id', () => {
+    const named = (projectName, total) => project(null, projectName, total);
 
-    it('pairs by name, in either month, and takes the id of the other one if it has one', () => {
-      expect(rows([legacy(100)], [project('project-legacy', 'Legacy', 150)]))
-        .toEqual([['project-legacy', 'Legacy', 100, 150, 50]]);
-      expect(rows([project('project-legacy', 'Legacy', 100)], [legacy(150)]))
-        .toEqual([['project-legacy', 'Legacy', 100, 150, 50]]);
-      expect(rows([legacy(100)], [legacy(150)]))
-        .toEqual([[undefined, 'Legacy', 100, 150, 50]]);
-    });
-
-    // The pairs by id come first: a project without an id only pairs with one left over
-    it('leaves the projects that pair by id to each other', () => {
-      expect(rows(
-        [legacy(100), project('project-legacy', 'Legacy', 200)],
-        [project('project-legacy', 'Legacy', 300)],
-      )).toEqual([
-        [undefined, 'Legacy', 100, 0, -100],
-        ['project-legacy', 'Legacy', 200, 300, 50],
-      ]);
-    });
+    expect(rows(
+      [named('Production', 400), named('Staging', 200)],
+      [named('Sandbox', 120), named('Production', 500)],
+    )).toEqual([
+      [null, 'Production', 400, 500, 25],
+      [null, 'Staging', 200, 0, -100],
+      [null, 'Sandbox', 0, 120, null],
+    ]);
   });
 
   it('leaves the lists it compares as they were', () => {
