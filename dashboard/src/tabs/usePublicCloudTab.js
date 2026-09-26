@@ -32,10 +32,11 @@ const usePublicCloudTab = ({ selectedMonth, activeTab, selectedProject }) => {
     enabled: !!selectedProject
   });
 
+  // The instances, with their costs in the selected month
   const { data: projectInstances = [] } = useQuery({
     queryKey: ['projectInstances', selectedProject?.id, selectedMonth?.from, selectedMonth?.to],
-    queryFn: () => fetchProjectInstances(selectedProject.id, selectedMonth?.from, selectedMonth?.to),
-    enabled: !!selectedProject
+    queryFn: () => fetchProjectInstances(selectedProject.id, selectedMonth.from, selectedMonth.to),
+    enabled: !!selectedProject && !!selectedMonth,
   });
   // The unallocated row is not an instance
   const instanceCount = projectInstances.filter(i => !i.unallocated).length;

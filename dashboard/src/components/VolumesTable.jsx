@@ -1,4 +1,5 @@
 import { PRO_RATA_HINT } from '../utils/estimatedCost.js';
+import { fmtBytes } from '../utils/format.js';
 
 // Block storage volumes of a project, shared by the inline panel and its modal.
 const VolumesTable = ({ volumes, language, t, fmt }) => (
@@ -32,7 +33,12 @@ const VolumesTable = ({ volumes, language, t, fmt }) => (
             </span>
           </td>
           <td className="p-2 text-xs">{v.region}</td>
-          <td className="p-2 text-right text-xs">{v.sizeGb !== null && v.sizeGb !== undefined ? `${Math.round(v.sizeGb)} GB` : '-'}</td>
+          {/* In the units and number format of the language, as the buckets (#70) */}
+          <td className="p-2 text-right text-xs">
+            {v.sizeGb !== null && v.sizeGb !== undefined
+              ? fmtBytes(v.sizeGb * 1e9, language)
+              : '-'}
+          </td>
           <td className="p-2 text-right font-medium text-xs" title={v.allocated ? PRO_RATA_HINT[language] : undefined}>
             {v.allocated && <span className="text-gray-400">~</span>}
             {fmt(v.total)}€

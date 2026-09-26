@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { formatCurrency, formatYearMonth, fmtBytes } from '../../src/utils/format.js';
-import { NNBSP } from '../support/amounts.js';
+import {
+  formatCurrency, formatPercent, formatYearMonth, fmtBytes,
+} from '../../src/utils/format.js';
+import { NBSP, NNBSP } from '../support/amounts.js';
 
 describe('formatCurrency', () => {
   it('writes an amount the French way', () => {
@@ -28,6 +30,30 @@ describe('formatCurrency', () => {
   it('keeps the minus sign of a credit note', () => {
     expect(formatCurrency(-120.5, 'fr')).toBe('-120,50');
     expect(formatCurrency(-120.5, 'en')).toBe('-120.50');
+  });
+});
+
+// A share of a total, such as that of the backups in the month's cost (#64)
+describe('formatPercent', () => {
+  it('writes a share the French way, with one decimal (#64)', () => {
+    expect(formatPercent(0.092, 'fr')).toBe(`9,2${NBSP}%`);
+    expect(formatPercent(0.0919, 'fr')).toBe(`9,2${NBSP}%`);
+    expect(formatPercent(1, 'fr')).toBe(`100,0${NBSP}%`);
+  });
+
+  it('writes a share the English way in English (#64)', () => {
+    expect(formatPercent(0.092, 'en')).toBe('9.2%');
+    expect(formatPercent(0.0919, 'en')).toBe('9.2%');
+    expect(formatPercent(1, 'en')).toBe('100.0%');
+  });
+
+  it('writes French shares by default (#64)', () => {
+    expect(formatPercent(0.092)).toBe(`9,2${NBSP}%`);
+  });
+
+  it('keeps its decimal for a share of nothing (#64)', () => {
+    expect(formatPercent(0, 'fr')).toBe(`0,0${NBSP}%`);
+    expect(formatPercent(0, 'en')).toBe('0.0%');
   });
 });
 
@@ -61,45 +87,84 @@ describe('formatYearMonth', () => {
   });
 });
 
-// The size of a bucket, as the Public Cloud tab shows it. The same in every language: it
-// takes none, and writes a decimal point in French too.
+// The size of a bucket, as the Public Cloud tab shows it: in the units and the number format
+// of the language (#70)
 describe('fmtBytes', () => {
   it('writes a dash for a size the API does not know', () => {
     // A bucket billed but gone from the inventory
-    expect(fmtBytes(null)).toBe('-');
-    expect(fmtBytes(undefined)).toBe('-');
+    expect(fmtBytes(null, 'fr')).toBe('-');
+    expect(fmtBytes(undefined, 'en')).toBe('-');
   });
 
-  it('writes an empty bucket in bytes', () => {
-    expect(fmtBytes(0)).toBe('0 B');
+  it('writes an empty bucket in bytes (#70)', () => {
+    expect(fmtBytes(0, 'fr')).toBe('0 o');
+    expect(fmtBytes(0, 'en')).toBe('0 B');
   });
 
-  it('writes a size below a kilobyte in bytes', () => {
-    expect(fmtBytes(1)).toBe('1 B');
-    expect(fmtBytes(999)).toBe('999 B');
+  it('writes a size below a kilobyte in bytes (#70)', () => {
+    expect(fmtBytes(1, 'fr')).toBe('1 o');
+    expect(fmtBytes(999, 'fr')).toBe('999 o');
+    expect(fmtBytes(999, 'en')).toBe('999 B');
   });
 
-  it('counts in powers of 1000, as the OVH manager does', () => {
-    expect(fmtBytes(1000)).toBe('1.0 KB');
-    expect(fmtBytes(1024)).toBe('1.0 KB');
-    expect(fmtBytes(1000000)).toBe('1.0 MB');
-    expect(fmtBytes(4200000000)).toBe('4.2 GB');
-    expect(fmtBytes(1500000000000)).toBe('1.5 TB');
-    expect(fmtBytes(2500000000000000)).toBe('2.5 PB');
+  it('counts in powers of 1000, as the OVH manager does, in French units (#70)', () => {
+    expect(fmtBytes(1000, 'fr')).toBe('1,0 Ko');
+    expect(fmtBytes(1024, 'fr')).toBe('1,0 Ko');
+    expect(fmtBytes(1000000, 'fr')).toBe('1,0 Mo');
+    expect(fmtBytes(4200000000, 'fr')).toBe('4,2 Go');
+    expect(fmtBytes(1500000000000, 'fr')).toBe('1,5 To');
+    expect(fmtBytes(2500000000000000, 'fr')).toBe('2,5 Po');
+  });
+
+  it('counts in English units in English', () => {
+    expect(fmtBytes(1000, 'en')).toBe('1.0 KB');
+    expect(fmtBytes(1024, 'en')).toBe('1.0 KB');
+    expect(fmtBytes(1000000, 'en')).toBe('1.0 MB');
+    expect(fmtBytes(4200000000, 'en')).toBe('4.2 GB');
+    expect(fmtBytes(1500000000000, 'en')).toBe('1.5 TB');
+    expect(fmtBytes(2500000000000000, 'en')).toBe('2.5 PB');
+  });
+
+  it('writes French sizes by default (#70)', () => {
+    expect(fmtBytes(4200000000)).toBe('4,2 Go');
   });
 
   it('keeps one decimal below 10 of a unit, and none from 10', () => {
-    expect(fmtBytes(1500)).toBe('1.5 KB');
-    expect(fmtBytes(10000)).toBe('10 KB');
-    expect(fmtBytes(12345)).toBe('12 KB');
+    expect(fmtBytes(1500, 'fr')).toBe('1,5 Ko');
+    expect(fmtBytes(1500, 'en')).toBe('1.5 KB');
+    expect(fmtBytes(10000, 'en')).toBe('10 KB');
+    expect(fmtBytes(12345, 'en')).toBe('12 KB');
   });
 
-  it('rounds in the unit it picks, up to 1000 of it', () => {
-    expect(fmtBytes(9999)).toBe('10.0 KB');
-    expect(fmtBytes(999999)).toBe('1000 KB');
+  it('rounds a half up, as the amounts do (#70)', () => {
+    expect(fmtBytes(1150000000, 'fr')).toBe('1,2 Go');
+    expect(fmtBytes(1150000000, 'en')).toBe('1.2 GB');
   });
 
-  it('counts in petabytes beyond', () => {
-    expect(fmtBytes(5000000000000000000)).toBe('5000 PB');
+  it('picks its decimals once rounded: none from 10 of a unit (#70)', () => {
+    expect(fmtBytes(9949, 'en')).toBe('9.9 KB');
+    expect(fmtBytes(9950, 'en')).toBe('10 KB');
+    expect(fmtBytes(9950, 'fr')).toBe('10 Ko');
+    expect(fmtBytes(9999, 'en')).toBe('10 KB');
+    // At every unit
+    expect(fmtBytes(9999999, 'en')).toBe('10 MB');
+    expect(fmtBytes(9999999999, 'en')).toBe('10 GB');
+    expect(fmtBytes(9999999999999, 'en')).toBe('10 TB');
+  });
+
+  it('rounds in the unit it picks, below 1000 of it', () => {
+    expect(fmtBytes(999499, 'en')).toBe('999 KB');
+  });
+
+  it('picks the next unit when the size rounds to 1000 of one (#70)', () => {
+    expect(fmtBytes(999999, 'en')).toBe('1.0 MB');
+    expect(fmtBytes(999999, 'fr')).toBe('1,0 Mo');
+    expect(fmtBytes(999500, 'en')).toBe('1.0 MB');
+    expect(fmtBytes(999999999999, 'en')).toBe('1.0 TB');
+  });
+
+  it('counts in petabytes beyond, with the thousands separator of the language (#70)', () => {
+    expect(fmtBytes(5000000000000000000, 'en')).toBe('5,000 PB');
+    expect(fmtBytes(5000000000000000000, 'fr')).toBe(`5${NNBSP}000 Po`);
   });
 });

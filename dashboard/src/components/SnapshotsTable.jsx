@@ -1,4 +1,5 @@
 import { PRO_RATA_HINT } from '../utils/estimatedCost.js';
+import { fmtBytes } from '../utils/format.js';
 
 // Instance snapshots of a project, shared by the inline panel and its modal.
 const SnapshotsTable = ({ snapshots, language, t, fmt, locale }) => (
@@ -20,7 +21,12 @@ const SnapshotsTable = ({ snapshots, language, t, fmt, locale }) => (
           <td className="p-2 text-xs text-gray-500">
             {sn.createdAt ? new Date(sn.createdAt).toLocaleDateString(locale) : '-'}
           </td>
-          <td className="p-2 text-right text-xs">{sn.sizeGb !== null && sn.sizeGb !== undefined ? `${Math.round(sn.sizeGb)} GB` : '-'}</td>
+          {/* In the units and number format of the language, as the buckets (#70) */}
+          <td className="p-2 text-right text-xs">
+            {sn.sizeGb !== null && sn.sizeGb !== undefined
+              ? fmtBytes(sn.sizeGb * 1e9, language)
+              : '-'}
+          </td>
           <td className="p-2 text-right font-medium text-xs" title={sn.allocated ? PRO_RATA_HINT[language] : undefined}>
             {sn.allocated && <span className="text-gray-400">~</span>}
             {fmt(sn.total)}€

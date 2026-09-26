@@ -303,12 +303,12 @@ describe('usePublicCloudTab', () => {
       const { result, queryClient } = await renderTabHook(usePublicCloudTab,
         { ...onTheTab, selectedMonth: null, selectedProject: production });
 
-      expect(made(PROJECT_REQUESTS))
-        .toEqual(['fetchProjectConsumption', 'fetchProjectQuotas', 'fetchProjectInstances']);
-      // Without a month, the instances come without their costs
-      expect(api.fetchProjectInstances)
-        .toHaveBeenCalledWith('project-production', undefined, undefined);
+      // The instances too, which come with their costs in the month (#71)
+      expect(made(PROJECT_REQUESTS)).toEqual(['fetchProjectConsumption', 'fetchProjectQuotas']);
+      expect(result.current.projectInstances).toEqual([]);
+      expect(result.current.instanceCount).toBe(0);
       for (const key of [
+        ['projectInstances', 'project-production', undefined, undefined],
         ['projectInstanceTotal', 'project-production', undefined, undefined],
         ['projectBuckets', 'project-production', undefined, undefined],
         ['projectVolumes', 'project-production', undefined, undefined],

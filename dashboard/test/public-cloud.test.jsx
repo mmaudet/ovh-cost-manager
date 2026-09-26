@@ -72,26 +72,28 @@ const instanceRows = [
   // Shut off all month: not billed
   ['batch-1', 'd2-4', 'GRA11', 'SHUTOFF', '-'],
 ];
+// Sizes in French units, with a decimal comma (#70)
 const bucketRows = [
   ['Nom', 'Type', 'Région', 'Taille', 'Coût'],
-  ['archives-2025', 'Cold Archive', 'archived', 'GRA', '1.5 TB', '~', '9,00€'],
-  ['assets-example-com', 'Standard', 'GRA', '4.2 GB', '14,00€'],
-  ['logs-empty', 'Standard', 'GRA', '0 B', '0,00€'],
+  ['archives-2025', 'Cold Archive', 'archived', 'GRA', '1,5 To', '~', '9,00€'],
+  ['assets-example-com', 'Standard', 'GRA', '4,2 Go', '14,00€'],
+  ['logs-empty', 'Standard', 'GRA', '0 o', '0,00€'],
   // Billed, but gone from the inventory
   ['old-exports', '†', 'Inconnu', 'SBG', '-', '2,00€'],
 ];
+// Sizes in French units, as those of the buckets (#70)
 const volumeRows = [
   ['Nom', 'Type', 'Région', 'Taille', 'Coût'],
-  ['db-data', 'high-speed', 'SBG5', '200 GB', '~', '6,50€'],
-  ['web-shared', 'classic', 'GRA11', '100 GB', '~', '3,00€'],
+  ['db-data', 'high-speed', 'SBG5', '200 Go', '~', '6,50€'],
+  ['web-shared', 'classic', 'GRA11', '100 Go', '~', '3,00€'],
   // A bill line with no volume left behind it
   ['Disques supplémentaires à bhs5 de type classic', 'classic', 'bhs5', '-', '~', '1,50€'],
-  ['old-backup', 'détaché', 'classic', 'GRA11', '50 GB', '~', '1,50€'],
+  ['old-backup', 'détaché', 'classic', 'GRA11', '50 Go', '~', '1,50€'],
 ];
 const snapshotRows = [
   ['Nom', 'Région', 'Créé le', 'Taille', 'Coût'],
-  ['db-1-before-upgrade', 'SBG5', '28/08/2026', '40 GB', '~4,00€'],
-  ['web-1-golden', 'GRA11', '14/02/2026', '10 GB', '~2,00€'],
+  ['db-1-before-upgrade', 'SBG5', '28/08/2026', '40 Go', '~4,00€'],
+  ['web-1-golden', 'GRA11', '14/02/2026', '10 Go', '~2,00€'],
 ];
 const savingsPlanRows = [
   ['Plan', 'Flavor', 'Couvert', 'Dernière facture', 'Coût'],
@@ -573,8 +575,13 @@ describe('Public Cloud tab', () => {
     expect(rowsOf(instances)[5]).toEqual(['Unallocated (deleted instances)', '6.40€']);
     expect(costsWith(instances, 'Even share of the aggregated hourly line for this flavor: '
       + 'the API exposes no per-instance runtime')).toEqual(['~420.50€', '~24.00€', '~24.00€']);
-    expect(rowTextsOf(resourceTable('Buckets'))[4])
-      .toEqual(['old-exports', '†', 'Unknown', 'SBG', '-', '2.00€']);
+    // Sizes in English units (#70)
+    expect(rowTextsOf(resourceTable('Buckets')).slice(1)).toEqual([
+      ['archives-2025', 'Cold Archive', 'archived', 'GRA', '1.5 TB', '~', '9.00€'],
+      ['assets-example-com', 'Standard', 'GRA', '4.2 GB', '14.00€'],
+      ['logs-empty', 'Standard', 'GRA', '0 B', '0.00€'],
+      ['old-exports', '†', 'Unknown', 'SBG', '-', '2.00€'],
+    ]);
     expect(rowTextsOf(resourceTable('Volumes'))[4])
       .toEqual(['old-backup', 'detached', 'classic', 'GRA11', '50 GB', '~', '1.50€']);
     expect(rowsOf(resourceTable('Snapshots'))[1])

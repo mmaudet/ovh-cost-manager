@@ -47,7 +47,43 @@ describe('useBackupTab', () => {
 
     expect(result.current).toEqual({
       backupStats: { vms: { count: 3, total: 90 }, enterprise: { count: 1, total: 25 } },
+      // Answered: the tab shows them (#64)
+      loadingBackup: false,
+      failedBackup: false,
     });
+  });
+
+  // Until then, the tab shows that it is loading, not figures that change once it arrives (#64)
+  it('says it is loading until the answer for the month arrives (#64)', async () => {
+    const { result, rerender } = await renderTabHook(useBackupTab,
+      { selectedMonth: september, activeTab: 'overview' });
+    // What the hook says as the request leaves, and once its answer arrived
+    const loading = [];
+    const loadingUntilAnswered = async (props) => {
+      const answered = rerender(props);
+      loading.push(result.current.loadingBackup);
+      await answered;
+      loading.push(result.current.loadingBackup);
+    };
+
+    await loadingUntilAnswered({ selectedMonth: september, activeTab: 'backup' });
+    // Another month waits for its own answer
+    await loadingUntilAnswered({ selectedMonth: august, activeTab: 'backup' });
+
+    expect(loading).toEqual([true, false, true, false]);
+  });
+
+  // The tab then says so (#64)
+  it('says the answer could not be loaded once it fails (#64)', async () => {
+    const { result, rerender } = await renderTabHook(useBackupTab,
+      { selectedMonth: september, activeTab: 'backup' });
+    expect(result.current.failedBackup).toBe(false);
+    api.fetchBackupStats.mockRejectedValue(new Error('Request failed with status code 500'));
+
+    await rerender({ selectedMonth: august, activeTab: 'backup' });
+
+    expect(result.current.failedBackup).toBe(true);
+    expect(result.current.loadingBackup).toBe(false);
   });
 
   it('caches the answer under the name of its query and its month', async () => {
