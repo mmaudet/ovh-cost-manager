@@ -545,7 +545,13 @@ environment:
 
 ### HTTPS
 
-`docker-compose.sso.yml` serves plain HTTP on port 80 and has no HTTPS setup: sign-in codes, tokens and session cookies travel unencrypted, and OCM warns at startup that its issuer is plain HTTP. With `COOKIE_SECURE=auto`, the default, the session cookie is not `Secure` on this stack, as browsers would not store it over plain HTTP (see [OIDC settings](#oidc-settings)). Beyond a test, the stack needs HTTPS, which this compose file does not provide.
+`docker-compose.sso.yml` serves plain HTTP on port 80 and has no HTTPS setup: sign-in codes, tokens and cookies travel unencrypted, and OCM warns at startup that its issuer is plain HTTP. On OCM's side, its settings support these steps:
+
+1. Terminate TLS in front of the `lemonldap` container's port 80, for `ocm.<domain>`.
+2. Set `OIDC_BASE_URL` to `https://ocm.<domain>`, and the redirect and post-logout redirect URIs of the relying party to match (see [demo/README.md](../demo/README.md#using-another-domain)). With `COOKIE_SECURE=auto`, the session and sign-in cookies then become `Secure`, with the `__Host-` prefix, because `OIDC_BASE_URL` is `https` (see [OIDC settings](#oidc-settings)).
+3. Set `ALLOWED_ORIGINS=https://ocm.<domain>`. The relay passes `Host: ocm.<domain>:80`, and the CORS check drops port 80 from that host for an `http://` origin only: without this setting, it refuses the dashboard's own `https://` origin, unless a trusted `X-Forwarded-Host` gives the public host (see [Environment Variables](#environment-variables)).
+
+The provider's side is not covered. LemonLDAP-NG's portal stays at `http://auth.<domain>`, where the compose file sets it (`PORTAL`), and OCM reaches `OIDC_ISSUER` inside the Docker network, where `auth.<domain>` is an alias of the `lemonldap` container: an `https://` issuer needs the provider reachable over TLS there too, which the compose file does not set up.
 
 ### High Availability
 
