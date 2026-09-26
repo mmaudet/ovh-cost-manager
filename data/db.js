@@ -318,7 +318,8 @@ const analysisOps = {
   },
 
   // The cost of every month between two dates, both included, 0 for a month without any
-  // bill: a trend over N months gives N months (#65)
+  // bill: a trend over N months gives N months (#65). Nothing when none of them has a bill,
+  // for the Trends tab to say it has no data.
   monthlyTrend: (fromDate, toDate) => {
     const db = getDb();
     const billed = db.prepare(`
@@ -331,6 +332,7 @@ const analysisOps = {
       GROUP BY strftime('%Y-%m', b.date)
       ORDER BY month
     `).all(fromDate, toDate);
+    if (billed.length === 0) return [];
     const totals = new Map(billed.map(({ month, total }) => [month, total]));
     return monthsOfWindow(fromDate, toDate)
       .map((month) => ({ month, total: totals.get(month) ?? 0 }));
@@ -338,7 +340,8 @@ const analysisOps = {
 
   // The cost of each resource type billed between two dates, both included, in every month
   // between them, 0 for a month it was not billed in: each resource type's trend gives
-  // every month, as the monthly trend does (#65)
+  // every month, as the monthly trend does (#65). Nothing when none of them has a bill,
+  // since no resource type was billed.
   monthlyTrendByResourceType: (fromDate, toDate) => {
     const db = getDb();
     const billed = db.prepare(`

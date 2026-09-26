@@ -4,7 +4,7 @@ import { months } from './calendar.js';
 // /api/analysis/monthly-trend-by-category answer, keyed by the month they end
 // on, then by the number of months asked for, and its GPU costs, as
 // /api/gpu/summary answers. A cost trend gives every month of its period, at
-// 0 € for a month without any bill (#65).
+// 0 € for a month without any bill, or none when none of them has a bill (#65).
 
 // The names the trend routes give the months, in French only
 const MONTH_NAMES = [

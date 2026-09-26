@@ -1,7 +1,8 @@
 /**
  * Tests for the monthly trend queries of the Trends tab: they add up the bill
  * lines of the months between two dates, both included, whatever the real
- * date, and give every one of those months, billed or not.
+ * date, and give every one of those months, billed or not, when any of them
+ * was billed.
  */
 
 const fs = require('fs');
@@ -123,14 +124,11 @@ describe('monthly trend queries', () => {
       ]);
     });
 
-    // No resource type was billed: none has a trend to give months to
-    test('adds up 0 for every month of a window without any bill', () => {
+    // April and May 2026: nothing to show, rather than months at 0, as without a window
+    test('finds nothing over a window without any bill', () => {
       const window = trendWindow('2026-05', 2);
 
-      expect(db.analysis.monthlyTrend(window.from, window.to)).toEqual([
-        { month: '2026-04', total: 0 },
-        { month: '2026-05', total: 0 },
-      ]);
+      expect(db.analysis.monthlyTrend(window.from, window.to)).toEqual([]);
       expect(db.analysis.monthlyTrendByResourceType(window.from, window.to)).toEqual([]);
     });
   });

@@ -1,7 +1,7 @@
 /**
  * The calendar months of a window of dates, from the month of its first day to
  * the month of its last day, both included, as YYYY-MM: the months that a
- * trend over that window lists, each one, billed or not (#65). 2026-07-01 to
+ * trend with a bill over that window gives, billed or not (#65). 2026-07-01 to
  * 2026-09-30 covers 2026-07, 2026-08 and 2026-09. No window, from and to
  * null, covers no months.
  *

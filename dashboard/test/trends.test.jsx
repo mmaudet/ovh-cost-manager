@@ -279,6 +279,7 @@ describe('Trends tab', () => {
     });
   });
 
+  // The trend routes then answer no months, rather than months at 0 € (#65)
   it('says there is no data when nothing was billed over the period', async () => {
     const { user } = await renderDashboard({
       ...account,
