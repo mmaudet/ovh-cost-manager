@@ -152,8 +152,8 @@ export default function Dashboard() {
   const infrastructureTab = useInfrastructureTab({
     selectedMonth, activeTab, selectedResourceType,
   });
-  // The Compare tab lists the dedicated servers too: the shell passes them on, though they
-  // only load on the Infrastructure tab (#35)
+  // The Compare tab lists the dedicated servers too: the shell passes them on, and the hook
+  // loads them on either tab (#35)
   const { inventoryServers } = infrastructureTab;
 
   const backupTab = useBackupTab({ selectedMonth, activeTab });

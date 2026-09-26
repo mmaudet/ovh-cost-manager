@@ -58,6 +58,7 @@ describe('Compare tab', () => {
       expect(fetchFigures).not.toHaveBeenCalledWith('2026-08-01', '2026-08-31');
     }
     expect(api.fetchBackupStats).not.toHaveBeenCalled();
+    expect(api.fetchInventoryServers).not.toHaveBeenCalled();
 
     await openTab(user, 'Comparaison');
 
@@ -67,10 +68,13 @@ describe('Compare tab', () => {
       expect(fetchFigures).toHaveBeenCalledWith('2026-08-01', '2026-08-31');
     }
     expect(api.fetchBackupStats).toHaveBeenCalledWith('2026-09-01', '2026-09-30');
-    // The consumption of a project waits until its comparison opens, and the
-    // dedicated servers until the Infrastructure tab opens (#35)
+    // The dedicated servers of the inventory load with the tab (#35), the
+    // rest of the inventory with the Infrastructure tab only, and the
+    // consumption of a project once its comparison opens
+    expect(api.fetchInventoryServers).toHaveBeenCalled();
+    expect(api.fetchInventoryVps).not.toHaveBeenCalled();
+    expect(api.fetchInventoryStorage).not.toHaveBeenCalled();
     expect(api.fetchProjectConsumption).not.toHaveBeenCalled();
-    expect(api.fetchInventoryServers).not.toHaveBeenCalled();
   });
 
   describe('months A and B', () => {
@@ -288,7 +292,12 @@ describe('Compare tab', () => {
       // A variation from 0 € shows nothing, and an empty cell gives no text.
       expect(rowTextsOf(comparisonTable(INFRASTRUCTURE))).toEqual([
         ['Type', 'Août 2026', 'Septembre 2026', 'Variation'],
-        ['Liste des Serveurs dédiés présents au 15/09/2026', '270,00€', '270,00€', '0.0%'],
+        // With the servers of the inventory, though the Infrastructure tab
+        // never opened (#35)
+        [
+          'Liste des Serveurs dédiés présents au 15/09/2026',
+          'backup-server', 'ns3000002.ip-198-51-100.eu', '270,00€', '270,00€', '0.0%',
+        ],
         ['VPS', '0,00€', '0,00€'],
         ['Stockage', '0,00€', '0,00€'],
         ['Load Balancer', '0,00€', '0,00€'],
@@ -329,7 +338,11 @@ describe('Compare tab', () => {
       expect(api.fetchBackupStats).toHaveBeenCalledWith('2026-07-01', '2026-07-31');
       expect(rowTextsOf(comparisonTable(INFRASTRUCTURE))).toEqual([
         ['Type', 'Septembre 2026', 'Juillet 2026', 'Variation'],
-        ['Liste des Serveurs dédiés présents au 15/09/2026', '270,00€', '270,00€', '0.0%'],
+        // With the servers of the inventory (#35)
+        [
+          'Liste des Serveurs dédiés présents au 15/09/2026',
+          'backup-server', 'ns3000002.ip-198-51-100.eu', '270,00€', '270,00€', '0.0%',
+        ],
         ['VPS', '11,99€', '0,00€', '-100.0%'],
         ['Stockage', '64,80€', '0,00€', '-100.0%'],
         ['Load Balancer', '18,00€', '0,00€', '-100.0%'],
@@ -351,16 +364,24 @@ describe('Compare tab', () => {
       ]);
     });
 
-    it('list dedicated servers only once the Infrastructure tab was opened (#35)', async () => {
+    it('list the dedicated servers as soon as the tab opens (#35)', async () => {
       const { user } = await renderDashboard();
       await openTab(user, 'Comparaison');
+
       await openComparison(user, INFRASTRUCTURE);
-      // The costs of months A and B (#32)
-      expect(rowTextsOf(comparisonTable(INFRASTRUCTURE))[1]).toEqual([
-        'Liste des Serveurs dédiés présents au 15/09/2026', '270,00€', '270,00€', '0.0%',
-      ]);
+
+      // The servers of the inventory, though the Infrastructure tab never
+      // opened (#35), and the costs of months A and B (#32)
+      const dedicatedServers = [
+        'Liste des Serveurs dédiés présents au 15/09/2026',
+        'backup-server', 'ns3000002.ip-198-51-100.eu',
+        '270,00€', '270,00€', '0.0%',
+      ];
+      expect(rowTextsOf(comparisonTable(INFRASTRUCTURE))[1]).toEqual(dedicatedServers);
 
       await openTab(user, 'Infrastructure');
+      expect(screen.getByRole('heading', { name: /^Serveurs dédiés \(2\)/ }))
+        .toBeInTheDocument();
       await openTab(user, 'Comparaison');
 
       // Closed again, as every comparison but the projects' when the tab opens
@@ -368,13 +389,10 @@ describe('Compare tab', () => {
 
       await openComparison(user, INFRASTRUCTURE);
 
-      // The servers the Infrastructure tab loaded, and the costs of months A
-      // and B (#32)
-      expect(rowTextsOf(comparisonTable(INFRASTRUCTURE))[1]).toEqual([
-        'Liste des Serveurs dédiés présents au 15/09/2026',
-        'backup-server', 'ns3000002.ip-198-51-100.eu',
-        '270,00€', '270,00€', '0.0%',
-      ]);
+      // The same servers: the Infrastructure tab showed them without requesting
+      // them again, one query whichever tab loads it (#35)
+      expect(rowTextsOf(comparisonTable(INFRASTRUCTURE))[1]).toEqual(dedicatedServers);
+      expect(api.fetchInventoryServers).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -469,7 +487,11 @@ describe('Compare tab', () => {
     await openComparison(user, /^Private Cloud Comparison/);
     await openComparison(user, /^Production \(Project\)/);
 
-    expect(rowsOf(comparisonTable(/^Infrastructure Comparison/)).map(([type]) => type)).toEqual([
+    // The label of each row, its first text: the row of the dedicated servers
+    // lists them after it (#35)
+    const infrastructureTypes = rowTextsOf(comparisonTable(/^Infrastructure Comparison/))
+      .map(([type]) => type);
+    expect(infrastructureTypes).toEqual([
       'Type',
       'List of Dedicated Servers present on 15/09/2026',
       'VPS', 'Storage', 'Load Balancer', 'IP Addresses', 'Domains',

@@ -7,8 +7,8 @@ import ProjectProductComparison from '../components/ProjectProductComparison.jsx
 
 // The Compare tab, which the shell renders while it is active: what useCompareTab() returns,
 // with the shell's language, translations (t), amount format (fmt) and months list, and the
-// dedicated servers of the inventory, which the Infrastructure hook loads, only on its own
-// tab (#35).
+// dedicated servers of the inventory, which the Infrastructure hook loads, on its own tab
+// and on this one (#35).
 const CompareTab = ({
   compareMonthA, setCompareMonthA, compareMonthB, setCompareMonthB,
   compareSort, handleCompareSort,
