@@ -1,7 +1,7 @@
 {
   "name": "ovh-cost-manager",
   "description": "OVH Cost Manager - Interactive dashboard for OVHcloud billing analysis",
-  "version": "2.3.0",
+  "version": "2.3.1",
   "private": true,
   "homepage": "https://github.com/mmaudet/ovh-cost-manager",
   "author": "Michel-Marie MAUDET <mmaudet@linagora.com>",
