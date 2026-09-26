@@ -6,7 +6,8 @@ const rules = { 'no-undef': 'error' };
 
 export default [
   {
-    files: ['dashboard/src/**/*.{js,jsx}'],
+    // The dashboard tests run in jsdom and import Vitest's functions
+    files: ['dashboard/src/**/*.{js,jsx}', 'dashboard/test/**/*.{js,jsx}'],
     languageOptions: {
       ecmaVersion: 'latest',
       sourceType: 'module',

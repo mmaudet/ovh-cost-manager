@@ -26,4 +26,7 @@ jobs:
 
       - run: npm test
 
+      # Dashboard page tests: Vitest in jsdom, no browser needed
+      - run: npm test --workspace=dashboard
+
       - run: npm run build
