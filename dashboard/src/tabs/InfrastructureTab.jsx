@@ -14,7 +14,7 @@ const INFRA_EXCLUDED_TYPES = ['cloud_project', 'domain', 'web_cloud'];
 // useInfrastructureTab() returns, with the shell's language, translations (t), amount format
 // (fmt) and selected month, the month's costs by resource type, which load at page start,
 // and the resource type whose bill lines are open, with its setter: shared state, since the
-// Overview's link and the tab bar close it too (#56).
+// Overview's link to this tab and the logo close it too (#56).
 const InfrastructureTab = ({
   inventoryServers, inventoryVps, inventoryStorage, resourceTypeDetails, setShowAllServers,
   language, t, fmt, selectedMonth, byResourceType,

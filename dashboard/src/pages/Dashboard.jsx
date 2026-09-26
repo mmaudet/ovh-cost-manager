@@ -260,7 +260,16 @@ export default function Dashboard() {
         {/* Header */}
         <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <button onClick={() => { setActiveTab('overview'); setSelectedProject(null); }} className="cursor-pointer">
+            {/* The logo goes back to a clean Overview: it closes the open project and
+                resource type, which the tab bar keeps (#56) */}
+            <button
+              onClick={() => {
+                setActiveTab('overview');
+                setSelectedProject(null);
+                setSelectedResourceType(null);
+              }}
+              className="cursor-pointer"
+            >
               <Logo className="h-40" />
             </button>
             <div>
@@ -488,7 +497,7 @@ export default function Dashboard() {
             ].map(tab => (
               <button
                 key={tab.id}
-                onClick={() => { setActiveTab(tab.id); if (tab.id !== 'infrastructure') setSelectedResourceType(null); }}
+                onClick={() => setActiveTab(tab.id)}
                 className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
                   activeTab === tab.id
                     ? 'bg-blue-600 text-white shadow-md'

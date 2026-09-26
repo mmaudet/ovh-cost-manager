@@ -17,7 +17,7 @@ tab owns.
 
 Shared state that a tab changes along with other parts of the page stays in the shell,
 and reaches the tab with its setter: the Infrastructure tab opens the bill lines of a
-resource type, which the Overview's link and the tab bar close (#56). When a tab reads
+resource type, which the logo and the Overview's link close (#56). When a tab reads
 data that another tab's hook owns, that hook returns it and the shell passes it on, so
 that the query keeps a single owner and its loading condition: the Compare tab lists the
 dedicated servers that the Infrastructure hook loads, only on its own tab (#35). The shell

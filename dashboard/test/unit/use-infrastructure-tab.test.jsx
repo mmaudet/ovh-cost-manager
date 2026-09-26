@@ -110,7 +110,8 @@ describe('useInfrastructureTab', () => {
     ]);
   });
 
-  // The logo leads back to the Overview with the resource type still open (#56)
+  // The tab bar and the Overview's link to Web Cloud leave the resource type open while
+  // another tab is active (#56)
   it('requests the bill lines of an open resource type whatever the tab', async () => {
     const { result } = await renderTabHook(useInfrastructureTab,
       { ...onInfrastructure, activeTab: 'overview', selectedResourceType: 'dedicated_server' });
