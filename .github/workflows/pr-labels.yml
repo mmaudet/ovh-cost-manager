@@ -1,0 +1,56 @@
+name: PR labels
+
+# Every pull request needs one changelog category label (see .github/release.yml).
+# It is set from a Conventional Commits title prefix when there is one ("feat: ...",
+# "fix(ui): ..."); otherwise this check fails until a maintainer adds the label.
+#
+# pull_request_target runs with this repository's token, so that labels can also
+# be added to pull requests coming from forks. It must never check out or run the
+# pull request's code: this job only reads its title and labels.
+on:
+  pull_request_target:
+    types: [opened, edited, reopened, synchronize, labeled, unlabeled]
+
+permissions:
+  issues: write
+  pull-requests: write
+
+jobs:
+  changelog-category:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/github-script@v9
+        with:
+          script: |
+            const CATEGORY_LABELS = [
+              'feature', 'enhancement', 'security', 'bug',
+              'maintenance', 'dependencies', 'documentation', 'skip-changelog',
+            ];
+            const LABEL_BY_PREFIX = {
+              feat: 'feature',
+              fix: 'bug',
+              security: 'security',
+              chore: 'maintenance',
+              ci: 'maintenance',
+              build: 'maintenance',
+              docs: 'maintenance',
+              refactor: 'maintenance',
+              test: 'maintenance',
+              perf: 'maintenance',
+            };
+
+            const pr = context.payload.pull_request;
+            if (pr.labels.some(label => CATEGORY_LABELS.includes(label.name))) return;
+
+            const prefix = pr.title.match(/^(\w+)(\([^)]*\))?!?:/)?.[1]?.toLowerCase();
+            const label = LABEL_BY_PREFIX[prefix];
+            if (label) {
+              await github.rest.issues.addLabels({ ...context.repo, issue_number: pr.number, labels: [label] });
+              core.info(`Labelled "${label}" from the "${prefix}:" title prefix`);
+              return;
+            }
+
+            core.setFailed(
+              `Add a changelog label (${CATEGORY_LABELS.join(', ')}), ` +
+              'or start the title with feat:, fix:, security:, chore:, ci:, build: or docs:.'
+            );

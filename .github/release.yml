@@ -1,0 +1,29 @@
+# Categories of the release notes GitHub generates from the labels of the
+# merged pull requests. scripts/release.sh writes these notes into CHANGELOG.md,
+# which is also the body of each GitHub release.
+#
+# A pull request goes in the first category whose labels it has. Security comes
+# before bug fixes so that a security fix is not listed as a plain bug fix.
+changelog:
+  exclude:
+    labels:
+      - skip-changelog
+  categories:
+    - title: New features
+      labels:
+        - feature
+        - enhancement
+    - title: Security
+      labels:
+        - security
+    - title: Bug fixes
+      labels:
+        - bug
+    - title: Maintenance
+      labels:
+        - maintenance
+        - dependencies
+        - documentation
+    - title: Other changes
+      labels:
+        - "*"
