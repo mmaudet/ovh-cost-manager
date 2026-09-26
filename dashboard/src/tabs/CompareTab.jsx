@@ -4,40 +4,49 @@ import {
 import Accordion from '../components/Accordion.jsx';
 import { SortIcon } from '../components/SortIcon.jsx';
 import ProjectProductComparison from '../components/ProjectProductComparison.jsx';
+import { Variation } from '../components/Variation.jsx';
+import { projectComparisonRows } from '../utils/projectComparison.js';
+
+// The cost of a resource type in a month, from its costs by resource type (#32)
+const costOfType = (byResourceType, type) => (
+  byResourceType.find(r => r.resource_type === type)?.value || 0
+);
+
+// The Veeam VMs or Enterprise licences of a month, from its backups (#32): their number and
+// their cost
+const backupsOf = (backupStats, kind) => ({
+  count: backupStats?.[kind]?.count || 0,
+  total: backupStats?.[kind]?.total || 0,
+});
 
 // The Compare tab, which the shell renders while it is active: what useCompareTab() returns,
 // with the shell's language, translations (t), amount format (fmt) and months list, and the
-// dedicated servers of the inventory, which the Infrastructure hook loads, only on its own
-// tab (#35).
+// dedicated servers of the inventory, which the Infrastructure hook loads, on its own tab
+// and on this one (#35).
 const CompareTab = ({
   compareMonthA, setCompareMonthA, compareMonthB, setCompareMonthB,
   compareSort, handleCompareSort,
   compareDataA, compareDataB, byServiceA, byServiceB, byProjectA, byProjectB,
+  byResourceTypeA, byResourceTypeB, backupStatsA, backupStatsB,
   language, t, fmt, months, inventoryServers,
 }) => {
-  // Merge and sort comparison data
+  // Merge and sort comparison data: the projects of months A and B, paired by id (#55)
   const getSortedCompareProjects = () => {
-    if (!byProjectA.length) return [];
-    const merged = byProjectA.map(p => {
-      const pB = byProjectB.find(proj => proj.projectName === p.projectName) || { total: 0 };
-      // Variation: how MoisB changed compared to MoisA (reference)
-      const diff = p.total ? ((pB.total - p.total) / p.total * 100) : null;
-      return { ...p, totalB: pB.total, diff };
-    });
+    const merged = projectComparisonRows(byProjectA, byProjectB);
     return merged.sort((a, b) => {
       let aVal, bVal;
       if (compareSort.column === 'name') {
         aVal = a.projectName?.toLowerCase() || '';
         bVal = b.projectName?.toLowerCase() || '';
       } else if (compareSort.column === 'totalA') {
-        aVal = a.total || 0;
-        bVal = b.total || 0;
+        aVal = a.totalA || 0;
+        bVal = b.totalA || 0;
       } else if (compareSort.column === 'totalB') {
         aVal = a.totalB || 0;
         bVal = b.totalB || 0;
       } else if (compareSort.column === 'diff') {
-        aVal = a.diff ?? -Infinity;
-        bVal = b.diff ?? -Infinity;
+        aVal = a.variation ?? -Infinity;
+        bVal = b.variation ?? -Infinity;
       }
       if (aVal < bVal) return compareSort.direction === 'asc' ? -1 : 1;
       if (aVal > bVal) return compareSort.direction === 'asc' ? 1 : -1;
@@ -55,9 +64,34 @@ const CompareTab = ({
     };
   });
 
-  const totalVariation = compareDataA && compareDataB && compareDataA.total
-    ? ((compareDataB.total - compareDataA.total) / compareDataA.total * 100).toFixed(1)
-    : 0;
+  // The rows of the Private Cloud comparison, which the infrastructure comparison ends with
+  const privateCloudTypes = [
+    {
+      key: 'private_cloud_host',
+      label: language === 'en' ? 'Private Cloud Hosts' : 'Hôtes Private Cloud',
+    },
+    {
+      key: 'private_cloud_datastore',
+      label: language === 'en' ? 'Private Cloud Datastores' : 'Datastores Private Cloud',
+    },
+  ];
+
+  // A row of the infrastructure or Private Cloud comparison: the cost of a resource type in
+  // months A and B (#32), and what shows under its label, if anything
+  const resourceTypeRow = ({ key, label, details }) => {
+    const valA = costOfType(byResourceTypeA, key);
+    const valB = costOfType(byResourceTypeB, key);
+    return (
+      <tr key={key} className="border-b hover:bg-gray-50 transition-colors">
+        <td className="p-3 font-medium">{label}{details}</td>
+        <td className="p-3 text-right font-medium">{fmt(valA)}€</td>
+        <td className="p-3 text-right text-gray-500">{fmt(valB)}€</td>
+        <td className="p-3 text-right">
+          <Variation from={valA} to={valB} t={t} />
+        </td>
+      </tr>
+    );
+  };
 
   return (
     <div className="space-y-6">
@@ -100,9 +134,12 @@ const CompareTab = ({
             <div className="text-gray-500 mt-1 text-sm">{compareMonthA?.label}</div>
           </div>
           <div className="flex flex-col items-center">
-            <span className={`px-4 py-2 rounded-full text-lg font-bold ${Number(totalVariation) > 0 ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
-              {Number(totalVariation) > 0 ? '+' : ''}{totalVariation}%
-            </span>
+            {/* From the total of month A to that of month B, once both are in */}
+            {compareDataA && compareDataB && (
+              <Variation
+                from={compareDataA.total} to={compareDataB.total} t={t} size="headline"
+              />
+            )}
           </div>
           <div className="text-center">
             <div className="text-3xl md:text-4xl font-bold text-gray-400">
@@ -164,14 +201,10 @@ const CompareTab = ({
             {getSortedCompareProjects().map((p) => (
               <tr key={p.projectId} className="border-b hover:bg-gray-50 transition-colors">
                 <td className="p-3 font-medium">{p.projectName}</td>
-                <td className="p-3 text-right font-medium">{fmt(p.total)}€</td>
+                <td className="p-3 text-right font-medium">{fmt(p.totalA)}€</td>
                 <td className="p-3 text-right text-gray-500">{fmt(p.totalB)}€</td>
                 <td className="p-3 text-right">
-                  {p.diff !== null && (
-                    <span className={`px-2 py-1 rounded text-xs font-medium ${p.diff > 0 ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
-                      {p.diff > 0 ? '+' : ''}{p.diff.toFixed(1)}%
-                    </span>
-                  )}
+                  <Variation from={p.totalA} to={p.totalB} t={t} />
                 </td>
               </tr>
             ))}
@@ -196,45 +229,21 @@ const CompareTab = ({
               { key: 'dedicated_server', label: language === 'en'
                 ? `List of Dedicated Servers present on ${new Date().toLocaleDateString('en-GB')}`
                 : `Liste des Serveurs dédiés présents au ${new Date().toLocaleDateString('fr-FR')}`,
-                renderNames: () => (
+                details: inventoryServers.length > 0 && (
                   <ul className="text-xs text-gray-500 mt-1">
                     {inventoryServers.map(srv => (
                       <li key={srv.id}>{srv.display_name || srv.id}</li>
                     ))}
                   </ul>
-                )
+                ),
               },
               { key: 'vps', label: 'VPS' },
               { key: 'storage', label: language === 'en' ? 'Storage' : 'Stockage' },
               { key: 'load_balancer', label: language === 'en' ? 'Load Balancer' : 'Load Balancer' },
               { key: 'ip_service', label: language === 'en' ? 'IP Addresses' : 'Adresses IP' },
               { key: 'domain', label: language === 'en' ? 'Domains' : 'Noms de domaine' },
-              { key: 'private_cloud_host', label: language === 'en' ? 'Private Cloud Hosts' : 'Hôtes Private Cloud' },
-              { key: 'private_cloud_datastore', label: language === 'en' ? 'Private Cloud Datastores' : 'Datastores Private Cloud' },
-            ].map(row => {
-              const a = byServiceA.find(s => s.key === row.key) || {};
-              const b = byServiceB.find(s => s.key === row.key) || {};
-              const valA = a.value || 0;
-              const valB = b.value || 0;
-              const diff = valA ? ((valB - valA) / valA * 100) : null;
-              return (
-                <tr key={row.key} className="border-b hover:bg-gray-50 transition-colors">
-                  <td className="p-3 font-medium">
-                    {row.label}
-                    {row.key === 'dedicated_server' && row.renderNames && inventoryServers.length > 0 && row.renderNames()}
-                  </td>
-                  <td className="p-3 text-right font-medium">{fmt(valA)}€</td>
-                  <td className="p-3 text-right text-gray-500">{fmt(valB)}€</td>
-                  <td className="p-3 text-right">
-                    {diff !== null && (
-                      <span className={`px-2 py-1 rounded text-xs font-medium ${diff > 0 ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
-                        {diff > 0 ? '+' : ''}{diff.toFixed(1)}%
-                      </span>
-                    )}
-                  </td>
-                </tr>
-              );
-            })}
+              ...privateCloudTypes,
+            ].map(resourceTypeRow)}
           </tbody>
         </table>
       </Accordion>
@@ -252,40 +261,29 @@ const CompareTab = ({
             </tr>
           </thead>
           <tbody>
+            {/* The number and the cost of the Veeam VMs and Enterprise licences of months A
+                and B, as the Backup tab shows them for the selected month (#32) */}
             {[
               {
                 key: 'backup_vms',
+                kind: 'vms',
                 label: language === 'en' ? 'Veeam Backup VMs' : 'VMs Veeam Backup',
-                getA: () => (byServiceA.find(s => s.key === 'backup')?.count || 0),
-                getB: () => (byServiceB.find(s => s.key === 'backup')?.count || 0),
-                getValA: () => (byServiceA.find(s => s.key === 'backup')?.value || 0),
-                getValB: () => (byServiceB.find(s => s.key === 'backup')?.value || 0),
               },
               {
                 key: 'backup_enterprise',
+                kind: 'enterprise',
                 label: language === 'en' ? 'Veeam Enterprise License' : 'Licence Veeam Enterprise',
-                getA: () => (byServiceA.find(s => s.key === 'backup_enterprise')?.count || 0),
-                getB: () => (byServiceB.find(s => s.key === 'backup_enterprise')?.count || 0),
-                getValA: () => (byServiceA.find(s => s.key === 'backup_enterprise')?.value || 0),
-                getValB: () => (byServiceB.find(s => s.key === 'backup_enterprise')?.value || 0),
               },
             ].map(row => {
-              const countA = row.getA();
-              const countB = row.getB();
-              const valA = row.getValA();
-              const valB = row.getValB();
-              const diff = valA ? ((valB - valA) / valA * 100) : null;
+              const a = backupsOf(backupStatsA, row.kind);
+              const b = backupsOf(backupStatsB, row.kind);
               return (
                 <tr key={row.key} className="border-b hover:bg-gray-50 transition-colors">
                   <td className="p-3 font-medium">{row.label}</td>
-                  <td className="p-3 text-right font-medium">{countA} / {fmt(valA)}€</td>
-                  <td className="p-3 text-right text-gray-500">{countB} / {fmt(valB)}€</td>
+                  <td className="p-3 text-right font-medium">{a.count} / {fmt(a.total)}€</td>
+                  <td className="p-3 text-right text-gray-500">{b.count} / {fmt(b.total)}€</td>
                   <td className="p-3 text-right">
-                    {diff !== null && (
-                      <span className={`px-2 py-1 rounded text-xs font-medium ${diff > 0 ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
-                        {diff > 0 ? '+' : ''}{diff.toFixed(1)}%
-                      </span>
-                    )}
+                    <Variation from={a.total} to={b.total} t={t} />
                   </td>
                 </tr>
               );
@@ -307,37 +305,17 @@ const CompareTab = ({
             </tr>
           </thead>
           <tbody>
-            {[
-              { key: 'private_cloud_host', label: language === 'en' ? 'Private Cloud Hosts' : 'Hôtes Private Cloud' },
-              { key: 'private_cloud_datastore', label: language === 'en' ? 'Private Cloud Datastores' : 'Datastores Private Cloud' },
-            ].map(row => {
-              const a = byServiceA.find(s => s.key === row.key) || {};
-              const b = byServiceB.find(s => s.key === row.key) || {};
-              const valA = a.value || 0;
-              const valB = b.value || 0;
-              const diff = valA ? ((valB - valA) / valA * 100) : null;
-              return (
-                <tr key={row.key} className="border-b hover:bg-gray-50 transition-colors">
-                  <td className="p-3 font-medium">{row.label}</td>
-                  <td className="p-3 text-right font-medium">{fmt(valA)}€</td>
-                  <td className="p-3 text-right text-gray-500">{fmt(valB)}€</td>
-                  <td className="p-3 text-right">
-                    {diff !== null && (
-                      <span className={`px-2 py-1 rounded text-xs font-medium ${diff > 0 ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
-                        {diff > 0 ? '+' : ''}{diff.toFixed(1)}%
-                      </span>
-                    )}
-                  </td>
-                </tr>
-              );
-            })}
+            {privateCloudTypes.map(resourceTypeRow)}
           </tbody>
         </table>
       </Accordion>
       {/* One accordion per Public Cloud project: detailed comparison of products/services */}
       {getSortedCompareProjects().map((proj) => (
         <Accordion key={proj.projectId} title={`${proj.projectName} (${t('project')})`}>
-          <ProjectProductComparison projectId={proj.projectId} monthA={compareMonthA} monthB={compareMonthB} fmt={fmt} language={language} />
+          <ProjectProductComparison
+            projectId={proj.projectId} monthA={compareMonthA} monthB={compareMonthB}
+            fmt={fmt} language={language} t={t}
+          />
         </Accordion>
       ))}
     </div>

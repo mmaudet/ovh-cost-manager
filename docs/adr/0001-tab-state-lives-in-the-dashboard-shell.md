@@ -20,9 +20,14 @@ and reaches the tab with its setter: the Public Cloud project whose detail is op
 the resource type whose bill lines are open on the Infrastructure tab. When a tab reads
 data that another tab's hook owns, that hook returns it and the shell passes it on, so
 that the query keeps a single owner and its loading condition: the Compare tab lists the
-dedicated servers that the Infrastructure hook loads, only on its own tab (#35). The shell
-itself reads a tab hook's result the same way: the "vs previous month" KPI reads the
-summary of month B from what the Compare hook returns (#50).
+dedicated servers that the Infrastructure hook loads, on its own tab and on Compare (#35).
+The shell itself reads a tab hook's result the same way: the "vs previous month" KPI
+reads the summary of month B from what the Compare hook returns (#50). When a month the
+Compare tab compares is the shell's selected month, as month B is when the page opens, the
+Compare hook's queries of that month's summary, costs by resource type and Veeam backups
+share their keys (`summary`, `byResourceType`, `backupStats`) with those the shell and the
+Backup hook run for it: the Compare hook owns the months it picks, and a shared key only
+means a shared cache, not a shared owner.
 
 What stays open depends on how the user moves around the page (#56):
 

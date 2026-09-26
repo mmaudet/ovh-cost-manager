@@ -9,7 +9,9 @@
 
 import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { fetchSummary, fetchByProject, fetchByService } from '../services/api.js';
+import {
+  fetchSummary, fetchByProject, fetchByService, fetchByResourceType, fetchBackupStats,
+} from '../services/api.js';
 
 const useCompareTab = ({ months, selectedMonth, activeTab }) => {
   const [compareMonthA, setCompareMonthA] = useState(null);
@@ -75,6 +77,33 @@ const useCompareTab = ({ months, selectedMonth, activeTab }) => {
     enabled: !!compareMonthB && activeTab === 'compare'
   });
 
+  // What the infrastructure, backup and Private Cloud comparisons show (#32): the costs of
+  // each resource type, under the key of those the page loads for its selected month, and
+  // the Veeam backups, under the key of those the Backup tab loads for it
+  const { data: byResourceTypeA = [] } = useQuery({
+    queryKey: ['byResourceType', compareMonthA?.from, compareMonthA?.to],
+    queryFn: () => fetchByResourceType(compareMonthA.from, compareMonthA.to),
+    enabled: !!compareMonthA && activeTab === 'compare',
+  });
+
+  const { data: byResourceTypeB = [] } = useQuery({
+    queryKey: ['byResourceType', compareMonthB?.from, compareMonthB?.to],
+    queryFn: () => fetchByResourceType(compareMonthB.from, compareMonthB.to),
+    enabled: !!compareMonthB && activeTab === 'compare',
+  });
+
+  const { data: backupStatsA } = useQuery({
+    queryKey: ['backupStats', compareMonthA?.from, compareMonthA?.to],
+    queryFn: () => fetchBackupStats(compareMonthA.from, compareMonthA.to),
+    enabled: !!compareMonthA && activeTab === 'compare',
+  });
+
+  const { data: backupStatsB } = useQuery({
+    queryKey: ['backupStats', compareMonthB?.from, compareMonthB?.to],
+    queryFn: () => fetchBackupStats(compareMonthB.from, compareMonthB.to),
+    enabled: !!compareMonthB && activeTab === 'compare',
+  });
+
   return {
     compareMonthA,
     setCompareMonthA,
@@ -88,6 +117,10 @@ const useCompareTab = ({ months, selectedMonth, activeTab }) => {
     byServiceB,
     byProjectA,
     byProjectB,
+    byResourceTypeA,
+    byResourceTypeB,
+    backupStatsA,
+    backupStatsB,
   };
 };
 

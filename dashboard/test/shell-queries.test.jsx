@@ -51,6 +51,10 @@ describe('query keys', () => {
       ['summary', '2026-08-01', '2026-08-31'],
       ['byService', '2026-08-01', '2026-08-31'],
       ['byProject', '2026-08-01', '2026-08-31'],
+      // And the costs by resource type and the Veeam backups of month A (#32): month B
+      // shares the key of the shell's costs, and that of the Backup tab's backups
+      ['byResourceType', '2026-08-01', '2026-08-31'],
+      ['backupStats', '2026-08-01', '2026-08-31'],
       // The Trends tab's: over 3 months, the only period offered before a month is selected,
       // then the longest that the three billed months up to September allow
       ['monthlyTrend', 3, undefined],

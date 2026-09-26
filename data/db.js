@@ -270,11 +270,14 @@ const importLogOps = {
 
 // Analysis queries
 const analysisOps = {
+  // The costs of each project billed between two dates, most expensive first. A project
+  // missing from the projects table keeps the id of its bill lines, without a name: the
+  // dashboard tells such projects apart by their id (#55).
   byProject: (fromDate, toDate) => {
     const db = getDb();
     return db.prepare(`
       SELECT
-        p.id as project_id,
+        d.project_id as project_id,
         p.name as project_name,
         SUM(d.total_price) as total,
         COUNT(d.id) as details_count

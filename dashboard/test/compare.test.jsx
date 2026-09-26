@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { screen, within } from '@testing-library/react';
-import { account, threeBilledProjects } from './fixtures/account.js';
+import { account, everyResourceType, threeBilledProjects } from './fixtures/account.js';
 import { months } from './fixtures/calendar.js';
 import { api } from './support/api.js';
 import {
@@ -48,23 +48,33 @@ const projectComparisons = () => screen
 
 describe('Compare tab', () => {
   it('loads the figures of month A when the tab opens, not before', async () => {
-    const figures = [api.fetchSummary, api.fetchByService, api.fetchByProject];
+    const figures = [
+      api.fetchSummary, api.fetchByService, api.fetchByProject,
+      // The costs by resource type and the Veeam backups too (#32)
+      api.fetchByResourceType, api.fetchBackupStats,
+    ];
     const { user } = await renderDashboard();
     for (const fetchFigures of figures) {
       expect(fetchFigures).not.toHaveBeenCalledWith('2026-08-01', '2026-08-31');
     }
+    expect(api.fetchBackupStats).not.toHaveBeenCalled();
+    expect(api.fetchInventoryServers).not.toHaveBeenCalled();
 
     await openTab(user, 'Comparaison');
 
     // Month B, the latest month, is the one the page opens on: its figures
-    // are there already
+    // are there already, all but its Veeam backups (#32)
     for (const fetchFigures of figures) {
       expect(fetchFigures).toHaveBeenCalledWith('2026-08-01', '2026-08-31');
     }
-    // The consumption of a project waits until its comparison opens, and the
-    // dedicated servers until the Infrastructure tab opens (#35)
+    expect(api.fetchBackupStats).toHaveBeenCalledWith('2026-09-01', '2026-09-30');
+    // The dedicated servers of the inventory load with the tab (#35), the
+    // rest of the inventory with the Infrastructure tab only, and the
+    // consumption of a project once its comparison opens
+    expect(api.fetchInventoryServers).toHaveBeenCalled();
+    expect(api.fetchInventoryVps).not.toHaveBeenCalled();
+    expect(api.fetchInventoryStorage).not.toHaveBeenCalled();
     expect(api.fetchProjectConsumption).not.toHaveBeenCalled();
-    expect(api.fetchInventoryServers).not.toHaveBeenCalled();
   });
 
   describe('months A and B', () => {
@@ -232,19 +242,119 @@ describe('Compare tab', () => {
       ]);
     });
 
-    it('leaves out the projects billed in month B only (#55)', async () => {
+    // #55: the projects of both months, paired by id
+    it('lists a project billed in month B only, from 0 € in month A (#55)', async () => {
       const { user } = await renderDashboard();
       await openTab(user, 'Comparaison');
 
       await pickMonth(user, 'Août 2026', 'Juillet 2026');
 
-      // Staging was first billed in August: missing from the table and from
-      // the comparisons of each project (#55)
+      // Staging was first billed in August, after month A: its variation
+      // from 0 € cannot be computed, and a tooltip says why (#65)
       expect(projectRows()).toEqual([
         ['Projet○', 'Juillet 2026▼', 'Septembre 2026○', 'Variation○'],
         ['Production', '680,00€', '610,40€', '-10.2%'],
+        ['Staging', '0,00€', '220,00€', '—'],
       ]);
-      expect(projectComparisons()).toEqual(['Production (Projet)']);
+      expect(within(projectTable()).getByTitle('non calculable : mois A à 0 € ou moins'))
+        .toHaveTextContent('—');
+      // Its consumption is compared too
+      expect(projectComparisons()).toEqual(['Production (Projet)', 'Staging (Projet)']);
+      await openComparison(user, /^Staging \(Projet\)/);
+      expect(api.fetchProjectConsumption)
+        .toHaveBeenCalledWith('project-staging', '2026-07-01', '2026-07-31');
+      expect(rowsOf(comparisonTable(/^Staging \(Projet\)/))).toEqual([
+        ['Produit/Type', 'Juillet 2026', 'Septembre 2026', 'Variation'],
+        ['instance', '0,00€', '52,35€', '—'],
+      ]);
+
+      await selectLanguage(user, 'en');
+
+      expect(within(comparisonTable(/^Comparison by project/))
+        .getByTitle('cannot be computed: month A at €0 or below')).toHaveTextContent('—');
+    });
+
+    it('lists the projects of month B when month A has none (#55)', async () => {
+      // No project billed in July
+      const { user } = await renderDashboard({
+        ...account, byProject: { ...account.byProject, '2026-07': [] },
+      });
+      await openTab(user, 'Comparaison');
+
+      await pickMonth(user, 'Août 2026', 'Juillet 2026');
+
+      expect(projectRows()).toEqual([
+        ['Projet○', 'Juillet 2026▼', 'Septembre 2026○', 'Variation○'],
+        ['Production', '0,00€', '610,40€', '—'],
+        ['Staging', '0,00€', '220,00€', '—'],
+      ]);
+      expect(projectComparisons()).toEqual(['Production (Projet)', 'Staging (Projet)']);
+    });
+
+    it('pairs the projects of months A and B by their id (#55)', async () => {
+      // Staging, renamed in September, and two projects deleted since, which
+      // the server cannot name: they read "Unknown"
+      const deleted = (projectId, total) => ({
+        projectId, projectName: 'Unknown', total, detailsCount: 1,
+      });
+      const [production, staging] = account.byProject['2026-09'];
+      const { user } = await renderDashboard({
+        ...account,
+        byProject: {
+          ...account.byProject,
+          '2026-08': [...account.byProject['2026-08'], deleted('project-deleted-1', 40)],
+          '2026-09': [
+            production,
+            { ...staging, projectName: 'Recette' },
+            deleted('project-deleted-2', 15),
+          ],
+        },
+      });
+
+      await openTab(user, 'Comparaison');
+
+      // Staging keeps its name of month A; each deleted project is compared
+      // with itself, not with the other one
+      expect(projectRows()).toEqual([
+        ['Projet○', 'Août 2026▼', 'Septembre 2026○', 'Variation○'],
+        ['Production', '512,00€', '610,40€', '+19.2%'],
+        ['Staging', '190,00€', '220,00€', '+15.8%'],
+        ['Unknown', '40,00€', '0,00€', '-100.0%'],
+        ['Unknown', '0,00€', '15,00€', '—'],
+      ]);
+    });
+
+    it('sorts the projects of months A and B together (#55)', async () => {
+      const { user } = await renderDashboard({ ...account, ...threeBilledProjects });
+      await openTab(user, 'Comparaison');
+      await pickMonth(user, 'Août 2026', 'Juillet 2026');
+      // Staging and Sandbox were first billed in August, after month A
+      expect(projectRows()).toEqual([
+        ['Projet○', 'Juillet 2026▼', 'Septembre 2026○', 'Variation○'],
+        ['Production', '680,00€', '460,40€', '-32.3%'],
+        ['Staging', '0,00€', '250,00€', '—'],
+        ['Sandbox', '0,00€', '120,00€', '—'],
+      ]);
+
+      await sortTable(user, projectTable(), /^Septembre 2026/);
+      await sortTable(user, projectTable(), /^Septembre 2026/);
+
+      expect(header()).toEqual(['Projet○', 'Juillet 2026○', 'Septembre 2026▲', 'Variation○']);
+      expect(projects()).toEqual(['Sandbox', 'Staging', 'Production']);
+
+      await sortTable(user, projectTable(), /^Variation/);
+
+      // A variation that cannot be computed comes below any other
+      expect(header()).toEqual(['Projet○', 'Juillet 2026○', 'Septembre 2026○', 'Variation▼']);
+      expect(projects()).toEqual(['Production', 'Staging', 'Sandbox']);
+
+      await sortTable(user, projectTable(), /^Projet/);
+      await sortTable(user, projectTable(), /^Projet/);
+
+      expect(header()).toEqual(['Projet▲', 'Juillet 2026○', 'Septembre 2026○', 'Variation○']);
+      expect(projects()).toEqual(['Production', 'Sandbox', 'Staging']);
+      expect(projectComparisons())
+        .toEqual(['Production (Projet)', 'Sandbox (Projet)', 'Staging (Projet)']);
     });
 
     it('compares a project billed in month A only with nothing', async () => {
@@ -262,8 +372,10 @@ describe('Compare tab', () => {
     });
   });
 
+  // The costs of each resource type are those of the costs by resource type
+  // of months A and B, and the backups those of their Veeam backups (#32)
   describe('infrastructure, backup and Private Cloud comparisons', () => {
-    it('show nothing billed, whatever months A and B cost (#32)', async () => {
+    it('compare the costs of each resource type in months A and B (#32)', async () => {
       const { user } = await renderDashboard();
       await openTab(user, 'Comparaison');
       // Closed from the start
@@ -275,41 +387,101 @@ describe('Compare tab', () => {
       await openComparison(user, BACKUP);
       await openComparison(user, PRIVATE_CLOUD);
 
-      // August and September were each billed 270 € of dedicated servers, and
-      // 40 € then 90 € of backups (see the costs by resource type of the
-      // account). The rows look them up by a key, and count them, in the
-      // service type breakdown, whose answer has neither: all read 0 (#32).
-      expect(rowsOf(comparisonTable(INFRASTRUCTURE))).toEqual([
+      // August and September were each billed 270 € of dedicated servers,
+      // and 30 € then 35 € of domains: nothing else these rows list (#32).
+      // A variation from 0 € cannot be computed (#65).
+      expect(rowTextsOf(comparisonTable(INFRASTRUCTURE))).toEqual([
         ['Type', 'Août 2026', 'Septembre 2026', 'Variation'],
-        ['Liste des Serveurs dédiés présents au 15/09/2026', '0,00€', '0,00€', ''],
-        ['VPS', '0,00€', '0,00€', ''],
-        ['Stockage', '0,00€', '0,00€', ''],
-        ['Load Balancer', '0,00€', '0,00€', ''],
-        ['Adresses IP', '0,00€', '0,00€', ''],
-        ['Noms de domaine', '0,00€', '0,00€', ''],
-        ['Hôtes Private Cloud', '0,00€', '0,00€', ''],
-        ['Datastores Private Cloud', '0,00€', '0,00€', ''],
+        // With the servers of the inventory, though the Infrastructure tab
+        // never opened (#35)
+        [
+          'Liste des Serveurs dédiés présents au 15/09/2026',
+          'backup-server', 'ns3000002.ip-198-51-100.eu', '270,00€', '270,00€', '0.0%',
+        ],
+        ['VPS', '0,00€', '0,00€', '—'],
+        ['Stockage', '0,00€', '0,00€', '—'],
+        ['Load Balancer', '0,00€', '0,00€', '—'],
+        ['Adresses IP', '0,00€', '0,00€', '—'],
+        // (35 - 30) / 30
+        ['Noms de domaine', '30,00€', '35,00€', '+16.7%'],
+        ['Hôtes Private Cloud', '0,00€', '0,00€', '—'],
+        ['Datastores Private Cloud', '0,00€', '0,00€', '—'],
       ]);
+      // 2 Veeam VMs backed up for 40 € in August, 3 for 90 € in September,
+      // and an Enterprise licence of 25 € in September only (#32)
       expect(rowsOf(comparisonTable(BACKUP))).toEqual([
         ['Catégorie', 'Août 2026', 'Septembre 2026', 'Variation'],
-        ['VMs Veeam Backup', '0 / 0,00€', '0 / 0,00€', ''],
-        ['Licence Veeam Enterprise', '0 / 0,00€', '0 / 0,00€', ''],
+        ['VMs Veeam Backup', '2 / 40,00€', '3 / 90,00€', '+125.0%'],
+        ['Licence Veeam Enterprise', '0 / 0,00€', '1 / 25,00€', '—'],
       ]);
       expect(rowsOf(comparisonTable(PRIVATE_CLOUD))).toEqual([
         ['Type', 'Août 2026', 'Septembre 2026', 'Variation'],
-        ['Hôtes Private Cloud', '0,00€', '0,00€', ''],
-        ['Datastores Private Cloud', '0,00€', '0,00€', ''],
+        ['Hôtes Private Cloud', '0,00€', '0,00€', '—'],
+        ['Datastores Private Cloud', '0,00€', '0,00€', '—'],
       ]);
     });
 
-    it('list dedicated servers only once the Infrastructure tab was opened (#35)', async () => {
+    it('follow the months the user picks, for every resource type (#32)', async () => {
+      const { user } = await renderDashboard({ ...account, ...everyResourceType });
+      await openTab(user, 'Comparaison');
+      await pickMonth(user, 'Septembre 2026', 'Juillet 2026');
+      await pickMonth(user, 'Août 2026', 'Septembre 2026');
+
+      await openComparison(user, INFRASTRUCTURE);
+      await openComparison(user, BACKUP);
+      await openComparison(user, PRIVATE_CLOUD);
+
+      // Month A, September, was billed for every resource type these rows
+      // list; month B, July, for dedicated servers and domains only, and
+      // backed nothing up (#32)
+      expect(api.fetchByResourceType).toHaveBeenCalledWith('2026-07-01', '2026-07-31');
+      expect(api.fetchBackupStats).toHaveBeenCalledWith('2026-07-01', '2026-07-31');
+      expect(rowTextsOf(comparisonTable(INFRASTRUCTURE))).toEqual([
+        ['Type', 'Septembre 2026', 'Juillet 2026', 'Variation'],
+        // With the servers of the inventory (#35)
+        [
+          'Liste des Serveurs dédiés présents au 15/09/2026',
+          'backup-server', 'ns3000002.ip-198-51-100.eu', '270,00€', '270,00€', '0.0%',
+        ],
+        ['VPS', '11,99€', '0,00€', '-100.0%'],
+        ['Stockage', '64,80€', '0,00€', '-100.0%'],
+        ['Load Balancer', '18,00€', '0,00€', '-100.0%'],
+        ['Adresses IP', '6,00€', '0,00€', '-100.0%'],
+        // (30 - 35) / 35
+        ['Noms de domaine', '35,00€', '30,00€', '-14.3%'],
+        ['Hôtes Private Cloud', '1 450,00€', '0,00€', '-100.0%'],
+        ['Datastores Private Cloud', '380,00€', '0,00€', '-100.0%'],
+      ]);
+      expect(rowsOf(comparisonTable(BACKUP))).toEqual([
+        ['Catégorie', 'Septembre 2026', 'Juillet 2026', 'Variation'],
+        ['VMs Veeam Backup', '3 / 90,00€', '0 / 0,00€', '-100.0%'],
+        ['Licence Veeam Enterprise', '1 / 25,00€', '0 / 0,00€', '-100.0%'],
+      ]);
+      expect(rowsOf(comparisonTable(PRIVATE_CLOUD))).toEqual([
+        ['Type', 'Septembre 2026', 'Juillet 2026', 'Variation'],
+        ['Hôtes Private Cloud', '1 450,00€', '0,00€', '-100.0%'],
+        ['Datastores Private Cloud', '380,00€', '0,00€', '-100.0%'],
+      ]);
+    });
+
+    it('list the dedicated servers as soon as the tab opens (#35)', async () => {
       const { user } = await renderDashboard();
       await openTab(user, 'Comparaison');
+
       await openComparison(user, INFRASTRUCTURE);
-      expect(rowTextsOf(comparisonTable(INFRASTRUCTURE))[1])
-        .toEqual(['Liste des Serveurs dédiés présents au 15/09/2026', '0,00€', '0,00€']);
+
+      // The servers of the inventory, though the Infrastructure tab never
+      // opened (#35), and the costs of months A and B (#32)
+      const dedicatedServers = [
+        'Liste des Serveurs dédiés présents au 15/09/2026',
+        'backup-server', 'ns3000002.ip-198-51-100.eu',
+        '270,00€', '270,00€', '0.0%',
+      ];
+      expect(rowTextsOf(comparisonTable(INFRASTRUCTURE))[1]).toEqual(dedicatedServers);
 
       await openTab(user, 'Infrastructure');
+      expect(screen.getByRole('heading', { name: /^Serveurs dédiés \(2\)/ }))
+        .toBeInTheDocument();
       await openTab(user, 'Comparaison');
 
       // Closed again, as every comparison but the projects' when the tab opens
@@ -317,12 +489,10 @@ describe('Compare tab', () => {
 
       await openComparison(user, INFRASTRUCTURE);
 
-      // The servers the Infrastructure tab loaded, the costs still 0 (#32)
-      expect(rowTextsOf(comparisonTable(INFRASTRUCTURE))[1]).toEqual([
-        'Liste des Serveurs dédiés présents au 15/09/2026',
-        'backup-server', 'ns3000002.ip-198-51-100.eu',
-        '0,00€', '0,00€',
-      ]);
+      // The same servers: the Infrastructure tab showed them without requesting
+      // them again, one query whichever tab loads it (#35)
+      expect(rowTextsOf(comparisonTable(INFRASTRUCTURE))[1]).toEqual(dedicatedServers);
+      expect(api.fetchInventoryServers).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -347,15 +517,17 @@ describe('Compare tab', () => {
       expect(api.fetchProjectConsumption)
         .toHaveBeenCalledWith('project-production', '2026-09-01', '2026-09-30');
       // The import keeps the consumption of the current month only (#54):
-      // nothing in August, so no variation
+      // nothing in August, so no variation to compute (#65)
       expect(rowsOf(comparisonTable(PRODUCTION_CONSUMPTION))).toEqual([
         ['Produit/Type', 'Août 2026', 'Septembre 2026', 'Variation'],
-        ['instance', '0,00€', '234,25€', ''],
-        ['instance_monthly', '0,00€', '64,00€', ''],
-        ['volume', '0,00€', '7,50€', ''],
-        ['snapshot', '0,00€', '3,25€', ''],
-        ['objectStorage', '0,00€', '41,00€', ''],
+        ['instance', '0,00€', '234,25€', '—'],
+        ['instance_monthly', '0,00€', '64,00€', '—'],
+        ['volume', '0,00€', '7,50€', '—'],
+        ['snapshot', '0,00€', '3,25€', '—'],
+        ['objectStorage', '0,00€', '41,00€', '—'],
       ]);
+      expect(within(comparisonTable(PRODUCTION_CONSUMPTION))
+        .getAllByTitle('non calculable : mois A à 0 € ou moins')).toHaveLength(5);
     });
 
     it('show a variation of -100% from the current month to any past one (#54)', async () => {
@@ -394,6 +566,83 @@ describe('Compare tab', () => {
     });
   });
 
+  // #65's rule for every variation of the tab: none from 0 € or less in month A, where it
+  // would be infinite, or of the wrong sign when credits exceed the costs
+  describe('variations from month A at 0 € or less (#65)', () => {
+    it.each([
+      ['at 0 €', 0, '0,00€'],
+      ['whose credits exceed its costs', -120.5, '-120,50€'],
+    ])('are not computed for the totals of a month A %s', async (_, total, shown) => {
+      const { user } = await renderDashboard({
+        ...account,
+        summary: { ...account.summary, '2026-07': { ...account.summary['2026-07'], total } },
+      });
+      await openTab(user, 'Comparaison');
+
+      await pickMonth(user, 'Août 2026', 'Juillet 2026');
+
+      expect(texts(comparedTotals())).toEqual([
+        'Mois A :', 'Juillet 2026', 'VS', 'Mois B :', 'Septembre 2026',
+        shown, 'Juillet 2026', '—', '1 250,40€', 'Septembre 2026',
+      ]);
+      expect(within(comparedTotals()).getByTitle('non calculable : mois A à 0 € ou moins'))
+        .toHaveTextContent('—');
+    });
+
+    it('are not computed from credits in month A, in any comparison', async () => {
+      // July with credit notes larger than the costs of Production, -15 €, and of the
+      // domains, -30 €
+      const production = account.byProject['2026-07'][0];
+      const { user } = await renderDashboard({
+        ...account,
+        byProject: { ...account.byProject, '2026-07': [{ ...production, total: -15 }] },
+        byResourceType: {
+          ...account.byResourceType,
+          '2026-07': account.byResourceType['2026-07'].map((type) => (
+            type.resource_type === 'domain' ? { ...type, value: -30 } : type
+          )),
+        },
+      });
+      await openTab(user, 'Comparaison');
+
+      await pickMonth(user, 'Août 2026', 'Juillet 2026');
+      await openComparison(user, INFRASTRUCTURE);
+      await openComparison(user, BACKUP);
+      await openComparison(user, PRIVATE_CLOUD);
+
+      // Neither -4169.3 % for Production nor -216.7 % for the domains
+      expect(rowsOf(comparisonTable(PROJECTS))).toEqual([
+        ['Projet○', 'Juillet 2026▼', 'Septembre 2026○', 'Variation○'],
+        ['Staging', '0,00€', '220,00€', '—'],
+        ['Production', '-15,00€', '610,40€', '—'],
+      ]);
+      expect(rowTextsOf(comparisonTable(INFRASTRUCTURE)).slice(1).map((row) => row.slice(-3)))
+        .toEqual([
+          // The dedicated servers, 270 € both months
+          ['270,00€', '270,00€', '0.0%'],
+          ['0,00€', '0,00€', '—'],
+          ['0,00€', '0,00€', '—'],
+          ['0,00€', '0,00€', '—'],
+          ['0,00€', '0,00€', '—'],
+          // The domains
+          ['-30,00€', '35,00€', '—'],
+          ['0,00€', '0,00€', '—'],
+          ['0,00€', '0,00€', '—'],
+        ]);
+      // Nothing backed up in July
+      expect(rowsOf(comparisonTable(BACKUP))).toEqual([
+        ['Catégorie', 'Juillet 2026', 'Septembre 2026', 'Variation'],
+        ['VMs Veeam Backup', '0 / 0,00€', '3 / 90,00€', '—'],
+        ['Licence Veeam Enterprise', '0 / 0,00€', '1 / 25,00€', '—'],
+      ]);
+      expect(rowsOf(comparisonTable(PRIVATE_CLOUD))).toEqual([
+        ['Type', 'Juillet 2026', 'Septembre 2026', 'Variation'],
+        ['Hôtes Private Cloud', '0,00€', '0,00€', '—'],
+        ['Datastores Private Cloud', '0,00€', '0,00€', '—'],
+      ]);
+    });
+  });
+
   it('speaks English when the page does', async () => {
     const { user } = await renderDashboard();
     await selectLanguage(user, 'en');
@@ -417,22 +666,30 @@ describe('Compare tab', () => {
     await openComparison(user, /^Private Cloud Comparison/);
     await openComparison(user, /^Production \(Project\)/);
 
-    expect(rowsOf(comparisonTable(/^Infrastructure Comparison/)).map(([type]) => type)).toEqual([
+    // The label of each row, its first text: the row of the dedicated servers
+    // lists them after it (#35)
+    const infrastructureTypes = rowTextsOf(comparisonTable(/^Infrastructure Comparison/))
+      .map(([type]) => type);
+    expect(infrastructureTypes).toEqual([
       'Type',
       'List of Dedicated Servers present on 15/09/2026',
       'VPS', 'Storage', 'Load Balancer', 'IP Addresses', 'Domains',
       'Private Cloud Hosts', 'Private Cloud Datastores',
     ]);
+    // The Veeam backups of months A and B (#32), none to compute a variation
+    // from (#65)
     expect(rowsOf(comparisonTable(/^Backup Comparison/))).toEqual([
       ['Category', 'Août 2026', 'Septembre 2026', 'Variation'],
-      ['Veeam Backup VMs', '0 / 0.00€', '0 / 0.00€', ''],
-      ['Veeam Enterprise License', '0 / 0.00€', '0 / 0.00€', ''],
+      ['Veeam Backup VMs', '2 / 40.00€', '3 / 90.00€', '+125.0%'],
+      ['Veeam Enterprise License', '0 / 0.00€', '1 / 25.00€', '—'],
     ]);
+    expect(within(comparisonTable(/^Backup Comparison/))
+      .getByTitle('cannot be computed: month A at €0 or below')).toHaveTextContent('—');
     expect(rowsOf(comparisonTable(/^Private Cloud Comparison/)).map(([type]) => type))
       .toEqual(['Type', 'Private Cloud Hosts', 'Private Cloud Datastores']);
     expect(rowsOf(comparisonTable(/^Production \(Project\)/)).slice(0, 2)).toEqual([
       ['Product/Type', 'Août 2026', 'Septembre 2026', 'Variation'],
-      ['instance', '0.00€', '234.25€', ''],
+      ['instance', '0.00€', '234.25€', '—'],
     ]);
   });
 });

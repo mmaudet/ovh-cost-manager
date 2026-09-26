@@ -1,8 +1,9 @@
 // The Infrastructure tab's state and data queries, in a hook that the dashboard shell calls
 // on every render: see docs/adr/0001-tab-state-lives-in-the-dashboard-shell.md
 //
-// The Compare tab lists the dedicated servers this hook returns as well, but they only
-// load on the Infrastructure tab: Compare shows none until that tab has been opened (#35).
+// The Compare tab lists the dedicated servers this hook returns as well: they load on that
+// tab too, under the same key, so that it lists them before the Infrastructure tab opens
+// (#35).
 
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
@@ -17,7 +18,7 @@ const useInfrastructureTab = ({ selectedMonth, activeTab, selectedResourceType }
   const { data: inventoryServers = [] } = useQuery({
     queryKey: ['inventoryServers'],
     queryFn: fetchInventoryServers,
-    enabled: activeTab === 'infrastructure'
+    enabled: activeTab === 'infrastructure' || activeTab === 'compare',
   });
 
   const { data: inventoryVps = [] } = useQuery({

@@ -18,8 +18,8 @@ const TABS = [
   { id: 'backup', label: { fr: 'Backup', en: 'Backup' } },
 ];
 // The tabs in the order they are visited, each visit naming its sections.
-// - Compare comes a second time after Infrastructure: it only lists the dedicated servers
-//   once that tab has loaded their inventory (#35).
+// - Compare comes a second time, after Infrastructure, which loads the dedicated servers it
+//   lists too: a base older than #35 only lists them then, a newer one on both visits.
 // - The overview comes last. When the page opens, or changes month, the loading screen only
 //   waits for the summary, so the bar chart mounts before its projects arrive, and a chart
 //   axis that mounts without labels measures them at the wrong font size for good. Coming
