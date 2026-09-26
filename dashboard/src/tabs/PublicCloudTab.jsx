@@ -10,7 +10,7 @@ import {
   InstancesTable, instanceCsvColumns, instanceCsvRows
 } from '../components/InstancesTable.jsx';
 import { downloadCSV } from '../utils/csv.js';
-import { fmtBytes } from '../utils/byteSize.js';
+import { fmtBytes } from '../utils/format.js';
 
 // The Public Cloud tab, which the shell renders while it is active: what usePublicCloudTab()
 // returns, with the shell's language, translations (t), amount format (fmt) and locale, the

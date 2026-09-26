@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { fmtBytes } from '../../src/utils/byteSize.js';
+import { fmtBytes } from '../../src/utils/format.js';
 
 // The size of a bucket, as the Public Cloud tab shows it. The same in every language: it
 // takes none, and writes a decimal point in French too.
