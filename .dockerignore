@@ -50,6 +50,8 @@ docker-compose*.yml
 demo
 scripts/release.sh
 tests
+dashboard/test
+dashboard/vitest.config.js
 CLAUDE.md
 CONTRIBUTING.md
 credentials.json

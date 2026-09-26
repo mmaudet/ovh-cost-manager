@@ -31,11 +31,14 @@
     "dev": "concurrently \"npm run dev:server\" \"npm run dev:dashboard\"",
     "build": "npm run build --workspace=dashboard",
     "start": "npm run dev:server",
-    "lint": "eslint dashboard/src server data cli tests",
+    "lint": "eslint dashboard/src dashboard/test server data cli tests",
     "release": "bash scripts/release.sh",
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage"
+  },
+  "jest": {
+    "roots": ["<rootDir>/tests"]
   },
   "devDependencies": {
     "concurrently": "^8.2.2",

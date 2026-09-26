@@ -111,9 +111,31 @@ publishes the Docker image, then creates the GitHub release from the
 4. Check your changes, as the CI does on each pull request:
    ```bash
    npm run lint
-   npm test
+   npm test                          # Node tests (Jest), in tests/
+   npm test --workspace=dashboard    # dashboard tests (Vitest), in dashboard/test/
    npm run build
    ```
+
+### Dashboard tests
+
+The dashboard tests render the whole page in jsdom, without a browser, with
+[Vitest](https://vitest.dev/) and [Testing Library](https://testing-library.com/):
+
+```bash
+npm test --workspace=dashboard                               # all of them
+npm test --workspace=dashboard -- test/web-cloud.test.jsx    # one file
+npm test --workspace=dashboard -- -t "closes with Escape"    # by name
+```
+
+- They act like a user (open a tab, change the month, open a "show all"
+  modal, export a CSV) and check what the user sees: text, amounts, table
+  rows, file contents. No DOM snapshots, and nothing inside the charts.
+- Only the API service module (`dashboard/src/services/api.js`) is replaced,
+  once for every test file, in `dashboard/test/setup.js`. Its stand-in answers
+  from the small, synthetic fixtures of `dashboard/test/fixtures/`. Never put
+  real billing data there.
+- "Today" is frozen on 15 September 2026 and the timezone on Europe/Paris, so
+  that dates read the same on every machine.
 
 ## Style Guide
 

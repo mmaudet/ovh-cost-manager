@@ -82,19 +82,29 @@ datasets, off by default: `--include-consumption`, `--include-account`,
 
 ### Tests
 
-Jest, no config file (defaults). Tests live in `tests/` and exercise the pure logic layer
-(classification, validation, CSV export, inventory, consumption) — not the HTTP server.
+Two suites:
+
+- **Node tests**: Jest, limited to `tests/` (`jest.roots` in the root `package.json`).
+  They exercise the pure logic layer (classification, validation, CSV export, inventory,
+  consumption), not the HTTP server.
+- **Dashboard tests**: Vitest and Testing Library in jsdom, in `dashboard/test/`. They
+  render the whole dashboard page with the API service module replaced by synthetic
+  fixtures, act like a user and check what is visible. They pin down the page's behaviour
+  while it is split into modules (#36): change them only when the behaviour is meant to
+  change. "Today" is frozen on 15 September 2026, in Europe/Paris time.
 
 ```bash
 npm test
 npm test -- tests/classification.test.js          # single file
 npm test -- -t "classifies instance types"        # single test by name
 npm run test:coverage
+npm test --workspace=dashboard                    # dashboard tests
+npm test --workspace=dashboard -- test/web-cloud.test.jsx
 npm run lint                                      # ESLint, no-undef only (eslint.config.mjs)
 ```
 
-CI (`.github/workflows/ci.yml`) runs lint, tests and the dashboard build on every pull
-request and push to main.
+CI (`.github/workflows/ci.yml`) runs lint, both test suites and the dashboard build on
+every pull request and push to main.
 
 ## Releases and changelog
 
