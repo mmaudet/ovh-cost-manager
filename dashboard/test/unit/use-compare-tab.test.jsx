@@ -5,7 +5,7 @@ import { fetchSummary } from '../../src/services/api.js';
 import { useCompareTab } from '../../src/tabs/useCompareTab.js';
 import { months } from '../fixtures/calendar.js';
 import { api } from '../support/api.js';
-import { renderTabHook, TAB_IDS } from '../support/hooks.jsx';
+import { renderTabHook, TAB_IDS, WAITING } from '../support/hooks.jsx';
 import { settle } from '../support/query-client.js';
 
 // The state and data queries of the Compare tab, as the dashboard shell sees them: what the
@@ -109,12 +109,10 @@ describe('useCompareTab', () => {
     expect(api.fetchByService).not.toHaveBeenCalled();
     expect(api.fetchByProject).not.toHaveBeenCalled();
     // The queries wait for months A and B, rather than failing for the lack of them
-    const waiting = { status: 'pending', fetchStatus: 'idle', error: null };
-    expect(queryClient.getQueryState(['summary', undefined, undefined])).toMatchObject(waiting);
-    expect(queryClient.getQueryState(['byService', undefined, undefined]))
-      .toMatchObject(waiting);
-    expect(queryClient.getQueryState(['byProject', undefined, undefined]))
-      .toMatchObject(waiting);
+    for (const name of ['summary', 'byService', 'byProject']) {
+      expect(queryClient.getQueryState([name, undefined, undefined]), name)
+        .toMatchObject(WAITING);
+    }
   });
 
   it('requests months A and B once the tab opens', async () => {
