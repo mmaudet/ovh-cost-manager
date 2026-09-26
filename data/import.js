@@ -212,8 +212,11 @@ async function fetchBills(fromDate, toDate) {
 
 // Fetch bill details
 async function fetchBillDetails(billId) {
-  const bill = await ovh.requestPromised('GET', `/me/bill/${billId}`);
-  const detailIds = await ovh.requestPromised('GET', `/me/bill/${billId}/details`);
+  // Retried as the calls of the other items are
+  const bill = await withRetry(() => ovh.requestPromised('GET', `/me/bill/${billId}`));
+  const detailIds = await withRetry(
+    () => ovh.requestPromised('GET', `/me/bill/${billId}/details`),
+  );
 
   // Fetch details in parallel batches
   const detailResults = await runInBatches(detailIds, async (detailId) => {
@@ -1202,7 +1205,9 @@ async function runImport(params) {
 
         console.log(` ${details.length} details`);
       } catch (err) {
-        console.log(` ERROR: ${err.message}`);
+        // The bill is skipped, as a failed item is
+        failedItems += 1;
+        console.log(` ERROR: ${describeError(err)}`);
       }
     }
 

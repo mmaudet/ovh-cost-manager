@@ -155,6 +155,36 @@ describe('an item that the import fails to fetch', () => {
   });
 });
 
+describe('a bill that the import fails to fetch', () => {
+  test('is skipped, logged with the reason, and counted in the summary', async () => {
+    mockRoutes.set('/me/bill/FR1',
+      fail(404, 'The requested object (billId = FR1) does not exist'));
+
+    await importSeptember();
+
+    expect(db.bills.exists('FR1')).toBe(false);
+    expect(console.log)
+      .toHaveBeenCalledWith(' ERROR: 404 The requested object (billId = FR1) does not exist');
+    expect(summary()).toEqual([
+      '\n=== IMPORT COMPLETE ===', 'Projects: 0', 'Bills: 0', 'Details: 0', 'Failed items: 1',
+    ]);
+  });
+
+  // As the calls of the other items are
+  test.each(['/me/bill/FR1', '/me/bill/FR1/details'])(
+    'is fetched again when %s answers a server error', async (route) => {
+      const answer = mockRoutes.get(route);
+      let calls = 0;
+      mockRoutes.set(route, () => (++calls === 1 ? fail(503, 'Service unavailable')() : answer()));
+
+      await importSeptember();
+
+      expect(summary()).toEqual([
+        '\n=== IMPORT COMPLETE ===', 'Projects: 0', 'Bills: 1', 'Details: 2', 'Failed items: 0',
+      ]);
+    });
+});
+
 describe('a call that the import retries', () => {
   // A rate limit waits twice as long as a server error
   test.each([
