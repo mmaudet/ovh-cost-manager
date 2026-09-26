@@ -5,16 +5,12 @@ import { account } from '../fixtures/account.js';
 import { months } from '../fixtures/calendar.js';
 import { sinceJuly2025 } from '../fixtures/trends.js';
 import { api } from '../support/api.js';
-import { renderTabHook } from '../support/hooks.jsx';
+import { renderTabHook, TAB_IDS } from '../support/hooks.jsx';
 import { settle } from '../support/query-client.js';
 
 // The state and data queries of the Trends tab, as the dashboard shell sees them: what the
 // hook requests and returns for the months list and the active tab. "Today" is 15 September
 // 2026 (see setup.js).
-
-const tabs = [
-  'overview', 'compare', 'trends', 'inventory', 'webcloud', 'infrastructure', 'backup',
-];
 
 // The account first billed in July 2025: 15 months of history
 const fifteenMonths = sinceJuly2025.months;
@@ -27,7 +23,7 @@ const costs = (trend) => trend.map(({ yearMonth, cost }) => [yearMonth, cost]);
 
 describe('useTrendsTab', () => {
   // The months list has not loaded yet when the page starts
-  it.each(tabs)('requests the trends over 6 months at page start on the %s tab',
+  it.each(TAB_IDS)('requests the trends over 6 months at page start on the %s tab',
     async (activeTab) => {
       const { result } = await renderTabHook(useTrendsTab, { months: [], activeTab });
 
@@ -40,7 +36,7 @@ describe('useTrendsTab', () => {
         .toEqual(['Public Cloud', 'Dedicated Servers', 'Backup', 'Domains', 'Licenses']);
     });
 
-  it.each(tabs.filter((tab) => tab !== 'trends'))(
+  it.each(TAB_IDS.filter((tab) => tab !== 'trends'))(
     'leaves the GPU trend out while the %s tab is active',
     async (activeTab) => {
       const { result } = await renderTabHook(useTrendsTab, { months, activeTab });
@@ -66,13 +62,9 @@ describe('useTrendsTab', () => {
     ]);
   });
 
-  // The cache is the page's: each period keeps its own answers there, and the end of an
-  // import invalidates them by the name of their query
   it('caches each answer under the name of its query and its period', async () => {
-    const { result, queryClient } = await renderTabHook(useTrendsTab,
+    const { result, queryClient, keysOf } = await renderTabHook(useTrendsTab,
       { months: fifteenMonths, activeTab: 'trends' }, billedSinceJuly2025);
-    const keysOf = (name) => queryClient.getQueriesData({ queryKey: [name] })
-      .map(([queryKey]) => queryKey);
 
     act(() => result.current.setTrendPeriod(24));
     await settle(queryClient);
