@@ -36,6 +36,7 @@ describe('dashboard shell', () => {
     it('stays on the loading screen when no month was billed', async () => {
       await renderDashboard({ ...account, months: [] });
 
+      // Forever: the page needs a month to show anything (#51)
       expect(screen.getByText('Chargement des données...')).toBeInTheDocument();
     });
 
@@ -89,7 +90,7 @@ describe('dashboard shell', () => {
     it("show the month's cost, Cloud total, daily average and active projects", async () => {
       await renderDashboard();
 
-      // The latest month is compared with itself, see below
+      // The latest month is compared with itself (#50, see below)
       expect(texts(cardOf('Coût total du mois')))
         .toEqual(['Coût total du mois', '1 250,40€', '0.0% vs mois précédent']);
       expect(texts(cardOf('Cloud Total'))).toEqual(['Cloud Total', '830,40€', 'Public Cloud']);
@@ -120,7 +121,7 @@ describe('dashboard shell', () => {
   });
 
   // The variation reads the summary of the Compare tab's month B, which is
-  // the latest month until the user picks another one there.
+  // the latest month until the user picks another one there (#50).
   describe('"vs previous month" variation', () => {
     it('compares the selected month with the latest one, not with the month before', async () => {
       const { user } = await renderDashboard();
@@ -458,6 +459,7 @@ describe('dashboard shell', () => {
 
       expect(screen.getByText('OVHcloud cost tracking dashboard')).toBeInTheDocument();
       expect(screen.getByRole('button', { name: /Resync/ })).toBeInTheDocument();
+      // The latest month, compared with itself (#50)
       expect(texts(cardOf('Total monthly cost')))
         .toEqual(['Total monthly cost', '1,250.40€', '0.0% vs previous month']);
       expect(texts(cardOf('Daily average cost')))
