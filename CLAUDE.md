@@ -36,7 +36,9 @@ OVH API ──> data/import.js ──> SQLite (ovh-bills.db) ──> server/inde
   sessions; it is bypassed entirely when auth is not enabled.
 - **`dashboard/`** — Vite + React SPA (Recharts, TanStack Query, Tailwind, axios). In dev,
   Vite proxies `/api` to `:3001` (see `dashboard/vite.config.js`). i18n is FR/EN
-  (`src/i18n/translations.js`).
+  (`src/i18n/translations.js`). The page, `src/pages/Dashboard.jsx`, is a shell: each tab
+  lives in `src/tabs/` as a `useXxxTab` hook plus an `XxxTab` component, per ADR 0001
+  (`docs/adr/`). Shared tables are in `src/components/`, pure helpers in `src/utils/`.
 
 ### Configuration resolution
 
