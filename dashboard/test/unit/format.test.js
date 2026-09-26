@@ -141,8 +141,18 @@ describe('fmtBytes', () => {
     expect(fmtBytes(1150000000, 'en')).toBe('1.2 GB');
   });
 
+  it('picks its decimals once rounded: none from 10 of a unit (#70)', () => {
+    expect(fmtBytes(9949, 'en')).toBe('9.9 KB');
+    expect(fmtBytes(9950, 'en')).toBe('10 KB');
+    expect(fmtBytes(9950, 'fr')).toBe('10 Ko');
+    expect(fmtBytes(9999, 'en')).toBe('10 KB');
+    // At every unit
+    expect(fmtBytes(9999999, 'en')).toBe('10 MB');
+    expect(fmtBytes(9999999999, 'en')).toBe('10 GB');
+    expect(fmtBytes(9999999999999, 'en')).toBe('10 TB');
+  });
+
   it('rounds in the unit it picks, below 1000 of it', () => {
-    expect(fmtBytes(9999, 'en')).toBe('10.0 KB');
     expect(fmtBytes(999499, 'en')).toBe('999 KB');
   });
 
