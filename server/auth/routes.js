@@ -5,6 +5,7 @@ const express = require('express');
 const { randomState, randomNonce } = require('openid-client');
 const oidcClient = require('./oidc-client');
 const sessionStore = require('./session-store');
+const { safeReturnTo } = require('./return-to');
 
 const router = express.Router();
 
@@ -32,10 +33,11 @@ function setup(config) {
     const state = randomState();
     const nonce = randomNonce();
 
-    // Store state for callback validation
+    // Store state for callback validation, and where to go back: a path of
+    // this site only, or the callback would redirect to any site
     pendingAuth.set(state, {
       nonce,
-      returnTo: req.query.returnTo || '/',
+      returnTo: safeReturnTo(req.query.returnTo),
       createdAt: Date.now()
     });
 
