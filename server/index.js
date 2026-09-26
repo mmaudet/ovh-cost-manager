@@ -12,6 +12,7 @@ const db = require('../data/db');
 
 // Import auth module
 const auth = require('./auth');
+const { isAllowedOrigin } = require('./cors');
 const { monthBounds } = require('./months');
 
 // Load configuration
@@ -97,32 +98,32 @@ const app = express();
 const PORT = process.env.PORT || 3001;
 const rateLimitConfig = getRateLimitConfig();
 
-// CORS configuration - restrict to allowed origins
-const corsOptions = {
-  origin: function (origin, callback) {
-    // Allow requests with no origin (same-origin, curl, mobile apps)
-    if (!origin) {
-      return callback(null, true);
-    }
-
+// CORS configuration - restrict to allowed origins and the request's own.
+// Per-request options, as the check reads the request's Host headers.
+function corsOptionsDelegate(req, callback) {
+  const origin = req.headers.origin;
+  const allowed = isAllowedOrigin({
+    origin,
+    host: req.headers.host,
+    forwardedHost: req.headers['x-forwarded-host'],
+    trustProxy: rateLimitConfig.trustProxy,
     // Check allowed origins from config or environment
-    const allowedOrigins = process.env.ALLOWED_ORIGINS
+    allowedOrigins: process.env.ALLOWED_ORIGINS
       ? process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim())
-      : config.allowedOrigins || [];
+      : config.allowedOrigins || [],
+    isDev: process.env.NODE_ENV !== 'production',
+  });
 
-    // In development, allow localhost origins
-    const isDev = process.env.NODE_ENV !== 'production';
-    const isLocalhost = origin.includes('localhost') || origin.includes('127.0.0.1');
-
-    if (allowedOrigins.includes(origin) || (isDev && isLocalhost)) {
-      callback(null, true);
-    } else {
-      console.warn(`CORS: Blocked request from origin: ${origin}`);
-      callback(new Error('Not allowed by CORS'));
-    }
-  },
-  credentials: true // Allow cookies for authentication
-};
+  if (allowed) {
+    callback(null, {
+      origin: true,
+      credentials: true, // Allow cookies for authentication
+    });
+  } else {
+    console.warn(`CORS: Blocked request from origin: ${origin}`);
+    callback(new Error('Not allowed by CORS'));
+  }
+}
 
 // Rate limiting - protect against DoS and brute-force attacks
 const apiLimiter = rateLimit({
@@ -212,7 +213,7 @@ if (rateLimitConfig.trustProxy) {
 }
 
 // Middleware
-app.use(cors(corsOptions));
+app.use(cors(corsOptionsDelegate));
 app.use(express.json());
 app.use(cookieParser());
 
