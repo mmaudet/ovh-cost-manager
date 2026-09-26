@@ -14,7 +14,25 @@ sections were written afterwards from the git history.
 
 ## 2.3.0 - 2026-09-26
 
-<!-- Upgrade notes and highlights of this release, if any. -->
+### Upgrade notes
+
+- **Docker volume.** The `ocm-data` volume moves from `/app/data` to `/data`
+  (`DATA_DIR=/data`). Mounted on `/app/data`, it had frozen a copy of the
+  data-layer code at the first start, so later images never updated that code.
+  With the compose files of this release, the existing database is picked up as
+  is: recreate the container. If you run the image with your own `docker run`
+  command or compose file, make the same change (see
+  [Volume Mounts](https://github.com/mmaudet/ovh-cost-manager/blob/v2.3.0/README.md#volume-mounts)).
+- **Docker image tags** now start with `v`: pull `v2.3.0`, `v2.3`, `v2` or
+  `latest`. The tags without `v` (`2`, `2.2`...) no longer move.
+- **Reclassify past bills.** Classification fixes only apply to bills imported
+  afterwards. Re-import the history once:
+  `docker exec ovh-cost-manager node /app/data/import.js --from 2025-01-01 --all`.
+- **New inventories.** Object Storage buckets, volumes, snapshots and Swift
+  containers appear after the next import with `--include-cloud-details` or
+  `--all`, which the Docker cron uses by default.
+- **Node 24.** The image now runs Node 24. Local development needs Node 22 or
+  later.
 
 ### New features
 * Trends: month i18n, cost-by-category chart, manual resync by @guillaume-gambs in https://github.com/mmaudet/ovh-cost-manager/pull/10
