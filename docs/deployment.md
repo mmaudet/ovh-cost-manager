@@ -77,7 +77,7 @@ Open http://localhost:3001
 | `IMPORT_ENABLED`            | Enable automatic periodic import     | `true`            |
 | `IMPORT_INTERVAL`           | Seconds between imports              | `86400` (24h)     |
 | `IMPORT_FLAGS`              | Extra flags for import script        | `--all`           |
-| `ALLOWED_ORIGINS`           | Comma-separated CORS allowed origins | (empty)           |
+| `ALLOWED_ORIGINS`           | Comma-separated CORS allowed origins, needed only for sites other than the dashboard: its own origin is always accepted, matched against `Host`, or against `X-Forwarded-Host` with `TRUST_PROXY=true` | (empty)           |
 ### Customization
 
 Create a `.env` file to override defaults:
