@@ -226,7 +226,7 @@ Add a `rateLimit` section to your [config.json](config.json):
 
 **Parameters**:
 - `enabled`: Enable/disable globally (default: `true`)
-- `trustProxy`: Trust `X-Forwarded-For` headers (default: `false`)
+- `trustProxy`: Trust `X-Forwarded-For` headers, and `X-Forwarded-Host` and `X-Forwarded-Proto` for the CORS check (default: `false`)
 - `api.windowMs`: Window duration in milliseconds (default: `900000` = 15 min)
 - `api.max`: Maximum API requests per IP per window (default: `100`)
 - `auth.windowMs`: Window duration for authentication endpoints (default: `900000`)
@@ -401,7 +401,7 @@ Access the dashboard at http://localhost:3001
 | `IMPORT_ENABLED`            | Enable automatic periodic import                                 | true            |
 | `IMPORT_INTERVAL`           | Seconds between imports                                          | 86400 (24h)     |
 | `IMPORT_FLAGS`              | Extra flags for import script                                    | --all           |
-| `TRUST_PROXY`               | Trust X-Forwarded-For headers (⚠️ required for K8s/reverse proxy) | false           |
+| `TRUST_PROXY`               | Trust X-Forwarded-For headers (⚠️ required for K8s/reverse proxy), and X-Forwarded-Host and X-Forwarded-Proto for the CORS check | false           |
 | `RATE_LIMIT_ENABLED`        | Enable rate limiting                                             | true            |
 | `RATE_LIMIT_API_MAX`        | Max API requests per IP per window                               | 100             |
 | `RATE_LIMIT_API_WINDOW_MS`  | API rate limit window in milliseconds                            | 900000 (15 min) |

@@ -68,7 +68,7 @@ Open http://localhost:3001
 | `OCM_PORT`                  | Host port mapping                    | `3001`            |
 | `AUTH_REQUIRED`             | Require authentication headers       | `false`           |
 | `NODE_ENV`                  | Node environment                     | `production`      |
-| `TRUST_PROXY`               | Trust X-Forwarded-For headers (required for K8s/reverse proxy) | `false` |
+| `TRUST_PROXY`               | Trust X-Forwarded-For headers (required for K8s/reverse proxy), and X-Forwarded-Host and X-Forwarded-Proto for the CORS check | `false` |
 | `RATE_LIMIT_ENABLED`        | Enable rate limiting                 | `true`            |
 | `RATE_LIMIT_API_MAX`        | Max API requests per IP per window   | `100`             |
 | `RATE_LIMIT_API_WINDOW_MS`  | API rate limit window in ms          | `900000` (15 min) |
