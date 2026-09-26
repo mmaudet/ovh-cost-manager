@@ -110,7 +110,8 @@ function setup(config) {
         maxAge: authConfig.session.maxAge,
       });
 
-      res.redirect(pending.returnTo);
+      // Checked again: the redirect follows the cookie, which /auth/login set
+      res.redirect(safeReturnTo(pending.returnTo));
     } catch (err) {
       // Refused by the provider, or its answer failed a check, as for a
       // replayed callback, a denied consent or another nonce: the user can

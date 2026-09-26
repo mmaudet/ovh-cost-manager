@@ -5,6 +5,7 @@
  * provider's key pair, as a real provider signs them.
  */
 
+const { encodeLoginState } = require('../server/auth/login-state');
 const { startFakeProvider } = require('./support/fake-provider');
 const { startOcm, createBrowser } = require('./support/ocm-server');
 
@@ -84,6 +85,24 @@ describe('sign-in', () => {
     const other = createBrowser(ocm.url);
     await startSignIn(other);
     expect((await other.fetch(callbackUrl)).status).toBe(400);
+  });
+
+  // The redirect follows the cookie: its returnTo is checked again, should a
+  // cookie be forged with the secret
+  test('goes back to / when the sign-in cookie holds another site', async () => {
+    provider.user = 'alice';
+    const browser = createBrowser(ocm.url);
+    const callbackUrl = await startSignIn(browser);
+    const [name, value] = [...browser.cookies].find(([cookie]) => cookie.startsWith('ocm.login.'));
+    const pending = JSON.parse(Buffer.from(value.split('.')[0], 'base64url').toString());
+    browser.cookies.set(name, encodeLoginState(
+      { ...pending, returnTo: 'https://evil.example/' },
+      SESSION_SECRET
+    ));
+
+    const callback = await browser.fetch(callbackUrl);
+    expect(callback.status).toBe(302);
+    expect(callback.headers.get('location')).toBe('/');
   });
 
   test('lets two sign-ins run in parallel in one browser, each with its cookie', async () => {
