@@ -1,8 +1,8 @@
 /**
  * The one way the server reads its settings, for authentication, rate
- * limiting, TRUST_PROXY and imports alike: a value that is not one the
- * setting takes stops the server, naming the setting, rather than turn a
- * protection off.
+ * limiting, TRUST_PROXY, imports and the allowed origins alike: a value that
+ * is not one the setting takes stops the server, naming the setting, rather
+ * than turn a protection off.
  */
 
 /**
@@ -65,6 +65,32 @@ function parsePositiveInteger(value, { name, fromFile = false }) {
 }
 
 /**
+ * Reads a list setting, such as the allowed origins: from the environment, a
+ * comma-separated text; from config.json, an array of strings, or such a
+ * text too. Each entry is trimmed, and blank ones left out. Anything else
+ * throws, naming the setting: a string of config.json used as the list was
+ * compared by substring, so that it allowed any part of an origin it held.
+ *
+ * @param {*} value - the variable's text, or the value in config.json
+ * @param {object} setting
+ * @param {string} setting.name - the setting, as the error names it
+ * @param {boolean} [setting.fromFile] - whether the value comes from config.json
+ * @returns {string[]|undefined} the entries, or undefined when unset, or empty
+ *   in the environment
+ */
+function parseList(value, { name, fromFile = false }) {
+  if (value === undefined || (!fromFile && value === '')) {
+    return undefined;
+  }
+  const entries = typeof value === 'string' ? value.split(',') : value;
+  if (!Array.isArray(entries) || !entries.every((entry) => typeof entry === 'string')) {
+    throw new Error(`${name} must be an array of strings or a comma-separated string, `
+      + `not ${JSON.stringify(value)}`);
+  }
+  return entries.map((entry) => entry.trim()).filter((entry) => entry !== '');
+}
+
+/**
  * Reads a section of config.json, such as auth or rateLimit under the file,
  * or session under auth: an object, or an empty one when absent. Anything
  * else throws, naming the section, rather than drop its settings: with
@@ -94,4 +120,4 @@ function readSection(parent, key, { name }) {
   throw new Error(`${name} must be an object, not ${shown}`);
 }
 
-module.exports = { parseBoolean, parsePositiveInteger, readSection };
+module.exports = { parseBoolean, parsePositiveInteger, parseList, readSection };

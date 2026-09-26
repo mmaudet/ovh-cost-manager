@@ -6,7 +6,7 @@
  * though they are same-origin (#76).
  */
 
-const { createOriginCheck } = require('../server/cors');
+const { createOriginCheck, readAllowedOrigins } = require('../server/cors');
 
 // Built as the server builds it at startup: in production, with no listed
 // origins, and without a trusted proxy unless the check's name says otherwise
@@ -183,5 +183,88 @@ describe('createOriginCheck', () => {
       expect(behindTrustedProxy('https://ocm.example.com', { host: 'ocm.example.com:443' }))
         .toBe(true);
     });
+  });
+
+  // A string compared as a list compares by substring
+  test('refuses a list of origins that is not an array', () => {
+    expect(() => createOriginCheck({ ...settings, allowedOrigins: 'https://ocm.example.com' }))
+      .toThrow(TypeError);
+  });
+});
+
+// ALLOWED_ORIGINS, or allowedOrigins in config.json, as the server reads them
+// at startup: an array, or a comma-separated string, as for the allowed hosts
+describe('readAllowedOrigins', () => {
+  const SOURCE = '/etc/ocm/config.json';
+
+  test('reads ALLOWED_ORIGINS, comma-separated', () => {
+    const env = { ALLOWED_ORIGINS: 'https://a.example, https://b.example:8443' };
+    expect(readAllowedOrigins({}, env)).toEqual(['https://a.example', 'https://b.example:8443']);
+  });
+
+  test.each([
+    ['an array', ['https://a.example', 'https://b.example']],
+    ['a comma-separated string', 'https://a.example, https://b.example'],
+  ])('reads allowedOrigins of config.json as %s', (label, allowedOrigins) => {
+    expect(readAllowedOrigins({ allowedOrigins }, {}))
+      .toEqual(['https://a.example', 'https://b.example']);
+  });
+
+  test('lists no origin when neither is set', () => {
+    expect(readAllowedOrigins({}, {})).toEqual([]);
+  });
+
+  test('lets ALLOWED_ORIGINS override config.json, unless it is empty', () => {
+    const file = { allowedOrigins: ['https://a.example'] };
+    expect(readAllowedOrigins(file, { ALLOWED_ORIGINS: 'https://b.example' }))
+      .toEqual(['https://b.example']);
+    expect(readAllowedOrigins(file, { ALLOWED_ORIGINS: '' })).toEqual(['https://a.example']);
+  });
+
+  test.each([
+    ['true', true],
+    ['null', null],
+    ['{"origin":"https://a.example"}', { origin: 'https://a.example' }],
+  ])('refuses allowedOrigins: %s, naming the file', (shown, allowedOrigins) => {
+    expect(() => readAllowedOrigins({ allowedOrigins }, {}, SOURCE)).toThrow(
+      `allowedOrigins in ${SOURCE} must be an array of strings or a comma-separated string, `
+        + `not ${shown}`
+    );
+  });
+
+  test('refuses a wrong allowedOrigins that ALLOWED_ORIGINS overrides', () => {
+    const env = { ALLOWED_ORIGINS: 'https://b.example' };
+    expect(() => readAllowedOrigins({ allowedOrigins: 42 }, env, SOURCE))
+      .toThrow(`allowedOrigins in ${SOURCE}`);
+  });
+});
+
+// The check built as the server builds it at startup, from an allowedOrigins
+// string of config.json. It used the string as the list, and includes compared
+// the Origin as a substring of it
+describe('the origin check, from an allowedOrigins string of config.json', () => {
+  const check = createOriginCheck({
+    ...settings,
+    allowedOrigins: readAllowedOrigins({
+      allowedOrigins: 'https://ocm.example.com,https://reports.example.com',
+    }, {}),
+  });
+  const elsewhere = { host: 'dashboard.example.org' };
+
+  test.each(['https://ocm.example.com', 'https://reports.example.com'])(
+    'allows %s, which it lists',
+    (origin) => {
+      expect(check(origin, elsewhere)).toBe(true);
+    }
+  );
+
+  test.each([
+    'https://ocm.example',
+    'https://ocm.example.co',
+    'https://ocm.example.com.evil.example',
+    'https://reports.example.co',
+    'https://ocm',
+  ])('rejects %s, a part or an extension of a listed origin', (origin) => {
+    expect(check(origin, elsewhere)).toBe(false);
   });
 });

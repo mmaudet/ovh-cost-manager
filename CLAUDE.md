@@ -62,7 +62,8 @@ and `server/index.js` (each loads config on its own, there is no shared config m
   authentication, rate limiting, `TRUST_PROXY` and `IMPORT_ENABLED` take `true` or
   `false`, in any case in the environment, JSON booleans in `config.json`, and `auto` for
   the cookie's `Secure` flag; the rate limits and `auth.session.maxAge`, positive
-  integers; the `auth` and `rateLimit` sections, and those under them, objects. Anything
+  integers; the `auth` and `rateLimit` sections, and those under them, objects; the
+  lists, such as `allowedOrigins`, arrays of strings or comma-separated strings. Anything
   else stops the server, naming the setting. The rate limiting settings are resolved in
   `server/rate-limit-config.js`.
 

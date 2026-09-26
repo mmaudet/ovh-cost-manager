@@ -5,7 +5,7 @@
  * limiting settings; here, the numbers and the sections of config.json.
  */
 
-const { parsePositiveInteger, readSection } = require('../server/settings');
+const { parsePositiveInteger, parseList, readSection } = require('../server/settings');
 
 const SOURCE = '/etc/ocm/config.json';
 
@@ -58,6 +58,63 @@ describe('parsePositiveInteger, from config.json', () => {
   ])('refuses %s', (shown, value) => {
     expect(() => read(value))
       .toThrow(`${name} must be a positive integer (a JSON number), not ${shown}`);
+  });
+});
+
+// A list, such as the allowed origins: a string of config.json, compared as it
+// was, let through any origin it contains
+describe('parseList, from the environment', () => {
+  const read = (value) => parseList(value, { name: 'ALLOWED_ORIGINS' });
+
+  test('splits the text on commas, and trims each entry', () => {
+    expect(read(' https://a.example , https://b.example:8443 '))
+      .toEqual(['https://a.example', 'https://b.example:8443']);
+  });
+
+  test('leaves out blank entries', () => {
+    expect(read('https://a.example,, ,')).toEqual(['https://a.example']);
+    expect(read(' , ')).toEqual([]);
+  });
+
+  test.each([undefined, ''])('gives undefined for %p, as unset', (value) => {
+    expect(read(value)).toBeUndefined();
+  });
+});
+
+describe('parseList, from config.json', () => {
+  const name = `allowedOrigins in ${SOURCE}`;
+  const read = (value) => parseList(value, { name, fromFile: true });
+
+  test('reads an array of strings, trimmed, without blank entries', () => {
+    expect(read([' https://a.example', 'https://b.example', ''])).toEqual([
+      'https://a.example',
+      'https://b.example',
+    ]);
+  });
+
+  test('reads a comma-separated string, as the environment gives it', () => {
+    expect(read('https://a.example, https://b.example'))
+      .toEqual(['https://a.example', 'https://b.example']);
+  });
+
+  test('reads an empty string or array as an empty list', () => {
+    expect(read('')).toEqual([]);
+    expect(read([])).toEqual([]);
+  });
+
+  test('gives undefined when the key is absent', () => {
+    expect(read(undefined)).toBeUndefined();
+  });
+
+  test.each([
+    ['true', true],
+    ['42', 42],
+    ['null', null],
+    ['{"origin":"https://a.example"}', { origin: 'https://a.example' }],
+    ['["https://a.example",42]', ['https://a.example', 42]],
+  ])('refuses %s', (shown, value) => {
+    expect(() => read(value))
+      .toThrow(`${name} must be an array of strings or a comma-separated string, not ${shown}`);
   });
 });
 

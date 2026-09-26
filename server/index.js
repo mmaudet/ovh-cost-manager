@@ -13,7 +13,7 @@ const { monthBounds } = require('../data/months');
 
 // Import auth module
 const auth = require('./auth');
-const { createOriginCheck } = require('./cors');
+const { createOriginCheck, readAllowedOrigins } = require('./cors');
 const { createHostCheckMiddleware } = require('./hosts');
 const { importsEnabled } = require('./imports');
 const { trendWindowFromQuery } = require('./months');
@@ -32,12 +32,15 @@ let config = { dashboard: { budget: 50000, currency: 'EUR' } };
 let configPath = null;
 // Rate limiting and TRUST_PROXY: a malformed setting stops the server too
 let rateLimitConfig;
+// The origins CORS allows besides the dashboard's own, as a list
+let allowedOrigins;
 
 try {
   const loaded = readConfigFile(CONFIG_PATHS);
   config = { ...config, ...loaded.config };
   configPath = loaded.path;
   rateLimitConfig = buildRateLimitConfig(config, process.env, configPath || undefined);
+  allowedOrigins = readAllowedOrigins(config, process.env, configPath || undefined);
   // IMPORT_ENABLED too, which the routes read later
   importsEnabled();
 } catch (err) {
@@ -57,10 +60,8 @@ const hostCheck = createHostCheckMiddleware({
 
 // CORS configuration - restrict to allowed origins and the request's own
 const isAllowedOrigin = createOriginCheck({
-  // Allowed origins from config or environment
-  allowedOrigins: process.env.ALLOWED_ORIGINS
-    ? process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim())
-    : config.allowedOrigins || [],
+  // ALLOWED_ORIGINS, or allowedOrigins in config.json
+  allowedOrigins,
   isDev: process.env.NODE_ENV !== 'production',
   trustProxy: rateLimitConfig.trustProxy,
 });
