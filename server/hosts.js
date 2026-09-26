@@ -11,8 +11,9 @@
 
 const { LOOPBACK_HOSTNAMES, firstValue, parseHost } = require('./hostHeader');
 
-// Each blocked host is logged once, and only the first hundred: any client can
-// send any number of them
+// The log names each blocked host once an hour, and at most this many hosts
+// an hour, as any client can send any number of them. It counts the others.
+const LOG_PERIOD_MS = 60 * 60 * 1000;
 const MAX_LOGGED_HOSTS = 100;
 
 // The entries of ALLOWED_HOSTS, without blanks. The check is on as soon as
@@ -45,8 +46,7 @@ function createHostCheck({ allowedHosts, trustProxy }) {
 
   // Listed, or a loopback name on any port: the Docker healthcheck, the import
   // cron and local tools call the server on localhost
-  function isAllowed(header) {
-    const parsed = parseHost(header);
+  function isAllowed(parsed) {
     if (!parsed) {
       return false;
     }
@@ -57,10 +57,15 @@ function createHostCheck({ allowedHosts, trustProxy }) {
     const forwardedHost = headers['x-forwarded-host'];
     // Behind a trusted proxy, the host the browser asked for is the proxy's
     // X-Forwarded-Host, when it sends one: Host may be the container's name
-    const [header, host] = trustProxy && forwardedHost
+    const [header, value] = trustProxy && forwardedHost
       ? ['X-Forwarded-Host', firstValue(forwardedHost)]
       : ['Host', headers.host];
-    return isAllowed(host) ? { allowed: true } : { allowed: false, header, host };
+    const parsed = parseHost(value);
+    if (isAllowed(parsed)) {
+      return { allowed: true };
+    }
+    // The host as the check compares it, or null when the header holds none
+    return { allowed: false, header, host: parsed && parsed.host };
   };
 }
 
@@ -78,19 +83,32 @@ function createHostCheckMiddleware(settings, logger = console) {
     return null;
   }
   const checkHost = createHostCheck(settings);
-  const loggedHosts = new Set();
+  let loggedHosts = new Set();
+  let unlogged = 0;
+
+  // Every hour, the log says how many rejections it left out, and starts over
+  setInterval(() => {
+    if (unlogged > 0) {
+      const requests = unlogged === 1 ? 'request' : 'requests';
+      logger.warn(`Host check: ${unlogged} more blocked ${requests} in the last hour, not logged`);
+    }
+    loggedHosts = new Set();
+    unlogged = 0;
+  }, LOG_PERIOD_MS).unref();
 
   return function hostCheck(req, res, next) {
     const result = checkHost(req.headers);
     if (result.allowed) {
       return next();
     }
-    if (!loggedHosts.has(result.host) && loggedHosts.size < MAX_LOGGED_HOSTS) {
-      loggedHosts.add(result.host);
-      logger.warn(`Host check: Blocked request for host: ${result.host}`);
-      if (loggedHosts.size === MAX_LOGGED_HOSTS) {
-        logger.warn('Host check: Further blocked hosts are not logged');
-      }
+    // Keyed on the host as the check compares it, so that a host is logged
+    // once however it is written, and all malformed ones together
+    const host = result.host || 'invalid';
+    if (loggedHosts.has(host) || loggedHosts.size >= MAX_LOGGED_HOSTS) {
+      unlogged += 1;
+    } else {
+      loggedHosts.add(host);
+      logger.warn(`Host check: Blocked request for host: ${host}`);
     }
     return res.status(421).json({ error: 'Host not allowed' });
   };

@@ -208,11 +208,31 @@ describe('createHostCheck', () => {
       expect(behindTrustedProxy({ host: 'ocm.example.com', 'x-forwarded-host': 'evil.example' }))
         .toEqual({ allowed: false, header: 'X-Forwarded-Host', host: 'evil.example' });
     });
+
+    test('names the host as it compares it: lowercase, without a default port', () => {
+      expect(direct({ host: 'EVIL.example:80' }))
+        .toEqual({ allowed: false, header: 'Host', host: 'evil.example' });
+    });
+
+    test('names no host when the header holds none', () => {
+      expect(direct({ host: 'user@ocm.example.com' }))
+        .toEqual({ allowed: false, header: 'Host', host: null });
+    });
   });
 });
 
 describe('createHostCheckMiddleware', () => {
   const settings = { allowedHosts, trustProxy: false };
+  const HOUR = 60 * 60 * 1000;
+
+  // The log starts over every hour
+  beforeEach(() => {
+    jest.useFakeTimers();
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+  });
 
   // A stand-in for the console
   function makeLogger() {
@@ -268,14 +288,73 @@ describe('createHostCheckMiddleware', () => {
     ]);
   });
 
-  test('logs at most 100 hosts, says so, and still rejects the others', () => {
+  test('logs a blocked host once, however it is written', () => {
+    const logger = makeLogger();
+    const hostCheck = createHostCheckMiddleware(settings, logger);
+    run(hostCheck, { host: 'EVIL.example' });
+    run(hostCheck, { host: 'evil.example:80' });
+    run(hostCheck, { host: 'evil.example:443' });
+    expect(logger.warn.mock.calls).toEqual([
+      ['Host check: Blocked request for host: evil.example'],
+    ]);
+  });
+
+  test('logs the requests without a well-formed host once, as invalid', () => {
+    const logger = makeLogger();
+    const hostCheck = createHostCheckMiddleware(settings, logger);
+    run(hostCheck, { host: 'user@ocm.example.com' });
+    run(hostCheck, { host: ':3001' });
+    run(hostCheck, {});
+    expect(logger.warn.mock.calls).toEqual([
+      ['Host check: Blocked request for host: invalid'],
+    ]);
+  });
+
+  test('logs a host again after an hour, once it said how many requests it left out', () => {
+    const logger = makeLogger();
+    const hostCheck = createHostCheckMiddleware(settings, logger);
+    run(hostCheck, { host: 'evil.example' });
+    run(hostCheck, { host: 'evil.example' });
+    run(hostCheck, { host: 'evil.example' });
+    jest.advanceTimersByTime(HOUR);
+    run(hostCheck, { host: 'evil.example' });
+    expect(logger.warn.mock.calls).toEqual([
+      ['Host check: Blocked request for host: evil.example'],
+      ['Host check: 2 more blocked requests in the last hour, not logged'],
+      ['Host check: Blocked request for host: evil.example'],
+    ]);
+  });
+
+  test('logs no count for an hour when it left no request out', () => {
+    const logger = makeLogger();
+    const hostCheck = createHostCheckMiddleware(settings, logger);
+    run(hostCheck, { host: 'evil.example' });
+    jest.advanceTimersByTime(HOUR);
+    expect(logger.warn).toHaveBeenCalledTimes(1);
+  });
+
+  test('logs at most 100 hosts an hour, and still rejects the others', () => {
     const logger = makeLogger();
     const hostCheck = createHostCheckMiddleware(settings, logger);
     for (let i = 1; i <= 100; i += 1) {
       run(hostCheck, { host: `evil${i}.example` });
     }
     expect(run(hostCheck, { host: 'evil101.example' }).status).toBe(421);
-    expect(logger.warn).toHaveBeenCalledTimes(101);
-    expect(logger.warn).toHaveBeenLastCalledWith('Host check: Further blocked hosts are not logged');
+    expect(run(hostCheck, { host: 'evil1.example' }).status).toBe(421);
+    expect(logger.warn).toHaveBeenCalledTimes(100);
+    jest.advanceTimersByTime(HOUR);
+    expect(logger.warn).toHaveBeenLastCalledWith(
+      'Host check: 2 more blocked requests in the last hour, not logged'
+    );
+  });
+
+  test('counts one request it left out in the singular', () => {
+    const logger = makeLogger();
+    const hostCheck = createHostCheckMiddleware(settings, logger);
+    run(hostCheck, { host: 'evil.example' });
+    run(hostCheck, { host: 'evil.example' });
+    jest.advanceTimersByTime(HOUR);
+    expect(logger.warn)
+      .toHaveBeenLastCalledWith('Host check: 1 more blocked request in the last hour, not logged');
   });
 });
