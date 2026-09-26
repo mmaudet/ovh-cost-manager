@@ -81,18 +81,19 @@ const bucketRows = [
   // Billed, but gone from the inventory
   ['old-exports', '†', 'Inconnu', 'SBG', '-', '2,00€'],
 ];
+// Sizes in French units, as those of the buckets (#70)
 const volumeRows = [
   ['Nom', 'Type', 'Région', 'Taille', 'Coût'],
-  ['db-data', 'high-speed', 'SBG5', '200 GB', '~', '6,50€'],
-  ['web-shared', 'classic', 'GRA11', '100 GB', '~', '3,00€'],
+  ['db-data', 'high-speed', 'SBG5', '200 Go', '~', '6,50€'],
+  ['web-shared', 'classic', 'GRA11', '100 Go', '~', '3,00€'],
   // A bill line with no volume left behind it
   ['Disques supplémentaires à bhs5 de type classic', 'classic', 'bhs5', '-', '~', '1,50€'],
-  ['old-backup', 'détaché', 'classic', 'GRA11', '50 GB', '~', '1,50€'],
+  ['old-backup', 'détaché', 'classic', 'GRA11', '50 Go', '~', '1,50€'],
 ];
 const snapshotRows = [
   ['Nom', 'Région', 'Créé le', 'Taille', 'Coût'],
-  ['db-1-before-upgrade', 'SBG5', '28/08/2026', '40 GB', '~4,00€'],
-  ['web-1-golden', 'GRA11', '14/02/2026', '10 GB', '~2,00€'],
+  ['db-1-before-upgrade', 'SBG5', '28/08/2026', '40 Go', '~4,00€'],
+  ['web-1-golden', 'GRA11', '14/02/2026', '10 Go', '~2,00€'],
 ];
 const savingsPlanRows = [
   ['Plan', 'Flavor', 'Couvert', 'Dernière facture', 'Coût'],
