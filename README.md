@@ -226,7 +226,7 @@ Add a `rateLimit` section to your [config.json](config.json):
 
 **Parameters**:
 - `enabled`: Enable/disable globally (default: `true`)
-- `trustProxy`: Trust `X-Forwarded-For` headers, and `X-Forwarded-Host` and `X-Forwarded-Proto` for the CORS check (default: `false`)
+- `trustProxy`: Trust `X-Forwarded-For` headers, `X-Forwarded-Host` for the CORS check and `ALLOWED_HOSTS`, and `X-Forwarded-Proto` for the CORS check (default: `false`)
 - `api.windowMs`: Window duration in milliseconds (default: `900000` = 15 min)
 - `api.max`: Maximum API requests per IP per window (default: `100`)
 - `auth.windowMs`: Window duration for authentication endpoints (default: `900000`)
@@ -401,7 +401,7 @@ Access the dashboard at http://localhost:3001
 | `IMPORT_ENABLED`            | Enable automatic periodic import                                 | true            |
 | `IMPORT_INTERVAL`           | Seconds between imports                                          | 86400 (24h)     |
 | `IMPORT_FLAGS`              | Extra flags for import script                                    | --all           |
-| `TRUST_PROXY`               | Trust X-Forwarded-For headers (⚠️ required for K8s/reverse proxy), and X-Forwarded-Host and X-Forwarded-Proto for the CORS check | false           |
+| `TRUST_PROXY`               | Trust X-Forwarded-For headers (⚠️ required for K8s/reverse proxy), X-Forwarded-Host for the CORS check and `ALLOWED_HOSTS`, and X-Forwarded-Proto for the CORS check | false           |
 | `ALLOWED_HOSTS`             | Comma-separated host names, each with an optional port, that the server answers, against DNS rebinding (see below) | (empty: any host) |
 | `RATE_LIMIT_ENABLED`        | Enable rate limiting                                             | true            |
 | `RATE_LIMIT_API_MAX`        | Max API requests per IP per window                               | 100             |
@@ -409,7 +409,7 @@ Access the dashboard at http://localhost:3001
 | `RATE_LIMIT_AUTH_MAX`       | Max auth requests per IP per window                              | 20              |
 | `RATE_LIMIT_AUTH_WINDOW_MS` | Auth rate limit window in milliseconds                           | 900000 (15 min) |
 
-> **`ALLOWED_HOSTS`**: set it when browsers can reach a dashboard without authentication, as on a LAN, to protect it against DNS rebinding, for instance `ALLOWED_HOSTS=ocm.example.com,ocm.lan:3001` (or `allowedHosts` in `config.json`). Other hosts then get a 421, but `localhost` is always allowed, for the healthcheck. With `TRUST_PROXY=true`, the server checks the first `X-Forwarded-Host` instead of `Host`. See [docs/deployment.md](docs/deployment.md#environment-variables).
+> **`ALLOWED_HOSTS`**: set it when browsers can reach a dashboard without authentication, as on a LAN, to protect it against DNS rebinding, for instance `ALLOWED_HOSTS=ocm.example.com,ocm.lan:3001` (or `allowedHosts` in `config.json`). Requests to other hosts get a 421. `Host` is always checked, and `localhost` passes on direct requests only, such as the healthcheck's; behind a proxy that rewrites `Host`, list its upstream too. With `TRUST_PROXY=true`, the last `X-Forwarded-Host` must be listed as well: the proxy must set or overwrite it, and if the server can be reached without the proxy, `TRUST_PROXY` lets any client forge it. See [docs/deployment.md](docs/deployment.md#environment-variables).
 
 ### Option 2: SSO Deployment (with LemonLDAP-NG)
 
