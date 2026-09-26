@@ -13,7 +13,7 @@ const db = require('../data/db');
 // Import auth module
 const auth = require('./auth');
 const { createOriginCheck } = require('./cors');
-const { monthBounds } = require('./months');
+const { monthBounds, trendWindowFromQuery } = require('./months');
 
 // Load configuration
 const CONFIG_PATHS = [
@@ -343,7 +343,7 @@ async function initializeServer() {
     console.log(`  GET /api/analysis/by-project?from=YYYY-MM-DD&to=YYYY-MM-DD`);
     console.log(`  GET /api/analysis/by-service?from=YYYY-MM-DD&to=YYYY-MM-DD`);
     console.log(`  GET /api/analysis/daily-trend?from=YYYY-MM-DD&to=YYYY-MM-DD`);
-    console.log(`  GET /api/analysis/monthly-trend?months=6`);
+    console.log(`  GET /api/analysis/monthly-trend?months=6&end=YYYY-MM`);
     console.log(`  GET /api/summary?from=YYYY-MM-DD&to=YYYY-MM-DD`);
     console.log(`  GET /api/months`);
     console.log(`  GET /api/import/status`);
@@ -605,10 +605,19 @@ function registerRoutes() {
     }
   });
 
+  // The month of the latest bill, YYYY-MM, or undefined when nothing was billed
+  const latestBilledMonth = () => db.bills.getLatestDate()?.slice(0, 7);
+
+  // The trend over the `months` months that end on the `end` month (YYYY-MM), that one
+  // included: 6 months, and the month of the latest bill, by default
   app.get('/api/analysis/monthly-trend', (req, res) => {
     try {
-      const months = parseInt(req.query.months) || 6;
-      const data = db.analysis.monthlyTrend(months);
+      const { valid, error, from, to } = trendWindowFromQuery(req.query, latestBilledMonth());
+      if (!valid) {
+        return res.status(400).json({ error });
+      }
+
+      const data = db.analysis.monthlyTrend(from, to);
 
       // Month names in French
       const monthNames = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Jun', 'Jul', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc'];
@@ -630,10 +639,15 @@ function registerRoutes() {
 
   // Monthly trend broken down by resource type, shaped for a multi-line chart:
   // { categories: [{key, label, color}], data: [{ yearMonth, <key>: total, ... }] }
+  // Over the same months as /api/analysis/monthly-trend, from the same parameters.
   app.get('/api/analysis/monthly-trend-by-category', (req, res) => {
     try {
-      const months = parseInt(req.query.months) || 6;
-      const rows = db.analysis.monthlyTrendByResourceType(months);
+      const { valid, error, from, to } = trendWindowFromQuery(req.query, latestBilledMonth());
+      if (!valid) {
+        return res.status(400).json({ error });
+      }
+
+      const rows = db.analysis.monthlyTrendByResourceType(from, to);
 
       // Total per resource_type to order categories by spend.
       const totals = {};

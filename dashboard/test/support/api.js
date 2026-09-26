@@ -83,9 +83,11 @@ const answers = {
   fetchProjectsEnriched: entry('projectsEnriched', emptyAnswers.list),
   fetchByProject: entryForPeriod('byProject', emptyAnswers.list),
   fetchByService: entryForPeriod('byService', emptyAnswers.list),
-  fetchMonthlyTrend: (data, months) => data.monthlyTrend?.[months] ?? emptyAnswers.list(),
-  fetchMonthlyTrendByCategory: (data, months) =>
-    data.monthlyTrendByCategory?.[months] ?? emptyAnswers.trendByCategory(),
+  // Trends: by the month they end on, then by their number of months
+  fetchMonthlyTrend: (data, months, end) =>
+    data.monthlyTrend?.[end]?.[months] ?? emptyAnswers.list(),
+  fetchMonthlyTrendByCategory: (data, months, end) =>
+    data.monthlyTrendByCategory?.[end]?.[months] ?? emptyAnswers.trendByCategory(),
   fetchImportStatus: entry('importStatus', emptyAnswers.importStatus),
   triggerImport: () => ({ started: true }),
   fetchConfig: entry('config', emptyAnswers.config),

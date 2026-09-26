@@ -13,13 +13,14 @@ const PERIOD_OPTIONS = [
   { months: 240, key: 'period20y' }
 ];
 
-// Number of months from a 'YYYY-MM' up to the current month, inclusive.
-const monthsSince = (yearMonth) => {
-  if (!yearMonth) return 0;
-  const [y, m] = yearMonth.split('-').map(Number);
-  if (!y || !m) return 0;
-  const now = new Date();
-  return (now.getFullYear() - y) * 12 + (now.getMonth() + 1 - m) + 1;
+// Number of months from a 'YYYY-MM' to another, both included: the months of data up to the
+// month the trend period ends on, the selected one (#66).
+const monthsBetween = (firstMonth, lastMonth) => {
+  if (!firstMonth || !lastMonth) return 0;
+  const [y, m] = firstMonth.split('-').map(Number);
+  const [lastY, lastM] = lastMonth.split('-').map(Number);
+  if (!y || !m || !lastY || !lastM) return 0;
+  return (lastY - y) * 12 + (lastM - m) + 1;
 };
 
 // Trend periods available given how far back the data goes. Offer every
@@ -33,4 +34,4 @@ const availablePeriodsFor = (maxMonths) => {
   return out;
 };
 
-export { PERIOD_OPTIONS, monthsSince, availablePeriodsFor };
+export { PERIOD_OPTIONS, monthsBetween, availablePeriodsFor };

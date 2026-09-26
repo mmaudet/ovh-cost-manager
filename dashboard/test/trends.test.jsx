@@ -10,6 +10,7 @@ import {
   optionsOf,
   renderDashboard,
   selectLanguage,
+  selectMonth,
   settle,
   swatchOf,
   texts,
@@ -27,16 +28,16 @@ describe('Trends tab', () => {
   it('loads the trends when the page opens, and the GPU trend when the tab opens', async () => {
     const { user } = await renderDashboard();
 
-    // Over the longest period the three billed months allow
-    expect(api.fetchMonthlyTrend).toHaveBeenCalledWith(3);
-    expect(api.fetchMonthlyTrendByCategory).toHaveBeenCalledWith(3);
+    // Over the longest period the three billed months allow, up to the selected month
+    expect(api.fetchMonthlyTrend).toHaveBeenCalledWith(3, '2026-09');
+    expect(api.fetchMonthlyTrendByCategory).toHaveBeenCalledWith(3, '2026-09');
     // Only the GPU costs of the selected month so far, for the Overview
-    expect(api.fetchGpuSummary).not.toHaveBeenCalledWith();
+    expect(api.fetchGpuSummary).not.toHaveBeenCalledWith('2026-07-01', '2026-09-30');
 
     await openTab(user, 'Tendances');
 
-    // All months: no period
-    expect(api.fetchGpuSummary).toHaveBeenCalledWith();
+    // The same 3 months, from July to September
+    expect(api.fetchGpuSummary).toHaveBeenCalledWith('2026-07-01', '2026-09-30');
     expect(periodSelector()).toHaveDisplayValue('3 mois');
     expect(screen.getByRole('heading', { name: 'Évolution des coûts (total) sur 3 mois' }))
       .toBeInTheDocument();
@@ -76,6 +77,38 @@ describe('Trends tab', () => {
         .toBeInTheDocument();
     });
 
+    it('goes no further than the billed months up to the selected one allow', async () => {
+      const { user } = await renderDashboard({ ...account, ...sinceJuly2025 });
+      await openTab(user, 'Tendances');
+      expect(periodSelector()).toHaveDisplayValue('6 mois');
+
+      await selectMonth(user, 'Juillet 2025');
+
+      // July 2025 is the first billed month: 3 months cover it
+      expect(optionsOf(periodSelector())).toEqual(['3 mois']);
+      expect(periodSelector()).toHaveDisplayValue('3 mois');
+      expect(screen.getByRole('heading', { name: 'Évolution des coûts (total) sur 3 mois' }))
+        .toBeInTheDocument();
+      expect(texts(cardOf('Mois le plus coûteux')))
+        .toEqual(['Mois le plus coûteux', 'juil. 2025', '450,00€']);
+    });
+
+    it('keeps the period picked while an older month offers only shorter ones', async () => {
+      const { user } = await renderDashboard({ ...account, ...sinceJuly2025 });
+      await openTab(user, 'Tendances');
+      await user.selectOptions(periodSelector(), '2 ans');
+      await settle();
+
+      await selectMonth(user, 'Juillet 2025');
+      expect(periodSelector()).toHaveDisplayValue('3 mois');
+
+      await selectMonth(user, 'Septembre 2026');
+
+      expect(periodSelector()).toHaveDisplayValue('2 ans');
+      expect(screen.getByRole('heading', { name: 'Évolution des coûts (total) sur 2 ans' }))
+        .toBeInTheDocument();
+    });
+
     it('reloads the trends over the period the user picks', async () => {
       const { user } = await renderDashboard({ ...account, ...sinceJuly2025 });
       await openTab(user, 'Tendances');
@@ -104,6 +137,32 @@ describe('Trends tab', () => {
     // 12 times the last month
     expect(texts(cardOf('Projection annuelle')))
       .toEqual(['Projection annuelle', '~15 004,80€', 'Basé sur le dernier mois']);
+  });
+
+  it('ends on the month selected in the header', async () => {
+    const { user } = await renderDashboard();
+    await openTab(user, 'Tendances');
+
+    await selectMonth(user, 'Août 2026');
+
+    // June to August
+    expect(api.fetchMonthlyTrend).toHaveBeenCalledWith(3, '2026-08');
+    expect(api.fetchMonthlyTrendByCategory).toHaveBeenCalledWith(3, '2026-08');
+    expect(api.fetchGpuSummary).toHaveBeenCalledWith('2026-06-01', '2026-08-31');
+    expect(periodSelector()).toHaveDisplayValue('3 mois');
+    // The growth over the period is left unchecked: June, its first month, was not billed,
+    // a case left to #65
+    expect(texts(cardOf('Mois le plus coûteux')))
+      .toEqual(['Mois le plus coûteux', 'août 2026', '1 042,00€']);
+    expect(texts(cardOf('Projection annuelle')))
+      .toEqual(['Projection annuelle', '~12 504,00€', 'Basé sur le dernier mois']);
+    // No licence was billed before September
+    expect(texts(cardOf('Évolution par catégorie'))).toEqual([
+      'Évolution par catégorie',
+      'Public Cloud', 'Dedicated Servers', 'Domains', 'Backup',
+    ]);
+    // Over those months, GPUs were billed in August alone: no trend to draw
+    expect(screen.queryByText('Évolution des coûts GPU')).not.toBeInTheDocument();
   });
 
   describe('cost trend by resource type', () => {
@@ -151,7 +210,7 @@ describe('Trends tab', () => {
   });
 
   describe('GPU trend', () => {
-    it('shows the GPU costs over all the billed months', async () => {
+    it('shows the GPU costs over the period', async () => {
       const { user } = await renderDashboard();
 
       await openTab(user, 'Tendances');
@@ -160,13 +219,17 @@ describe('Trends tab', () => {
         .toEqual(['Évolution des coûts GPU', 'Total: 730,50€']);
     });
 
-    it('is left out when GPUs were billed in a single month', async () => {
+    it('is left out when GPUs were billed in a single month of the period', async () => {
+      const threeMonths = '2026-07/2026-09';
       const singleMonth = {
-        ...account.gpuSummary.all,
+        ...account.gpuSummary[threeMonths],
         total: 420.5,
         monthlyTrend: [{ month: '2026-09', total: 420.5 }],
       };
-      const { user } = await renderDashboard({ ...account, gpuSummary: { all: singleMonth } });
+      const { user } = await renderDashboard({
+        ...account,
+        gpuSummary: { [threeMonths]: singleMonth },
+      });
 
       await openTab(user, 'Tendances');
 
