@@ -3,15 +3,49 @@ import { months } from './calendar.js';
 // Cost trends of the synthetic account, as /api/analysis/monthly-trend and
 // /api/analysis/monthly-trend-by-category answer, keyed by the month they end
 // on, then by the number of months asked for, and its GPU costs, as
-// /api/gpu/summary answers.
+// /api/gpu/summary answers. A cost trend gives every month of its period, at
+// 0 € for a month without any bill (#65).
+
+// The names the trend routes give the months, in French only
+const MONTH_NAMES = [
+  'Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Jun', 'Jul', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc',
+];
+
+// The months from one to another, both included: monthsFrom('2025-11', '2026-01')
+// gives 2025-11, 2025-12 and 2026-01
+const monthsFrom = (first, last) => {
+  const monthIndex = (yearMonth) => {
+    const [year, month] = yearMonth.split('-').map(Number);
+    return year * 12 + month - 1;
+  };
+  const start = monthIndex(first);
+  return Array.from({ length: monthIndex(last) - start + 1 }, (_, offset) => {
+    const index = start + offset;
+    return `${Math.floor(index / 12)}-${String((index % 12) + 1).padStart(2, '0')}`;
+  });
+};
+
+// A cost trend from one month to another, as its route answers: the billed
+// months given, and every other month at 0 €
+const costTrend = (first, last, billed) => monthsFrom(first, last).map((yearMonth) =>
+  billed.find((entry) => entry.yearMonth === yearMonth)
+  ?? { month: MONTH_NAMES[Number(yearMonth.slice(5)) - 1], yearMonth, cost: 0 });
+
+// A cost trend by resource type from one month to another, as its route
+// answers: the rows of the billed months given, and every other month with
+// every resource type at 0 €
+const costTrendByResourceType = (first, last, { categories, data }) => ({
+  categories,
+  data: monthsFrom(first, last).map((yearMonth) =>
+    data.find((row) => row.yearMonth === yearMonth)
+    ?? { yearMonth, ...Object.fromEntries(categories.map(({ key }) => [key, 0])) }),
+});
 
 const lastThreeMonths = [
   { month: 'Jul', yearMonth: '2026-07', cost: 980 },
   { month: 'Aoû', yearMonth: '2026-08', cost: 1042 },
   { month: 'Sep', yearMonth: '2026-09', cost: 1250.4 },
 ];
-// Up to August: September is left out
-const julyAndAugust = lastThreeMonths.slice(0, 2);
 
 // Categories are resource types, labelled by the server in English only and
 // ordered by what they cost over the period.
@@ -94,14 +128,16 @@ const gpuInMonth = (month, total) => ({
 export const trends = {
   // The page asks for 3 months, the longest period that three billed months
   // allow, rather than the 6 of the default. With August selected, the 3
-  // months run from June, which was not billed.
+  // months run from June, which was not billed: at 0 €.
   monthlyTrend: {
     '2026-09': { 3: lastThreeMonths },
-    '2026-08': { 3: julyAndAugust },
+    '2026-08': { 3: costTrend('2026-06', '2026-08', lastThreeMonths) },
   },
   monthlyTrendByCategory: {
     '2026-09': { 3: costByResourceType },
-    '2026-08': { 3: costByResourceTypeUpToAugust },
+    '2026-08': {
+      3: costTrendByResourceType('2026-06', '2026-08', costByResourceTypeUpToAugust),
+    },
   },
   gpuSummary: {
     '2026-07/2026-09': gpuFromJulyToSeptember,
@@ -118,7 +154,8 @@ const costByResourceTypeInJuly2025 = {
   data: [{ yearMonth: '2025-07', cloud_project: 450 }],
 };
 
-// A variant of the account, first billed in July 2025: 15 months of history.
+// A variant of the account, first billed in July 2025: 15 months of history,
+// without any bill from August 2025 to June 2026.
 export const sinceJuly2025 = {
   months: [
     ...months,
@@ -126,28 +163,32 @@ export const sinceJuly2025 = {
   ],
   monthlyTrend: {
     '2026-09': {
-      6: lastThreeMonths,
-      12: lastThreeMonths,
-      24: [july2025, ...lastThreeMonths],
+      6: costTrend('2026-04', '2026-09', lastThreeMonths),
+      12: costTrend('2025-10', '2026-09', lastThreeMonths),
+      24: costTrend('2024-10', '2026-09', [july2025, ...lastThreeMonths]),
     },
-    '2026-08': { 6: julyAndAugust },
+    '2026-08': { 6: costTrend('2026-03', '2026-08', lastThreeMonths) },
     // The first billed month allows 3 months only
-    '2025-07': { 3: [july2025] },
+    '2025-07': { 3: costTrend('2025-05', '2025-07', [july2025]) },
   },
   monthlyTrendByCategory: {
     '2026-09': {
-      6: costByResourceType,
-      12: costByResourceType,
-      24: {
+      6: costTrendByResourceType('2026-04', '2026-09', costByResourceType),
+      12: costTrendByResourceType('2025-10', '2026-09', costByResourceType),
+      24: costTrendByResourceType('2024-10', '2026-09', {
         categories: costByResourceType.categories,
         data: [
           { yearMonth: '2025-07',
             cloud_project: 450, dedicated_server: 0, backup: 0, domain: 0, license: 0 },
           ...costByResourceType.data,
         ],
-      },
+      }),
     },
-    '2026-08': { 6: costByResourceTypeUpToAugust },
-    '2025-07': { 3: costByResourceTypeInJuly2025 },
+    '2026-08': {
+      6: costTrendByResourceType('2026-03', '2026-08', costByResourceTypeUpToAugust),
+    },
+    '2025-07': {
+      3: costTrendByResourceType('2025-05', '2025-07', costByResourceTypeInJuly2025),
+    },
   },
 };

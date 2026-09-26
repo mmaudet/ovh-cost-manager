@@ -116,11 +116,12 @@ describe('Trends tab', () => {
       await user.selectOptions(periodSelector(), '2 ans');
       await settle();
 
+      expect(api.fetchMonthlyTrend).toHaveBeenCalledWith(24, '2026-09');
       expect(screen.getByRole('heading', { name: 'Évolution des coûts (total) sur 2 ans' }))
         .toBeInTheDocument();
-      // From July 2025: (1 250.40 - 450) / 450
+      // From October 2024, before the first bill: a first month at 0 € (#65)
       expect(texts(cardOf('Croissance sur la période')))
-        .toEqual(['Croissance sur la période', '+177.9%', 'Sur 2 ans']);
+        .toEqual(['Croissance sur la période', '—', 'Sur 2 ans']);
     });
   });
 
@@ -190,8 +191,9 @@ describe('Trends tab', () => {
     expect(api.fetchMonthlyTrendByCategory).toHaveBeenCalledWith(3, '2026-08');
     expect(api.fetchGpuSummary).toHaveBeenCalledWith('2026-06-01', '2026-08-31');
     expect(periodSelector()).toHaveDisplayValue('3 mois');
-    // The growth over the period is left unchecked: June, its first month, was not billed,
-    // a case left to #65
+    // June, not billed, comes at 0 €: no growth to compute from it (#65)
+    expect(texts(cardOf('Croissance sur la période')))
+      .toEqual(['Croissance sur la période', '—', 'Sur 3 mois']);
     expect(texts(cardOf('Mois le plus coûteux')))
       .toEqual(['Mois le plus coûteux', 'août 2026', '1 042,00€']);
     expect(texts(cardOf('Projection annuelle')))
