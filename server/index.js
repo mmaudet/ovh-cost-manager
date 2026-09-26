@@ -13,7 +13,7 @@ const db = require('../data/db');
 // Import auth module
 const auth = require('./auth');
 const { createOriginCheck } = require('./cors');
-const { monthBounds } = require('./months');
+const { monthBounds, trendWindow } = require('./months');
 
 // Load configuration
 const CONFIG_PATHS = [
@@ -608,7 +608,9 @@ function registerRoutes() {
   app.get('/api/analysis/monthly-trend', (req, res) => {
     try {
       const months = parseInt(req.query.months) || 6;
-      const data = db.analysis.monthlyTrend(months);
+      // The months that end on the current one, in UTC as SQLite's date('now') reads it
+      const { from, to } = trendWindow(new Date().toISOString().slice(0, 7), months);
+      const data = db.analysis.monthlyTrend(from, to);
 
       // Month names in French
       const monthNames = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Jun', 'Jul', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc'];
@@ -633,7 +635,9 @@ function registerRoutes() {
   app.get('/api/analysis/monthly-trend-by-category', (req, res) => {
     try {
       const months = parseInt(req.query.months) || 6;
-      const rows = db.analysis.monthlyTrendByResourceType(months);
+      // The months that end on the current one, in UTC as SQLite's date('now') reads it
+      const { from, to } = trendWindow(new Date().toISOString().slice(0, 7), months);
+      const rows = db.analysis.monthlyTrendByResourceType(from, to);
 
       // Total per resource_type to order categories by spend.
       const totals = {};

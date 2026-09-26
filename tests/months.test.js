@@ -1,5 +1,6 @@
 /**
- * Tests for the month bounds behind /api/months.
+ * Tests for the month bounds behind /api/months, and for the months that a
+ * trend covers.
  *
  * The bounds must not depend on the server timezone. Jest ignores TZ changes
  * made at runtime, hence a child process per timezone.
@@ -8,14 +9,25 @@
 const path = require('path');
 const { execFileSync } = require('child_process');
 
-function monthBoundsInTimezone(yearMonth, timezone) {
+// Calls a function of server/months.js in a Node process of its own, run in a
+// timezone
+function callInTimezone(timezone, name, ...args) {
   const monthsModule = path.join(__dirname, '..', 'server', 'months.js');
-  const script = `process.stdout.write(JSON.stringify(require(${JSON.stringify(monthsModule)}).monthBounds(${JSON.stringify(yearMonth)})))`;
+  const script = `process.stdout.write(JSON.stringify(require(${JSON.stringify(monthsModule)})`
+    + `.${name}(...${JSON.stringify(args)})))`;
   const output = execFileSync(process.execPath, ['-e', script], {
     env: { ...process.env, TZ: timezone },
     encoding: 'utf8'
   });
   return JSON.parse(output);
+}
+
+function monthBoundsInTimezone(yearMonth, timezone) {
+  return callInTimezone(timezone, 'monthBounds', yearMonth);
+}
+
+function trendWindowInTimezone(endMonth, months, timezone) {
+  return callInTimezone(timezone, 'trendWindow', endMonth, months);
 }
 
 describe('monthBounds', () => {
@@ -32,5 +44,52 @@ describe('monthBounds', () => {
 
   test('ends December on the 31st', () => {
     expect(monthBoundsInTimezone('2025-12', 'Europe/Paris')).toEqual({ from: '2025-12-01', to: '2025-12-31' });
+  });
+});
+
+// A trend over N months covers N calendar months, the month it ends on included
+describe('trendWindow', () => {
+  test.each(['UTC', 'America/New_York', 'Europe/Paris', 'Pacific/Kiritimati'])(
+    'covers July to September for 3 months that end on September 2026 in %s',
+    (timezone) => {
+      expect(trendWindowInTimezone('2026-09', 3, timezone))
+        .toEqual({ from: '2026-07-01', to: '2026-09-30' });
+    }
+  );
+
+  test('covers the month it ends on alone for 1 month', () => {
+    expect(trendWindowInTimezone('2026-09', 1, 'Europe/Paris'))
+      .toEqual({ from: '2026-09-01', to: '2026-09-30' });
+  });
+
+  test('starts in the October before for 12 months that end on a September', () => {
+    expect(trendWindowInTimezone('2026-09', 12, 'Europe/Paris'))
+      .toEqual({ from: '2025-10-01', to: '2026-09-30' });
+  });
+
+  test('starts in the year before for 3 months that end on a January', () => {
+    expect(trendWindowInTimezone('2026-01', 3, 'Europe/Paris'))
+      .toEqual({ from: '2025-11-01', to: '2026-01-31' });
+  });
+
+  test('starts in the February before for 12 months that end on a January', () => {
+    expect(trendWindowInTimezone('2026-01', 12, 'Europe/Paris'))
+      .toEqual({ from: '2025-02-01', to: '2026-01-31' });
+  });
+
+  test('covers the calendar year for 12 months that end on a December', () => {
+    expect(trendWindowInTimezone('2025-12', 12, 'Europe/Paris'))
+      .toEqual({ from: '2025-01-01', to: '2025-12-31' });
+  });
+
+  test('ends on the 29th for months that end on a leap-year February', () => {
+    expect(trendWindowInTimezone('2024-02', 3, 'Europe/Paris'))
+      .toEqual({ from: '2023-12-01', to: '2024-02-29' });
+  });
+
+  // The longest period the Trends tab offers
+  test('goes back 20 years for 240 months', () => {
+    expect(trendWindowInTimezone('2026-09', 240, 'Europe/Paris'))
+      .toEqual({ from: '2006-10-01', to: '2026-09-30' });
   });
 });

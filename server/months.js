@@ -15,4 +15,23 @@ function monthBounds(yearMonth) {
   };
 }
 
-module.exports = { monthBounds };
+/**
+ * First and last day of the calendar months that a trend over `months` months
+ * ending on a 'YYYY-MM' month covers, that month included: 3 months that end
+ * on September run from July to September.
+ * @param {string} endMonth - e.g. '2026-09'
+ * @param {number} months - e.g. 3
+ * @returns {{from: string, to: string}}
+ */
+function trendWindow(endMonth, months) {
+  const [year, month] = endMonth.split('-').map(Number);
+  // Date.UTC carries a month before January over to the years before
+  const first = new Date(Date.UTC(year, month - months, 1));
+  const firstMonth = String(first.getUTCMonth() + 1).padStart(2, '0');
+  return {
+    from: `${first.getUTCFullYear()}-${firstMonth}-01`,
+    to: monthBounds(endMonth).to
+  };
+}
+
+module.exports = { monthBounds, trendWindow };

@@ -316,7 +316,7 @@ const analysisOps = {
     `).all(fromDate, toDate);
   },
 
-  monthlyTrend: (months = 6) => {
+  monthlyTrend: (fromDate, toDate) => {
     const db = getDb();
     return db.prepare(`
       SELECT
@@ -324,13 +324,13 @@ const analysisOps = {
         SUM(d.total_price) as total
       FROM bill_details d
       JOIN bills b ON d.bill_id = b.id
-      WHERE b.date >= date('now', 'start of month', '-' || ? || ' months')
+      WHERE b.date >= ? AND b.date <= ?
       GROUP BY strftime('%Y-%m', b.date)
       ORDER BY month
-    `).all(months);
+    `).all(fromDate, toDate);
   },
 
-  monthlyTrendByResourceType: (months = 6) => {
+  monthlyTrendByResourceType: (fromDate, toDate) => {
     const db = getDb();
     return db.prepare(`
       SELECT
@@ -339,10 +339,10 @@ const analysisOps = {
         SUM(d.total_price) as total
       FROM bill_details d
       JOIN bills b ON d.bill_id = b.id
-      WHERE b.date >= date('now', 'start of month', '-' || ? || ' months')
+      WHERE b.date >= ? AND b.date <= ?
       GROUP BY strftime('%Y-%m', b.date), COALESCE(d.resource_type, 'other')
       ORDER BY month
-    `).all(months);
+    `).all(fromDate, toDate);
   },
 
   summary: (fromDate, toDate) => {
