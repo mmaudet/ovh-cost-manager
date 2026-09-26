@@ -597,6 +597,27 @@ describe('dashboard shell', () => {
         expect(monthCost()).toBe('1 300,40€');
         expect(lastSync('15/09/2026 12:00:31 (4 factures)')).toBeInTheDocument();
       });
+
+    it('shows the dashboard once the first import ever is over, even before the refresh (#51)',
+      async () => {
+        fakeTimers();
+        // Nothing ever imported: no bill, and no import in the history
+        const neverImported = { ...signedIn, months: [], importStatus: undefined };
+        const { user } = await renderDashboard(neverImported);
+        // An import quick enough to be over before the status is asked again: the first one
+        serve({
+          ...afterImport,
+          importStatus: { latest: finished, running: false, history: [finished] },
+        });
+
+        await user.click(within(emptyState()).getByRole('button', { name: /Synchroniser/ }));
+        await settle();
+        await passTime(8000);
+
+        expect(monthSelector()).toHaveDisplayValue('Septembre 2026');
+        expect(monthCost()).toBe('1 300,40€');
+        expect(lastSync('15/09/2026 12:00:31 (4 factures)')).toBeInTheDocument();
+      });
   });
 
   describe('report export', () => {

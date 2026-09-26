@@ -222,13 +222,16 @@ export default function Dashboard() {
 
   // Once the latest import has finished, refresh every query built from
   // imported data (all of them but config, user and the import status).
-  const latestImport = importStatus?.latest;
+  // The latest import: undefined until the import status loads, null when there was none
+  const latestImport = importStatus ? (importStatus.latest ?? null) : undefined;
   const previousImport = useRef(latestImport);
   useEffect(() => {
     const previous = previousImport.current;
     previousImport.current = latestImport;
-    if (!previous || !latestImport || latestImport.status === 'running') return;
-    if (previous.id !== latestImport.id || previous.status === 'running') {
+    if (previous === undefined || !latestImport || latestImport.status === 'running') return;
+    // Over since the status was last read: another import, the one that was running, or the
+    // first one ever, which the refresh 8 s after a resync can find over already (#51)
+    if (!previous || previous.id !== latestImport.id || previous.status === 'running') {
       queryClient.invalidateQueries({
         predicate: (query) => !['config', 'user', 'importStatus'].includes(query.queryKey[0])
       });
