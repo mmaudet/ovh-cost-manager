@@ -1,5 +1,5 @@
-// The React Query client of the tests, and how to wait for its answers: shared by
-// renderDashboard() (render.jsx) and renderTabHook() (hooks.jsx).
+// The React Query client of the tests, how to wait for its answers, and the keys it caches
+// them under: shared by renderDashboard() (render.jsx) and renderTabHook() (hooks.jsx).
 
 import { vi } from 'vitest';
 import { act } from '@testing-library/react';
@@ -50,4 +50,11 @@ export async function settle(queryClient) {
       ? vi.advanceTimersByTimeAsync(1)
       : new Promise((resolve) => setTimeout(resolve, 0))));
   } while (queryClient.isFetching() + queryClient.isMutating() + pendingNotifications.size > 0);
+}
+
+// The keys the client caches the answers of its queries under, in the order it first built
+// them: of every query it holds, whether it ran or waits for what it needs, or of those that
+// match the filters, such as { queryKey: [name] } for the queries of one name
+export function keysIn(queryClient, filters = {}) {
+  return queryClient.getQueriesData(filters).map(([queryKey]) => queryKey);
 }

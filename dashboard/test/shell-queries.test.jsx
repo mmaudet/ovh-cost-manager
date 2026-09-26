@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { cachedQueryKeys, renderDashboard } from './support/render.jsx';
+import { renderDashboard } from './support/render.jsx';
 
 // The keys the page caches the answers of its queries under. Each period keeps its own
 // answers, and the end of an import invalidates them by the name of their query (see
@@ -21,11 +21,11 @@ const sorted = (keys) => [...keys].sort((a, b) => {
 
 describe('query keys', () => {
   it('caches every query of the shell and of the tab hooks under its key', async () => {
-    await renderDashboard();
+    const { allKeys } = await renderDashboard();
 
     // Open on the Overview of September 2026. The queries of a month first ran without one,
     // on the first render, before the months list loaded: they wait for a month, and stay.
-    expect(sorted(cachedQueryKeys())).toEqual(sorted([
+    expect(sorted(allKeys())).toEqual(sorted([
       // The shell's, which load at page start: the header, the KPI cards, the footer and
       // several tabs read them
       ['config'],
