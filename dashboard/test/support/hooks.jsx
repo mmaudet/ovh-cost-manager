@@ -22,9 +22,9 @@ export const WAITING = { status: 'pending', fetchStatus: 'idle', error: null };
 
 // Calls useTab(props), the API answering from the dataset, and waits until the hook holds
 // every answer it asked for. Returns its result, the query client that holds the answers,
-// keysOf(name), the keys that client caches the answers of a query under, and
-// rerender(props), which calls it again with other props, as the shell does when its state
-// changes, and waits the same way.
+// keysOf(name), the keys that client caches the answers of a query under, allKeys(), the
+// keys of every query it holds, and rerender(props), which calls it again with other props,
+// as the shell does when its state changes, and waits the same way.
 export async function renderTabHook(useTab, props, data = account) {
   serve(data);
   const queryClient = createQueryClient();
@@ -42,6 +42,8 @@ export async function renderTabHook(useTab, props, data = account) {
     // import invalidates them by the name of their query
     keysOf: (name) => queryClient.getQueriesData({ queryKey: [name] })
       .map(([queryKey]) => queryKey),
+    // Whatever their name, as for a hook that should hold no query at all
+    allKeys: () => queryClient.getQueriesData({}).map(([queryKey]) => queryKey),
     async rerender(nextProps) {
       rerender(nextProps);
       await settle(queryClient);

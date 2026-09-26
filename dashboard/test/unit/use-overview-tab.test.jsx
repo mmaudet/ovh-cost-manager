@@ -24,11 +24,11 @@ const requestsOfTheShell = [
 
 describe('useOverviewTab', () => {
   it('requests nothing: what the tab shows loads with the shell', async () => {
-    const { queryClient } = await renderTabHook(useOverviewTab);
+    const { allKeys } = await renderTabHook(useOverviewTab);
 
     for (const request of requestsOfTheShell) expect(request).not.toHaveBeenCalled();
     // No query of its own, under any key
-    expect(queryClient.getQueryCache().getAll().map(({ queryKey }) => queryKey)).toEqual([]);
+    expect(allKeys()).toEqual([]);
   });
 
   it('returns only the sort order, by amount descending, and its handler', async () => {
