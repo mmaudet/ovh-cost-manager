@@ -222,6 +222,10 @@ npm test --workspace=dashboard -- -t "closes with Escape"    # by name
 - "Today" is frozen on 15 September 2026 and the timezone on Europe/Paris, so
   that dates read the same on every machine.
 
+Besides these page tests, the pure helpers split out of the page have unit
+tests in `dashboard/test/unit/`: each helper is called through what its module
+exports, and checked against literal values.
+
 ## Style Guide
 
 - Use 2 spaces for indentation
