@@ -27,16 +27,19 @@ describe('Trends tab', () => {
   it('loads the trends when the page opens, and the GPU trend when the tab opens', async () => {
     const { user } = await renderDashboard();
 
-    // 6 months at first, then the longest period the three billed months allow
-    expect(api.fetchMonthlyTrend.mock.calls).toEqual([[6], [3]]);
-    expect(api.fetchMonthlyTrendByCategory.mock.calls).toEqual([[6], [3]]);
-    // Only the GPU costs of the selected month, for the Overview
+    // Over the longest period the three billed months allow
+    expect(api.fetchMonthlyTrend).toHaveBeenCalledWith(3);
+    expect(api.fetchMonthlyTrendByCategory).toHaveBeenCalledWith(3);
+    // Only the GPU costs of the selected month so far, for the Overview
     expect(api.fetchGpuSummary).not.toHaveBeenCalledWith();
 
     await openTab(user, 'Tendances');
 
     // All months: no period
     expect(api.fetchGpuSummary).toHaveBeenCalledWith();
+    expect(periodSelector()).toHaveDisplayValue('3 mois');
+    expect(screen.getByRole('heading', { name: 'Évolution des coûts (total) sur 3 mois' }))
+      .toBeInTheDocument();
   });
 
   describe('period', () => {

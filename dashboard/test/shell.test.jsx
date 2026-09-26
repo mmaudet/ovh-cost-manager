@@ -64,15 +64,21 @@ describe('dashboard shell', () => {
 
     it('shows the loading screen again while the summary of the new month loads', async () => {
       const { user } = await renderDashboard();
-      let answer;
-      api.fetchSummary.mockImplementationOnce(() => new Promise((resolve) => {
-        answer = resolve;
-      }));
+      // Hold back the summary of August, and only that one
+      const answerSummary = api.fetchSummary.getMockImplementation();
+      let releaseAugust;
+      const august = new Promise((resolve) => {
+        releaseAugust = resolve;
+      });
+      api.fetchSummary.mockImplementation(async (from, to) => {
+        if (from === '2026-08-01' && to === '2026-08-31') await august;
+        return answerSummary(from, to);
+      });
 
       await user.selectOptions(monthSelector(), 'Août 2026');
       expect(screen.getByText('Chargement des données...')).toBeInTheDocument();
 
-      answer(account.summary['2026-08']);
+      releaseAugust();
       await settle();
       expect(texts(cardOf('Coût total du mois')))
         .toEqual(['Coût total du mois', '1 042,00€', '-16.7% vs mois précédent']);
