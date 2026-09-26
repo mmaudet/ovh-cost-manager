@@ -519,6 +519,18 @@ const accountOps = {
   }
 };
 
+// Makes the function that deletes the services of an inventory table whose id is not in
+// `ids`, the list the OVH API gave of all those that exist now: the services cancelled since
+// an import stored them (#74). The function returns how many it deleted.
+function deleteNotIn(table) {
+  return (ids) => {
+    const db = getDb();
+    return db.prepare(`
+      DELETE FROM ${table} WHERE id NOT IN (SELECT value FROM json_each(?))
+    `).run(JSON.stringify(ids)).changes;
+  };
+}
+
 // Inventory operations (Phase 3)
 const inventoryOps = {
   // Dedicated servers
@@ -578,29 +590,10 @@ const inventoryOps = {
     return db.prepare('SELECT * FROM storage_services ORDER BY display_name').all();
   },
 
-  // Each deletes the services of its kind that are not in `ids`, the list the OVH API gave of
-  // all those that exist now: the services cancelled since an import stored them (#74). It
-  // returns how many it deleted.
-  deleteServersNotIn: (ids) => {
-    const db = getDb();
-    return db.prepare(`
-      DELETE FROM dedicated_servers WHERE id NOT IN (SELECT value FROM json_each(?))
-    `).run(JSON.stringify(ids)).changes;
-  },
-
-  deleteVpsNotIn: (ids) => {
-    const db = getDb();
-    return db.prepare(`
-      DELETE FROM vps_instances WHERE id NOT IN (SELECT value FROM json_each(?))
-    `).run(JSON.stringify(ids)).changes;
-  },
-
-  deleteStorageNotIn: (ids) => {
-    const db = getDb();
-    return db.prepare(`
-      DELETE FROM storage_services WHERE id NOT IN (SELECT value FROM json_each(?))
-    `).run(JSON.stringify(ids)).changes;
-  },
+  // The services cancelled since an import stored them go, see deleteNotIn() (#74)
+  deleteServersNotIn: deleteNotIn('dedicated_servers'),
+  deleteVpsNotIn: deleteNotIn('vps_instances'),
+  deleteStorageNotIn: deleteNotIn('storage_services'),
 
   getSummary: () => {
     const db = getDb();
