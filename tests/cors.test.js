@@ -31,10 +31,6 @@ describe('createOriginCheck', () => {
     expect(production('https://evil.example', { host: 'ocm.example.com' })).toBe(false);
   });
 
-  test('rejects an origin on the same hostname but another port', () => {
-    expect(production('https://ocm.example.com:8443', { host: 'ocm.example.com' })).toBe(false);
-  });
-
   // Hosts compare as URL writes them: lowercase, without the scheme's default port
   test.each([
     ['https://ocm.example.com', 'ocm.example.com:443'],
@@ -50,15 +46,18 @@ describe('createOriginCheck', () => {
     expect(production(origin, { host })).toBe(true);
   });
 
-  test('rejects http://ocm.example.com with Host ocm.example.com:443, the https port', () => {
-    expect(production('http://ocm.example.com', { host: 'ocm.example.com:443' })).toBe(false);
-  });
-
-  // Other ports still differ: port 80 stands only for an https origin's default port
+  // Other ports and other hostnames still differ: port 80 stands only for the
+  // default port of an https origin, on its own hostname
   test.each([
+    ['https://ocm.example.com:8443', 'ocm.example.com'],
     ['https://ocm.example.com:8443', 'ocm.example.com:80'],
     ['https://ocm.example.com', 'ocm.example.com:8080'],
-  ])('rejects %s with Host %s, on another port', (origin, host) => {
+    // The https port: an http page can be a network attacker's
+    ['http://ocm.example.com', 'ocm.example.com:443'],
+    ['https://evil.example', 'ocm.example.com:80'],
+    ['https://ocm.example.com', 'evil.example:80'],
+    ['https://ocm.example.com', 'ocm.example.com.evil.example:80'],
+  ])('rejects %s with Host %s', (origin, host) => {
     expect(production(origin, { host })).toBe(false);
   });
 
@@ -140,14 +139,6 @@ describe('createOriginCheck', () => {
         .toBe(true);
     });
 
-    test('rejects the origin with X-Forwarded-Host on port 80 and X-Forwarded-Proto http', () => {
-      expect(behindTrustedProxy(origin, {
-        ...proxied,
-        forwardedHost: 'ocm.example.com:80',
-        forwardedProto: 'http',
-      })).toBe(false);
-    });
-
     // As the Host check reads it: the last host is the one the nearest proxy
     // set or appended, where a client may have sent the others
     test('reads the last host of an X-Forwarded-Host list', () => {
@@ -183,6 +174,15 @@ describe('createOriginCheck', () => {
     test('allows an https page on https behind a trusted proxy', () => {
       expect(behindTrustedProxy('https://ocm.example.com', { host, forwardedProto: 'https' }))
         .toBe(true);
+    });
+
+    // Even when the host matches, here only through X-Forwarded-Host on port 80
+    test('rejects an https page on http behind a trusted proxy', () => {
+      expect(behindTrustedProxy('https://ocm.example.com', {
+        host: 'ovh-cost-manager:3001',
+        forwardedHost: 'ocm.example.com:80',
+        forwardedProto: 'http',
+      })).toBe(false);
     });
 
     test('reads the first scheme of an X-Forwarded-Proto list', () => {
