@@ -33,11 +33,6 @@ export const fetchSummary = async (from, to) => {
   return data;
 };
 
-export const fetchProjects = async () => {
-  const { data } = await api.get('/projects');
-  return data;
-};
-
 export const fetchProjectsEnriched = async () => {
   const { data } = await api.get('/projects/enriched');
   return data;
@@ -50,11 +45,6 @@ export const fetchByProject = async (from, to) => {
 
 export const fetchByService = async (from, to) => {
   const { data } = await api.get('/analysis/by-service', { params: { from, to } });
-  return data;
-};
-
-export const fetchDailyTrend = async (from, to) => {
-  const { data } = await api.get('/analysis/daily-trend', { params: { from, to } });
   return data;
 };
 
@@ -100,22 +90,6 @@ export const fetchConsumptionForecast = async () => {
   return data;
 };
 
-export const fetchConsumptionHistory = async (from, to) => {
-  const { data } = await api.get('/consumption/usage-history', { params: { from, to } });
-  return data;
-};
-
-// Phase 2: Account
-export const fetchAccountBalance = async () => {
-  const { data } = await api.get('/account/balance');
-  return data;
-};
-
-export const fetchAccountCredits = async () => {
-  const { data } = await api.get('/account/credits');
-  return data;
-};
-
 // Phase 3: Inventory
 export const fetchInventoryServers = async () => {
   const { data } = await api.get('/inventory/servers');
@@ -129,11 +103,6 @@ export const fetchInventoryVps = async () => {
 
 export const fetchInventoryStorage = async () => {
   const { data } = await api.get('/inventory/storage');
-  return data;
-};
-
-export const fetchInventorySummary = async () => {
-  const { data } = await api.get('/inventory/summary');
   return data;
 };
 
@@ -220,5 +189,3 @@ export const fetchBackupStats = async (from, to) => {
   const { data } = await api.get('/analysis/backup-stats', { params: { from, to } });
   return data;
 };
-
-export default api;
