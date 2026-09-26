@@ -2,10 +2,12 @@ import { months } from './calendar.js';
 import { webCloud } from './web-cloud.js';
 import { trends } from './trends.js';
 import { backup } from './backup.js';
+import { infrastructure } from './infrastructure.js';
 
 // A small synthetic OVHcloud account: two Public Cloud projects, a dedicated
-// server, Veeam backups and a few Web Cloud services, billed over three months.
-// Every name, identifier and amount is made up.
+// server, Veeam backups and a few Web Cloud services, billed over three months,
+// and the inventory of what exists today, with a second server, a VPS and a
+// file storage. Every name, identifier and amount is made up.
 //
 // It is shaped as the API of server/index.js answers. Each key is named after
 // an API function of src/services/api.js, without its "fetch" prefix. What
@@ -201,4 +203,5 @@ export const account = {
   ...webCloud,
   ...trends,
   ...backup,
+  ...infrastructure,
 };
