@@ -9,15 +9,9 @@ import { renderTabHook } from '../support/hooks.jsx';
 // the hook requests and returns for the selected month and the active tab.
 
 const [september, august] = months;
-// Months as /api/months lists them, at the turn of a year and in a leap year
+// A month as /api/months lists it, at the turn of a year
 const january = {
   value: '2026-01', label: 'Janvier 2026', from: '2026-01-01', to: '2026-01-31',
-};
-const december = {
-  value: '2025-12', label: 'Décembre 2025', from: '2025-12-01', to: '2025-12-31',
-};
-const leapFebruary = {
-  value: '2024-02', label: 'Février 2024', from: '2024-02-01', to: '2024-02-29',
 };
 
 // The services of a period, as [family, name, cost]
@@ -97,17 +91,14 @@ describe('useWebCloudTab', () => {
     ]);
   });
 
-  it.each([
-    ['January 2026', january, { from: '2025-02-01', to: '2026-01-31' }],
-    ['December 2025', december, { from: '2025-01-01', to: '2025-12-31' }],
-    ['February 2024, in a leap year', leapFebruary, { from: '2023-03-01', to: '2024-02-29' }],
-  ])('covers the 12 months that end on %s', async (_, selectedMonth, period) => {
+  // The period itself is unit tested with webCloudPeriodEndingOn()
+  it('requests the 12 months that end on a January from the February before', async () => {
     const { result } = await renderTabHook(useWebCloudTab,
-      { selectedMonth, activeTab: 'webcloud' });
+      { selectedMonth: january, activeTab: 'webcloud' });
 
-    expect(result.current.webCloudPeriod).toEqual(period);
-    expect(api.fetchWebCloudSummary).toHaveBeenCalledWith(period.from, period.to);
-    expect(api.fetchWebCloudItems).toHaveBeenCalledWith(period.from, period.to);
+    expect(result.current.webCloudPeriod).toEqual({ from: '2025-02-01', to: '2026-01-31' });
+    expect(api.fetchWebCloudSummary).toHaveBeenCalledWith('2025-02-01', '2026-01-31');
+    expect(api.fetchWebCloudItems).toHaveBeenCalledWith('2025-02-01', '2026-01-31');
   });
 
   it('keeps the family of the "show all" modal when another tab opens', async () => {
