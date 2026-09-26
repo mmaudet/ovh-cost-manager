@@ -66,7 +66,7 @@ docker-compose up -d --build
 
 ### 3. Import billing data
 
-The container imports on its own. At start, once the server answers, it counts the bills in its database: without any, it runs a full import; with some, it skips this first import; when it cannot count them, it runs a differential import, as a full import first clears the imported data. Then it runs a differential import every `IMPORT_INTERVAL` seconds, 24 hours by default, with the flags of `IMPORT_FLAGS`. `IMPORT_ENABLED=false` turns these imports off, and the dashboard's resync button with them.
+The container imports on its own. At start, once the server answers, it counts the bills in its database: without any, it runs a full import; with some, it skips this first import; when it cannot count them, it runs a differential import rather than a full one, which would clear the data first. Then it runs a differential import every `IMPORT_INTERVAL` seconds, 24 hours by default. Every one of these imports, the first included, takes the flags of `IMPORT_FLAGS`, `--all` by default. `IMPORT_ENABLED=false` turns these imports off, and the dashboard's resync button with them.
 
 To import by hand:
 

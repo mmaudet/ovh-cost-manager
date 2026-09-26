@@ -151,24 +151,25 @@ up to 2.2.2 they did not (`2.2.2`).
 `scripts/entrypoint.sh` runs `cron-import.sh` in the background (periodic differential
 import, default 24h, controlled by `IMPORT_*` env vars) and the Express server in the
 foreground. At start, the cron runs a full import only when the DB holds no bill: it
-counts them with `data/count-bills.js`, straight from the DB, since the API needs a login
-under authentication, and `scripts/import-decision.sh` falls back to a differential
-import when the count fails, as `--full` clears the data first.
+counts them with `data/count-bills.js`, straight from the DB, since OCM's own API needs a
+login under authentication. When the count fails, `scripts/import-decision.sh` picks a
+differential import rather than a full one, which would clear the data first.
+`IMPORT_FLAGS` applies to every run, the first included.
 
 - `docker-compose up -d --build` — simple mode, dashboard on `:3001`. OCM runs in header
   mode there (OIDC off by default) with no proxy in front: any client can send its own
   `Auth-User`, so `AUTH_REQUIRED=true` keeps out only the clients that send none.
 - `docker-compose -f docker-compose.sso.yml up -d --build` — SSO mode, a standalone file:
-  LemonLDAP-NG is the OIDC provider and, through its RELAY, the only way in to OCM, which
-  signs users in itself with OIDC. The `yadd/lemonldap-ng-portal` image has no Manager:
-  OCM's relying party comes from `demo/sso/`, mounted at `/over` as config overrides
-  (`demo/README.md`).
+  LemonLDAP-NG is the OIDC provider and, through its RELAY (its built-in reverse proxy),
+  the only way in to OCM, which signs users in itself with OIDC. The
+  `yadd/lemonldap-ng-portal` image has no Manager: OCM's relying party comes from
+  `demo/sso/`, mounted at `/over` as config overrides (`demo/README.md`).
 
 **`TRUST_PROXY=true` is required behind any reverse proxy / Kubernetes ingress**, otherwise
 rate limiting buckets all users under the proxy's single IP and everyone shares one limit.
 With it, the server also trusts `X-Forwarded-Host` and `X-Forwarded-Proto` for the CORS
-check (`server/cors.js`), which always accepts the dashboard's own origin, and the last
-`X-Forwarded-Host` for the `ALLOWED_HOSTS` check (`server/hosts.js`).
+check (`server/cors.js`), and the last `X-Forwarded-Host` for the `ALLOWED_HOSTS` check
+(`server/hosts.js`); the CORS check always accepts the dashboard's own origin.
 
 See `docs/deployment.md` for full SSO/OIDC setup.
 
