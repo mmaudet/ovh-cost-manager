@@ -12,13 +12,16 @@ const TrendsTab = ({
   language, t, fmt,
 }) => {
   const currentPeriodLabel = (PERIOD_OPTIONS.find(o => o.months === trendPeriod) || {}).key;
-  // The growth over the period, in percent, from its first month to its last: none to show
-  // below two months, and none to compute from a first month at 0 € or less (#65)
-  const hasGrowth = monthlyTrend.length > 1;
-  const growth = hasGrowth
+  // The growth over the period, in percent, from its first month to its last. Two states
+  // show none (#65):
+  // - N/A, without two months to compare: with no months at all, as when nothing was billed
+  //   over the period, since the trend routes give every month of a period with a bill;
+  // - "—", with a tooltip, when the first month, at 0 € or less, leaves none to compute.
+  const spansTwoMonths = monthlyTrend.length > 1;
+  const growth = spansTwoMonths
     ? growthOverPeriod(monthlyTrend[0].cost, monthlyTrend[monthlyTrend.length - 1].cost)
     : null;
-  const growthNotComputable = hasGrowth && growth === null;
+  const growthNotComputable = spansTwoMonths && growth === null;
 
   return (
     <div className="space-y-6">
@@ -145,9 +148,9 @@ const TrendsTab = ({
               : (growth > 0 ? 'text-red-600' : 'text-green-600')}`}
             title={growthNotComputable ? t('periodGrowthNotComputable') : undefined}
           >
-            {growth === null
-              ? (growthNotComputable ? '—' : 'N/A')
-              : `${growth > 0 ? '+' : ''}${growth.toFixed(1)}%`}
+            {!spansTwoMonths && 'N/A'}
+            {growthNotComputable && '—'}
+            {growth !== null && `${growth > 0 ? '+' : ''}${growth.toFixed(1)}%`}
           </div>
           <p className="text-sm text-gray-500 mt-1">{t('overPeriod')} {t(currentPeriodLabel)}</p>
         </div>
