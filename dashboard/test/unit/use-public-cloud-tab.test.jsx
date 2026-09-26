@@ -42,6 +42,38 @@ const openModals = (tab) => Object.entries({
 }).filter(([, open]) => open).map(([resources]) => resources);
 
 describe('usePublicCloudTab', () => {
+  it('returns what the tab and its modals read, and nothing else', async () => {
+    const { result } = await renderTabHook(usePublicCloudTab,
+      { ...onTheTab, selectedProject: production });
+
+    // What the shell spreads over the tab and its modals: the "show all" modals, closed,
+    // the projects and the figures of the month, and the resources of the open project,
+    // whose lists the tests below read
+    expect(result.current).toEqual({
+      showAllBuckets: false,
+      setShowAllBuckets: expect.any(Function),
+      showAllInstances: false,
+      setShowAllInstances: expect.any(Function),
+      showAllVolumes: false,
+      setShowAllVolumes: expect.any(Function),
+      showAllSnapshots: false,
+      setShowAllSnapshots: expect.any(Function),
+      showAllSavingsPlans: false,
+      setShowAllSavingsPlans: expect.any(Function),
+      projectsEnriched: expect.any(Array),
+      publicCloudStats: expect.any(Object),
+      projectConsumption: expect.any(Array),
+      projectInstances: expect.any(Array),
+      instanceCount: 5,
+      projectInstanceTotal: { total: 538.9 },
+      projectQuotas: expect.any(Array),
+      projectBuckets: expect.any(Array),
+      projectVolumes: expect.any(Array),
+      projectSnapshots: expect.any(Array),
+      projectSavingsPlans: expect.any(Array),
+    });
+  });
+
   describe('projects and figures of the month', () => {
     it.each(TAB_IDS.filter((tab) => tab !== 'inventory'))(
       'are left out while the %s tab is active',
