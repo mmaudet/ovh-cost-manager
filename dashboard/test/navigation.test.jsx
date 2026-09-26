@@ -46,14 +46,17 @@ const productionDetail = [
 ];
 
 // Opens the Production project on the Public Cloud tab, then the bill lines of the
-// dedicated servers on the Infrastructure tab, where the user stays
+// dedicated servers on the Infrastructure tab, where the user stays. Every test starts
+// there, so the helper checks that both opened.
 const openProjectAndResourceType = async () => {
   const { user } = await renderDashboard();
   await openTab(user, 'Public Cloud');
   await openProject(user, 'Production');
+  expect(texts(cloudProjectRow('Production'))).toContain('▲');
   await openTab(user, 'Infrastructure');
   await user.click(resourceType('Dedicated Servers'));
   await settle();
+  expect(texts(costsByResourceType())).toEqual(withServerBillLines);
   return { user };
 };
 
