@@ -8,9 +8,7 @@
  * origin does not widen access.
  */
 
-// Allowed in development, where the Vite dev server calls the API from
-// another port. Compared with the whole hostname, as URL writes it.
-const LOOPBACK_HOSTNAMES = ['localhost', '127.0.0.1', '[::1]'];
+const { LOOPBACK_HOSTNAMES, firstValue, parseHost } = require('./hostHeader');
 
 /**
  * Builds the check once, from the server's settings.
@@ -40,6 +38,7 @@ function createOriginCheck({ allowedOrigins, isDev, trustProxy }) {
     if (!url) {
       return false;
     }
+    // In development, the Vite dev server calls the API from another port
     if (isDev && LOOPBACK_HOSTNAMES.includes(url.hostname)) {
       return true;
     }
@@ -55,7 +54,7 @@ function createOriginCheck({ allowedOrigins, isDev, trustProxy }) {
     if (trustProxy && request.forwardedHost) {
       ownHosts.push(firstValue(request.forwardedHost));
     }
-    return ownHosts.some((ownHost) => normalizeHost(ownHost, url.protocol) === url.host);
+    return ownHosts.some((ownHost) => parseHost(ownHost, url.protocol)?.host === url.host);
   };
 }
 
@@ -69,11 +68,6 @@ function knownScheme({ forwardedProto, encrypted }, trustProxy) {
   return encrypted ? 'https' : null;
 }
 
-// The first value of a header that may hold a list, as Express reads it
-function firstValue(header) {
-  return header.split(',')[0].trim();
-}
-
 // The Origin header as an http(s) URL, which always has a host, or null: when
 // it is malformed, 'null', or of another scheme. 'ocm.example.com:3001' parses,
 // but as the scheme 'ocm.example.com:' without a host.
@@ -85,20 +79,6 @@ function parseOrigin(origin) {
     return null;
   }
   return ['http:', 'https:'].includes(url.protocol) ? url : null;
-}
-
-// A host header as URL writes the host of the origin's scheme: lowercase,
-// without the scheme's default port (ocm.example.com:443 for https is
-// ocm.example.com). null when it is no host.
-function normalizeHost(host, protocol) {
-  if (!host) {
-    return null;
-  }
-  try {
-    return new URL(`${protocol}//${host}`).host;
-  } catch (e) {
-    return null;
-  }
 }
 
 module.exports = { createOriginCheck };

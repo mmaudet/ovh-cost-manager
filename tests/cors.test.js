@@ -53,6 +53,11 @@ describe('createOriginCheck', () => {
     expect(production('http://undefined', {})).toBe(false);
   });
 
+  // As the Host check reads it: URL alone would read the host after the user
+  test('rejects an origin when the request\'s Host is malformed', () => {
+    expect(production('http://ocm.example.com', { host: 'user@ocm.example.com' })).toBe(false);
+  });
+
   // 'ocm.example.com:3001' parses, but as the scheme 'ocm.example.com:' without a host
   test.each(['ocm.example.com', 'ocm.example.com:3001', 'null'])(
     'rejects the malformed Origin %s without throwing',
