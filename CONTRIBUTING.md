@@ -162,7 +162,8 @@ the base reads it too, so that both show the same budget.
 
 Snapshots, database copies and captures hold real billing data: never commit
 them, nor attach them to an issue or a pull request. The script refuses an
-output directory inside the repository that git does not ignore.
+output directory in the snapshot, or in the work tree of any repository where
+git does not ignore it, symbolic links followed.
 
 ## Development Setup
 

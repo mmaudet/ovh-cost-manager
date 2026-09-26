@@ -89,12 +89,17 @@ async function main(argv) {
     describeSide('head', options.head, repo),
   ];
 
-  const out = outputDirectory(options, repo);
+  const { dir: out, created } = outputDirectory(options);
   const logs = path.join(out, 'logs');
   fs.mkdirSync(logs, { recursive: true });
-  // A run that stops before writing anything leaves no empty directory behind
+  // A run that stops before writing anything leaves no empty directory of its own behind
   defer(async () => {
-    for (const dir of options.out ? [logs] : [logs, out]) {
+    const own = [logs];
+    for (let dir = out; created && dir !== path.dirname(dir); dir = path.dirname(dir)) {
+      own.push(dir);
+      if (dir === created) break;
+    }
+    for (const dir of own) {
       try {
         fs.rmdirSync(dir);
       } catch {
@@ -247,29 +252,54 @@ function describeSide(name, ref, repo) {
   return { name, ref, commit, label: `${ref} (${commit.slice(0, 7)})` };
 }
 
-// Captures hold real billing data: never where git could pick them up, nor in the snapshot
-function outputDirectory({ out, data }, repo) {
-  if (!out) return fs.mkdtempSync(path.join(os.tmpdir(), 'ocm-dashboard-comparison-'));
-  const dir = path.resolve(expandHome(out));
-  const within = (parent) => {
-    const relative = path.relative(parent, dir);
-    return !relative.startsWith('..') && !path.isAbsolute(relative);
-  };
-  if (within(data)) throw new UsageError(`--out ${out} is in the snapshot directory, which is never written to.`);
-  if (within(repo)) {
-    let ignored = true;
-    try {
-      git(['check-ignore', '--quiet', dir], repo);
-    } catch {
-      ignored = false;
-    }
-    if (!ignored) {
-      throw new UsageError(`--out ${out} is in the repository and git does not ignore it: the captures `
-        + 'hold real billing data, pick a directory outside the repository.');
-    }
+// Captures hold real billing data: never where git could pick them up, nor in the snapshot.
+// Returns the directory and the first directory the script had to create, if any.
+function outputDirectory({ out, data }) {
+  if (!out) {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ocm-dashboard-comparison-'));
+    return { dir, created: dir };
   }
-  fs.mkdirSync(dir, { recursive: true });
-  return dir;
+  // Through the symbolic links, to where the files will really be written
+  const dir = realPath(expandHome(out));
+  const relative = path.relative(realPath(data), dir);
+  if (!relative.startsWith('..') && !path.isAbsolute(relative)) {
+    throw new UsageError(`--out ${out} is in the snapshot directory, which is never written to.`);
+  }
+  // In the work tree of any repository, another checkout of this one included, only where
+  // git ignores it
+  let workTree = null;
+  try {
+    workTree = git(['rev-parse', '--show-toplevel'], nearestExisting(dir));
+  } catch {
+    // Not in a work tree
+  }
+  if (workTree !== null && !ignoredByGit(workTree, dir)) {
+    throw new UsageError(`--out ${out} is in the work tree ${workTree} and git does not ignore it: `
+      + 'the captures hold real billing data, pick a directory outside any repository.');
+  }
+  return { dir, created: fs.mkdirSync(dir, { recursive: true }) };
+}
+
+function nearestExisting(target) {
+  let existing = path.resolve(target);
+  while (!fs.existsSync(existing)) existing = path.dirname(existing);
+  return existing;
+}
+
+// The path with the symbolic links of its existing part resolved
+function realPath(target) {
+  const absolute = path.resolve(target);
+  const existing = nearestExisting(absolute);
+  return path.join(fs.realpathSync(existing), path.relative(existing, absolute));
+}
+
+function ignoredByGit(workTree, target) {
+  try {
+    git(['check-ignore', '--quiet', target], workTree);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 // Noon UTC: the same calendar day from UTC-11 to UTC+11
