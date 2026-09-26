@@ -48,6 +48,7 @@ export default function Dashboard() {
   const [syncWarningDismissed, setSyncWarningDismissed] = useState(false);
   const [selectedProject, setSelectedProject] = useState(null);
   const [selectedResourceType, setSelectedResourceType] = useState(null);
+  const [syncFeedback, setSyncFeedback] = useState(null); // { type: 'ok'|'error', msg }
 
   // Helper to format currency with current language
   const fmt = (value) => formatCurrency(value, language);
@@ -65,26 +66,11 @@ export default function Dashboard() {
     queryFn: fetchUser
   });
 
-  // Update budget when config loads
-  useEffect(() => {
-    if (configData?.budget) {
-      setBudget(configData.budget);
-    }
-  }, [configData]);
-
   // Fetch available months
   const { data: months = [] } = useQuery({
     queryKey: ['months'],
     queryFn: fetchMonths
   });
-
-  // Set the default month when data loads: the latest one. useCompareTab sets months A
-  // and B on the same condition, in the same commit
-  useEffect(() => {
-    if (months.length > 0 && !selectedMonth) {
-      setSelectedMonth(months[0]);
-    }
-  }, [months, selectedMonth]);
 
   // Fetch data for selected month
   const { data: summary, isLoading: loadingSummary } = useQuery({
@@ -105,15 +91,18 @@ export default function Dashboard() {
     enabled: !!selectedMonth
   });
 
-  const overviewTab = useOverviewTab();
+  const { data: byResourceType = [] } = useQuery({
+    queryKey: ['byResourceType', selectedMonth?.from, selectedMonth?.to],
+    queryFn: () => fetchByResourceType(selectedMonth.from, selectedMonth.to),
+    enabled: !!selectedMonth
+  });
 
-  const trendsTab = useTrendsTab({ months, activeTab });
-
-  const compareTab = useCompareTab({ months, selectedMonth, activeTab });
-  // The "vs previous month" KPI reads the summary of month B (#50). Its query only runs on
-  // the Compare tab, but month B defaults to the latest month, whose summary the page loads
-  // at start under the same key: the KPI reads it from page start.
-  const { compareDataB } = compareTab;
+  // GPU cost summary — filtered by selected month (for overview)
+  const { data: gpuSummary } = useQuery({
+    queryKey: ['gpuSummary', selectedMonth?.from, selectedMonth?.to],
+    queryFn: () => fetchGpuSummary(selectedMonth.from, selectedMonth.to),
+    enabled: !!selectedMonth
+  });
 
   const { data: importStatus } = useQuery({
     queryKey: ['importStatus'],
@@ -124,9 +113,62 @@ export default function Dashboard() {
     refetchInterval: (query) => (query.state.data?.running ? 30000 : false)
   });
 
+  // Phase 1: Consumption data
+  const { data: consumptionCurrent } = useQuery({
+    queryKey: ['consumptionCurrent'],
+    queryFn: fetchConsumptionCurrent
+  });
+
+  const { data: consumptionForecast } = useQuery({
+    queryKey: ['consumptionForecast'],
+    queryFn: fetchConsumptionForecast
+  });
+
+  const { data: expiringServices = [] } = useQuery({
+    queryKey: ['expiringServices'],
+    queryFn: () => fetchExpiringServices(30)
+  });
+
+  const overviewTab = useOverviewTab();
+
+  const compareTab = useCompareTab({ months, selectedMonth, activeTab });
+  // The "vs previous month" KPI reads the summary of month B (#50). Its query only runs on
+  // the Compare tab, but month B defaults to the latest month, whose summary the page loads
+  // at start under the same key: the KPI reads it from page start.
+  const { compareDataB } = compareTab;
+
+  const trendsTab = useTrendsTab({ months, activeTab });
+
+  const publicCloudTab = usePublicCloudTab({ selectedMonth, activeTab, selectedProject });
+
+  const webCloudTab = useWebCloudTab({ selectedMonth, activeTab });
+
+  const infrastructureTab = useInfrastructureTab({
+    selectedMonth, activeTab, selectedResourceType,
+  });
+  // The Compare tab lists the dedicated servers too: the shell passes them on, though they
+  // only load on the Infrastructure tab (#35)
+  const { inventoryServers } = infrastructureTab;
+
+  const backupTab = useBackupTab({ selectedMonth, activeTab });
+
+  // Update budget when config loads
+  useEffect(() => {
+    if (configData?.budget) {
+      setBudget(configData.budget);
+    }
+  }, [configData]);
+
+  // Set the default month when data loads: the latest one. useCompareTab sets months A
+  // and B on the same condition, in the same commit
+  useEffect(() => {
+    if (months.length > 0 && !selectedMonth) {
+      setSelectedMonth(months[0]);
+    }
+  }, [months, selectedMonth]);
+
   // Manual resync
   const queryClient = useQueryClient();
-  const [syncFeedback, setSyncFeedback] = useState(null); // { type: 'ok'|'error', msg }
   const resync = useMutation({
     mutationFn: triggerImport,
     onSuccess: () => {
@@ -158,49 +200,6 @@ export default function Dashboard() {
       });
     }
   }, [latestImport, queryClient]);
-
-  // Phase 1: Consumption data
-  const { data: consumptionCurrent } = useQuery({
-    queryKey: ['consumptionCurrent'],
-    queryFn: fetchConsumptionCurrent
-  });
-
-  const { data: consumptionForecast } = useQuery({
-    queryKey: ['consumptionForecast'],
-    queryFn: fetchConsumptionForecast
-  });
-
-
-  const infrastructureTab = useInfrastructureTab({
-    selectedMonth, activeTab, selectedResourceType,
-  });
-  // The Compare tab lists the dedicated servers too: the shell passes them on, though they
-  // only load on the Infrastructure tab (#35)
-  const { inventoryServers } = infrastructureTab;
-
-  const { data: expiringServices = [] } = useQuery({
-    queryKey: ['expiringServices'],
-    queryFn: () => fetchExpiringServices(30)
-  });
-
-  const webCloudTab = useWebCloudTab({ selectedMonth, activeTab });
-
-  const { data: byResourceType = [] } = useQuery({
-    queryKey: ['byResourceType', selectedMonth?.from, selectedMonth?.to],
-    queryFn: () => fetchByResourceType(selectedMonth.from, selectedMonth.to),
-    enabled: !!selectedMonth
-  });
-
-  const publicCloudTab = usePublicCloudTab({ selectedMonth, activeTab, selectedProject });
-
-  // GPU cost summary — filtered by selected month (for overview)
-  const { data: gpuSummary } = useQuery({
-    queryKey: ['gpuSummary', selectedMonth?.from, selectedMonth?.to],
-    queryFn: () => fetchGpuSummary(selectedMonth.from, selectedMonth.to),
-    enabled: !!selectedMonth
-  });
-
-  const backupTab = useBackupTab({ selectedMonth, activeTab });
 
   // Check if previous month exists
   const previousMonthExists = selectedMonth && months.length > 1 &&
