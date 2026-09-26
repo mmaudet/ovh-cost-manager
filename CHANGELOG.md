@@ -12,6 +12,28 @@ sections were written afterwards from the git history.
 
 <!-- scripts/release.sh inserts each new version above the first version heading. -->
 
+## 2.4.1 - 2026-09-26
+
+<!-- Upgrade notes and highlights of this release, if any. -->
+
+### Security
+* security: let deployments restrict the host names the server answers to by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/92
+* security: harden OIDC sign-in, sessions and back-channel logout, and read the settings strictly by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/98
+### Bug fixes
+* fix: complete the Compare tab: accordions, dedicated servers and projects of both months by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/89
+* fix: loading and error states, and localised sizes and shares, in the Web Cloud, Backup and Public Cloud tabs by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/90
+* fix: keep each month's project consumption, store the VPS OS, and log import failures by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/91
+* fix: stop the Docker cron from re-importing everything under authentication by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/93
+* fix: translate the month labels, the logout tooltip and the Markdown report by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/94
+* fix: list expiring services by date, remove cancelled ones, and merge the 'other' costs by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/95
+* fix: compare the total cost KPI with the previous month, and say when there is no data by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/96
+* fix: write percentages and sizes the French way, and harden the dashboard tests by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/97
+* fix: accept the dashboard's https origin when the SSO relay passes port 80 by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/100
+### Maintenance
+* docs: describe the LemonLDAP-NG relay and OIDC setup of the SSO stack by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/99
+
+**Full Changelog**: https://github.com/mmaudet/ovh-cost-manager/compare/v2.4.0...v2.4.1
+
 ## 2.4.0 - 2026-09-26
 
 The dashboard page is now split into one module per tab, pinned down by 375
