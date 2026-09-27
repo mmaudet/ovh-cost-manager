@@ -12,6 +12,15 @@ sections were written afterwards from the git history.
 
 <!-- scripts/release.sh inserts each new version above the first version heading. -->
 
+## 2.4.2 - 2026-09-27
+
+<!-- Upgrade notes and highlights of this release, if any. -->
+
+### New features
+* feat: use the new logo in the dashboard, its favicon and the README, with new screenshots by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/104
+
+**Full Changelog**: https://github.com/mmaudet/ovh-cost-manager/compare/v2.4.1...v2.4.2
+
 ## 2.4.1 - 2026-09-26
 
 This release fixes the issues open after 2.4.0. It hardens the OIDC
