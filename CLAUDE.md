@@ -60,6 +60,41 @@ OVH API ──> data/import.js ──> SQLite (ovh-bills.db) ──> server/inde
   lives in `src/tabs/` as a `useXxxTab` hook plus an `XxxTab` component, per ADR 0001
   (`docs/adr/`). Shared components are in `src/components/`, helpers in `src/utils/`.
 
+### Accounts
+
+One database holds every account's data (ADR 0002; `CONTEXT.md` defines Account and
+Unknown account). An account is its NIC handle, which each import reads from `GET /me`.
+In every layer, all accounts is the absence of a filter, and one account a filter on its
+NIC handle:
+
+- **Data layer.** The root tables fed by the OVH API hold the NIC handle in an `account`
+  column; bill lines and a project's resources, consumption and quotas reach it through
+  their bill or project. Their writers require the account (`requireAccount()`), so a row
+  without one was stored before the accounts: the Unknown account's. A query that can keep
+  one account's rows takes an `account` argument, `null` for all accounts,
+  `UNKNOWN_ACCOUNT` or a NIC handle, and joins `accountCondition()` to its WHERE clause.
+- **API.** A data route takes the optional `account` parameter through the
+  `accountParameter` middleware (`server/account-parameter.js`), into `req.account`: a NIC
+  handle that the `accounts` table records, `unknown`, or none for all accounts; anything
+  else gets a 400. Without it, a route answers as before the accounts, and the account-wide
+  figures (consumption, forecast, balance, consumption history) add up the accounts.
+  `byAccount=true` opts a list of projects or services into one row per account.
+  `GET /api/accounts` lists the recorded accounts, then the Unknown account while rows
+  without an account remain.
+- **Dashboard.** The shell holds the selected account (`useSelectedAccount()`, remembered
+  in the browser, per ADR 0001) and passes `selectedAccount` to the tab hooks: `null` for
+  all accounts, the default, or the `id` that `/api/accounts` gives. A query that follows
+  it is built with `accountQuery()` (`src/utils/accounts.js`): its request and its key name
+  the account only when one is selected, after the other parts of the key. The selector
+  shows when `/api/accounts` lists two entries or more (`offersAccounts()`), the Unknown
+  account and the accounts no longer configured included. The same module gives the
+  Account column of the lists and CSV exports with all accounts shown, the budget the page
+  compares with, and the scope the report names.
+
+A single-account installation sends the same requests, under the same query keys, and
+shows the same page as before the accounts: `dashboard/test/shell-queries.test.jsx` pins
+the keys, and the real-data comparison of `CONTRIBUTING.md` checks the page.
+
 ### Configuration resolution
 
 Two settings are resolved with the same priority pattern, used independently in `db.js`
@@ -129,7 +164,7 @@ fails does not stop the others: the run then ends `partial`, or `failed` when al
 `--account <NIC handle>` limits a run to one configured account. What acts on a whole
 table acts on the imported account only: the removal of the services OVH no longer
 lists, the replacement of the consumption history, and the clearing of `--full`, which
-clears every account it can read, or the one of `--account`. A service that two accounts
+clears each account it can import, or the one of `--account`. A service that two accounts
 list is stored once: it belongs to the account that bills it, or else to the first
 configured account that lists it. An account removed from the configuration keeps its
 data, and is no longer imported.
