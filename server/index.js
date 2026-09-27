@@ -732,6 +732,31 @@ function registerRoutes() {
   });
 
   // ========================
+  // Accounts Endpoint
+  // ========================
+
+  // The OVH accounts that the imports read, as the imports record them: none before the
+  // first import since the upgrade (#112). An account's name is its NIC handle until names
+  // can be configured, and its last import is null until one has ended.
+  app.get('/api/accounts', (req, res) => {
+    try {
+      const accounts = db.accounts.getAll().map(account => ({
+        nic: account.nic,
+        name: account.nic,
+        currency: account.currency,
+        lastImport: account.last_import_at === null ? null : {
+          at: account.last_import_at,
+          status: account.last_import_status,
+          error: account.last_import_error
+        }
+      }));
+      res.json(accounts);
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ========================
   // Available months endpoint (for selectors)
   // ========================
 

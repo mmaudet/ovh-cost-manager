@@ -3,7 +3,7 @@
  * go through its routes: Jest cannot load openid-client, an ES module, while
  * the server's own Node can. It runs with a throwaway HOME and DATA_DIR, and
  * reads neither the developer's config.json nor data: only the config.json a
- * test gives it, if any.
+ * test gives it, if any, and the rows a test seeds its database with.
  *
  * Also a minimal browser, which keeps the cookies the server sets and follows
  * no redirect, so that a test sees each step of a sign-in.
@@ -17,6 +17,28 @@ const path = require('path');
 
 const SERVER = path.resolve(__dirname, '..', '..', 'server', 'index.js');
 const HIDE_REPO_CONFIG = path.resolve(__dirname, 'hide-repo-config.js');
+const DATA_LAYER = path.resolve(__dirname, '..', '..', 'data', 'db.js');
+
+// Creates the database of `dataDir` as the server does, and hands its data
+// layer to `seed`, which writes the rows the test needs. data/db.js reads
+// DATA_DIR once, when it is first required.
+function seedDatabase(dataDir, seed) {
+  const previousDataDir = process.env.DATA_DIR;
+  process.env.DATA_DIR = dataDir;
+  try {
+    jest.isolateModules(() => {
+      const db = require(DATA_LAYER);
+      try {
+        seed(db);
+      } finally {
+        db.closeDb();
+      }
+    });
+  } finally {
+    if (previousDataDir === undefined) delete process.env.DATA_DIR;
+    else process.env.DATA_DIR = previousDataDir;
+  }
+}
 
 function freePort() {
   return new Promise((resolve, reject) => {
@@ -41,12 +63,17 @@ async function waitFor(check, what, output, timeout = 15000) {
 }
 
 // The server in a child process, with a throwaway HOME, which holds config
-// in my-ovh-bills/config.json when it is given, and DATA_DIR
-async function spawnOcm(envOf, config) {
+// in my-ovh-bills/config.json when it is given, and DATA_DIR, whose database
+// seed writes to when it is given
+async function spawnOcm(envOf, config, seed) {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'ocm-test-'));
   if (config !== undefined) {
     fs.mkdirSync(path.join(home, 'my-ovh-bills'));
     fs.writeFileSync(path.join(home, 'my-ovh-bills', 'config.json'), JSON.stringify(config));
+  }
+  const dataDir = path.join(home, 'data');
+  if (seed !== undefined) {
+    seedDatabase(dataDir, seed);
   }
   const port = await freePort();
   const url = `http://127.0.0.1:${port}`;
@@ -55,7 +82,7 @@ async function spawnOcm(envOf, config) {
     env: {
       PATH: process.env.PATH,
       HOME: home,
-      DATA_DIR: path.join(home, 'data'),
+      DATA_DIR: dataDir,
       PORT: String(port),
       NODE_ENV: 'production',
       IMPORT_ENABLED: 'false',
@@ -83,11 +110,13 @@ async function spawnOcm(envOf, config) {
  *   throwaway places, from its URL, such as for OIDC_BASE_URL
  * @param {object} [options]
  * @param {object} [options.config] - the content of its config.json
+ * @param {function(object)} [options.seed] - writes to its database before it
+ *   starts, through the data layer (data/db.js) that it is handed
  * @returns {Promise<{ url: string, output: function(): string,
  *   logged: function(string): Promise, stop: function }>}
  */
-async function startOcm(envOf, { config } = {}) {
-  const { home, url, env, child, exited, output } = await spawnOcm(envOf, config);
+async function startOcm(envOf, { config, seed } = {}) {
+  const { home, url, env, child, exited, output } = await spawnOcm(envOf, config, seed);
 
   const server = {
     url,
