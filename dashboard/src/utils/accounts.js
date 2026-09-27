@@ -55,6 +55,33 @@ export function accountColumnOf(accounts, selectedAccount, t) {
   return { label: t('account'), nameOf };
 }
 
+/**
+ * Whether the lists of the page and their CSV files show the account of each row, in an
+ * Account column (#110): when the page offers accounts to select and shows all of them. A
+ * single-account installation shows its lists as before.
+ * @param {object[]|undefined} accounts - The accounts of the instance (accountsOf()),
+ *   undefined while their list loads
+ * @param {?string|undefined} selectedAccount - The account shown (useSelectedAccount())
+ * @returns {boolean}
+ */
+export const accountColumnShown = (accounts, selectedAccount) =>
+  selectedAccount === null && accounts !== undefined && offersAccounts(accounts);
+
+/**
+ * The account of a row of a list, as the Account column names it: by its name, or else its
+ * NIC handle, and the Unknown account for a row without an account.
+ * @param {?string} nic - The NIC handle of the row's account, as the server gives it: null
+ *   for the Unknown account
+ * @param {object[]} accounts - The accounts of the instance (accountsOf()), whose id is the
+ *   NIC handle of each, but the Unknown account's
+ * @param {function(string): string} t - The translations of the page
+ * @returns {string}
+ */
+export function accountNameOf(nic, accounts, t) {
+  if (nic === null) return t('unknownAccount');
+  return accounts.find(({ id }) => id === nic)?.name ?? nic;
+}
+
 // Whether the key and the request of a query name the account shown: not for all accounts,
 // null, which the page asks for as it did before several accounts. A query that a tab shares
 // with the shell thus keeps sharing its key for all accounts (ADR 0001).

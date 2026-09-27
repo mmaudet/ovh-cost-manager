@@ -1,9 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import { screen, within } from '@testing-library/react';
 import { account } from './fixtures/account.js';
-import { severalAccounts } from './fixtures/accounts.js';
+import { lyonAccount, severalAccounts } from './fixtures/accounts.js';
 import { api, holdBack } from './support/api.js';
-import { captureFileDownloads } from './support/downloads.js';
+import {
+  captureFileDownloads, csvFile, downloadFromPanelAndModal,
+} from './support/downloads.js';
 import {
   backdropOf,
   cardOf,
@@ -395,4 +397,162 @@ describe('Web Cloud tab with several accounts', () => {
         ['example.com', 'Zone DNS Anycast example.com - 12 mois', '2026-07-01', '1,20€'],
       ]);
     });
+
+  describe('Account column', () => {
+    const headerWithAccount =
+      ['Service', 'Compte', 'Libellé de facture', 'Dernière facture', 'Coût'];
+
+    // By its name, or else its NIC handle, as that of the account removed from config.json.
+    // Email Pro example.com moved from that account to Lyon: a service of each, with its cost.
+    it('names the account of each service when the page shows all accounts', async () => {
+      const { user } = await renderDashboard(severalAccounts);
+
+      await openTab(user, 'Web Cloud');
+
+      expect(familyHeadings()).toEqual([
+        ['Domaines (2)', '28,48€', 'Tout afficher', 'CSV'],
+        ['Zones DNS (1)', '1,20€', 'Tout afficher', 'CSV'],
+        ['Hébergements (1)', '71,88€', 'Tout afficher', 'CSV'],
+        ['Emails (3)', '44,52€', 'Tout afficher', 'CSV'],
+        ['Options (1)', '11,88€', 'Tout afficher', 'CSV'],
+      ]);
+      expect(rowsOf(familyTable('Emails'))).toEqual([
+        headerWithAccount,
+        ['example.com', 'zz3333-ovh', 'Email Pro example.com - 2 comptes - 1 mois',
+          '2026-06-01', '35,64€'],
+        ['example.com', 'Lyon subsidiary', 'Email Pro example.com - 2 comptes - 1 mois',
+          '2026-09-01', '11,88€'],
+        ['example.org', 'yy2222-ovh', 'Avoir MX Plan example.org', '2026-09-01', '-3,00€'],
+      ]);
+      expect(rowsOf(familyTable('Domaines'))).toEqual([
+        headerWithAccount,
+        ['example.com', 'Lyon subsidiary', 'Renouvellement du domaine example.com - 1 an',
+          '2026-01-05', '15,99€'],
+        ['example.org', 'yy2222-ovh', 'Renouvellement du domaine example.org - 1 an',
+          '2026-09-01', '12,49€'],
+      ]);
+      // A service of a bill that no account claimed
+      expect(rowsOf(familyTable('Zones DNS'))).toEqual([
+        headerWithAccount,
+        ['example.com', 'Compte inconnu', 'Zone DNS Anycast example.com - 12 mois',
+          '2026-07-01', '1,20€'],
+      ]);
+    });
+
+    it('names the account of each service in the "show all" modal too', async () => {
+      const { user } = await renderDashboard(severalAccounts);
+      await openTab(user, 'Web Cloud');
+
+      await user.click(familyButton('Domaines', 'Tout afficher'));
+
+      expect(rowsOf(within(screen.getByRole('dialog')).getByRole('table'))).toEqual([
+        headerWithAccount,
+        ['example.com', 'Lyon subsidiary', 'Renouvellement du domaine example.com - 1 an',
+          '2026-01-05', '15,99€'],
+        ['example.org', 'yy2222-ovh', 'Renouvellement du domaine example.org - 1 an',
+          '2026-09-01', '12,49€'],
+      ]);
+    });
+
+    // As the page shows them before an instance could import several accounts, in their CSV
+    // files too
+    it.each([
+      ['no account, as before the first import since the upgrade', []],
+      ['a single account', [lyonAccount]],
+    ])('is not shown with %s', async (_, accounts) => {
+      const { user } = await renderDashboard({ ...severalAccounts, accounts });
+      await openTab(user, 'Web Cloud');
+      const downloadedFiles = captureFileDownloads();
+
+      await user.click(familyButton('Emails', 'CSV'));
+
+      expect(rowsOf(familyTable('Emails'))[0]).toEqual(tableHeader);
+      const [file] = await downloadedFiles();
+      expect(file.content.slice(BOM.length).split('\n')[0]).toBe(csvHeader);
+    });
+
+    it('is not shown with an account selected, in the "show all" modal neither', async () => {
+      const { user } = await renderDashboard(severalAccounts);
+      await openTab(user, 'Web Cloud');
+
+      await selectAccount(user, 'yy2222-ovh');
+      await user.click(familyButton('Domaines', 'Tout afficher'));
+
+      expect(rowsOf(within(screen.getByRole('dialog')).getByRole('table'))).toEqual([
+        tableHeader,
+        ['example.org', 'Renouvellement du domaine example.org - 1 an', '2026-09-01', '12,49€'],
+      ]);
+    });
+
+    it('speaks English when the page does', async () => {
+      const { user } = await renderDashboard(severalAccounts);
+      await selectLanguage(user, 'en');
+
+      await openTab(user, 'Web Cloud');
+
+      expect(rowsOf(familyTable('DNS zones'))).toEqual([
+        ['Service', 'Account', 'Bill wording', 'Last billed', 'Cost'],
+        ['example.com', 'Unknown account', 'Zone DNS Anycast example.com - 12 mois',
+          '2026-07-01', '1.20€'],
+      ]);
+    });
+  });
+
+  describe('CSV export', () => {
+    const csvHeaderWithAccount = '"Service";"Compte";"Famille";"Libellé de facture";'
+      + '"Lignes de facture";"Première facture";"Dernière facture";"Coût (EUR)"';
+
+    // So that a spreadsheet can pivot the services by account
+    it('gives the account of each service when the page shows all accounts', async () => {
+      const { user } = await renderDashboard(severalAccounts);
+      await openTab(user, 'Web Cloud');
+
+      const [fromPanel, fromModal] =
+        await downloadFromPanelAndModal(user, familyPanel('Emails'));
+
+      expect(fromModal).toEqual(fromPanel);
+      expect(fromPanel).toEqual(csvFile('ovh-email-2025-10-to-2026-09.csv', [
+        csvHeaderWithAccount,
+        '"example.com";"zz3333-ovh";"email";"Email Pro example.com - 2 comptes - 1 mois";9;'
+          + '"2025-10-01";"2026-06-01";35,64',
+        '"example.com";"Lyon subsidiary";"email";"Email Pro example.com - 2 comptes - 1 mois";3;'
+          + '"2026-07-01";"2026-09-01";11,88',
+        '"example.org";"yy2222-ovh";"email";"Avoir MX Plan example.org";1;"2026-09-01";'
+          + '"2026-09-01";-3',
+      ]));
+    });
+
+    it('names the Unknown account, in the language of the page', async () => {
+      const { user } = await renderDashboard(severalAccounts);
+      await selectLanguage(user, 'en');
+      await openTab(user, 'Web Cloud');
+      const downloadedFiles = captureFileDownloads();
+
+      await user.click(familyButton('DNS zones', 'CSV'));
+
+      const [file] = await downloadedFiles();
+      expect(file.content.slice(BOM.length).split('\n')).toEqual([
+        '"Service";"Account";"Family";"Bill wording";"Bill lines";"First billed";"Last billed";'
+          + '"Cost (EUR)"',
+        '"example.com";"Unknown account";"dns_zone";"Zone DNS Anycast example.com - 12 mois";1;'
+          + '"2026-07-01";"2026-07-01";1,2',
+      ]);
+    });
+
+    it('gives no account with an account selected', async () => {
+      const { user } = await renderDashboard(severalAccounts);
+      await openTab(user, 'Web Cloud');
+      await selectAccount(user, 'Lyon subsidiary');
+
+      const [fromPanel, fromModal] =
+        await downloadFromPanelAndModal(user, familyPanel('Emails'));
+
+      expect(fromModal).toEqual(fromPanel);
+      expect(fromPanel).toEqual(csvFile('ovh-email-2025-10-to-2026-09.csv', [
+        csvHeader,
+        '"example.com";"email";"Email Pro example.com - 2 comptes - 1 mois";3;"2026-07-01";'
+          + '"2026-09-01";11,88',
+      ]));
+    });
+  });
 });

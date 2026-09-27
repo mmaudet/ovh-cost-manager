@@ -13,7 +13,9 @@ import Logo from '../components/Logo';
 import { AccountSelector } from '../components/AccountSelector.jsx';
 import { HeaderSelect } from '../components/HeaderSelect.jsx';
 import { ResyncButton } from '../components/ResyncButton.jsx';
-import { accountColumnOf, accountQuery, accountsOf } from '../utils/accounts.js';
+import {
+  accountColumnOf, accountColumnShown, accountQuery, accountsOf,
+} from '../utils/accounts.js';
 import { formatCurrency, formatMonthLabel, yearMonthOf } from '../utils/format.js';
 import { parseSqliteDate } from '../utils/sqliteDate.js';
 import { generateMarkdownReport } from '../utils/markdownReport.js';
@@ -107,6 +109,9 @@ export default function Dashboard() {
   // The Account column of the lists, which name the account of each row with all accounts
   // shown, when the page offers several (#121): null when they name none
   const accountColumn = accountColumnOf(accounts, selectedAccount, t);
+  // Whether the lists show the account of each row: with all accounts shown, when the page
+  // offers to select one (#110)
+  const showAccountColumn = accountColumnShown(accounts, selectedAccount);
 
   // The months billed to the account shown
   const { data: months = [], isSuccess: monthsLoaded } = useQuery(accountQuery(selectedAccount, {
@@ -618,7 +623,10 @@ export default function Dashboard() {
 
         {/* Tab Content - Web Cloud */}
         {activeTab === 'webcloud' && (
-          <WebCloudTab {...webCloudTab} language={language} t={t} fmt={fmt} />
+          <WebCloudTab
+            {...webCloudTab} language={language} t={t} fmt={fmt}
+            showAccountColumn={showAccountColumn} accounts={accounts}
+          />
         )}
 
         {/* Tab Content - Public Cloud */}
@@ -706,7 +714,10 @@ export default function Dashboard() {
           </details>
         </div>
       </div>
-      <WebCloudTabModals {...webCloudTab} language={language} t={t} fmt={fmt} />
+      <WebCloudTabModals
+        {...webCloudTab} language={language} t={t} fmt={fmt}
+        showAccountColumn={showAccountColumn} accounts={accounts}
+      />
 
       <PublicCloudTabModals
         {...publicCloudTab} language={language} t={t} fmt={fmt} locale={locale}
