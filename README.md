@@ -42,7 +42,7 @@ The screenshots show anonymised data.
 ### Dashboard
 - **Interactive Dashboard**: React-based SPA with Recharts visualizations
 - **Multi-language Support**: French and English interface (i18n)
-- **6 navigation tabs**: Overview, Comparison, Trends, Public Cloud, Infrastructure, Backup
+- **7 navigation tabs**: Overview, Comparison, Trends, Public Cloud, Web Cloud, Infrastructure, Backup
 - **Several OVH Accounts**: one instance imports several accounts; a selector in the header narrows every tab down to one, and with all accounts shown, the lists name each row's account
 
 ### Cost Analysis
@@ -233,7 +233,7 @@ Each entry has:
 
 - **`name`**, optional and unique: how the dashboard names the account, its NIC handle otherwise.
 - **`budget`**, optional, a positive integer: the account's own budget, which the budget card uses when that account is selected. `dashboard.budget` stays the budget of all accounts.
-- **`credentials`**, required: the account's keys, `endpoint` included. Request a consumer key for each account as above, and open its `validationUrl` as that account. Each key needs `GET /me`.
+- **`credentials`**, required: the account's keys, and its `endpoint`, which is required here, unlike in the `credentials` section. Request a consumer key for each account as above, and open its `validationUrl` as that account. Each key needs `GET /me`.
 
 With several accounts:
 
@@ -241,7 +241,7 @@ With several accounts:
 - **One form**: `accounts` cannot be set with `credentials`, nor with the legacy flat form. A malformed section stops the server and the import, naming the setting. The accounts have no environment variables.
 - **Import**: each import imports every account, one after the other, and a differential import starts each account from its own latest bill. An account that fails does not stop the others: the run then ends `partial`. `--account <NIC handle>` limits a run to one account (see [Import Data](#import-data)).
 - **Dashboard**: it shows all accounts by default. A selector in the header narrows every tab down to one, and with all accounts shown, the lists and their CSV exports gain an Account column.
-- **Upgrading**: the first import after the upgrade gives the data stored before it an account, on its own. A single account gets it all. With several, each account claims what its API lists, and an account that claimed every bill gets the rest; what no account claims shows as the Unknown account.
+- **Upgrading**: the first import after the upgrade gives the data stored before it an account, on its own. A single account gets it all. With several, each account claims what its API lists, and an account that claimed every bill gets the rest; what no account claims shows as the Unknown account. So upgrade with the one account you had, and add the others once its first import has run: no Unknown account then shows.
 - **Removed accounts**: an account removed from `config.json` keeps its data, and shows as not configured. It is no longer imported.
 
 The [deployment guide](docs/deployment.md#several-ovh-accounts) details each point, and its [upgrade notes](docs/deployment.md#upgrading-to-several-accounts) what the first import after the upgrade does.
@@ -390,13 +390,13 @@ npm run import -- --from 2025-01-01 --include-cloud-details
 npm run import -- --from 2025-01-01 --all
 
 # Several accounts: import one account alone, by its NIC handle
-npm run import -- --diff --account xx1111-ovh
+npm run import -- --diff --all --account xx1111-ovh
 
 # Several accounts: clear and reimport one account alone
-npm run import -- --full --account xx1111-ovh
+npm run import -- --full --all --account xx1111-ovh
 ```
 
-With several accounts, each run imports every account, one after the other, under one entry of the import history. An account that fails does not stop the others: the run then ends `partial`, and names it, or `failed` when every account did. `--full` clears each account that it can import, and keeps the data of the others (see the [deployment guide](docs/deployment.md#importing-several-accounts)).
+With several accounts, each run imports every account, one after the other, under one entry of the import history. An account that fails does not stop the others: the run then ends `partial`, and names it, or `failed` when every account did. The import's output names each account's NIC handle. `--full` clears each account that it can import, and keeps the data of the others (see the [deployment guide](docs/deployment.md#importing-several-accounts)). Give it `--all`: it clears the account's inventory, balance, consumption history and credit movements too, and fetches again only the datasets that its flags ask for.
 
 ### Start Dashboard
 
@@ -499,7 +499,7 @@ Any other value gets a 400. `/api/bills`, `/api/analysis/daily-trend` and the ro
 | ------------------- | ------------------------------------------------------------------------------------------------------------------ |
 | `GET /api/accounts` | The accounts: `id`, `nic`, `name`, `currency`, `configured`, `unknown`, `lastImport`, `lastSuccessAt` and `budget` |
 
-The route lists the accounts that the imports recorded: those of `config.json`, in its order, then those it no longer lists, then the Unknown account while it holds data. `id` is the value of the `account` parameter: the NIC handle, `nic`, or `unknown` for the Unknown account, whose `nic` is `null`. `name` is the configured name, or else the NIC handle; `configured`, whether `config.json` still lists the account; `unknown`, whether it is the Unknown account. `lastImport` gives when the account's last import ended, with its `status` and `error`, or `null` until one has; `lastSuccessAt`, when its last successful import ended. `budget` is the account's own budget, or `null`. An empty database lists no account, and a database not imported since the upgrade the Unknown account alone.
+The route lists the accounts that the imports recorded: those that the configuration of the last import listed, in its order, then the others, then the Unknown account while it holds data. `id` is the value of the `account` parameter: the NIC handle, `nic`, or `unknown` for the Unknown account, whose `nic`, `name` and `currency` are `null`. `name` is the configured name, as the account's last import recorded it, or else the NIC handle; `configured`, whether the configuration of the last import listed the account; `unknown`, whether it is the Unknown account. `lastImport` gives when the account's last import ended, with its `status` and `error`, or `null` until one has; `lastSuccessAt`, when its last successful import ended. `budget` is the account's own budget, or `null`. An empty database lists no account, and a database not imported since the upgrade the Unknown account alone.
 
 ### Billing & Analysis
 
