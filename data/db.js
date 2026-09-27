@@ -471,6 +471,8 @@ const accountsOps = {
 
   /** @see ownership.attributeRowsWithoutAccount */
   attributeRowsWithoutAccount: onDb(ownership.attributeRowsWithoutAccount),
+  /** @see ownership.markSeveralAccounts */
+  markSeveralAccounts: onDb(ownership.markSeveralAccounts),
   /** @see ownership.isOnlyAccount */
   isOnlyAccount: onDb(ownership.isOnlyAccount),
   /** @see ownership.hasRowsWithoutAccount */

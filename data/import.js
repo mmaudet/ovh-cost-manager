@@ -1503,6 +1503,10 @@ async function runImport(params) {
   const importId = db.importLog.start(importType, fromDate, toDate);
 
   try {
+    // A configuration of several entries marks the database for good, whatever their GET /me
+    // answers: its rows without an account may be any of those accounts', even one that no
+    // run could record, so that a single account configured later never gets them all (#114)
+    if (several) db.accounts.markSeveralAccounts();
     // Before any write or clear: an account that cannot name itself must leave the data as
     // it is, since nothing could tell whose rows it would write
     const attempts = await readEveryAccount(configuration.accounts, several);

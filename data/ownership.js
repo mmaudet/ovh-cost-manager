@@ -46,6 +46,20 @@ const PROJECT_RESOURCE_TABLES = [
 // The tables of the balance and consumption snapshots, of which only the latest is read
 const SNAPSHOT_TABLES = ['account_balance', 'consumption_snapshots'];
 
+// The import state that an import recorded for its account before the accounts, which has
+// none: the month of the current consumption, and not the marks of the database, which have
+// no account either
+const ofAccountState = idInList('key', ['consumption_month']);
+const ACCOUNT_STATE_WITHOUT_ACCOUNT = {
+  sql: `${WITHOUT_ACCOUNT.sql} AND ${ofAccountState.sql}`,
+  params: [...WITHOUT_ACCOUNT.params, ...ofAccountState.params],
+};
+
+// The key of the import state that marks a database whose configuration listed several
+// entries at a run, whether their GET /me answered or not: the database may hold several
+// accounts' rows since. It has no account, and stays.
+const SEVERAL_ACCOUNTS = 'several_accounts';
+
 // The tables that a full import fetches again whole, and clears first: those whose rows carry
 // the account, but the bills, which go with their lines, and the projects, which the
 // consumption of their past months keeps
@@ -62,24 +76,43 @@ const REFETCHED_TABLES = ACCOUNT_TABLES.filter(table => !['bills', 'projects'].i
  * @returns {number} How many rows it gave the account
  */
 function attributeRowsWithoutAccount(database, nic) {
-  const attribute = database.transaction(() => [...ACCOUNT_TABLES, 'import_state']
-    .reduce((attributed, table) => attributed + database
-      .prepare(`UPDATE OR IGNORE ${table} SET account = ? WHERE ${WITHOUT_ACCOUNT.sql}`)
-      .run(nic, ...WITHOUT_ACCOUNT.params).changes, 0));
+  const give = (table, rows) => database.prepare(`
+    UPDATE OR IGNORE ${table} SET account = ? WHERE ${rows.sql}
+  `).run(nic, ...rows.params).changes;
+  const attribute = database.transaction(() => ACCOUNT_TABLES.reduce(
+    (attributed, table) => attributed + give(table, WITHOUT_ACCOUNT),
+    give('import_state', ACCOUNT_STATE_WITHOUT_ACCOUNT),
+  ));
   return attribute();
+}
+
+/**
+ * Marks that a run's configuration listed several entries, whether their GET /me answered or
+ * not: the database may hold several accounts' rows since, and isOnlyAccount() no longer
+ * tells that it has known one account alone. Once marked, it stays so.
+ * @param {object} database - The database
+ */
+function markSeveralAccounts(database) {
+  database.prepare(`
+    INSERT INTO import_state (key, value, account)
+    SELECT ?, 'yes', NULL WHERE NOT EXISTS (SELECT 1 FROM import_state WHERE key = ?)
+  `).run(SEVERAL_ACCOUNTS, SEVERAL_ACCOUNTS);
 }
 
 /**
  * @param {object} database - The database
  * @param {string} nic - The NIC handle of an account
- * @returns {boolean} Whether the database has never known another account: the accounts
- *   table records no other NIC handle. Its rows without an account can then only be that
- *   account's, stored before the accounts.
+ * @returns {boolean} Whether the database has only ever known that account: no run's
+ *   configuration listed several entries (see markSeveralAccounts()), and the accounts table
+ *   records no other NIC handle. Its rows without an account can then only be that
+ *   account's, stored before the accounts. An account whose GET /me never answered is in no
+ *   table, but its entry marked the database.
  */
 function isOnlyAccount(database, nic) {
-  return database
-    .prepare('SELECT NOT EXISTS (SELECT 1 FROM accounts WHERE nic <> ?) AS only')
-    .get(nic).only === 1;
+  return database.prepare(`
+    SELECT NOT EXISTS (SELECT 1 FROM accounts WHERE nic <> ?)
+      AND NOT EXISTS (SELECT 1 FROM import_state WHERE key = ?) AS only
+  `).get(nic, SEVERAL_ACCOUNTS).only === 1;
 }
 
 /**
@@ -239,6 +272,7 @@ function clearAccount(database, nic) {
 module.exports = {
   ACCOUNT_TABLES,
   attributeRowsWithoutAccount,
+  markSeveralAccounts,
   isOnlyAccount,
   hasRowsWithoutAccount,
   claimBills,

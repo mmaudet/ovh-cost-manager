@@ -5,7 +5,7 @@
  */
 
 const {
-  routes, ok, fail, calls, serveAccount, useConfig, useThrowawayImport,
+  routes, ok, fail, me, calls, serveAccount, useConfig, useThrowawayImport,
 } = require('./support/simulated-ovh');
 const { ACCOUNT, LYON, PARIS, bill, project } = require('./support/accounts');
 const { ROOT_TABLES, asBefore114 } = require('./support/database-before');
@@ -934,6 +934,49 @@ describe('the rows that no account claims, once a single account is left configu
     });
     expect(idsWithoutAccount()).toEqual(leftUnknown);
   });
+
+  // Paris's key lacks GET /me: no run could record Paris, but the configuration listed it,
+  // and the rows could be its own. Once its key answers, it claims them.
+  test('stay the Unknown account\'s when the other account never answered GET /me',
+    async () => {
+      const lyon = serveInEuros(LYON);
+      const paris = serveInEuros(PARIS);
+      for (const served of [lyon, paris]) {
+        serveProjects(served.routes);
+        serveInventories(served.routes);
+        serveHistory(served.routes, []);
+        serveBalance(served.routes, {});
+        serveBills(served.routes, []);
+      }
+      paris.routes.set('/me', fail(403, 'This call has not been granted'));
+      storeDataOf(PARIS, 'P');
+      storeHistory('2026-06', PARIS);
+      forgetAccounts();
+      const history = allIdsIn('consumption_history');
+      useAccounts({ served: lyon }, { served: paris });
+      await importAsTheCron();
+      useAccounts({ served: lyon });
+
+      await importAsTheCron();
+
+      expect(idsWithoutAccount()).toMatchObject({
+        bills: ['FR-P0'], consumption_history: history, credit_movements: ['PREPAID_ACCOUNT_1'],
+      });
+
+      paris.routes.set('/me', me({ nic: PARIS, currency: 'EUR' }));
+      serveBills(paris.routes, [['FR-P0', '2026-08-01']]);
+      serveHistory(paris.routes, ['2026-06', '2026-07', '2026-08']);
+      serveBalance(paris.routes, { PREPAID_ACCOUNT: [[1, 50]] });
+      useAccounts({ served: lyon }, { served: paris });
+
+      await importAsTheCron();
+
+      expect(idsWithoutAccount()).toEqual(Object.fromEntries(ROOT_TABLES.map(t => [t, []])));
+      expect(accountsOf('bills')).toEqual([['FR-P0', PARIS]]);
+      expect(db.consumption.getHistory().map(entry => [entry.account, entry.period_start]))
+        .toEqual([[PARIS, '2026-08-01'], [PARIS, '2026-07-01'], [PARIS, '2026-06-01']]);
+      expect(storedMovements()).toEqual([[PARIS, 'PREPAID_ACCOUNT_1', 50]]);
+    });
 });
 
 // A database from before the accounts held the data of the single account that OCM took the
