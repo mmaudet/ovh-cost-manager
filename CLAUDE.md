@@ -67,6 +67,12 @@ and `server/index.js` (each loads config on its own, there is no shared config m
   `allowedOrigins`, arrays of strings or comma-separated strings. Anything else stops the
   server, naming the setting. The rate limiting settings are resolved in
   `server/rate-limit-config.js`.
+- **OVH accounts**: the `accounts` array (each entry an optional unique `name`, an
+  optional positive integer `budget`, and its `credentials`), or the single `credentials`
+  section, or the legacy flat form, never both sections. One strict reader,
+  `data/accounts-config.js`, serves the import, which reads them from the first config
+  file that gives any, and the server, which only checks them at startup: it never uses
+  the keys, and names each account as its last import recorded it in the `accounts` table.
 
 When adding a configurable option, follow this same env-over-file pattern and apply it in
 the relevant workspace's own loader.
@@ -99,6 +105,12 @@ npm run bills -- --project "AI" --format md
 `--full` (clears + reimports) | `--diff` [`--since DATE`] | `--from`/`--to` | and the extra
 datasets, off by default: `--include-consumption`, `--include-account`,
 `--include-inventory`, `--include-cloud-details`, or `--all` for everything.
+
+A run imports every configured account, one after the other, under one import log entry;
+each differential import starts from that account's own latest bill. An account that
+fails does not stop the others: the run then ends `partial`, or `failed` when all did.
+`--account <NIC handle>` limits a run to one configured account; not with `--full` yet,
+which clears every account.
 
 ### Tests
 
