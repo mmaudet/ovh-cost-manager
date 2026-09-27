@@ -1,0 +1,28 @@
+{
+  "accounts": [
+    {
+      "name": "Filiale Lyon",
+      "budget": 30000,
+      "credentials": {
+        "appKey": "LYON_APP_KEY",
+        "appSecret": "LYON_APP_SECRET",
+        "consumerKey": "LYON_CONSUMER_KEY",
+        "endpoint": "ovh-eu"
+      }
+    },
+    {
+      "name": "Filiale Paris",
+      "credentials": {
+        "appKey": "PARIS_APP_KEY",
+        "appSecret": "PARIS_APP_SECRET",
+        "consumerKey": "PARIS_CONSUMER_KEY",
+        "endpoint": "ovh-eu"
+      }
+    }
+  ],
+  "dashboard": {
+    "budget": 50000,
+    "currency": "EUR",
+    "language": "fr"
+  }
+}
