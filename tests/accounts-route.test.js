@@ -6,7 +6,7 @@
 
 const { startOcm } = require('./support/ocm-server');
 const {
-  SQLITE_TIME, LYON, PARIS, NEW_ACCOUNT, UNKNOWN_ACCOUNT, recordAccounts, bill,
+  SQLITE_TIME, LYON, PARIS, NEW_ACCOUNT, UNKNOWN_ACCOUNT, recordAccounts, credentials, bill,
 } = require('./support/accounts');
 const { asBefore114, asBefore124 } = require('./support/database-before');
 
@@ -165,10 +165,6 @@ test('lists every account recorded, by its name, or else its NIC handle', async 
 // the account is imported again, and an entry never imported is not listed
 test('names the accounts as their last import recorded them, not as config.json does now',
   async () => {
-    const credentials = (key) => ({
-      appKey: `app-${key}`, appSecret: `secret-${key}`, consumerKey: `consumer-${key}`,
-      endpoint: 'ovh-eu',
-    });
     const accounts = await listAccounts((db) => {
       recordAccounts(db, { nic: LYON, name: 'Lyon' });
       db.accounts.recordImport(LYON, { status: 'success' });

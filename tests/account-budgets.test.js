@@ -9,7 +9,9 @@
  */
 
 const { startOcm } = require('./support/ocm-server');
-const { LYON, PARIS, NEW_ACCOUNT, recordAccounts } = require('./support/accounts');
+const {
+  LYON, PARIS, NEW_ACCOUNT, recordAccounts, credentials,
+} = require('./support/accounts');
 
 // The configuration that the server gives, over a database that `seed` writes to, with this
 // config.json, if given
@@ -23,12 +25,6 @@ async function configOf(seed, config) {
     await ocm.stop();
   }
 }
-
-// Invented credentials of an entry of config.json
-const credentials = (key) => ({
-  appKey: `app-${key}`, appSecret: `secret-${key}`, consumerKey: `consumer-${key}`,
-  endpoint: 'ovh-eu',
-});
 
 // A single-account installation, whose credentials section gives its account no budget
 test('gives the dashboard budget of config.json, and none for an account without one',
