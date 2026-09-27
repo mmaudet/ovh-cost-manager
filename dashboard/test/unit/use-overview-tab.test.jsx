@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { act } from '@testing-library/react';
+import { translations } from '../../src/i18n/translations.js';
 import { useOverviewTab } from '../../src/tabs/useOverviewTab.js';
+import { accountColumnOf, accountsOf } from '../../src/utils/accounts.js';
 import { months } from '../fixtures/calendar.js';
 import { severalAccounts } from '../fixtures/accounts.js';
 import { api } from '../support/api.js';
@@ -29,11 +31,17 @@ const requestsOfTheShell = [
 const requestsByAccount = [api.fetchProjectsByAccount, api.fetchGpuProjectsByAccount];
 
 // The hook as the shell calls it: on the month selected, which the months of the account
-// shown hold, with lists that name no account, as with a single account
+// shown hold, with lists that name no account, as with a single account, or with the Account
+// column of all accounts shown
 const withoutAccountColumn = {
-  selectedMonth: september, holdsSelectedMonth: true, showAccountColumn: false,
+  selectedMonth: september, holdsSelectedMonth: true, accountColumn: null,
 };
-const withAccountColumn = { ...withoutAccountColumn, showAccountColumn: true };
+const withAccountColumn = {
+  ...withoutAccountColumn,
+  accountColumn: accountColumnOf(
+    accountsOf(severalAccounts.accounts), null, (key) => translations.fr[key],
+  ),
+};
 
 describe('useOverviewTab', () => {
   it('requests nothing without the Account column: what the tab shows loads with the shell',

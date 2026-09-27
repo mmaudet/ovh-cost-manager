@@ -15,9 +15,9 @@ import { useQuery } from '@tanstack/react-query';
 import { fetchGpuProjectsByAccount, fetchProjectsByAccount } from '../services/api.js';
 
 // selectedMonth: the month of the header, which the months of the account shown hold when
-// holdsSelectedMonth says so, as the shell checks it. showAccountColumn: whether the tab's
-// lists name the account of each project (showsAccountColumn()).
-const useOverviewTab = ({ selectedMonth, holdsSelectedMonth, showAccountColumn }) => {
+// holdsSelectedMonth says so, as the shell checks it. accountColumn: the Account column of
+// the lists (accountColumnOf()), null when they name no account.
+const useOverviewTab = ({ selectedMonth, holdsSelectedMonth, accountColumn }) => {
   const [projectSort, setProjectSort] = useState({ column: 'total', direction: 'desc' });
 
   const handleProjectSort = (column) => {
@@ -33,7 +33,7 @@ const useOverviewTab = ({ selectedMonth, holdsSelectedMonth, showAccountColumn }
   const byAccount = (key, fetch) => ({
     queryKey: [key, selectedMonth?.from, selectedMonth?.to],
     queryFn: () => fetch(selectedMonth.from, selectedMonth.to),
-    enabled: showAccountColumn && holdsSelectedMonth,
+    enabled: accountColumn !== null && holdsSelectedMonth,
   });
   const { data: projectsByAccount = [] } = useQuery(
     byAccount('projectsByAccount', fetchProjectsByAccount),

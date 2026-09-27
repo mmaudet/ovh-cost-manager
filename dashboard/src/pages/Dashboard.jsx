@@ -13,9 +13,7 @@ import Logo from '../components/Logo';
 import { AccountSelector } from '../components/AccountSelector.jsx';
 import { HeaderSelect } from '../components/HeaderSelect.jsx';
 import { ResyncButton } from '../components/ResyncButton.jsx';
-import {
-  accountColumnOf, accountQuery, accountsOf, showsAccountColumn,
-} from '../utils/accounts.js';
+import { accountColumnOf, accountQuery, accountsOf } from '../utils/accounts.js';
 import { formatCurrency, formatMonthLabel, yearMonthOf } from '../utils/format.js';
 import { parseSqliteDate } from '../utils/sqliteDate.js';
 import { generateMarkdownReport } from '../utils/markdownReport.js';
@@ -111,10 +109,6 @@ export default function Dashboard() {
   // shown, when the page offers several (#121): null when they name none
   const accountColumn = accountColumnOf(accounts, selectedAccount, t);
 
-  // Whether the lists name the account of each row, in an Account column: with all accounts
-  // shown, when the page offers several (#118)
-  const showAccountColumn = showsAccountColumn(accounts, selectedAccount);
-
   // The months billed to the account shown
   const { data: months = [], isSuccess: monthsLoaded } = useQuery(accountQuery(selectedAccount, {
     key: ['months'],
@@ -206,7 +200,7 @@ export default function Dashboard() {
   // Each tab's state and queries, in the order of the tab bar: its hook runs on every render,
   // before the loading screen, so that the tab keeps them while another one is open (ADR 0001)
 
-  const overviewTab = useOverviewTab({ selectedMonth, holdsSelectedMonth, showAccountColumn });
+  const overviewTab = useOverviewTab({ selectedMonth, holdsSelectedMonth, accountColumn });
 
   const compareTab = useCompareTab({ months, selectedMonth, activeTab });
 
@@ -606,7 +600,7 @@ export default function Dashboard() {
         {activeTab === 'overview' && (
           <OverviewTab
             {...overviewTab} language={language} t={t} fmt={fmt}
-            accounts={accounts} showAccountColumn={showAccountColumn}
+            accountColumn={accountColumn}
             summary={summary} total={total} byService={byService} byProject={byProject}
             byResourceType={byResourceType} gpuSummary={gpuSummary}
             expiringServices={expiringServices} budget={budget} setBudget={setBudget}

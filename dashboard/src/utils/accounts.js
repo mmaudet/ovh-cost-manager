@@ -24,19 +24,6 @@ export function accountsOf(entries) {
 // installation shows the page as before.
 export const offersAccounts = (accounts) => accounts.length >= 2;
 
-/**
- * Whether the lists of the page name the account of each row, in an Account column (#118):
- * when the page offers accounts to select, and shows all of them. A single-account
- * installation shows its lists as before.
- * @param {object[]|undefined} accounts - The accounts of the instance (accountsOf()),
- *   undefined while their list loads
- * @param {?string|undefined} selectedAccount - The account shown (useSelectedAccount()): null
- *   for all accounts
- * @returns {boolean}
- */
-export const showsAccountColumn = (accounts, selectedAccount) =>
-  accounts !== undefined && offersAccounts(accounts) && selectedAccount === null;
-
 // An account as the selector names it: the Unknown account, or its name, which says when
 // config.json no longer lists it
 export function accountLabel(account, t) {
@@ -66,22 +53,6 @@ export function accountColumnOf(accounts, selectedAccount, t) {
     return accounts.find(({ id }) => id === nic)?.name ?? nic;
   };
   return { label: t('account'), nameOf };
-}
-
-/**
- * The account of a row of a list, as its Account column names it in the view of all
- * accounts (#118): by the name that the accounts route gives it, its NIC handle when
- * config.json names it not, or as the Unknown account for a row without one.
- * @param {?string} nic - The NIC handle of the row's account, as the routes give it: null for
- *   the Unknown account
- * @param {object[]} accounts - The accounts of the instance (accountsOf())
- * @param {function(string): string} t - The translations of the page
- * @returns {string} The name of the account, or its NIC handle when the accounts do not list
- *   it
- */
-export function accountNameOf(nic, accounts, t) {
-  if (nic == null) return t('unknownAccount');
-  return accounts.find(({ id }) => id === nic)?.name ?? nic;
 }
 
 // Whether the key and the request of a query name the account shown: not for all accounts,
