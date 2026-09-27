@@ -643,7 +643,12 @@ export default function Dashboard() {
                       </td>
                       <td className="py-1 px-2 text-gray-600">{t(IMPORT_TYPE_KEYS[h.type] || h.type)}</td>
                       <td className="py-1 px-2">
-                        <span className={importStatusOf(h.status).tone}>
+                        {/* Why it failed or ended partial, which names the accounts that
+                            failed (#113) */}
+                        <span
+                          className={importStatusOf(h.status).tone}
+                          title={h.error_message || undefined}
+                        >
                           {t(importStatusOf(h.status).key)}
                         </span>
                       </td>

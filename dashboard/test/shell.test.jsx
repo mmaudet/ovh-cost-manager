@@ -511,6 +511,29 @@ describe('dashboard shell', () => {
         .toEqual(statuses);
     });
 
+    // The error of a run names the accounts that failed, and says when a full import cleared
+    // nothing (#113)
+    it('tells why an import failed or ended partial, over its status', async () => {
+      const reason = '1 of 2 accounts failed: accounts[1]: This credential is not valid';
+      const partial = {
+        ...account.importStatus.latest, id: 4, status: 'partial', error_message: reason,
+      };
+      const { user } = await renderDashboard({
+        ...account,
+        importStatus: {
+          latest: partial,
+          running: false,
+          history: [partial, ...account.importStatus.history.slice(1)],
+        },
+      });
+
+      await user.click(screen.getByText('Historique des imports'));
+
+      expect(within(importHistory()).getByTitle(reason)).toHaveTextContent('partiel');
+      expect(within(importHistory()).getByTitle('OVH API unreachable'))
+        .toHaveTextContent('échoué');
+    });
+
     it('says when nothing was ever imported', async () => {
       const { user } = await renderDashboard({ ...account, importStatus: undefined });
 
