@@ -5,11 +5,8 @@
  */
 
 const { startOcm } = require('./support/ocm-server');
-const { SQLITE_TIME } = require('./support/accounts');
+const { SQLITE_TIME, LYON, PARIS, NEW_ACCOUNT, bill } = require('./support/accounts');
 const { asBefore114 } = require('./support/database-before');
-
-const NIC = 'xx1111-ovh';
-const OTHER_NIC = 'yy2222-ovh';
 
 // The entry of the Unknown account (see CONTEXT.md): the rows that no account claims (#114)
 const UNKNOWN = {
@@ -22,9 +19,9 @@ const UNKNOWN = {
 async function listAccounts(seed, config) {
   const ocm = await startOcm(() => ({}), { seed, config });
   try {
-    const res = await fetch(`${ocm.url}/api/accounts`);
-    expect(res.status).toBe(200);
-    return await res.json();
+    const { status, body } = await ocm.get('/api/accounts');
+    expect(status).toBe(200);
+    return body;
   } finally {
     await ocm.stop();
   }
@@ -37,11 +34,12 @@ function recordAccounts(db, ...accounts) {
   db.accounts.recordConfiguration(accounts.map(({ nic }) => nic));
 }
 
-// A bill that an import stored, of the account whose NIC handle is given, or of none
-const storeBill = (db, id, nic) => db.getDb().prepare(`
+// A bill that an import stored before the accounts, which no account claimed since: the
+// writers refuse such rows now, so it is written as the database held it
+const storeBillWithoutAccount = (db, id) => db.getDb().prepare(`
   INSERT INTO bills (id, date, price_without_tax, currency, account)
-  VALUES (?, '2026-06-01', 10, 'EUR', ?)
-`).run(id, nic);
+  VALUES (?, '2026-06-01', 10, 'EUR', NULL)
+`).run(id);
 
 test('lists no account before any import since the upgrade', async () => {
   expect(await listAccounts()).toEqual([]);
@@ -49,14 +47,14 @@ test('lists no account before any import since the upgrade', async () => {
 
 test('lists the account that an import recorded, named by its NIC handle', async () => {
   const accounts = await listAccounts((db) => {
-    recordAccounts(db, { nic: NIC });
-    db.accounts.recordImport(NIC, { status: 'success' });
+    recordAccounts(db, { nic: LYON });
+    db.accounts.recordImport(LYON, { status: 'success' });
   });
 
   expect(accounts).toEqual([{
-    id: NIC,
-    nic: NIC,
-    name: NIC,
+    id: LYON,
+    nic: LYON,
+    name: LYON,
     currency: 'EUR',
     configured: true,
     unknown: false,
@@ -67,19 +65,19 @@ test('lists the account that an import recorded, named by its NIC handle', async
 // The import records the account as soon as GET /me names it
 test('gives no last import while the first import of the account runs', async () => {
   const accounts = await listAccounts((db) => {
-    recordAccounts(db, { nic: NIC });
+    recordAccounts(db, { nic: LYON });
   });
 
   expect(accounts).toEqual([{
-    id: NIC, nic: NIC, name: NIC, currency: 'EUR', configured: true, unknown: false,
+    id: LYON, nic: LYON, name: LYON, currency: 'EUR', configured: true, unknown: false,
     lastImport: null,
   }]);
 }, 30000);
 
 test('gives why the last import of the account failed', async () => {
   const accounts = await listAccounts((db) => {
-    recordAccounts(db, { nic: NIC });
-    db.accounts.recordImport(NIC, { status: 'failed', error: 'Internal server error' });
+    recordAccounts(db, { nic: LYON });
+    db.accounts.recordImport(LYON, { status: 'failed', error: 'Internal server error' });
   });
 
   expect(accounts.map(account => account.lastImport)).toEqual([{
@@ -90,15 +88,15 @@ test('gives why the last import of the account failed', async () => {
 // Each account named as the entry of config.json that its last import read names it (#113)
 test('lists every account recorded, by its name, or else its NIC handle', async () => {
   const accounts = await listAccounts((db) => {
-    recordAccounts(db, { nic: NIC, name: 'Lyon subsidiary', budget: 20000 }, { nic: OTHER_NIC });
-    db.accounts.recordImport(NIC, { status: 'success' });
-    db.accounts.recordImport(OTHER_NIC, { status: 'failed', error: 'Internal server error' });
+    recordAccounts(db, { nic: LYON, name: 'Lyon subsidiary', budget: 20000 }, { nic: PARIS });
+    db.accounts.recordImport(LYON, { status: 'success' });
+    db.accounts.recordImport(PARIS, { status: 'failed', error: 'Internal server error' });
   });
 
   expect(accounts).toEqual([
     {
-      id: NIC,
-      nic: NIC,
+      id: LYON,
+      nic: LYON,
       name: 'Lyon subsidiary',
       currency: 'EUR',
       configured: true,
@@ -106,9 +104,9 @@ test('lists every account recorded, by its name, or else its NIC handle', async 
       lastImport: { at: expect.stringMatching(SQLITE_TIME), status: 'success', error: null },
     },
     {
-      id: OTHER_NIC,
-      nic: OTHER_NIC,
-      name: OTHER_NIC,
+      id: PARIS,
+      nic: PARIS,
+      name: PARIS,
       currency: 'EUR',
       configured: true,
       unknown: false,
@@ -128,8 +126,8 @@ test('names the accounts as their last import recorded them, not as config.json 
       endpoint: 'ovh-eu',
     });
     const accounts = await listAccounts((db) => {
-      recordAccounts(db, { nic: NIC, name: 'Lyon' });
-      db.accounts.recordImport(NIC, { status: 'success' });
+      recordAccounts(db, { nic: LYON, name: 'Lyon' });
+      db.accounts.recordImport(LYON, { status: 'success' });
     }, {
       accounts: [
         { name: 'Lyon subsidiary', credentials: credentials('lyon') },
@@ -137,7 +135,7 @@ test('names the accounts as their last import recorded them, not as config.json 
       ],
     });
 
-    expect(accounts.map(account => [account.nic, account.name])).toEqual([[NIC, 'Lyon']]);
+    expect(accounts.map(account => [account.nic, account.name])).toEqual([[LYON, 'Lyon']]);
   }, 30000);
 
 // The configured accounts first, in the order of the configuration that the last import
@@ -145,20 +143,20 @@ test('names the accounts as their last import recorded them, not as config.json 
 test('lists the configured accounts in their order, then the others, then the Unknown account',
   async () => {
     const accounts = await listAccounts((db) => {
-      recordAccounts(db, { nic: 'zz3333-ovh' }, { nic: 'ab4444-ovh' }, { nic: OTHER_NIC },
-        { nic: NIC });
+      recordAccounts(db, { nic: NEW_ACCOUNT }, { nic: 'ab4444-ovh' }, { nic: PARIS },
+        { nic: LYON });
       // The last import's configuration lists Paris, then Lyon
-      db.accounts.recordConfiguration([OTHER_NIC, null, NIC]);
-      storeBill(db, 'FR-1', NIC);
-      storeBill(db, 'FR-0', null);
+      db.accounts.recordConfiguration([PARIS, null, LYON]);
+      bill(db, 'FR-1', '2026-06-01', LYON);
+      storeBillWithoutAccount(db, 'FR-0');
     });
 
     expect(accounts.map(({ id, configured, unknown }) => ({ id, configured, unknown })))
       .toEqual([
-        { id: OTHER_NIC, configured: true, unknown: false },
-        { id: NIC, configured: true, unknown: false },
+        { id: PARIS, configured: true, unknown: false },
+        { id: LYON, configured: true, unknown: false },
         { id: 'ab4444-ovh', configured: false, unknown: false },
-        { id: 'zz3333-ovh', configured: false, unknown: false },
+        { id: NEW_ACCOUNT, configured: false, unknown: false },
         { id: 'unknown', configured: false, unknown: true },
       ]);
     expect(accounts.at(-1)).toEqual(UNKNOWN);
@@ -167,28 +165,28 @@ test('lists the configured accounts in their order, then the others, then the Un
 // Rows stored before the accounts that no account claimed: whatever table holds them
 test('lists the Unknown account while some table holds rows without an account', async () => {
   const accounts = await listAccounts((db) => {
-    recordAccounts(db, { nic: NIC });
-    storeBill(db, 'FR-1', NIC);
+    recordAccounts(db, { nic: LYON });
+    bill(db, 'FR-1', '2026-06-01', LYON);
     db.getDb().prepare(`
       INSERT INTO consumption_history (period_start, period_end, total, currency)
       VALUES ('2026-07-01', '2026-07-31', 90, 'EUR')
     `).run();
   });
 
-  expect(accounts.map(account => account.id)).toEqual([NIC, 'unknown']);
+  expect(accounts.map(account => account.id)).toEqual([LYON, 'unknown']);
 }, 30000);
 
 // Every account recorded then was configured at its last import: until the next import
 // records the configuration, they are listed as configured, in the order first recorded
 test('lists the accounts recorded before the upgrade as configured', async () => {
   const accounts = await listAccounts((db) => {
-    db.accounts.upsert({ nic: OTHER_NIC, currency: 'EUR' });
-    db.accounts.upsert({ nic: NIC, currency: 'EUR' });
+    db.accounts.upsert({ nic: PARIS, currency: 'EUR' });
+    db.accounts.upsert({ nic: LYON, currency: 'EUR' });
     asBefore114(db.getDb());
   });
 
   expect(accounts.map(({ id, configured }) => [id, configured]))
-    .toEqual([[OTHER_NIC, true], [NIC, true]]);
+    .toEqual([[PARIS, true], [LYON, true]]);
 }, 30000);
 
 // As every other API route, behind the Host and CORS checks and rate limiting too

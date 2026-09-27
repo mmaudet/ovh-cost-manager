@@ -8,9 +8,10 @@
 
 const { startOcm } = require('./support/ocm-server');
 const { asBefore114 } = require('./support/database-before');
-const { ACCOUNT, SQLITE_TIME } = require('./support/accounts');
+const { LYON, SQLITE_TIME, project } = require('./support/accounts');
 
-const NIC = ACCOUNT.nic;
+// The one account
+const NIC = LYON;
 const PROJECT = 'proj-1';
 
 // GETs these routes of the server started over a database of the account, whose rows `seed`
@@ -28,9 +29,9 @@ async function answersOf(seed, routes) {
   try {
     const answers = {};
     for (const route of routes) {
-      const res = await fetch(`${ocm.url}${route}`);
-      expect(res.status).toBe(200);
-      answers[route] = await res.json();
+      const { status, body } = await ocm.get(route);
+      expect(status).toBe(200);
+      answers[route] = body;
     }
     return answers;
   } finally {
@@ -47,10 +48,7 @@ const storeConsumption = (db, from, to, totalPrice) => db.cloudDetails.insertCon
 
 // The project, which consumed 30.5 in August and 12.25 in September up to the 15th
 function storeProjectConsumption(db) {
-  db.projects.upsert({
-    id: PROJECT, name: 'Project 1', description: null, status: 'ok', created_at: null,
-    account: NIC,
-  });
+  project(db, PROJECT, 'Project 1', NIC);
   storeConsumption(db, '2026-08-01', '2026-08-31', 30.5);
   storeConsumption(db, '2026-09-01', '2026-09-15', 12.25);
 }
@@ -196,7 +194,7 @@ test('the consumption and forecast routes read the projects of the month last im
         days_in_month: 30,
       },
       '/api/projects/enriched': [{
-        id: PROJECT, name: 'Project 1', description: null, status: 'ok', instance_count: 0,
+        id: PROJECT, name: 'Project 1', description: 'Project 1', status: 'ok', instance_count: 0,
         consumption_total: 12.25, period_start: '2026-09-01', period_end: '2026-09-15',
       }],
     });
@@ -232,7 +230,7 @@ test('the consumption routes read a month last imported that has no consumption 
         progress: 0,
       },
       '/api/projects/enriched': [{
-        id: PROJECT, name: 'Project 1', description: null, status: 'ok', instance_count: 0,
+        id: PROJECT, name: 'Project 1', description: 'Project 1', status: 'ok', instance_count: 0,
         consumption_total: 0, period_start: null, period_end: null,
       }],
     });

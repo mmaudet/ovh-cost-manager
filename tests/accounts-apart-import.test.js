@@ -7,6 +7,7 @@
 const {
   ok, calls, serveAccount, useConfig, useThrowawayImport,
 } = require('./support/simulated-ovh');
+const { LYON, PARIS, bill, project } = require('./support/accounts');
 const { ROOT_TABLES, asBefore114 } = require('./support/database-before');
 
 jest.mock('ovh', () => require('./support/simulated-ovh').ovh);
@@ -26,9 +27,8 @@ beforeEach(() => {
   jest.spyOn(process.stdout, 'write').mockImplementation(() => true);
 });
 
-// The accounts that OVH serves, invented
-const LYON = { nic: 'xx1111-ovh', currency: 'EUR' };
-const PARIS = { nic: 'yy2222-ovh', currency: 'EUR' };
+// Serves the account of this NIC handle, such as LYON or PARIS, which bills in euros
+const serveInEuros = (nic) => serveAccount({ nic, currency: 'EUR' });
 
 // Credentials that lead to no account, as a revoked key
 const REVOKED = {
@@ -139,35 +139,33 @@ const storedServices = () => ({
 
 describe('the removal of the services that OVH no longer lists', () => {
   test('removes those of the importing account only', async () => {
-    const lyon = serveAccount(LYON);
-    const paris = serveAccount(PARIS);
+    const lyon = serveInEuros(LYON);
+    const paris = serveInEuros(PARIS);
     // Cancelled since an earlier import of Lyon
-    storeServer('ns-lyon-cancelled', LYON.nic);
-    storeVps('vps-lyon-cancelled', LYON.nic);
-    storeStorage('netapp-lyon-cancelled', LYON.nic);
+    storeServer('ns-lyon-cancelled', LYON);
+    storeVps('vps-lyon-cancelled', LYON);
+    storeStorage('netapp-lyon-cancelled', LYON);
     // Paris's, which Lyon's API does not list
-    storeServer('ns-paris', PARIS.nic);
-    storeVps('vps-paris', PARIS.nic);
-    storeStorage('netapp-paris', PARIS.nic);
+    storeServer('ns-paris', PARIS);
+    storeVps('vps-paris', PARIS);
+    storeStorage('netapp-paris', PARIS);
     serveProjects(lyon.routes);
     serveBills(lyon.routes, []);
     serveInventories(lyon.routes, { servers: ['ns-lyon'], vps: ['vps-lyon'], storage: ['netapp-lyon'] });
     useAccounts({ served: lyon }, { served: paris });
 
-    await importSeptember({ account: LYON.nic, includeInventory: true });
+    await importSeptember({ account: LYON, includeInventory: true });
 
     expect(storedServices()).toEqual({
-      servers: [['ns-lyon', LYON.nic], ['ns-paris', PARIS.nic]],
-      vps: [['vps-lyon', LYON.nic], ['vps-paris', PARIS.nic]],
-      storage: [['netapp-lyon', LYON.nic], ['netapp-paris', PARIS.nic]],
+      servers: [['ns-lyon', LYON], ['ns-paris', PARIS]],
+      vps: [['vps-lyon', LYON], ['vps-paris', PARIS]],
+      storage: [['netapp-lyon', LYON], ['netapp-paris', PARIS]],
     });
   });
 });
 
-// A Public Cloud project of the account, as an earlier import stored it
-const storeProject = (id, nic) => db.projects.upsert({
-  id, name: id, description: null, status: 'ok', created_at: null, account: nic,
-});
+// A Public Cloud project of the account, as an earlier import stored it, named by its id
+const storeProject = (id, nic) => project(db, id, id, nic);
 
 // The services that two accounts' APIs can list: the table that stores each kind, how an
 // account's API lists it, and how an earlier import stored one
@@ -198,8 +196,8 @@ describe.each(Object.entries(KINDS))('a %s that two accounts list', (_, { table,
   // Both accounts' APIs list it, with these bills, as serveBills() takes them. Lyon is
   // configured first.
   function serveBoth({ lyonBills = [], parisBills = [] } = {}) {
-    const lyon = serveAccount(LYON);
-    const paris = serveAccount(PARIS);
+    const lyon = serveInEuros(LYON);
+    const paris = serveInEuros(PARIS);
     for (const [served, bills] of [[lyon, lyonBills], [paris, parisBills]]) {
       serveProjects(served.routes);
       serveInventories(served.routes);
@@ -212,12 +210,12 @@ describe.each(Object.entries(KINDS))('a %s that two accounts list', (_, { table,
   // Whichever lists it first: Lyon stores it before Paris's bills are imported
   test.each([['Lyon', LYON], ['Paris', PARIS]])(
     'is stored once, as %s, whose bill lines name it', async (__, billing) => {
-      const bill = [['FR-1', '2026-09-01', [SHARED]]];
-      serveBoth(billing === LYON ? { lyonBills: bill } : { parisBills: bill });
+      const bills = [['FR-1', '2026-09-01', [SHARED]]];
+      serveBoth(billing === LYON ? { lyonBills: bills } : { parisBills: bills });
 
       await importSeptember({ includeInventory: true });
 
-      expect(accountsOf(table)).toEqual([[SHARED, billing.nic]]);
+      expect(accountsOf(table)).toEqual([[SHARED, billing]]);
     });
 
   test('goes to the first configured account that lists it, when no bill line names it',
@@ -226,16 +224,16 @@ describe.each(Object.entries(KINDS))('a %s that two accounts list', (_, { table,
 
       await importSeptember({ includeInventory: true });
 
-      expect(accountsOf(table)).toEqual([[SHARED, LYON.nic]]);
+      expect(accountsOf(table)).toEqual([[SHARED, LYON]]);
     });
 
   test('is never taken over by another account that lists it', async () => {
     serveBoth();
-    store(SHARED, PARIS.nic);
+    store(SHARED, PARIS);
 
-    await importSeptember({ account: LYON.nic, includeInventory: true });
+    await importSeptember({ account: LYON, includeInventory: true });
 
-    expect(accountsOf(table)).toEqual([[SHARED, PARIS.nic]]);
+    expect(accountsOf(table)).toEqual([[SHARED, PARIS]]);
   });
 });
 
@@ -259,8 +257,8 @@ const storedHistory = () => db.getDb().prepare(`
 
 describe('the consumption history', () => {
   test('is replaced for the importing account only', async () => {
-    const lyon = serveAccount(LYON);
-    const paris = serveAccount(PARIS);
+    const lyon = serveInEuros(LYON);
+    const paris = serveInEuros(PARIS);
     for (const served of [lyon, paris]) {
       serveProjects(served.routes);
       serveBills(served.routes, []);
@@ -272,10 +270,10 @@ describe('the consumption history', () => {
     // A month later, OVH gives Lyon a history that has moved on
     serveConsumption(lyon.routes, '2026-08', 110);
 
-    await importSeptember({ account: LYON.nic, includeConsumption: true });
+    await importSeptember({ account: LYON, includeConsumption: true });
 
     expect(storedHistory()).toEqual([
-      [LYON.nic, '2026-08-01', 110], [PARIS.nic, '2026-07-01', 200],
+      [LYON, '2026-08-01', 110], [PARIS, '2026-07-01', 200],
     ]);
   });
 });
@@ -308,8 +306,8 @@ const storedMovements = () => db.getDb().prepare(`
 describe('the credit movements', () => {
   // Their ids join the name of their balance and their number, which two accounts can share
   test('of two accounts are kept apart, even with the same ids', async () => {
-    const lyon = serveAccount(LYON);
-    const paris = serveAccount(PARIS);
+    const lyon = serveInEuros(LYON);
+    const paris = serveInEuros(PARIS);
     for (const served of [lyon, paris]) {
       serveProjects(served.routes);
       serveBills(served.routes, []);
@@ -321,13 +319,13 @@ describe('the credit movements', () => {
     await importSeptember({ includeAccount: true });
 
     expect(storedMovements()).toEqual([
-      [LYON.nic, 'PREPAID_ACCOUNT_1', 50], [PARIS.nic, 'PREPAID_ACCOUNT_1', 20],
+      [LYON, 'PREPAID_ACCOUNT_1', 50], [PARIS, 'PREPAID_ACCOUNT_1', 20],
     ]);
   });
 
   // Keyed by their id alone before #114
   test('stored before the upgrade are kept, and replaced when imported again', async () => {
-    const lyon = serveAccount(LYON);
+    const lyon = serveInEuros(LYON);
     serveProjects(lyon.routes);
     serveBills(lyon.routes, []);
     serveBalance(lyon.routes, { PREPAID_ACCOUNT: [[1, 50], [2, -20]] });
@@ -341,7 +339,7 @@ describe('the credit movements', () => {
     await importSeptember({ includeAccount: true });
 
     expect(storedMovements()).toEqual([
-      [LYON.nic, 'PREPAID_ACCOUNT_1', 50], [LYON.nic, 'PREPAID_ACCOUNT_2', -25],
+      [LYON, 'PREPAID_ACCOUNT_1', 50], [LYON, 'PREPAID_ACCOUNT_2', -25],
     ]);
   });
 });
@@ -363,8 +361,8 @@ const recordedMonths = () => db.getDb().prepare(`
 describe('the month of the current consumption', () => {
   // OVH can be late to start the month for some projects
   test('is recorded for each account, the latest being the current one', async () => {
-    const lyon = serveAccount(LYON);
-    const paris = serveAccount(PARIS);
+    const lyon = serveInEuros(LYON);
+    const paris = serveInEuros(PARIS);
     serveProjects(lyon.routes, ['proj-lyon']);
     serveProjects(paris.routes, ['proj-paris']);
     for (const served of [lyon, paris]) serveBills(served.routes, []);
@@ -375,7 +373,7 @@ describe('the month of the current consumption', () => {
     await importSeptember({ includeCloudDetails: true });
 
     expect(db.cloudDetails.getCurrentConsumptionMonth()).toBe('2026-09-01');
-    expect(recordedMonths()).toEqual([[LYON.nic, '2026-09-01'], [PARIS.nic, '2026-08-01']]);
+    expect(recordedMonths()).toEqual([[LYON, '2026-09-01'], [PARIS, '2026-08-01']]);
   });
 });
 
@@ -394,8 +392,8 @@ const routesCalledWith = ({ credentials }) => calls
 describe('the accounts that the configuration lists', () => {
   // Lyon and Paris, each with a bill of September, and Paris with a project
   function serveLyonAndParis() {
-    const lyon = serveAccount(LYON);
-    const paris = serveAccount(PARIS);
+    const lyon = serveInEuros(LYON);
+    const paris = serveInEuros(PARIS);
     serveProjects(lyon.routes);
     serveProjects(paris.routes, ['proj-paris']);
     serveBills(lyon.routes, [['FR-L1', '2026-09-01']]);
@@ -411,9 +409,9 @@ describe('the accounts that the configuration lists', () => {
       // Reordered since
       useAccounts({ served: paris }, { served: lyon });
 
-      await importSeptember({ account: PARIS.nic });
+      await importSeptember({ account: PARIS });
 
-      expect(placesInConfiguration()).toEqual([[LYON.nic, 1], [PARIS.nic, 0]]);
+      expect(placesInConfiguration()).toEqual([[LYON, 1], [PARIS, 0]]);
     });
 
   // Its GET /me cannot name it, but its entry's name is the one that an import recorded it with
@@ -426,18 +424,18 @@ describe('the accounts that the configuration lists', () => {
 
     await importSeptember();
 
-    expect(placesInConfiguration()).toEqual([[LYON.nic, 0], [PARIS.nic, 1]]);
+    expect(placesInConfiguration()).toEqual([[LYON, 0], [PARIS, 1]]);
   });
 
   // Every account was configured then: the next run records which ones still are
   test('include those recorded before the upgrade, in the order they were first recorded',
     () => {
-      db.accounts.upsert({ nic: PARIS.nic, currency: 'EUR' });
-      db.accounts.upsert({ nic: LYON.nic, currency: 'EUR' });
+      db.accounts.upsert({ nic: PARIS, currency: 'EUR' });
+      db.accounts.upsert({ nic: LYON, currency: 'EUR' });
       asBefore114(db.getDb());
       db.closeDb();
 
-      expect(placesInConfiguration()).toEqual([[LYON.nic, 1], [PARIS.nic, 0]]);
+      expect(placesInConfiguration()).toEqual([[LYON, 1], [PARIS, 0]]);
     });
 
   describe('once an account is removed from them', () => {
@@ -450,20 +448,17 @@ describe('the accounts that the configuration lists', () => {
 
       await importSeptember();
 
-      expect(accountsOf('bills')).toEqual([['FR-L1', LYON.nic], ['FR-P1', PARIS.nic]]);
-      expect(accountsOf('projects')).toEqual([['proj-paris', PARIS.nic]]);
+      expect(accountsOf('bills')).toEqual([['FR-L1', LYON], ['FR-P1', PARIS]]);
+      expect(accountsOf('projects')).toEqual([['proj-paris', PARIS]]);
       expect(routesCalledWith(paris)).toEqual([]);
-      expect(placesInConfiguration()).toEqual([[LYON.nic, 0], [PARIS.nic, null]]);
+      expect(placesInConfiguration()).toEqual([[LYON, 0], [PARIS, null]]);
     });
   });
 });
 
 // A bill of the account, as an earlier import stored it, with one line
 function storeBill(id, date, nic) {
-  db.bills.upsert({
-    id, date, price_without_tax: 10, price_with_tax: 12, tax: 2, currency: 'EUR',
-    pdf_url: null, html_url: null, account: nic,
-  });
+  bill(db, id, date, nic);
   db.details.insert({
     id: `${id}_D1`, bill_id: id, project_id: null, domain: 'example.com',
     description: 'Service example.com', quantity: 1, unit_price: 10, total_price: 10,
@@ -559,10 +554,10 @@ describe('a full import of one account (--full --account)', () => {
   // Lyon and Paris with what an earlier import stored for each; Lyon's API now lists a bill
   // of September and no project
   function storeLyonAndParis() {
-    const lyon = serveAccount(LYON);
-    const paris = serveAccount(PARIS);
-    storeDataOf(LYON.nic, 'L');
-    storeDataOf(PARIS.nic, 'P');
+    const lyon = serveInEuros(LYON);
+    const paris = serveInEuros(PARIS);
+    storeDataOf(LYON, 'L');
+    storeDataOf(PARIS, 'P');
     serveProjects(lyon.routes);
     serveBills(lyon.routes, [['FR-L1', '2026-09-01']]);
     return { lyon, paris };
@@ -570,13 +565,13 @@ describe('a full import of one account (--full --account)', () => {
 
   test('clears that account\'s data only, and imports it again', async () => {
     const { lyon, paris } = storeLyonAndParis();
-    const ofParis = contentOf(PARIS.nic);
+    const ofParis = contentOf(PARIS);
     useAccounts({ served: lyon }, { served: paris });
 
-    await runImport({ full: true, account: LYON.nic });
+    await runImport({ full: true, account: LYON });
 
-    expect(idsOf(LYON.nic)).toEqual(clearedAndImportedAgain('L'));
-    expect(contentOf(PARIS.nic)).toEqual(ofParis);
+    expect(idsOf(LYON)).toEqual(clearedAndImportedAgain('L'));
+    expect(contentOf(PARIS)).toEqual(ofParis);
     expect(runs()).toEqual([['success', null]]);
     expect(routesCalledWith(paris)).toEqual(['/me']);
   });
@@ -588,7 +583,7 @@ describe('a full import of one account (--full --account)', () => {
     db.importLog.complete(earlier, { bills: 2, details: 2, projects: 4 });
     useAccounts({ served: lyon }, { served: paris });
 
-    await runImport({ full: true, account: LYON.nic });
+    await runImport({ full: true, account: LYON });
 
     expect(db.importLog.getAll().map(entry => [entry.type, entry.status]))
       .toEqual([['full', 'success'], ['differential', 'success']]);
@@ -596,13 +591,13 @@ describe('a full import of one account (--full --account)', () => {
 
   test('clears nothing when that account cannot be read', async () => {
     const { paris } = storeLyonAndParis();
-    db.accounts.upsert({ nic: LYON.nic, currency: 'EUR', name: 'Lyon' });
-    const before = [contentOf(LYON.nic), contentOf(PARIS.nic)];
+    db.accounts.upsert({ nic: LYON, currency: 'EUR', name: 'Lyon' });
+    const before = [contentOf(LYON), contentOf(PARIS)];
     useAccounts({ served: REVOKED, name: 'Lyon' }, { served: paris });
 
-    await runImport({ full: true, account: LYON.nic });
+    await runImport({ full: true, account: LYON });
 
-    expect([contentOf(LYON.nic), contentOf(PARIS.nic)]).toEqual(before);
+    expect([contentOf(LYON), contentOf(PARIS)]).toEqual(before);
     expect(runs()).toEqual([[
       'failed',
       '1 of 1 account failed: "Lyon": This credential is not valid. A full import clears only '
@@ -615,19 +610,19 @@ describe('a full import of every account', () => {
   // Each account that it can import again: Paris's key is revoked, and its entry's name is
   // the one that an import recorded it with
   test('clears only the accounts that it can import, and says so', async () => {
-    const lyon = serveAccount(LYON);
-    storeDataOf(LYON.nic, 'L');
-    storeDataOf(PARIS.nic, 'P');
-    db.accounts.upsert({ nic: PARIS.nic, currency: 'EUR', name: 'Paris' });
-    const ofParis = contentOf(PARIS.nic);
+    const lyon = serveInEuros(LYON);
+    storeDataOf(LYON, 'L');
+    storeDataOf(PARIS, 'P');
+    db.accounts.upsert({ nic: PARIS, currency: 'EUR', name: 'Paris' });
+    const ofParis = contentOf(PARIS);
     serveProjects(lyon.routes);
     serveBills(lyon.routes, [['FR-L1', '2026-09-01']]);
     useAccounts({ served: lyon }, { served: REVOKED, name: 'Paris' });
 
     await runImport({ full: true });
 
-    expect(idsOf(LYON.nic)).toEqual(clearedAndImportedAgain('L'));
-    expect(contentOf(PARIS.nic)).toEqual(ofParis);
+    expect(idsOf(LYON)).toEqual(clearedAndImportedAgain('L'));
+    expect(contentOf(PARIS)).toEqual(ofParis);
     expect(runs()).toEqual([[
       'partial',
       '1 of 2 accounts failed: "Paris": This credential is not valid. A full import clears '
@@ -636,18 +631,18 @@ describe('a full import of every account', () => {
   });
 
   test('keeps the data of an account removed from the configuration', async () => {
-    const lyon = serveAccount(LYON);
-    storeDataOf(LYON.nic, 'L');
-    storeDataOf(PARIS.nic, 'P');
-    const ofParis = contentOf(PARIS.nic);
+    const lyon = serveInEuros(LYON);
+    storeDataOf(LYON, 'L');
+    storeDataOf(PARIS, 'P');
+    const ofParis = contentOf(PARIS);
     serveProjects(lyon.routes);
     serveBills(lyon.routes, [['FR-L1', '2026-09-01']]);
     useAccounts({ served: lyon });
 
     await runImport({ full: true });
 
-    expect(idsOf(LYON.nic)).toEqual(clearedAndImportedAgain('L'));
-    expect(contentOf(PARIS.nic)).toEqual(ofParis);
+    expect(idsOf(LYON)).toEqual(clearedAndImportedAgain('L'));
+    expect(contentOf(PARIS)).toEqual(ofParis);
     expect(runs()).toEqual([['success', null]]);
   });
 });
@@ -672,8 +667,8 @@ const allIdsIn = (table) => db.getDb().prepare(`SELECT id FROM ${table} ORDER BY
 describe('the rows stored before the accounts, with several accounts configured', () => {
   // Lyon and Paris, whose APIs list nothing but what each test serves
   function serveLyonAndParis() {
-    const lyon = serveAccount(LYON);
-    const paris = serveAccount(PARIS);
+    const lyon = serveInEuros(LYON);
+    const paris = serveInEuros(PARIS);
     for (const served of [lyon, paris]) {
       serveProjects(served.routes);
       serveInventories(served.routes);
@@ -693,8 +688,8 @@ describe('the rows stored before the accounts, with several accounts configured'
   // stored: the bills of before are claimed from the account's whole list, without dates
   test('are claimed by each account whose full bill list names them', async () => {
     const { lyon, paris } = serveLyonAndParis();
-    storeBill('FR-P0', '2026-08-01', PARIS.nic);
-    storeBill('FR-X0', '2026-07-01', PARIS.nic);
+    storeBill('FR-P0', '2026-08-01', PARIS);
+    storeBill('FR-X0', '2026-07-01', PARIS);
     forgetAccounts();
     serveBills(lyon.routes, [['FR-L1', '2026-09-01']]);
     serveBills(paris.routes, [['FR-P0', '2026-08-01'], ['FR-P1', '2026-09-01']]);
@@ -702,7 +697,7 @@ describe('the rows stored before the accounts, with several accounts configured'
     await runImport({ diff: true });
 
     expect(accountsOf('bills')).toEqual([
-      ['FR-L1', LYON.nic], ['FR-P0', PARIS.nic], ['FR-P1', PARIS.nic], ['FR-X0', null],
+      ['FR-L1', LYON], ['FR-P0', PARIS], ['FR-P1', PARIS], ['FR-X0', null],
     ]);
     const undated = calls.filter(call => call.route === '/me/bill' && call.params === undefined);
     expect(undated.map(call => call.consumerKey))
@@ -713,23 +708,23 @@ describe('the rows stored before the accounts, with several accounts configured'
   test('are claimed by each account whose API lists them: projects, with their consumption, '
     + 'and services', async () => {
     const { paris } = serveLyonAndParis();
-    storeDataOf(PARIS.nic, 'P');
+    storeDataOf(PARIS, 'P');
     forgetAccounts();
     serveProjects(paris.routes, ['proj-P-used']);
     serveInventories(paris.routes, { servers: ['ns-P'], vps: ['vps-P'] });
 
     await runImport({ diff: true, includeInventory: true });
 
-    expect(accountsOf('projects')).toEqual([['proj-P-idle', null], ['proj-P-used', PARIS.nic]]);
-    expect(contentOf(PARIS.nic).project_consumption).toHaveLength(1);
+    expect(accountsOf('projects')).toEqual([['proj-P-idle', null], ['proj-P-used', PARIS]]);
+    expect(contentOf(PARIS).project_consumption).toHaveLength(1);
     expect(storedServices()).toEqual({
-      servers: [['ns-P', PARIS.nic]], vps: [['vps-P', PARIS.nic]], storage: [['netapp-P', null]],
+      servers: [['ns-P', PARIS]], vps: [['vps-P', PARIS]], storage: [['netapp-P', null]],
     });
   });
 
   test('leave the services to the run that imports the inventories', async () => {
     const { paris } = serveLyonAndParis();
-    storeServer('ns-P', PARIS.nic);
+    storeServer('ns-P', PARIS);
     forgetAccounts();
     serveInventories(paris.routes, { servers: ['ns-P'] });
 
@@ -745,7 +740,7 @@ describe('the rows stored before the accounts, with several accounts configured'
       for (const [id, balance] of [['PREPAID_ACCOUNT_1', 'PREPAID_ACCOUNT'], ['OLD_1', 'OLD']]) {
         db.balance.insertCreditMovement({
           id, balance_name: balance, amount: 50, date: '2026-08-01', description: 'Voucher',
-          movement_type: 'VOUCHER', account: PARIS.nic,
+          movement_type: 'VOUCHER', account: PARIS,
         });
       }
       forgetAccounts();
@@ -755,24 +750,24 @@ describe('the rows stored before the accounts, with several accounts configured'
 
       expect(storedMovements()).toEqual([
         [null, 'OLD_1', 50],
-        [PARIS.nic, 'PREPAID_ACCOUNT_1', 50],
-        [PARIS.nic, 'PREPAID_ACCOUNT_2', -5],
+        [PARIS, 'PREPAID_ACCOUNT_1', 50],
+        [PARIS, 'PREPAID_ACCOUNT_2', -5],
       ]);
     });
 
   // No account can claim them, and each account's import records its own
   test('lose their balance and consumption snapshots', async () => {
     serveLyonAndParis();
-    storeDataOf(PARIS.nic, 'P');
+    storeDataOf(PARIS, 'P');
     forgetAccounts();
     db.balance.insertBalance({
-      debt_balance: 0, credit_balance: 10, deposit_total: 0, currency: 'EUR', account: LYON.nic,
+      debt_balance: 0, credit_balance: 10, deposit_total: 0, currency: 'EUR', account: LYON,
     });
 
     await runImport({ diff: true });
 
     expect(db.getDb().prepare('SELECT account FROM account_balance').all())
-      .toEqual([{ account: LYON.nic }]);
+      .toEqual([{ account: LYON }]);
     expect(allIdsIn('consumption_snapshots')).toEqual([]);
   });
 
@@ -780,7 +775,7 @@ describe('the rows stored before the accounts, with several accounts configured'
   // consumption of past months
   test('keep no account when no account claims them, and none is deleted', async () => {
     const { lyon, paris } = serveLyonAndParis();
-    storeDataOf(PARIS.nic, 'P');
+    storeDataOf(PARIS, 'P');
     forgetAccounts();
     const history = allIdsIn('consumption_history');
     for (const served of [lyon, paris]) {
@@ -806,14 +801,14 @@ describe('the rows stored before the accounts, with several accounts configured'
   // It clears the accounts that it imports, not the Unknown account
   test('are kept by a full import, but for those that an account claims', async () => {
     const { paris } = serveLyonAndParis();
-    storeDataOf(PARIS.nic, 'P');
+    storeDataOf(PARIS, 'P');
     forgetAccounts();
     const history = allIdsIn('consumption_history');
     serveBills(paris.routes, [['FR-P0', '2026-08-01']]);
 
     await runImport({ full: true });
 
-    expect(accountsOf('bills')).toEqual([['FR-P0', PARIS.nic]]);
+    expect(accountsOf('bills')).toEqual([['FR-P0', PARIS]]);
     expect(idsWithoutAccount()).toEqual({
       bills: [],
       projects: ['proj-P-idle', 'proj-P-used'],
