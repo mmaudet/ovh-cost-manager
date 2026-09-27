@@ -111,8 +111,9 @@ Two suites:
   the tests of `server/index.js` itself start the real server in a child process
   (`tests/support/ocm-server.js`, with a throwaway HOME and DATA_DIR, and the
   repository's `config.json` hidden): its startup settings, rate limiting, the CORS
-  check, and the OIDC sign-in, which `tests/auth-oidc-flow.test.js` goes through against
-  a fake OpenID provider served in the test's process (`tests/support/fake-provider.js`).
+  check, the accounts route over a database that the test seeds, and the OIDC sign-in,
+  which `tests/auth-oidc-flow.test.js` goes through against a fake OpenID provider served
+  in the test's process (`tests/support/fake-provider.js`).
 - **Dashboard tests**: Vitest and Testing Library in jsdom, in `dashboard/test/`. The page
   tests render the whole dashboard with the API service module replaced by synthetic
   fixtures, act like a user and check what is visible. They pin the dashboard's behaviour:
@@ -182,8 +183,9 @@ See `docs/deployment.md` for full SSO/OIDC setup.
 Three values (`appKey`, `appSecret`, `consumerKey`) plus `endpoint` (e.g. `ovh-eu`), stored
 under `credentials` in `config.json`. Generate appKey/appSecret at
 https://eu.api.ovh.com/createToken/, then request a consumerKey with GET access to the
-paths listed in the README. Minimum useful scope is `/me/*` and `/cloud/*`; the other
-paths enable the infrastructure inventory.
+paths listed in the README. Minimum useful scope is `GET /me`, `/me/*` and `/cloud/*`:
+every import reads the account it imports from `GET /me`, which `/me/*` does not cover.
+The other paths enable the infrastructure inventory.
 
 ## Agent skills
 
