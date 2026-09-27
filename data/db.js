@@ -153,9 +153,49 @@ const projectOps = {
     return stmt.run(requireAccount('projects', project));
   },
 
-  getAll: () => {
-    const db = getDb();
-    return db.prepare('SELECT * FROM projects ORDER BY name').all();
+  /**
+   * @param {?string} [account] - The account whose projects to list (see accountCondition()):
+   *   every account's by default (#121)
+   * @returns {object[]} The projects, by name, each with the NIC handle of its account
+   */
+  getAll: (account = null) => {
+    const ofAccount = accountCondition(account, 'p.account');
+    return getDb().prepare(`SELECT * FROM projects p WHERE ${ofAccount.sql} ORDER BY name`)
+      .all(...ofAccount.params);
+  },
+
+  /**
+   * The projects of the account (see accountCondition()), every account's by default, as the
+   * Public Cloud tab lists them (#121): most consuming first, each with its account, its
+   * number of instances, and what it consumed in the month of the last import of the
+   * consumption, which keeps the other months (#54).
+   * @param {?string} [account]
+   * @returns {object[]}
+   */
+  getEnriched: (account = null) => {
+    const ofAccount = accountCondition(account, 'p.account');
+    return getDb().prepare(`
+      SELECT
+        p.id, p.name, p.description, p.status, p.account,
+        COALESCE(ci.instance_count, 0) as instance_count,
+        COALESCE(pc.consumption_total, 0) as consumption_total,
+        pc.period_start, pc.period_end
+      FROM projects p
+      LEFT JOIN (
+        SELECT project_id, COUNT(*) as instance_count
+        FROM cloud_instances
+        GROUP BY project_id
+      ) ci ON ci.project_id = p.id
+      LEFT JOIN (
+        SELECT project_id, SUM(total_price) as consumption_total,
+               MIN(period_start) as period_start, MAX(period_end) as period_end
+        FROM project_consumption
+        WHERE period_start = ?
+        GROUP BY project_id
+      ) pc ON pc.project_id = p.id
+      WHERE ${ofAccount.sql}
+      ORDER BY consumption_total DESC
+    `).all(cloudDetailOps.getCurrentConsumptionMonth(), ...ofAccount.params);
   },
 
   getById: (id) => {
@@ -868,10 +908,21 @@ const inventoryOps = {
     `).all(resourceType, fromDate, toDate, resourceType, fromDate, toDate);
   },
 
-  // Public Cloud detailed stats (Kubernetes clusters, S3 buckets, etc)
-  getPublicCloudStats: (fromDate, toDate) => {
+  /**
+   * The figures of the Public Cloud cards over a period (Kubernetes clusters, S3 buckets, etc),
+   * for the account (see accountCondition()), every account's by default (#121). The costs are
+   * those of the bill lines of its bills; the counts of volumes, snapshots and buckets, those of
+   * the inventory of its projects, as a project's resources belong to its account (ADR 0002).
+   * @param {string} fromDate
+   * @param {string} toDate
+   * @param {?string} [account]
+   * @returns {object}
+   */
+  getPublicCloudStats: (fromDate, toDate, account = null) => {
     const db = getDb();
-    
+    const ofBills = accountCondition(account, 'b.account');
+    const ofProjects = accountCondition(account, 'p.account');
+
     // Count unique Kubernetes services from descriptions. Savings plans for
     // nodes ("savings-plan-3xc3-4_node_k8s") match '%k8s%' but belong to the
     // savings plan card, as for the instance total.
@@ -882,15 +933,18 @@ const inventoryOps = {
       WHERE b.date >= ? AND b.date <= ?
         AND (LOWER(description) LIKE '%kubernetes%' OR LOWER(description) LIKE '%kube%' OR LOWER(description) LIKE '%k8s%')
         AND LOWER(description) NOT LIKE 'savings plan%'
-    `).get(fromDate, toDate);
+        AND ${ofBills.sql}
+    `).get(fromDate, toDate, ...ofBills.params);
 
     // Count object storage buckets from the imported inventory (buckets that exist
     // right now, including the ones that cost nothing over the period). Falls back
     // to the billing-derived count when the inventory has never been imported.
     let s3 = db.prepare(`
-      SELECT COUNT(*) as count FROM object_storage_buckets
-      WHERE created_at IS NULL OR SUBSTR(created_at, 1, 10) <= ?
-    `).get(toDate);
+      SELECT COUNT(*) as count FROM object_storage_buckets o
+      LEFT JOIN projects p ON p.id = o.project_id
+      WHERE (o.created_at IS NULL OR SUBSTR(o.created_at, 1, 10) <= ?)
+        AND ${ofProjects.sql}
+    `).get(toDate, ...ofProjects.params);
     if (!s3?.count) {
       s3 = db.prepare(`
         SELECT COUNT(*) as count
@@ -905,9 +959,10 @@ const inventoryOps = {
                OR LOWER(description) LIKE 'stockage standard infrequent%bucket%')
               AND LOWER(description) NOT LIKE '%bande passante%'
             )
+            AND ${ofBills.sql}
           GROUP BY description
         )
-      `).get(fromDate, toDate);
+      `).get(fromDate, toDate, ...ofBills.params);
     }
     
     // Total cost for all object storage (including bandwidth, archives)
@@ -924,7 +979,8 @@ const inventoryOps = {
           OR LOWER(description) LIKE '%public cloud archive%'
           OR LOWER(description) LIKE 'stockage cold archive%'
         )
-    `).get(fromDate, toDate);
+        AND ${ofBills.sql}
+    `).get(fromDate, toDate, ...ofBills.params);
 
     // Instances: monthly + hourly lines. Savings plans read as "%instance%" but
     // are prepaid compute billed on their own line, they are counted apart.
@@ -935,7 +991,8 @@ const inventoryOps = {
       WHERE b.date >= ? AND b.date <= ?
         AND (d.description LIKE 'Forfait mensuel pour une instance%'
              OR d.description LIKE 'Consommation à l%heure pour les instances%')
-    `).get(fromDate, toDate);
+        AND ${ofBills.sql}
+    `).get(fromDate, toDate, ...ofBills.params);
 
     const volumes = db.prepare(`
       SELECT ROUND(SUM(d.total_price), 2) as total
@@ -943,11 +1000,14 @@ const inventoryOps = {
       JOIN bills b ON d.bill_id = b.id
       WHERE b.date >= ? AND b.date <= ?
         AND d.description LIKE 'Disques supplémentaires%'
-    `).get(fromDate, toDate);
+        AND ${ofBills.sql}
+    `).get(fromDate, toDate, ...ofBills.params);
     const volumeCount = db.prepare(`
-      SELECT COUNT(*) as count FROM cloud_volumes
-      WHERE created_at IS NULL OR SUBSTR(created_at, 1, 10) <= ?
-    `).get(toDate);
+      SELECT COUNT(*) as count FROM cloud_volumes v
+      LEFT JOIN projects p ON p.id = v.project_id
+      WHERE (v.created_at IS NULL OR SUBSTR(v.created_at, 1, 10) <= ?)
+        AND ${ofProjects.sql}
+    `).get(toDate, ...ofProjects.params);
 
     const snapshots = db.prepare(`
       SELECT ROUND(SUM(d.total_price), 2) as total
@@ -955,11 +1015,14 @@ const inventoryOps = {
       JOIN bills b ON d.bill_id = b.id
       WHERE b.date >= ? AND b.date <= ?
         AND d.description LIKE 'Snapshots Public Cloud%'
-    `).get(fromDate, toDate);
+        AND ${ofBills.sql}
+    `).get(fromDate, toDate, ...ofBills.params);
     const snapshotCount = db.prepare(`
-      SELECT COUNT(*) as count FROM cloud_snapshots
-      WHERE created_at IS NULL OR SUBSTR(created_at, 1, 10) <= ?
-    `).get(toDate);
+      SELECT COUNT(*) as count FROM cloud_snapshots s
+      LEFT JOIN projects p ON p.id = s.project_id
+      WHERE (s.created_at IS NULL OR SUBSTR(s.created_at, 1, 10) <= ?)
+        AND ${ofProjects.sql}
+    `).get(toDate, ...ofProjects.params);
 
     const savingsPlans = db.prepare(`
       SELECT COUNT(DISTINCT d.description) as count, ROUND(SUM(d.total_price), 2) as total
@@ -967,7 +1030,8 @@ const inventoryOps = {
       JOIN bills b ON d.bill_id = b.id
       WHERE b.date >= ? AND b.date <= ?
         AND d.description LIKE 'Savings plan%'
-    `).get(fromDate, toDate);
+        AND ${ofBills.sql}
+    `).get(fromDate, toDate, ...ofBills.params);
 
     // Count Container Registry services
     const registry = db.prepare(`
@@ -976,7 +1040,8 @@ const inventoryOps = {
       JOIN bills b ON d.bill_id = b.id
       WHERE b.date >= ? AND b.date <= ?
         AND (LOWER(description) LIKE '%registry%' OR LOWER(description) LIKE '%container registry%' OR LOWER(description) LIKE '%harbor%')
-    `).get(fromDate, toDate);
+        AND ${ofBills.sql}
+    `).get(fromDate, toDate, ...ofBills.params);
 
     // Count AI/ML services
     const aiml = db.prepare(`
@@ -985,7 +1050,8 @@ const inventoryOps = {
       JOIN bills b ON d.bill_id = b.id
       WHERE b.date >= ? AND b.date <= ?
         AND (LOWER(description) LIKE '%ai training%' OR LOWER(description) LIKE '%ai deploy%' OR LOWER(description) LIKE '%notebook%' OR LOWER(description) LIKE '%ml%')
-    `).get(fromDate, toDate);
+        AND ${ofBills.sql}
+    `).get(fromDate, toDate, ...ofBills.params);
 
     // Count Load Balancers
     const lbs = db.prepare(`
@@ -994,7 +1060,8 @@ const inventoryOps = {
       JOIN bills b ON d.bill_id = b.id
       WHERE b.date >= ? AND b.date <= ?
         AND (LOWER(description) LIKE '%load balancer%' OR LOWER(description) LIKE '%loadbalancer%' OR LOWER(description) LIKE '%octavia%')
-    `).get(fromDate, toDate);
+        AND ${ofBills.sql}
+    `).get(fromDate, toDate, ...ofBills.params);
 
     return {
       kubernetes: { count: k8s?.count || 0, total: k8s?.total || 0 },
