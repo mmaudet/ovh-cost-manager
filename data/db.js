@@ -106,11 +106,12 @@ function projectGrouping(projectColumn, byAccount) {
 // The tables of the services that the APIs of two accounts can both list, such as a server
 // whose technical contact is one account and whose billing is another's (#114). A service is
 // stored once, and belongs to the account whose bill lines name it, or else to the first
-// configured account that lists it: the accounts are imported in the order of the
-// configuration, and a writer of these tables never changes the account of a service that
-// one holds. It gives a service without an account, stored before the accounts, to the
-// account that lists it. Then, once the account's bills are stored,
-// accounts.takeOverBilledRows() gives it the services that it lists and bills.
+// configured account that lists it. The writers of these tables never change the account of
+// a service that an account holds, and the accounts are imported in the order of the
+// configuration: the first that lists a service stores it. A writer gives a service stored
+// before the accounts, without one, to the account that lists it. Then, once the account's
+// bills are stored, accounts.takeOverBilledRows() gives it the services that it lists and
+// bills.
 const SERVICE_TABLES = ['projects', 'dedicated_servers', 'vps_instances', 'storage_services'];
 
 let db = null;
@@ -144,8 +145,8 @@ function rekeyTable(database, table, columns, hasFormerKey) {
     if (!hasFormerKey()) return;
     const former = `${table}_former_key`;
     database.exec(`ALTER TABLE ${table} RENAME TO ${former}`);
-    // Its indexes follow it, under their names, which schema.sql creates those of the new
-    // table with
+    // Its indexes follow it under their names, which schema.sql would find taken: they go,
+    // and schema.sql creates them again on the new table
     const indexes = database.prepare(`
       SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = ? AND sql IS NOT NULL
     `).all(former);
@@ -685,9 +686,9 @@ const accountsOps = {
     getDb().prepare('SELECT 1 FROM accounts WHERE nic = ?').get(nic) !== undefined,
 
   /**
-   * Records which of the accounts recorded the configuration of a run lists, and at which
-   * place: the others are no longer configured, keep their data and are no longer imported
-   * (#114). Each run records it, whatever it imports of them.
+   * Records which accounts the configuration of a run lists, among those recorded, and at
+   * which place: the others are no longer configured, keep their data and are no longer
+   * imported (#114). Each run records it, whatever it imports of them.
    * @param {Array<?string>} nics - The NIC handle of the account of each entry of the
    *   configuration, in its order: the one that its GET /me named, or else the one that an
    *   import last recorded with its entry's name; null for an entry that leads to no account

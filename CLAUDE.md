@@ -26,7 +26,9 @@ OVH API ──> data/import.js ──> SQLite (ovh-bills.db) ──> server/inde
   - `db.js` — connection singleton (`getDb()`). Opens SQLite in WAL mode, runs
     `schema.sql`, then applies idempotent runtime migrations via `addColumnIfNotExists`.
     There is no migration framework; schema changes are made by editing `schema.sql` AND
-    adding an `addColumnIfNotExists` call for existing databases.
+    adding an `addColumnIfNotExists` call for existing databases. A table whose key
+    changes goes through `rekeyTable()`, which moves its rows to the table as `schema.sql`
+    creates it now, as SQLite cannot change a key in place.
   - `classify.js` — pure functions (`classifyService`, etc.) mapping a bill line's
     description to a service type. **Classification runs at import time** and the result is
     stored in `bill_details.service_type`; the server reads the stored value, it does not
@@ -114,8 +116,15 @@ datasets, off by default: `--include-consumption`, `--include-account`,
 A run imports every configured account, one after the other, under one import log entry;
 each differential import starts from that account's own latest bill. An account that
 fails does not stop the others: the run then ends `partial`, or `failed` when all did.
-`--account <NIC handle>` limits a run to one configured account; not with `--full` yet,
-which clears every account.
+`--account <NIC handle>` limits a run to one configured account. What acts on a whole
+table acts on the imported account only: the removal of the services OVH no longer
+lists, the replacement of the consumption history, and the clearing of `--full`, which
+clears every account it can read, or the one of `--account`. A service that two accounts
+list is stored once: it belongs to the account that bills it, or else to the first
+configured account that lists it. An account removed from the configuration keeps its
+data, and is no longer imported. At the first import after #114, the rows stored before the accounts go to the
+single configured account, or to each of several that lists them; the rest stay without
+an account, as the Unknown account's (`CONTEXT.md`).
 
 ### Tests
 
