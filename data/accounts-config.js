@@ -37,13 +37,19 @@ const ACCOUNT_KEYS = [...KEYS, 'endpoint'];
  * @param {string} source - The file's path, which the errors name
  * @returns {ConfiguredAccount[]} Its accounts, in its order: none when it gives none
  * @throws {Error} naming the setting and the file, for any value that the accounts do not
- *   take, and for a file that gives both the credentials and the accounts sections, as it
- *   would be ambiguous which accounts to import
+ *   take, and for a file that gives the accounts section with the credentials of a single
+ *   account, in the credentials section or at its top, as it would be ambiguous which
+ *   accounts to import
  */
 function readAccounts(config, source) {
   if (config.accounts !== undefined && config.credentials !== undefined) {
     throw new Error(`credentials and accounts in ${source} cannot both be set: list every `
       + 'account under accounts');
+  }
+  const legacyKeys = ACCOUNT_KEYS.filter((key) => config[key] !== undefined);
+  if (config.accounts !== undefined && legacyKeys.length > 0) {
+    throw new Error(`accounts in ${source} cannot be set with the legacy credentials at the `
+      + `top of the file (${legacyKeys.join(', ')}): list every account under accounts`);
   }
   if (config.accounts !== undefined) {
     return readAccountList(config.accounts, source);
@@ -52,7 +58,7 @@ function readAccounts(config, source) {
     return [unnamed(readCredentials(config.credentials, 'credentials', source, KEYS))];
   }
   // The legacy flat form, which the whole file is the credentials of
-  if (ACCOUNT_KEYS.some((key) => config[key] !== undefined)) {
+  if (legacyKeys.length > 0) {
     return [unnamed(readCredentials(config, null, source, KEYS))];
   }
   return [];

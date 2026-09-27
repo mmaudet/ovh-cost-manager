@@ -184,6 +184,11 @@ describe('a configuration that the import refuses', () => {
       { credentials, accounts: [{ credentials: other }] },
       `credentials and accounts in ${FILE} cannot both be set: list every account under `
         + 'accounts'],
+    ['the accounts section and legacy credentials at the top of the file',
+      { appKey: 'app-paris', appSecret: 'secret-paris', consumerKey: 'consumer-paris',
+        accounts: [{ credentials }] },
+      `accounts in ${FILE} cannot be set with the legacy credentials at the top of the file `
+        + '(appKey, appSecret, consumerKey): list every account under accounts'],
     ['an accounts section that is not an array', { accounts: { name: 'Lyon', credentials } },
       `accounts in ${FILE} must be an array of accounts, not an object`],
     ['an accounts section that lists none', { accounts: [] },
