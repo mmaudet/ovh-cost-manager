@@ -12,6 +12,32 @@ sections were written afterwards from the git history.
 
 <!-- scripts/release.sh inserts each new version above the first version heading. -->
 
+## 3.0.0 - 2026-09-27
+
+<!-- Upgrade notes and highlights of this release, if any. -->
+
+### New features
+* feat: record the account of every imported row by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/126
+* feat: configure and import several OVH accounts in one run by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/127
+* feat: select the account in the dashboard header by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/128
+* feat: Trends follows the account by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/129
+* feat: Public Cloud follows the account by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/130
+* feat: Web Cloud follows the account by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/131
+* feat: Overview follows the account by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/132
+* feat: keep each account's inventory, history and snapshots apart by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/133
+* feat: name the account in the report and the footer by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/134
+* feat: Compare follows the account by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/135
+* feat: consumption, forecast and balance follow the account by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/136
+* feat: Infrastructure and Backup follow the account by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/138
+* feat: budget per account by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/139
+* feat: the API's CSV exports follow the account by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/141
+* feat: the bills and daily trend routes follow the account by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/142
+### Maintenance
+* docs: record the multi-account decisions in the glossary and ADR 0002 by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/111
+* docs: document several accounts by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/143
+
+**Full Changelog**: https://github.com/mmaudet/ovh-cost-manager/compare/v2.4.3...v3.0.0
+
 ## 2.4.3 - 2026-09-27
 
 `TRUST_PROXY` can now count the proxies in front of OCM, so that rate limiting
