@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { projectComparisonRows } from '../../src/utils/projectComparison.js';
+import {
+  firstRowOfEachProject, projectComparisonRows,
+} from '../../src/utils/projectComparison.js';
 
 // The rows of the project comparison of the Compare tab, from the projects of months A and B
 // as /api/analysis/by-project lists them: most expensive first, each with its id, its name,
@@ -176,5 +178,59 @@ describe('projectComparisonRows', () => {
 
       expect(row).not.toHaveProperty('account');
     });
+  });
+});
+
+// The projects whose consumption the Compare tab compares, one comparison each, in the order
+// of the rows of the comparison by project (#119)
+describe('firstRowOfEachProject', () => {
+  const ofAccount = (row, account) => ({ ...row, account });
+  // The rows, each as [id, name, account]
+  const projectsOf = (rows) => rows.map(({ projectId, projectName, account }) => (
+    [projectId, projectName, account]
+  ));
+
+  // What a project consumed is its own, whatever account billed it
+  it('gives the first row of a project that has a row for each account', () => {
+    const rows = projectComparisonRows(
+      [ofAccount(staging(200), 'xx1111-ovh'), ofAccount(production(400), 'xx1111-ovh')],
+      [ofAccount(production(500), 'xx1111-ovh'), ofAccount(staging(150), 'yy2222-ovh')],
+    );
+
+    expect(projectsOf(firstRowOfEachProject(rows))).toEqual([
+      ['project-staging', 'Staging', 'xx1111-ovh'],
+      ['project-production', 'Production', 'xx1111-ovh'],
+    ]);
+  });
+
+  // In the order the tab sorts them in
+  it('keeps the order of the rows it is given', () => {
+    const rows = projectComparisonRows(
+      [ofAccount(staging(200), 'xx1111-ovh'), ofAccount(production(400), 'xx1111-ovh')],
+      [ofAccount(staging(150), 'yy2222-ovh')],
+    ).reverse();
+
+    expect(projectsOf(firstRowOfEachProject(rows))).toEqual([
+      ['project-staging', 'Staging', 'yy2222-ovh'],
+      ['project-production', 'Production', 'xx1111-ovh'],
+    ]);
+  });
+
+  // Each project has a row of its own there already
+  it('gives every row of projects that name no account', () => {
+    const rows = projectComparisonRows([production(400), staging(200)], [sandbox(120)]);
+
+    expect(firstRowOfEachProject(rows)).toEqual(rows);
+  });
+
+  // As projectComparisonRows() pairs them: the projects the server cannot name, all
+  // "Unknown", by their ids, and by their names those without one
+  it('tells projects apart by their ids, or by their names without one', () => {
+    const rows = projectComparisonRows(
+      [project('project-gone-1', 'Unknown', 40), project(null, 'Legacy', 20)],
+      [project('project-gone-2', 'Unknown', 15), project(null, 'Archive', 10)],
+    );
+
+    expect(firstRowOfEachProject(rows)).toEqual(rows);
   });
 });

@@ -6,7 +6,7 @@ import { SortIcon } from '../components/SortIcon.jsx';
 import ProjectProductComparison from '../components/ProjectProductComparison.jsx';
 import { Variation } from '../components/Variation.jsx';
 import { formatMonthLabel } from '../utils/format.js';
-import { projectComparisonRows } from '../utils/projectComparison.js';
+import { firstRowOfEachProject, projectComparisonRows } from '../utils/projectComparison.js';
 
 // The cost of a resource type in a month, from its costs by resource type (#32)
 const costOfType = (byResourceType, type) => (
@@ -65,14 +65,9 @@ const CompareTab = ({
   };
 
   const compareProjects = getSortedCompareProjects();
-  // The projects whose consumption the tab compares, in the order of their first rows: a
-  // project billed to several accounts has a row for each in the Account column (#119), but
-  // what it consumed is its own
-  const consumptionProjects = accountColumn
-    ? compareProjects.filter((p, i) => (
-      compareProjects.findIndex(({ projectId }) => projectId === p.projectId) === i
-    ))
-    : compareProjects;
+  // The projects whose consumption the tab compares, once each, in the order of their first
+  // rows: in the Account column, a project billed to several accounts has a row for each (#119)
+  const consumptionProjects = firstRowOfEachProject(compareProjects);
 
   // Comparison chart data
   const comparisonChartData = byServiceA.map((s) => {
