@@ -14,7 +14,36 @@ sections were written afterwards from the git history.
 
 ## 2.4.3 - 2026-09-27
 
-<!-- Upgrade notes and highlights of this release, if any. -->
+`TRUST_PROXY` can now count the proxies in front of OCM, so that rate limiting
+tells users apart behind a TLS terminator and the SSO relay. The compose files
+pass the settings that the deployment guide documents, and a refused CORS
+origin gets a 403 instead of a 500.
+
+### Upgrade notes
+
+- **Check your `.env`.** The compose files used to ignore some of the settings
+  the guide documents. They now pass them, so a value that `.env`, or the
+  shell, sets for them takes effect:
+  - `docker-compose.yml`: `TRUST_PROXY`, the `RATE_LIMIT_*` settings,
+    `ALLOWED_ORIGINS`, `OIDC_ENABLED`, `OIDC_ISSUER`, `OIDC_CLIENT_ID`,
+    `OIDC_CLIENT_SECRET`, `OIDC_BASE_URL`, `SESSION_SECRET` and
+    `COOKIE_SECURE`;
+  - `docker-compose.sso.yml`: `TRUST_PROXY` (still `true` when unset),
+    `OIDC_BASE_URL`, the `RATE_LIMIT_*` settings and the `IMPORT_*` ones.
+
+  Left unset, they change nothing: `config.json` and the defaults still apply.
+  With the simple stack, whose port is published directly, leave `TRUST_PROXY`
+  unset.
+- **`TRUST_PROXY` counts proxies.** `TRUST_PROXY`, or `rateLimit.trustProxy`
+  in `config.json`, takes `true`, `false` or a number of proxies from 1 to 10;
+  `true` still means one. Behind a TLS terminator in front of the SSO relay,
+  set `TRUST_PROXY=2`, provided the terminator adds to `X-Forwarded-For` and
+  the relay can be reached through it alone (see
+  [HTTPS](https://github.com/mmaudet/ovh-cost-manager/blob/v2.4.3/docs/deployment.md#https)).
+- **Refused CORS origins get a 403.** A request from an origin that is neither
+  the dashboard's own nor listed now gets a 403 with a short JSON error, where
+  it got a 500, and logs one line without a stack trace. Monitoring that
+  counted these as server errors will see them as refusals.
 
 ### New features
 * feat: let TRUST_PROXY name how many proxies OCM trusts by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/108
