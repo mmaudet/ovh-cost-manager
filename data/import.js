@@ -1291,121 +1291,104 @@ function billsStartOf(nic, params) {
 }
 
 /**
- * Imports one account through `ovh`, the client of its credentials: its projects, its bills
- * from the day that billsStartOf() gives, and the datasets that the options ask for. Every
+ * Imports a bill of the account and its lines, in one transaction: a bill is stored whole or
+ * not at all, and one imported again replaces its lines, which OVH may have changed. Each line
+ * is classified now, as the readers use the classification that is stored.
+ * @param {object} ovh - The OVH API client of the account
+ * @param {string} billId - The bill
+ * @param {object} account - `nic`, the NIC handle of the account, which the bill carries,
+ *   `params`, the options of the run, `projectMap`, the name of each of its Public Cloud
+ *   projects by id, and `resourceTypeMap`, the type of each service of its inventories by id
+ * @returns {Promise<number>} How many lines it stored
+ * @throws When the bill or the list of its lines cannot be fetched: the bill is skipped
+ */
+async function importBill(ovh, billId, { nic, params, projectMap, resourceTypeMap }) {
+  const { bill, details } = await fetchBillDetails(ovh, billId);
+  // How the bill was paid belongs to the balance, which --include-account asks for
+  const paymentInfo = params.includeAccount ? await fetchBillPayment(ovh, billId) : null;
+
+  db.transaction(() => {
+    db.bills.upsert({ ...bill, account: nic });
+    if (paymentInfo) {
+      db.balance.updateBillPayment(billId, paymentInfo);
+    }
+    db.details.deleteByBillId(billId);
+    db.details.insertMany(details.map(detail => ({
+      ...detail,
+      // The domain of a line of a Public Cloud project is the project's id; that of another
+      // line names its service, such as a server or a domain name
+      project_id: projectMap.hasOwnProperty(detail.domain) ? detail.domain : null,
+      service_type: classifyService(detail.description),
+      // The inventories know the type of the services they list; the domain and the wording
+      // of the line tell those of the others
+      resource_type: resourceTypeMap[detail.domain]
+        || classifyResourceTypeFromDomain(detail.domain, detail.description),
+    })));
+  });
+  return details.length;
+}
+
+/**
+ * Imports one account through its OVH API client: its projects, its inventories when asked,
+ * its bills from the day that billsStartOf() gives, then the other datasets asked for. Every
  * row it writes carries the account's NIC handle, or reaches it through its bill or project.
  * @param {object} ovh - The OVH API client of the account
  * @param {string} nic - The NIC handle of the account
- * @param {object} run - The run: `params`, its options, `importType`, as its log entry names
- *   it, `toDate`, the day it imports the bills to, and `stats`, which the account adds to
- * @throws {Error} When a call that the account cannot be imported without fails, which fails
- *   the account
+ * @param {object} run - `params`, the options of the run, `importType`, as its log entry
+ *   names it, and `toDate`, the day it imports the bills to
+ * @returns {Promise<{projects: number, bills: number, details: number}>} What it imported
+ * @throws {Error} When the list of its projects or of its bills cannot be fetched, which
+ *   fails the account
  */
-async function importAccount(ovh, nic, { params, importType, toDate, stats }) {
-  // Fetch and store projects
+async function importAccount(ovh, nic, { params, importType, toDate }) {
+  const imported = { projects: 0, bills: 0, details: 0 };
+
+  // The projects first: their ids tell the bill lines of Public Cloud
   const projects = await fetchProjects(ovh);
   const projectMap = {};
   for (const project of projects) {
     db.projects.upsert({ ...project, account: nic });
     projectMap[project.id] = project.name;
-    stats.projects++;
   }
+  imported.projects = projects.length;
 
-  // Phase 3: Import inventory and build resource type map
-  let resourceTypeMap = {};
-  if (params.includeInventory) {
-    resourceTypeMap = await importInventory(ovh, projectMap, nic);
-  }
+  // Then the inventories, when asked: they tell the type of the services that bill lines name
+  const resourceTypeMap = params.includeInventory
+    ? await importInventory(ovh, projectMap, nic)
+    : {};
 
-  // Fetch bills
   const billIds = await fetchBills(ovh, billsStartOf(nic, params), toDate);
-
-  // Process each bill
   console.log('\nProcessing bills...');
-  for (let i = 0; i < billIds.length; i++) {
-    const billId = billIds[i];
-    process.stdout.write(`  [${i + 1}/${billIds.length}] ${billId}...`);
-
-    // Skip if already exists (for differential)
+  for (const [index, billId] of billIds.entries()) {
+    process.stdout.write(`  [${index + 1}/${billIds.length}] ${billId}...`);
+    // A differential import only adds the bills it lacks, which keeps the daily run short
     if (importType === 'differential' && db.bills.exists(billId)) {
       console.log(' skipped (exists)');
       continue;
     }
-
     try {
-      const { bill, details } = await fetchBillDetails(ovh, billId);
-
-      // Fetch payment info if account import is enabled (Phase 2)
-      let paymentInfo = null;
-      if (params.includeAccount) {
-        paymentInfo = await fetchBillPayment(ovh, billId);
-      }
-
-      // Process and store bill + details in a transaction
-      // This ensures atomic write: either all data is written or none
-      db.transaction(() => {
-        // Store bill
-        db.bills.upsert({ ...bill, account: nic });
-
-        // Update payment info if available
-        if (paymentInfo) {
-          db.balance.updateBillPayment(billId, paymentInfo);
-        }
-
-        // Delete existing details (for updates)
-        db.details.deleteByBillId(billId);
-
-        // Process and store details with project mapping
-        // Note: d.domain from OVH API contains the project ID for cloud resources
-        // For non-cloud resources (domains, web hosting), d.domain is a domain name
-        const processedDetails = details.map(d => {
-          // Déterminer le type de ressource dès l'import
-          let resource_type = 'other';
-          // Priorité : mapping inventaire, puis classification domain
-          if (resourceTypeMap && resourceTypeMap[d.domain]) {
-            resource_type = resourceTypeMap[d.domain];
-          } else {
-            resource_type = classifyResourceTypeFromDomain(d.domain, d.description);
-          }
-          // Projet cloud
-          const isCloudProject = projectMap.hasOwnProperty(d.domain);
-          return {
-            ...d,
-            project_id: isCloudProject ? d.domain : null,
-            service_type: classifyService(d.description),
-            resource_type
-          };
-        });
-
-        db.details.insertMany(processedDetails);
-      });
-
-      stats.bills++;
-      stats.details += details.length;
-
-      console.log(` ${details.length} details`);
+      const lines = await importBill(ovh, billId, { nic, params, projectMap, resourceTypeMap });
+      imported.bills += 1;
+      imported.details += lines;
+      console.log(` ${lines} details`);
     } catch (err) {
-      // The bill is skipped, as a failed item is
+      // The bill is skipped, as a failed item is, and counted in the summary
       failedItemCount += 1;
       console.log(` ERROR: ${describeError(err)}`);
     }
   }
 
-
-  // Phase 1: Import consumption data
+  // The other datasets, only when asked: each takes many calls
   if (params.includeConsumption) {
     await importConsumption(ovh, nic);
   }
-
-  // Phase 2: Import account data
   if (params.includeAccount) {
     await importAccountData(ovh, nic);
   }
-
-  // Phase 4: Import cloud project details
   if (params.includeCloudDetails) {
     await importCloudDetails(ovh, Object.keys(projectMap));
   }
+  return imported;
 }
 
 function printUsage() {
@@ -1558,7 +1541,9 @@ async function runImport(params) {
     for (const account of accounts.filter(({ error }) => !error)) {
       if (several) console.log(`\n=== ACCOUNT ${describeAccount(account)} ===`);
       try {
-        await importAccount(account.client, account.nic, { params, importType, toDate, stats });
+        const imported = await importAccount(account.client, account.nic,
+          { params, importType, toDate });
+        for (const figure of Object.keys(stats)) stats[figure] += imported[figure];
         db.accounts.recordImport(account.nic, { status: 'success' });
       } catch (err) {
         // The next accounts are imported all the same
