@@ -4,7 +4,9 @@
  * another account's data, and a service that two accounts list is stored once.
  */
 
-const { ok, serveAccount, useConfig, useThrowawayImport } = require('./support/simulated-ovh');
+const {
+  ok, calls, serveAccount, useConfig, useThrowawayImport,
+} = require('./support/simulated-ovh');
 const { asBefore114 } = require('./support/database-before');
 
 jest.mock('ovh', () => require('./support/simulated-ovh').ovh);
@@ -27,6 +29,14 @@ beforeEach(() => {
 // The accounts that OVH serves, invented
 const LYON = { nic: 'xx1111-ovh', currency: 'EUR' };
 const PARIS = { nic: 'yy2222-ovh', currency: 'EUR' };
+
+// Credentials that lead to no account, as a revoked key
+const REVOKED = {
+  credentials: {
+    appKey: 'app-revoked', appSecret: 'secret-revoked', consumerKey: 'consumer-revoked',
+    endpoint: 'ovh-eu',
+  },
+};
 
 // Configures these accounts, in this order, under the accounts section: each entry is an
 // account that OVH serves, with the fields of its entry, such as its name
@@ -366,5 +376,84 @@ describe('the month of the current consumption', () => {
 
     expect(db.cloudDetails.getCurrentConsumptionMonth()).toBe('2026-09-01');
     expect(recordedMonths()).toEqual([[LYON.nic, '2026-09-01'], [PARIS.nic, '2026-08-01']]);
+  });
+});
+
+// The accounts recorded, as [NIC handle, place in the configuration of the last run, from 0,
+// or null when it does not list the account]
+const placesInConfiguration = () => db.getDb()
+  .prepare('SELECT nic, position FROM accounts ORDER BY nic')
+  .all()
+  .map(row => [row.nic, row.position]);
+
+// The routes that the clients of an account's credentials called, in order
+const routesCalledWith = ({ credentials }) => calls
+  .filter(call => call.consumerKey === credentials.consumerKey)
+  .map(call => call.route);
+
+describe('the accounts that the configuration lists', () => {
+  // Lyon and Paris, each with a bill of September, and Paris with a project
+  function serveLyonAndParis() {
+    const lyon = serveAccount(LYON);
+    const paris = serveAccount(PARIS);
+    serveProjects(lyon.routes);
+    serveProjects(paris.routes, ['proj-paris']);
+    serveBills(lyon.routes, [['FR-L1', '2026-09-01']]);
+    serveBills(paris.routes, [['FR-P1', '2026-09-01']]);
+    return { lyon, paris };
+  }
+
+  test('are recorded in the order of the configuration, whatever the run imports of them',
+    async () => {
+      const { lyon, paris } = serveLyonAndParis();
+      useAccounts({ served: lyon }, { served: paris });
+      await importSeptember();
+      // Reordered since
+      useAccounts({ served: paris }, { served: lyon });
+
+      await importSeptember({ account: PARIS.nic });
+
+      expect(placesInConfiguration()).toEqual([[LYON.nic, 1], [PARIS.nic, 0]]);
+    });
+
+  // Its GET /me cannot name it, but its entry's name is the one that an import recorded it with
+  test('include an account whose key fails, by the name of its entry', async () => {
+    const { lyon, paris } = serveLyonAndParis();
+    useAccounts({ served: lyon, name: 'Lyon' }, { served: paris });
+    await importSeptember();
+    // Its key revoked since
+    useAccounts({ served: REVOKED, name: 'Lyon' }, { served: paris });
+
+    await importSeptember();
+
+    expect(placesInConfiguration()).toEqual([[LYON.nic, 0], [PARIS.nic, 1]]);
+  });
+
+  // Every account was configured then: the next run records which ones still are
+  test('include those recorded before the upgrade, in the order they were first recorded',
+    () => {
+      db.accounts.upsert({ nic: PARIS.nic, currency: 'EUR' });
+      db.accounts.upsert({ nic: LYON.nic, currency: 'EUR' });
+      asBefore114(db.getDb());
+      db.closeDb();
+
+      expect(placesInConfiguration()).toEqual([[LYON.nic, 1], [PARIS.nic, 0]]);
+    });
+
+  describe('once an account is removed from them', () => {
+    test('keep its data, and neither import it nor list it any more', async () => {
+      const { lyon, paris } = serveLyonAndParis();
+      useAccounts({ served: lyon }, { served: paris });
+      await importSeptember();
+      useAccounts({ served: lyon });
+      calls.length = 0;
+
+      await importSeptember();
+
+      expect(accountsOf('bills')).toEqual([['FR-L1', LYON.nic], ['FR-P1', PARIS.nic]]);
+      expect(accountsOf('projects')).toEqual([['proj-paris', PARIS.nic]]);
+      expect(routesCalledWith(paris)).toEqual([]);
+      expect(placesInConfiguration()).toEqual([[LYON.nic, 0], [PARIS.nic, null]]);
+    });
   });
 });

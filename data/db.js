@@ -117,12 +117,15 @@ let db = null;
 
 /**
  * Safely add a column to a table if it doesn't exist
+ * @returns {boolean} Whether it added the column
  */
 function addColumnIfNotExists(database, table, column, type) {
   const columns = database.pragma(`table_info(${table})`);
   if (!columns.find(c => c.name === column)) {
     database.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${type}`);
+    return true;
   }
+  return false;
 }
 
 /**
@@ -191,6 +194,17 @@ function getDb() {
     // import of the account records
     addColumnIfNotExists(db, 'accounts', 'name', 'TEXT');
     addColumnIfNotExists(db, 'accounts', 'budget', 'INTEGER');
+    // The place of each account in the configuration, which each run records (#114). An
+    // account recorded before was configured at its last import: each takes its place in the
+    // order the accounts were first recorded, until the next run records the configuration.
+    db.transaction(() => {
+      if (addColumnIfNotExists(db, 'accounts', 'position', 'INTEGER')) {
+        db.exec(`
+          UPDATE accounts SET position =
+            (SELECT COUNT(*) FROM accounts AS earlier WHERE earlier.rowid < accounts.rowid)
+        `);
+      }
+    }).immediate();
     // What keeps the lock of a long import (#113)
     addColumnIfNotExists(db, 'import_log', 'heartbeat_at', 'DATETIME');
     // The credit movements keyed by their account too (#114): their ids, which join the name
@@ -606,11 +620,32 @@ const accountsOps = {
     getDb().prepare('SELECT 1 FROM accounts WHERE nic = ?').get(nic) !== undefined,
 
   /**
-   * @returns {object[]} Every account recorded, by NIC handle, as the accounts table holds it
+   * Records which of the accounts recorded the configuration of a run lists, and at which
+   * place: the others are no longer configured, keep their data and are no longer imported
+   * (#114). Each run records it, whatever it imports of them.
+   * @param {Array<?string>} nics - The NIC handle of the account of each entry of the
+   *   configuration, in its order: the one that its GET /me named, or else the one that an
+   *   import last recorded with its entry's name; null for an entry that leads to no account
+   *   that the run can tell
+   */
+  recordConfiguration: (nics) => {
+    const db = getDb();
+    const place = db.prepare('UPDATE accounts SET position = ? WHERE nic = ?');
+    db.transaction(() => {
+      db.exec('UPDATE accounts SET position = NULL');
+      nics.forEach((nic, position) => {
+        if (nic) place.run(position, nic);
+      });
+    })();
+  },
+
+  /**
+   * @returns {object[]} Every account recorded, as the accounts table holds it: those that
+   *   the configuration of the last run lists, in its order, then the others by NIC handle
    */
   getAll: () => {
     const db = getDb();
-    return db.prepare('SELECT * FROM accounts ORDER BY nic').all();
+    return db.prepare('SELECT * FROM accounts ORDER BY position IS NULL, position, nic').all();
   }
 };
 

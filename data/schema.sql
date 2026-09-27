@@ -11,7 +11,9 @@ CREATE TABLE IF NOT EXISTS accounts (
   last_import_status TEXT,       -- 'success', 'failed'
   last_import_error TEXT,        -- Why its last import failed
   name TEXT,                     -- The name of its entry in config.json at its last import
-  budget INTEGER                 -- The budget of that entry
+  budget INTEGER,                -- The budget of that entry
+  position INTEGER               -- Its place in the configuration of the last run, from 0,
+                                 -- NULL when that one does not list it any more (#114)
 );
 
 -- Cloud Projects

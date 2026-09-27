@@ -1489,6 +1489,9 @@ async function runImport(params) {
         // An entry without a name, or one never imported, leads to no account that the data
         // can tell: only the run's log names it, by its place
       }
+      // Which accounts the configuration lists, whatever the run imports of them: one that it
+      // no longer lists keeps its data, and is no longer imported (#114)
+      db.accounts.recordConfiguration(attempts.map(({ nic, lastNic }) => nic ?? lastNic ?? null));
       // Rows stored before the upgrade carry no account. With a single account configured,
       // they can only be its own: they get it at the first import, and none is left after.
       // With several, whose they are is for each account's API to tell (#114).
