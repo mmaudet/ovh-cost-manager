@@ -31,9 +31,10 @@ describe('services about to expire', () => {
     account: ACCOUNT.nic,
   });
 
-  // A service of the list, as /api/inventory/expiring answers
+  // A service of the list, as /api/inventory/expiring answers: with the NIC handle of its
+  // account (#123)
   const expiring = (type, id, displayName, expirationDate) => ({
-    id, display_name: displayName, type, expiration_date: expirationDate,
+    id, display_name: displayName, type, expiration_date: expirationDate, account: ACCOUNT.nic,
   });
 
   beforeAll(() => {

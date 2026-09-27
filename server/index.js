@@ -365,10 +365,11 @@ function registerRoutes() {
     isRecordedAccount: db.accounts.isRecorded,
   });
 
-  // The byAccount parameter of the lists of the costs of projects (#118): req.byAccount,
-  // whether a request asks for each project once for each account that billed it, with that
-  // account, as the Overview's lists that name the account of each project do, rather than
-  // once. true or false, false without it; any other value is refused.
+  // The byAccount parameter of the lists of the costs of projects (#118), and of the bill lines
+  // of a resource type by service (#123): req.byAccount, whether a request asks for each
+  // project or service once for each account that billed it, with that account, as the lists
+  // that name the account of each row do, rather than once. true or false, false without it;
+  // any other value is refused.
   const byAccountParameter = (req, res, next) => {
     const { byAccount } = req.query;
     if (byAccount !== undefined && byAccount !== 'true' && byAccount !== 'false') {
@@ -1122,9 +1123,13 @@ function registerRoutes() {
   // Inventory Endpoints (Phase 3)
   // ========================
 
-  app.get('/api/inventory/servers', (req, res) => {
+  // The services of the inventories, dedicated servers, VPS and storage services: those of the
+  // account the request asks for, or of every account without one (#123). Each names its
+  // account, null for the Unknown account; a service that two accounts' APIs list is stored,
+  // and listed, once (ADR 0002).
+  app.get('/api/inventory/servers', accountParameter, (req, res) => {
     try {
-      const servers = db.inventory.getAllServers();
+      const servers = db.inventory.getAllServers(req.account);
       const result = servers.map(s => ({
         ...s,
         disk_info: s.disk_info ? JSON.parse(s.disk_info) : []
@@ -1135,9 +1140,9 @@ function registerRoutes() {
     }
   });
 
-  app.get('/api/inventory/vps', (req, res) => {
+  app.get('/api/inventory/vps', accountParameter, (req, res) => {
     try {
-      const vps = db.inventory.getAllVps();
+      const vps = db.inventory.getAllVps(req.account);
       const result = vps.map(v => ({
         ...v,
         ip_addresses: v.ip_addresses ? JSON.parse(v.ip_addresses) : []
@@ -1148,19 +1153,21 @@ function registerRoutes() {
     }
   });
 
-  app.get('/api/inventory/storage', (req, res) => {
+  app.get('/api/inventory/storage', accountParameter, (req, res) => {
     try {
-      const storage = db.inventory.getAllStorage();
+      const storage = db.inventory.getAllStorage(req.account);
       res.json(storage);
     } catch (err) {
       res.status(500).json({ error: err.message });
     }
   });
 
-  app.get('/api/inventory/summary', (req, res) => {
+  // How many services the inventories of the account the request asks for hold, and how many
+  // expire within 30 days: those of every account without one (#123)
+  app.get('/api/inventory/summary', accountParameter, (req, res) => {
     try {
-      const summary = db.inventory.getSummary();
-      const expiring = db.inventory.getExpiringServices(30);
+      const summary = db.inventory.getSummary(req.account);
+      const expiring = db.inventory.getExpiringServices(30, req.account);
       res.json({
         ...summary,
         total: summary.servers + summary.vps + summary.storage + summary.cloud_projects,
@@ -1171,10 +1178,13 @@ function registerRoutes() {
     }
   });
 
-  app.get('/api/inventory/expiring', (req, res) => {
+  // The services about to expire, which the Overview lists and the header counts: those of
+  // the account the request asks for, or of every account without one, each with its account,
+  // null for the Unknown account (#123)
+  app.get('/api/inventory/expiring', accountParameter, (req, res) => {
     try {
       const days = parseInt(req.query.days) || 30;
-      const expiring = db.inventory.getExpiringServices(days);
+      const expiring = db.inventory.getExpiringServices(days, req.account);
       res.json(expiring);
     } catch (err) {
       res.status(500).json({ error: err.message });
@@ -1208,18 +1218,26 @@ function registerRoutes() {
     }
   });
 
-  app.get('/api/analysis/resource-type-details', (req, res) => {
-    try {
-      const { type, from, to } = req.query;
-      if (!type) return res.status(400).json({ error: 'type parameter is required' });
-      const validation = validateDateRange(from, to);
-      if (!validation.valid) return res.status(400).json({ error: validation.error });
-      const data = db.inventory.byResourceTypeDetails(type, from, to);
-      res.json(data);
-    } catch (err) {
-      res.status(500).json({ error: err.message });
-    }
-  });
+  // The bill lines of a resource type in a period, by service, which the Infrastructure tab
+  // lists under each resource type, the Private Cloud hosts and datastores included: those of
+  // the account the request asks for, or of every account without one (#123). Once each
+  // service, as before, or, by account, once for each account that billed it, with that
+  // account: its NIC handle, or null for the Unknown account.
+  app.get('/api/analysis/resource-type-details', accountParameter, byAccountParameter,
+    (req, res) => {
+      try {
+        const { type, from, to } = req.query;
+        if (!type) return res.status(400).json({ error: 'type parameter is required' });
+        const validation = validateDateRange(from, to);
+        if (!validation.valid) return res.status(400).json({ error: validation.error });
+        const data = db.inventory.byResourceTypeDetails(
+          type, from, to, req.account, { byAccount: req.byAccount },
+        );
+        res.json(data);
+      } catch (err) {
+        res.status(500).json({ error: err.message });
+      }
+    });
 
   // The figures of the Public Cloud cards: those of the account the request asks for, or of
   // every account without one (#121)
