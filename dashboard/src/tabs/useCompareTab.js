@@ -1,8 +1,8 @@
 // The Compare tab's state and data queries, in a hook that the dashboard shell calls on
 // every render: see docs/adr/0001-tab-state-lives-in-the-dashboard-shell.md
 //
-// Months A and B get their defaults when the months list loads, on the same condition as
-// the shell's selected month, so in the same commit.
+// Months A and B get their defaults when the months list first loads, while the shell has no
+// month selected yet: the shell then selects the latest month, in the same commit.
 
 import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';

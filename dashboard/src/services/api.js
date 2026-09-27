@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { accountParams } from '../utils/accounts.js';
 
 const API_BASE = '/api';
 
@@ -23,13 +24,24 @@ api.interceptors.response.use(
   }
 );
 
-export const fetchMonths = async () => {
-  const { data } = await api.get('/months');
+// The accounts of the instance (#112), as the account selector offers them (#115)
+export const fetchAccounts = async () => {
+  const { data } = await api.get('/accounts');
   return data;
 };
 
-export const fetchSummary = async (from, to) => {
-  const { data } = await api.get('/summary', { params: { from, to } });
+// The functions whose last argument is an account ask for its answer: the id of an account,
+// the NIC handle of an account or `unknown` for the Unknown account, or null, by default, for
+// all accounts (#115)
+
+// The months billed to the account
+export const fetchMonths = async (account = null) => {
+  const { data } = await api.get('/months', { params: accountParams(account) });
+  return data;
+};
+
+export const fetchSummary = async (from, to, account = null) => {
+  const { data } = await api.get('/summary', { params: { from, to, ...accountParams(account) } });
   return data;
 };
 

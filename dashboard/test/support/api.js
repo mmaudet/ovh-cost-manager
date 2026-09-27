@@ -75,11 +75,41 @@ const entryForPeriod = (key, empty) => (data, from, to) =>
 const entryForProject = (key, empty) => (data, projectId, from, to) =>
   data[key]?.[projectId]?.[periodKey(from, to)] ?? empty();
 
+// The value of the account parameter that selects the Unknown account, which
+// the server accepts whether the accounts route lists it or not
+const UNKNOWN_ACCOUNT = 'unknown';
+
+// What the server answers to an account it does not know, as axios rejects it
+// (see server/account-parameter.js)
+const accountRefusal = () => Object.assign(new Error('Request failed with status code 400'), {
+  response: {
+    status: 400,
+    data: {
+      error: "Invalid 'account' parameter: expected the NIC handle of an account, or unknown",
+    },
+  },
+});
+
+// The dataset that answers a request (#115): the dataset itself when the
+// request names no account, for all accounts, or else what it holds for that
+// account under `ofAccount`, by its id, nothing when it holds nothing (see
+// fixtures/accounts.js). As the server, it refuses an account that the
+// accounts route does not list, but the Unknown account.
+const ofAccount = (data, account = null) => {
+  if (account === null) return data;
+  const listed = (data.accounts ?? []).some((entry) => entry.nic === account);
+  if (account !== UNKNOWN_ACCOUNT && !listed) throw accountRefusal();
+  return data.ofAccount?.[account] ?? {};
+};
+
 // Every function of src/services/api.js, with how it answers:
 // (dataset, ...arguments of the call) => answer
 const answers = {
-  fetchMonths: entry('months', emptyAnswers.list),
-  fetchSummary: entryForPeriod('summary', emptyAnswers.summary),
+  fetchAccounts: entry('accounts', emptyAnswers.list),
+  // The months list and the summaries follow the account the page selects
+  fetchMonths: (data, account) => entry('months', emptyAnswers.list)(ofAccount(data, account)),
+  fetchSummary: (data, from, to, account) =>
+    entryForPeriod('summary', emptyAnswers.summary)(ofAccount(data, account), from, to),
   fetchProjectsEnriched: entry('projectsEnriched', emptyAnswers.list),
   fetchByProject: entryForPeriod('byProject', emptyAnswers.list),
   fetchByService: entryForPeriod('byService', emptyAnswers.list),

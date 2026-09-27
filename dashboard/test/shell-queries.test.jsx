@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { renderDashboard } from './support/render.jsx';
+import { lyonAccount, severalAccounts } from './fixtures/accounts.js';
+import { renderDashboard, selectAccount } from './support/render.jsx';
 
 // The keys the page caches the answers of its queries under. Each period keeps its own
 // answers, and the end of an import invalidates them by the name of their query (see
@@ -31,6 +32,10 @@ describe('query keys', () => {
       // several tabs read them
       ['config'],
       ['user'],
+      // The accounts of the instance, which the header offers to select when it knows two at
+      // least (#115). The months list and the summaries follow the account selected: for all
+      // accounts, the default, their keys hold none, as their requests do not name one.
+      ['accounts'],
       ['months'],
       ['summary', undefined, undefined],
       ['summary', '2026-09-01', '2026-09-30'],
@@ -100,4 +105,24 @@ describe('query keys', () => {
       ['backupStats', '2026-09-01', '2026-09-30'],
     ]));
   });
+
+  // A request for one account names it, and so does the key of its answers, after the key's
+  // other parts: each account keeps its own answers (#115)
+  it('caches the months and the summaries of the account selected under keys that name it',
+    async () => {
+      const { user, allKeys } = await renderDashboard(severalAccounts);
+
+      await selectAccount(user, 'Lyon subsidiary');
+
+      // The months list and the summaries of the KPI cards, on September: the other queries
+      // follow the account in the next tickets (#116 to #123)
+      expect(sorted(allKeys().filter((key) => key.includes(lyonAccount.id)))).toEqual(sorted([
+        ['months', 'xx1111-ovh'],
+        ['summary', '2026-09-01', '2026-09-30', 'xx1111-ovh'],
+        // The summary of the month before, August, once the account's months list holds it:
+        // while that list loaded, there was no month before to ask for
+        ['summary', undefined, undefined, 'xx1111-ovh'],
+        ['summary', '2026-08-01', '2026-08-31', 'xx1111-ovh'],
+      ]));
+    });
 });
