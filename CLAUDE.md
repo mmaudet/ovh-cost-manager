@@ -51,7 +51,9 @@ OVH API ──> data/import.js ──> SQLite (ovh-bills.db) ──> server/inde
 ### Configuration resolution
 
 Two settings are resolved with the same priority pattern, used independently in `db.js`
-and `server/index.js` (each loads config on its own, there is no shared config module):
+and `server/index.js`. Each of them, and the import, loads the config file on its own;
+what they share is how values are checked: `data/strict-settings.js`, which
+`server/settings.js` builds on, and `data/accounts-config.js` for the accounts.
 
 - **config file**: `./config.json` first, then `~/my-ovh-bills/config.json`. Legacy flat
   `credentials.json` is still accepted. The server stops when the first one that exists
@@ -68,11 +70,14 @@ and `server/index.js` (each loads config on its own, there is no shared config m
   server, naming the setting. The rate limiting settings are resolved in
   `server/rate-limit-config.js`.
 - **OVH accounts**: the `accounts` array (each entry an optional unique `name`, an
-  optional positive integer `budget`, and its `credentials`), or the single `credentials`
-  section, or the legacy flat form, never both sections. One strict reader,
-  `data/accounts-config.js`, serves the import, which reads them from the first config
-  file that gives any, and the server, which only checks them at startup: it never uses
-  the keys, and names each account as its last import recorded it in the `accounts` table.
+  optional positive integer `budget`, and its `credentials`, `endpoint` included), or,
+  as before, the single `credentials` section or the legacy flat form, where `endpoint`
+  is optional; never `accounts` with either of those. They have no environment override:
+  their secrets stay in `config.json`, which the compose files mount read-only. One
+  strict reader, `data/accounts-config.js`, serves the import, which reads them from the
+  first config file that gives any, and the server, which only checks them at startup: it
+  never uses the keys, and names each account as its last import recorded it in the
+  `accounts` table.
 
 When adding a configurable option, follow this same env-over-file pattern and apply it in
 the relevant workspace's own loader.
@@ -193,7 +198,8 @@ See `docs/deployment.md` for full SSO/OIDC setup.
 ## OVH API credentials
 
 Three values (`appKey`, `appSecret`, `consumerKey`) plus `endpoint` (e.g. `ovh-eu`), stored
-under `credentials` in `config.json`. Generate appKey/appSecret at
+under `credentials` in `config.json`, or under that of each entry of `accounts` for several
+accounts (see Configuration resolution). Generate appKey/appSecret at
 https://eu.api.ovh.com/createToken/, then request a consumerKey with GET access to the
 paths listed in the README. Minimum useful scope is `GET /me`, `/me/*` and `/cloud/*`:
 every import reads the account it imports from `GET /me`, which `/me/*` does not cover.
