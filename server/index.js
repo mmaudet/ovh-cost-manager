@@ -1582,7 +1582,7 @@ function registerRoutes() {
           state: s.state,
           expiration: s.expiration_date || '',
           renewal: s.renewal_type || '',
-          account: s.account
+          account: s.account,
         })),
         ...vps.map(v => ({
           type: 'VPS',
@@ -1593,7 +1593,7 @@ function registerRoutes() {
           state: v.state,
           expiration: v.expiration_date || '',
           renewal: v.renewal_type || '',
-          account: v.account
+          account: v.account,
         })),
         ...storage.map(s => ({
           type: 'Storage',
@@ -1604,7 +1604,7 @@ function registerRoutes() {
           state: '',
           expiration: s.expiration_date || '',
           renewal: '',
-          account: s.account
+          account: s.account,
         }))
       ];
 
