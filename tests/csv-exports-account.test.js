@@ -42,11 +42,19 @@ function seedOneAccount(db, account) {
   if (account !== null) recordAccounts(db, { nic: account });
   project(db, 'project-production', 'Production', account);
   project(db, 'project-staging', 'Staging', account);
-  bill(db, 'FR0999', '2026-08-28', account, { price: 99, priceWithTax: 118.8, tax: 19.8 });
+  bill(db, 'FR0999', '2026-08-28', account, {
+    priceWithoutTax: 99, priceWithTax: 118.8, tax: 19.8,
+  });
   // Two bills of the same day, FR1001 stored last
-  bill(db, 'FR1002', '2026-09-05', account, { price: 40, priceWithTax: 48, tax: 8 });
-  bill(db, 'FR1001', '2026-09-05', account, { price: 700.5, priceWithTax: 840.6, tax: 140.1 });
-  bill(db, 'FR1003', '2026-09-20', account, { price: 150.25, priceWithTax: 180.3, tax: 30.05 });
+  bill(db, 'FR1002', '2026-09-05', account, {
+    priceWithoutTax: 40, priceWithTax: 48, tax: 8,
+  });
+  bill(db, 'FR1001', '2026-09-05', account, {
+    priceWithoutTax: 700.5, priceWithTax: 840.6, tax: 140.1,
+  });
+  bill(db, 'FR1003', '2026-09-20', account, {
+    priceWithoutTax: 150.25, priceWithTax: 180.3, tax: 30.05,
+  });
   // How FR1001 was paid, which the balance's import records
   db.balance.updateBillPayment('FR1001', {
     type: 'creditCard', date: '2026-09-06', status: 'paid',
@@ -100,10 +108,18 @@ function seedAccounts(db) {
   project(db, 'project-production', 'Production', LYON);
   project(db, 'project-staging', 'Staging', PARIS);
   project(db, 'project-legacy', 'Legacy', null);
-  bill(db, 'FR1001', '2026-09-05', LYON, { price: 650, priceWithTax: 780, tax: 130 });
-  bill(db, 'FR1002', '2026-08-05', LYON, { price: 500, priceWithTax: 600, tax: 100 });
-  bill(db, 'FR2001', '2026-09-10', PARIS, { price: 270, priceWithTax: 324, tax: 54 });
-  bill(db, 'FR0001', '2026-09-20', null, { price: 90, priceWithTax: 108, tax: 18 });
+  bill(db, 'FR1001', '2026-09-05', LYON, {
+    priceWithoutTax: 650, priceWithTax: 780, tax: 130,
+  });
+  bill(db, 'FR1002', '2026-08-05', LYON, {
+    priceWithoutTax: 500, priceWithTax: 600, tax: 100,
+  });
+  bill(db, 'FR2001', '2026-09-10', PARIS, {
+    priceWithoutTax: 270, priceWithTax: 324, tax: 54,
+  });
+  bill(db, 'FR0001', '2026-09-20', null, {
+    priceWithoutTax: 90, priceWithTax: 108, tax: 18,
+  });
   const instances = (id, billId, projectId, flavor, serviceType, price) => line(id, billId, {
     project: projectId, description: `Instances ${flavor} GRA11`, serviceType,
     resourceType: 'cloud_project', unitPrice: price,
@@ -464,7 +480,9 @@ describe.each([
     ocm = await startOcm(() => ({}), {
       seed: (db) => {
         recordAccounts(db, { nic: LYON });
-        bill(db, 'FR1001', '2026-09-05', LYON, { price: 650, priceWithTax: 780, tax: 130 });
+        bill(db, 'FR1001', '2026-09-05', LYON, {
+          priceWithoutTax: 650, priceWithTax: 780, tax: 130,
+        });
         seedOther(db);
       },
     });

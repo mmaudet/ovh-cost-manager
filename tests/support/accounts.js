@@ -63,12 +63,12 @@ function write(db, table, row, writeOfAccount) {
 
 // A bill of an account, of these amounts, without and with tax, and of its tax: none by
 // default
-const bill = (db, id, date, account, { price = 0, priceWithTax = 0, tax = 0 } = {}) => write(
-  db, 'bills', {
-    id, date, price_without_tax: price, price_with_tax: priceWithTax, tax, currency: 'EUR',
-    pdf_url: null, html_url: null, account,
-  }, (row) => db.bills.upsert(row),
-);
+const bill = (db, id, date, account, {
+  priceWithoutTax = 0, priceWithTax = 0, tax = 0,
+} = {}) => write(db, 'bills', {
+  id, date, price_without_tax: priceWithoutTax, price_with_tax: priceWithTax, tax,
+  currency: 'EUR', pdf_url: null, html_url: null, account,
+}, (row) => db.bills.upsert(row));
 
 // Dates a snapshot, given what its write returned, at a time as SQLite writes it: without
 // one, it keeps the time it was written at
