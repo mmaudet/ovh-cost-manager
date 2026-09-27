@@ -35,6 +35,19 @@
 #                                  # random characters or more (openssl rand -hex 32),
 #                                  # as the default logs a warning. Changing it signs
 #                                  # everyone out
+#   OIDC_BASE_URL=http://ocm.${SSO_DOMAIN}
+#                                  # The dashboard's public URL: https:// behind a TLS
+#                                  # terminator (docs/deployment.md#https)
+#   TRUST_PROXY=true               # Whether OCM trusts the relay, its proxy. It
+#                                  # overrides rateLimit.trustProxy of config.json
+#   ALLOWED_HOSTS=                 # Hosts the server answers, against DNS rebinding
+#   IMPORT_ENABLED, IMPORT_INTERVAL, IMPORT_FLAGS
+#                                  # The container's imports
+#                                  # (docs/deployment.md#3-import-billing-data)
+#   RATE_LIMIT_ENABLED, RATE_LIMIT_API_MAX, RATE_LIMIT_API_WINDOW_MS,
+#   RATE_LIMIT_AUTH_MAX, RATE_LIMIT_AUTH_WINDOW_MS
+#                                  # Rate limiting; unset: the rateLimit section of
+#                                  # config.json, or the server's defaults
 #
 # ACCESS:
 #   Dashboard: http://ocm.${SSO_DOMAIN}/
@@ -65,7 +78,18 @@ services:
       # Database lives in a dedicated dir mounted as a volume, kept separate
       # from the application code under /app/data (which ships in the image).
       - DATA_DIR=/data
-      - TRUST_PROXY=true
+      - IMPORT_ENABLED=${IMPORT_ENABLED:-true}
+      - IMPORT_INTERVAL=${IMPORT_INTERVAL:-86400}
+      - IMPORT_FLAGS=${IMPORT_FLAGS:---all}
+      # The proxies OCM trusts: the relay by default
+      - TRUST_PROXY=${TRUST_PROXY:-true}
+      # Rate limiting; empty: the rateLimit section of config.json, or the
+      # server's defaults
+      - RATE_LIMIT_ENABLED=${RATE_LIMIT_ENABLED:-}
+      - RATE_LIMIT_API_MAX=${RATE_LIMIT_API_MAX:-}
+      - RATE_LIMIT_API_WINDOW_MS=${RATE_LIMIT_API_WINDOW_MS:-}
+      - RATE_LIMIT_AUTH_MAX=${RATE_LIMIT_AUTH_MAX:-}
+      - RATE_LIMIT_AUTH_WINDOW_MS=${RATE_LIMIT_AUTH_WINDOW_MS:-}
       # Hosts the server answers, against DNS rebinding; empty: any host
       - ALLOWED_HOSTS=${ALLOWED_HOSTS:-}
       # OIDC Configuration
@@ -73,7 +97,7 @@ services:
       - OIDC_ISSUER=http://auth.${SSO_DOMAIN:-localhost}
       - OIDC_CLIENT_ID=ocm-dashboard
       - OIDC_CLIENT_SECRET=${OIDC_CLIENT_SECRET:-change-me}
-      - OIDC_BASE_URL=http://ocm.${SSO_DOMAIN:-localhost}
+      - OIDC_BASE_URL=${OIDC_BASE_URL:-http://ocm.${SSO_DOMAIN:-localhost}}
       - OIDC_SCOPES=openid,profile,email
       - SESSION_SECRET=${SESSION_SECRET:-change-me-in-production}
     networks:

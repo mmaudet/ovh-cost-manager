@@ -144,8 +144,8 @@ The settings, with the values of the [SSO stack](#sso-deployment-with-lemonldap-
 | `OIDC_ISSUER`        | `auth.provider.issuer`       | `http://auth.<SSO_DOMAIN>`                | Issuer URL of the provider, which the server discovers. Required                                                                    |
 | `OIDC_CLIENT_ID`     | `auth.provider.clientId`     | `ocm-dashboard`                           | Client ID. Required                                                                                                                 |
 | `OIDC_CLIENT_SECRET` | `auth.provider.clientSecret` | From `.env`, or `change-me`               | Client secret. Required                                                                                                             |
-| `OIDC_BASE_URL`      | `auth.baseUrl`               | `http://ocm.<SSO_DOMAIN>`                 | Public URL of the dashboard: the redirect URI is `<base URL>/auth/callback`, and the post-logout redirect URI the base URL. Required |
-| `OIDC_SCOPES`        | `auth.provider.scopes`       | `openid,profile,email`                    | Comma-separated in the variable, an array in the file. Default: `openid`, `profile`, `email`                                        |
+| `OIDC_BASE_URL`      | `auth.baseUrl`               | From `.env`, or `http://ocm.<SSO_DOMAIN>` | Public URL of the dashboard: the redirect URI is `<base URL>/auth/callback`, and the post-logout redirect URI the base URL. Required |
+| `OIDC_SCOPES`        | `auth.provider.scopes`       | `openid,profile,email`                    | Comma-separated in the variable, an array in the file. Default: `openid`, `profile`, `email`. `docker-compose.yml` does not pass the variable: its stack takes the scopes from `config.json` |
 | `SESSION_SECRET`     | `auth.session.secret`        | From `.env`, or `change-me-in-production` | Signs the session and sign-in cookies. Required                                                                                     |
 | `COOKIE_SECURE`      | `auth.session.secure`        | Unset                                     | `true`, `false` or `auto`. Default: `auto`                                                                                          |
 |                      | `auth.session.maxAge`        | Unset                                     | Session length in ms. Default: `86400000` (24 h)                                                                                    |
@@ -199,7 +199,7 @@ Below, `<domain>` stands for `SSO_DOMAIN`, `localhost` by default.
 
 ### 1. Configuration
 
-Create `config.json` with your OVH credentials, as for the [simple deployment](#1-configuration): OCM reads it here too, but the OIDC variables of the compose file take precedence over its `auth` section. Then create a `.env` file next to the compose file:
+Create `config.json` with your OVH credentials, as for the [simple deployment](#1-configuration): OCM reads it here too, but the compose file's variables take precedence: the OIDC ones over its `auth` section, and `TRUST_PROXY`, from `.env` and `true` by default, over `rateLimit.trustProxy`. Then create a `.env` file next to the compose file:
 
 ```bash
 cat > .env <<EOF
@@ -551,7 +551,7 @@ environment:
 `docker-compose.sso.yml` serves plain HTTP on port 80 and has no HTTPS setup: sign-in codes, tokens and cookies travel unencrypted, and OCM warns at startup that its issuer is plain HTTP. On OCM's side, its settings support these steps:
 
 1. Terminate TLS in front of the `lemonldap` container's port 80, for `ocm.<domain>`.
-2. Set `OIDC_BASE_URL` to `https://ocm.<domain>`, and the redirect and post-logout redirect URIs of the relying party to match (see [demo/README.md](../demo/README.md#using-another-domain)). With `COOKIE_SECURE=auto`, the session and sign-in cookies then become `Secure`, with the `__Host-` prefix, because `OIDC_BASE_URL` is `https` (see [OIDC settings](#oidc-settings)).
+2. Set `OIDC_BASE_URL=https://ocm.<domain>` in `.env`, and the redirect and post-logout redirect URIs of the relying party to match (see [demo/README.md](../demo/README.md#using-another-domain)). With `COOKIE_SECURE=auto`, the session and sign-in cookies then become `Secure`, with the `__Host-` prefix, because `OIDC_BASE_URL` is `https` (see [OIDC settings](#oidc-settings)).
 3. Have the terminator send `X-Forwarded-Proto: https`. The relay passes it on, and the CORS check then refuses `http://` pages, which otherwise pass for the dashboard (see [Environment Variables](#environment-variables)).
 
 Rate limiting then counts every user at the terminator's address: OCM trusts one proxy, the relay, whose client is the terminator. Raise `RATE_LIMIT_API_MAX` to what all users need together, or set `RATE_LIMIT_ENABLED=false` (see [Rate Limiting for Kubernetes/Reverse Proxy](#rate-limiting-for-kubernetesreverse-proxy)).
