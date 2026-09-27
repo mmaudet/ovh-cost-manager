@@ -12,17 +12,38 @@ import {
 import { downloadCSV } from '../utils/csv.js';
 import { formatMonthLabel } from '../utils/format.js';
 
+// Downloads resources of the open project as a CSV file. When the lists show the Account
+// column, so does the file, after the name of each resource, with the project's account: the
+// file leaves the project's row behind, and a project's resources belong to its account (#121).
+const downloadResources = (
+  { accountColumn, projectsEnriched, selectedProject }, rows, columns, filename,
+) => {
+  if (!accountColumn) {
+    downloadCSV(rows, columns, filename);
+    return;
+  }
+  const project = projectsEnriched.find(({ id }) => id === selectedProject?.id);
+  const account = accountColumn.nameOf(project?.account ?? null);
+  const [name, ...others] = columns;
+  downloadCSV(
+    rows.map((row) => ({ ...row, account })),
+    [name, { key: 'account', label: accountColumn.label }, ...others],
+    filename,
+  );
+};
+
 // The Public Cloud tab, which the shell renders while it is active: what usePublicCloudTab()
 // returns, with the shell's language, translations (t), amount format (fmt) and locale, the
 // selected month, the selected project and its setter, and two of its queries that load at
-// page start: the month's costs by resource type and its GPU costs.
+// page start: the month's costs by resource type and its GPU costs. And the Account column of
+// the lists, null when they show none (#121).
 const PublicCloudTab = ({
   projectsEnriched, publicCloudStats, projectConsumption, projectInstances, instanceCount,
   projectInstanceTotal, projectBuckets, projectVolumes, projectSnapshots, projectSavingsPlans,
   projectQuotas, setShowAllInstances, setShowAllBuckets, setShowAllVolumes,
   setShowAllSnapshots, setShowAllSavingsPlans,
   language, t, fmt, locale, selectedMonth, selectedProject, setSelectedProject,
-  byResourceType, gpuSummary,
+  byResourceType, gpuSummary, accountColumn,
 }) => (
   <div className="space-y-6">
     {/* Cloud Summary Cards */}
@@ -97,6 +118,9 @@ const PublicCloudTab = ({
             <thead>
               <tr className="border-b bg-gray-50">
                 <th className="p-3 text-left font-medium">{language === 'en' ? 'Name' : 'Nom'}</th>
+                {accountColumn && (
+                  <th className="p-3 text-left font-medium">{accountColumn.label}</th>
+                )}
                 <th className="p-3 text-left font-medium">{t('state')}</th>
                 <th className="p-3 text-right font-medium">{t('instances')}</th>
                 <th className="p-3 text-right font-medium">{language === 'en' ? 'Current consumption' : 'Consommation en cours'}</th>
@@ -114,6 +138,9 @@ const PublicCloudTab = ({
                       <span className="text-blue-600">{p.name || p.id}</span>
                       {p.description && <div className="text-xs text-gray-400">{p.description}</div>}
                     </td>
+                    {accountColumn && (
+                      <td className="p-3 text-gray-600">{accountColumn.nameOf(p.account)}</td>
+                    )}
                     <td className="p-3">
                       <span className={`px-2 py-0.5 rounded text-xs font-medium ${p.status === 'ok' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'}`}>
                         {p.status}
@@ -131,7 +158,7 @@ const PublicCloudTab = ({
                   </tr>
                   {selectedProject?.id === p.id && (
                     <tr>
-                      <td colSpan="5" className="p-0">
+                      <td colSpan={accountColumn ? 6 : 5} className="p-0">
                         <div className="bg-blue-50 border-l-4 border-blue-400 p-5">
                           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                             {/* Consumption by resource type */}
@@ -191,7 +218,8 @@ const PublicCloudTab = ({
                                   <TableActions
                                     language={language}
                                     onShowAll={() => setShowAllInstances(true)}
-                                    onExport={() => downloadCSV(
+                                    onExport={() => downloadResources(
+                                      { accountColumn, projectsEnriched, selectedProject },
                                       instanceCsvRows(projectInstances, language),
                                       instanceCsvColumns(language),
                                       `ovh-instances-${selectedProject?.name || 'export'}`
@@ -223,7 +251,8 @@ const PublicCloudTab = ({
                                   <TableActions
                                     language={language}
                                     onShowAll={() => setShowAllBuckets(true)}
-                                    onExport={() => downloadCSV(
+                                    onExport={() => downloadResources(
+                                      { accountColumn, projectsEnriched, selectedProject },
                                       sortBucketsByName(projectBuckets),
                                       bucketCsvColumns(language),
                                       `ovh-buckets-${selectedMonth?.value || 'export'}`
@@ -252,7 +281,8 @@ const PublicCloudTab = ({
                                   <TableActions
                                     language={language}
                                     onShowAll={() => setShowAllVolumes(true)}
-                                    onExport={() => downloadCSV(
+                                    onExport={() => downloadResources(
+                                      { accountColumn, projectsEnriched, selectedProject },
                                       volumeCsvRows(projectVolumes),
                                       volumeCsvColumns(language),
                                       `ovh-volumes-${selectedMonth?.value || 'export'}`
@@ -278,7 +308,8 @@ const PublicCloudTab = ({
                                   <TableActions
                                     language={language}
                                     onShowAll={() => setShowAllSnapshots(true)}
-                                    onExport={() => downloadCSV(
+                                    onExport={() => downloadResources(
+                                      { accountColumn, projectsEnriched, selectedProject },
                                       projectSnapshots,
                                       snapshotCsvColumns(language),
                                       `ovh-snapshots-${selectedMonth?.value || 'export'}`
@@ -304,7 +335,8 @@ const PublicCloudTab = ({
                                   <TableActions
                                     language={language}
                                     onShowAll={() => setShowAllSavingsPlans(true)}
-                                    onExport={() => downloadCSV(
+                                    onExport={() => downloadResources(
+                                      { accountColumn, projectsEnriched, selectedProject },
                                       projectSavingsPlans,
                                       savingsPlanCsvColumns(language),
                                       `ovh-savings-plans-${selectedMonth?.value || 'export'}`
@@ -374,8 +406,8 @@ const PublicCloudTabModals = ({
   showAllVolumes, setShowAllVolumes, showAllSnapshots, setShowAllSnapshots,
   showAllSavingsPlans, setShowAllSavingsPlans,
   projectBuckets, projectInstances, instanceCount, projectInstanceTotal, projectVolumes,
-  projectSnapshots, projectSavingsPlans,
-  language, t, fmt, locale, selectedMonth, selectedProject,
+  projectSnapshots, projectSavingsPlans, projectsEnriched,
+  language, t, fmt, locale, selectedMonth, selectedProject, accountColumn,
 }) => (
   <>
     <Modal
@@ -397,7 +429,8 @@ const PublicCloudTabModals = ({
       }
       actions={
         <button
-          onClick={() => downloadCSV(
+          onClick={() => downloadResources(
+            { accountColumn, projectsEnriched, selectedProject },
             sortBucketsByName(projectBuckets),
             bucketCsvColumns(language),
             `ovh-buckets-${selectedMonth?.value || 'export'}`
@@ -429,7 +462,8 @@ const PublicCloudTabModals = ({
       actions={
         <TableActions
           language={language}
-          onExport={() => downloadCSV(
+          onExport={() => downloadResources(
+            { accountColumn, projectsEnriched, selectedProject },
             instanceCsvRows(projectInstances, language),
             instanceCsvColumns(language),
             `ovh-instances-${selectedProject?.name || 'export'}`
@@ -455,7 +489,8 @@ const PublicCloudTabModals = ({
       actions={
         <TableActions
           language={language}
-          onExport={() => downloadCSV(
+          onExport={() => downloadResources(
+            { accountColumn, projectsEnriched, selectedProject },
             volumeCsvRows(projectVolumes),
             volumeCsvColumns(language),
             `ovh-volumes-${selectedMonth?.value || 'export'}`
@@ -481,7 +516,8 @@ const PublicCloudTabModals = ({
       actions={
         <TableActions
           language={language}
-          onExport={() => downloadCSV(
+          onExport={() => downloadResources(
+            { accountColumn, projectsEnriched, selectedProject },
             projectSnapshots,
             snapshotCsvColumns(language),
             `ovh-snapshots-${selectedMonth?.value || 'export'}`
@@ -507,7 +543,8 @@ const PublicCloudTabModals = ({
       actions={
         <TableActions
           language={language}
-          onExport={() => downloadCSV(
+          onExport={() => downloadResources(
+            { accountColumn, projectsEnriched, selectedProject },
             projectSavingsPlans,
             savingsPlanCsvColumns(language),
             `ovh-savings-plans-${selectedMonth?.value || 'export'}`

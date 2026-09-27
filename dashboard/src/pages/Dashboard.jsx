@@ -13,7 +13,7 @@ import Logo from '../components/Logo';
 import { AccountSelector } from '../components/AccountSelector.jsx';
 import { HeaderSelect } from '../components/HeaderSelect.jsx';
 import { ResyncButton } from '../components/ResyncButton.jsx';
-import { accountQuery, accountsOf } from '../utils/accounts.js';
+import { accountColumnOf, accountQuery, accountsOf } from '../utils/accounts.js';
 import { formatCurrency, formatMonthLabel, yearMonthOf } from '../utils/format.js';
 import { parseSqliteDate } from '../utils/sqliteDate.js';
 import { generateMarkdownReport } from '../utils/markdownReport.js';
@@ -104,6 +104,9 @@ export default function Dashboard() {
   // knows it. The months list and the KPI cards of the month's figures follow it; the other
   // cards and the tabs follow it in the next tickets (#116 to #123).
   const { selectedAccount, selectAccount } = useSelectedAccount(accounts);
+  // The Account column of the lists, which name the account of each row with all accounts
+  // shown, when the page offers several (#121): null when they name none
+  const accountColumn = accountColumnOf(accounts, selectedAccount, t);
 
   // The months billed to the account shown
   const { data: months = [], isSuccess: monthsLoaded } = useQuery(accountQuery(selectedAccount, {
@@ -624,7 +627,7 @@ export default function Dashboard() {
             {...publicCloudTab} language={language} t={t} fmt={fmt} locale={locale}
             selectedMonth={selectedMonth} selectedProject={selectedProject}
             setSelectedProject={setSelectedProject} byResourceType={byResourceType}
-            gpuSummary={gpuSummary}
+            gpuSummary={gpuSummary} accountColumn={accountColumn}
           />
         )}
 
@@ -708,6 +711,7 @@ export default function Dashboard() {
       <PublicCloudTabModals
         {...publicCloudTab} language={language} t={t} fmt={fmt} locale={locale}
         selectedMonth={selectedMonth} selectedProject={selectedProject}
+        accountColumn={accountColumn}
       />
 
       <InfrastructureTabModals {...infrastructureTab} language={language} t={t} />

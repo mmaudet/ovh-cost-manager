@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { screen, within } from '@testing-library/react';
 import { account } from './fixtures/account.js';
-import { severalAccounts } from './fixtures/accounts.js';
+import { lyonAccount, severalAccounts } from './fixtures/accounts.js';
 import { api } from './support/api.js';
 import {
   BOM,
@@ -703,6 +703,116 @@ describe('Public Cloud tab', () => {
       await selectAccount(user, 'yy2222-ovh');
 
       expect(detailHeadings()).toEqual([]);
+    });
+
+    describe('account column', () => {
+      const projectsTable = () => within(cloudProjects()).getByRole('table');
+      const WITHOUT_ACCOUNT = ['Nom', 'État', 'Instances', 'Consommation en cours'];
+
+      it('names the account of each project when all accounts are shown', async () => {
+        const { user } = await renderDashboard(severalAccounts);
+
+        await openTab(user, 'Public Cloud');
+
+        // Its name, or else its NIC handle, and the Unknown account for a project without one
+        expect(rowTextsOf(projectsTable())).toEqual([
+          ['Nom', 'Compte', 'État', 'Instances', 'Consommation en cours'],
+          ['Production', 'Customer-facing services', 'Lyon subsidiary', 'ok', '5', '350,00€',
+            '▼'],
+          ['Staging', 'yy2222-ovh', 'ok', '0', '52,35€', '▼'],
+          ['Sandbox', 'Compte inconnu', 'ok', '0', '-', '▼'],
+        ]);
+
+        await selectLanguage(user, 'en');
+
+        expect(rowTextsOf(projectsTable())[0])
+          .toEqual(['Name', 'Account', 'State', 'Instances', 'Current consumption']);
+        expect(rowTextsOf(projectsTable())[3])
+          .toEqual(['Sandbox', 'Unknown account', 'ok', '0', '-', '▼']);
+      });
+
+      it('names no account once one is selected, and names them again with all accounts',
+        async () => {
+          const { user } = await openOnAccount('Lyon subsidiary');
+
+          expect(rowTextsOf(projectsTable())[0]).toEqual(WITHOUT_ACCOUNT);
+
+          await selectAccount(user, 'Tous les comptes');
+
+          expect(rowTextsOf(projectsTable())[0]).toEqual([
+            'Nom', 'Compte', 'État', 'Instances', 'Consommation en cours',
+          ]);
+        });
+
+      // As before several accounts: an installation with a single account, or one before its
+      // first import since the upgrade, whose accounts route lists none
+      it.each([
+        ['no account', []],
+        ['a single account', [lyonAccount]],
+      ])('names no account with %s', async (_, accounts) => {
+        const { user } = await renderDashboard({ ...severalAccounts, accounts });
+
+        await openTab(user, 'Public Cloud');
+
+        expect(rowTextsOf(projectsTable())[0]).toEqual(WITHOUT_ACCOUNT);
+      });
+    });
+
+    // The CSV files of the resources of the open project, which leave the page and the
+    // project's row: a project's resources belong to its account
+    describe('CSV files of the resources of a project', () => {
+      // The second cell of each line of a CSV file, its header first
+      const secondCells = (file) => file.content.slice(BOM.length).split('\n')
+        .map((line) => line.split(';')[1]);
+
+      it.each([
+        ['Instances', 6],
+        ['Buckets', 4],
+        ['Volumes', 4],
+        ['Snapshots', 2],
+        ['Savings plans', 2],
+      ])('name its account after the name of each of its %s, from the panel and the modal',
+        async (kind, count) => {
+          const { user } = await renderDashboard(severalAccounts);
+          await openTab(user, 'Public Cloud');
+          await openProject(user, 'Production');
+
+          const [fromPanel, fromModal] =
+            await downloadFromPanelAndModal(user, resourcePanel(kind));
+
+          expect(fromModal).toEqual(fromPanel);
+          expect(secondCells(fromPanel))
+            .toEqual(['"Compte"', ...Array(count).fill('"Lyon subsidiary"')]);
+        });
+
+      it('name an account without a name by its NIC handle, in the language of the page',
+        async () => {
+          const { user } = await renderDashboard(severalAccounts);
+          await selectLanguage(user, 'en');
+          await openTab(user, 'Public Cloud');
+          await openProject(user, 'Staging');
+          const downloadedFiles = captureFileDownloads();
+
+          await user.click(resourceButton('Instances', 'CSV'));
+
+          const [file] = await downloadedFiles();
+          expect(file.content.slice(BOM.length).split('\n')).toEqual([
+            '"Name";"Account";"Flavor";"Region";"State";"Cost (EUR)";"Estimated";'
+              + '"Monthly billing";"Created at";"ID"',
+            '"Unallocated (deleted instances)";"yy2222-ovh";"";;;180;0;;;',
+          ]);
+        });
+
+      it('name no account once one is selected', async () => {
+        const { user } = await openOnAccount('Lyon subsidiary');
+        await openProject(user, 'Production');
+
+        const [fromPanel, fromModal] =
+          await downloadFromPanelAndModal(user, resourcePanel('Volumes'));
+
+        expect(fromModal).toEqual(fromPanel);
+        expect(secondCells(fromPanel)[0]).toBe('"Type"');
+      });
     });
   });
 });
