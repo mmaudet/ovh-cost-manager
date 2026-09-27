@@ -1016,14 +1016,16 @@ function usagePeriod(usage) {
 }
 
 // Imports the resources and the consumption of each Public Cloud project of the account,
-// through `ovh`, its OVH API client
-async function importCloudDetails(ovh, projectIds) {
+// through `ovh`, its OVH API client. `heartbeat()` keeps the lock of the run, if any, before
+// each project: an account can have many, and each takes many calls.
+async function importCloudDetails(ovh, projectIds, heartbeat = () => {}) {
   console.log('\n--- Importing cloud project details ---');
 
   // The month of the current consumption: the latest that the usage of a project reports
   let consumptionMonth = null;
 
   for (const projectId of projectIds) {
+    heartbeat();
     console.log(`  Project ${projectId}...`);
 
     // Current usage (hourly + monthly)
@@ -1288,6 +1290,9 @@ async function importAccount(ovh, nic, { params, importType, toDate, heartbeat }
     const resourceTypeMap = params.includeInventory
       ? await importInventory(ovh, projectMap, nic)
       : {};
+    // Each dataset keeps the run's lock, as each bill and each project do: --all, which the
+    // cron and the resync import, takes many calls for each
+    heartbeat();
 
     const billIds = await fetchBills(ovh, billsStartOf(nic, params), toDate);
     console.log('\nProcessing bills...');
@@ -1315,12 +1320,14 @@ async function importAccount(ovh, nic, { params, importType, toDate, heartbeat }
     // The other datasets, only when asked: each takes many calls
     if (params.includeConsumption) {
       await importConsumption(ovh, nic);
+      heartbeat();
     }
     if (params.includeAccount) {
       await importAccountData(ovh, nic);
+      heartbeat();
     }
     if (params.includeCloudDetails) {
-      await importCloudDetails(ovh, Object.keys(projectMap));
+      await importCloudDetails(ovh, Object.keys(projectMap), heartbeat);
     }
     return { imported };
   } catch (err) {

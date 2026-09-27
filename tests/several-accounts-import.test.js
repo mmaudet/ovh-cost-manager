@@ -221,6 +221,60 @@ describe('the lock of a run', () => {
     expect(held).toEqual({ aged: false, atNextBill: true });
   });
 
+  // The datasets of --all, which the cron and the resync import, take many calls each. Each
+  // is aged at its last call, and the lock checked at the first call of the next.
+  test('is kept after each dataset of an account', async () => {
+    const lyon = serveAccount(LYON);
+    serveBills(lyon.routes, []);
+    serveProjects(lyon.routes, ['proj-1']);
+    lyon.routes.set('/storage/netapp', ok([]));
+    lyon.routes.set('/me/consumption/usage/history', ok([]));
+    lyon.routes.set('/me/debtAccount', ok({ todoAmount: { value: 0, currencyCode: 'EUR' } }));
+    lyon.routes.set('/me/deposit', ok([]));
+    lyon.routes.set('/cloud/project/proj-1/usage/current', ok(null));
+    useAccounts({ served: lyon });
+    const aged = [];
+    const held = {};
+    around(lyon.routes, '/storage/netapp', () => aged.push(ageTheLock()));
+    around(lyon.routes, '/me/bill', () => { held.afterInventory = db.importLog.isRunning(); });
+    around(lyon.routes, '/me/consumption/usage/history', () => aged.push(ageTheLock()));
+    around(lyon.routes, '/me/debtAccount', () => {
+      held.afterConsumption = db.importLog.isRunning();
+    });
+    around(lyon.routes, '/me/deposit', () => aged.push(ageTheLock()));
+    around(lyon.routes, '/cloud/project/proj-1/usage/current', () => {
+      held.afterBalance = db.importLog.isRunning();
+    });
+
+    await importSeptember({
+      includeInventory: true, includeConsumption: true, includeAccount: true,
+      includeCloudDetails: true,
+    });
+
+    expect(aged).toEqual([false, false, false]);
+    expect(held).toEqual({ afterInventory: true, afterConsumption: true, afterBalance: true });
+  });
+
+  test('is kept after each Public Cloud project', async () => {
+    const lyon = serveAccount(LYON);
+    serveBills(lyon.routes, []);
+    serveProjects(lyon.routes, ['proj-1', 'proj-2']);
+    // The last call of the first project: its Swift containers, after its regions
+    lyon.routes.set('/cloud/project/proj-1/region', ok([]));
+    lyon.routes.set('/cloud/project/proj-1/storage', ok([]));
+    lyon.routes.set('/cloud/project/proj-2/usage/current', ok(null));
+    useAccounts({ served: lyon });
+    const held = {};
+    around(lyon.routes, '/cloud/project/proj-1/storage', () => { held.aged = ageTheLock(); });
+    around(lyon.routes, '/cloud/project/proj-2/usage/current', () => {
+      held.atNextProject = db.importLog.isRunning();
+    });
+
+    await importSeptember({ includeCloudDetails: true });
+
+    expect(held).toEqual({ aged: false, atNextProject: true });
+  });
+
   test('is kept from one account to the next', async () => {
     const lyon = serveAccount(LYON);
     const paris = serveAccount(PARIS);
