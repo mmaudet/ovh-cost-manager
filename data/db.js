@@ -2022,6 +2022,15 @@ function transaction(fn) {
   return database.transaction(fn)(database);
 }
 
+// Orders two rows' accounts, NIC handles or null for the Unknown account: by NIC handle, the
+// Unknown account last, and the same account as equal
+function compareAccounts(a, b) {
+  if (a === b) return 0;
+  if (a === null) return 1;
+  if (b === null) return -1;
+  return a.localeCompare(b);
+}
+
 /**
  * Web Cloud operations (domains, DNS zones, hosting, email, options).
  *
@@ -2093,7 +2102,12 @@ const webCloudOps = {
       byService.set(key, item);
     }
 
-    return [...byService.values()].sort((a, b) => b.total - a.total || a.name.localeCompare(b.name));
+    // Most expensive first, then by name. A service that costs the same on several accounts
+    // comes by the NIC handle of each, the Unknown account's last, rather than in the order
+    // the import wrote its bill lines in; the services of one account keep their order.
+    return [...byService.values()].sort((a, b) => b.total - a.total
+      || a.name.localeCompare(b.name)
+      || compareAccounts(a.account, b.account));
   },
 
   /**

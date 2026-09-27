@@ -244,3 +244,73 @@ describe.each([
     });
   });
 });
+
+// A service that costs the same on several accounts is listed by the NIC handle of each
+// account, the Unknown account's last, whatever order the import wrote its bill lines in:
+// here the Unknown account's first, then bb2222-ovh's, then aa1111-ovh's, which their bill
+// numbers and dates follow too. The services of one account keep the order they had before,
+// as a domain and its DNS zone at the same cost.
+describe('services that cost the same', () => {
+  const FIRST = 'aa1111-ovh';
+  const SECOND = 'bb2222-ovh';
+  const RENEWAL = 'example.com - .com demande de renouvellement - 12 mois';
+  let tied;
+
+  beforeAll(async () => {
+    tied = await startOcm(() => ({}), {
+      seed: (db) => {
+        // Written as the database held it, as in seed() above
+        db.getDb().prepare(
+          "INSERT INTO bills (id, date, currency, account) VALUES (?, ?, 'EUR', NULL)",
+        ).run('FR0001', '2026-01-20');
+        db.details.insertMany([
+          line('FR0001-1', 'FR0001', 'example.com', RENEWAL, 10.49, 'domain'),
+        ]);
+        db.accounts.upsert({ nic: SECOND, currency: 'EUR' });
+        bill(db, 'FR1001', '2026-02-10', SECOND);
+        db.details.insertMany([
+          line('FR1001-1', 'FR1001', 'example.com', RENEWAL, 10.49, 'domain'),
+        ]);
+        db.accounts.upsert({ nic: FIRST, currency: 'EUR' });
+        bill(db, 'FR2001', '2026-03-05', FIRST);
+        db.details.insertMany([
+          line('FR2001-1', 'FR2001', 'example.com', RENEWAL, 10.49, 'domain'),
+          line('FR2001-2', 'FR2001', 'example.org',
+            'example.org - .org demande de renouvellement - 12 mois', 1.2, 'domain'),
+          line('FR2001-3', 'FR2001', 'example.org', 'example.org - Zone DNS - Renouvellement',
+            1.2, 'domain'),
+        ]);
+      },
+    });
+  }, 30000);
+
+  afterAll(async () => {
+    await tied?.stop();
+  });
+
+  // Each service as [name, family, account]
+  const services = (items) =>
+    items.map(({ name, category, account }) => [name, category, account]);
+
+  test('lists them by the NIC handle of their account, the Unknown account last', async () => {
+    const { body } = await get(`/api/web-cloud/items?${YEAR}`, tied);
+
+    expect(services(body)).toEqual([
+      ['example.com', 'domain', FIRST],
+      ['example.com', 'domain', SECOND],
+      ['example.com', 'domain', null],
+      ['example.org', 'domain', FIRST],
+      ['example.org', 'dns_zone', FIRST],
+    ]);
+  });
+
+  test('keeps the order of the services of one account', async () => {
+    const { body } = await get(`/api/web-cloud/items?${YEAR}&account=${FIRST}`, tied);
+
+    expect(services(body)).toEqual([
+      ['example.com', 'domain', FIRST],
+      ['example.org', 'domain', FIRST],
+      ['example.org', 'dns_zone', FIRST],
+    ]);
+  });
+});
