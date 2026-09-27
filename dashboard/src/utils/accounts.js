@@ -64,6 +64,21 @@ export function accountColumnOf(accounts, selectedAccount, t) {
 }
 
 /**
+ * How a line that names a service, rather than a row of a table, names its account too, after
+ * the service, when the lists show the Account column (#123): in brackets, so that it does not
+ * read as part of the service's name. The Overview's services about to expire and the Compare
+ * tab's dedicated servers name it so.
+ * @param {?{ nameOf: function(?string): string }} accountColumn - The Account column of the
+ *   lists (accountColumnOf()), null when they show none
+ * @param {?string} account - The NIC handle of the service's account, null for the Unknown
+ *   account
+ * @returns {?string} Null when the lists name no account
+ */
+export function accountInBrackets(accountColumn, account) {
+  return accountColumn ? `(${accountColumn.nameOf(account)})` : null;
+}
+
+/**
  * What the page shows, as the account selector names it: all accounts, or the account
  * selected (accountLabel()). The report names it in its title (#124). A single-account
  * installation's page offers no account to select, and its report names none.

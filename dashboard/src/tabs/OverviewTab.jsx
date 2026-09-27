@@ -3,6 +3,7 @@ import {
   PieChart, Pie, Cell,
 } from 'recharts';
 import { SortIcon } from '../components/SortIcon.jsx';
+import { accountInBrackets } from '../utils/accounts.js';
 import { formatPercent, takesSingular } from '../utils/format.js';
 import { sortProjects } from '../utils/projectSort.js';
 
@@ -398,10 +399,10 @@ const OverviewTab = ({
                        s.type === 'vps' ? t('vpsInstances') : t('storageServices')}
                     </span>
                     <span className="font-medium">{s.display_name || s.id}</span>
-                    {/* Its account, as the Account column of the lists names it (#123) */}
+                    {/* Its account, in brackets, when the lists name it (#123) */}
                     {accountColumn && (
-                      <span className="text-xs text-gray-500">
-                        {accountColumn.nameOf(s.account)}
+                      <span className="text-gray-500">
+                        {accountInBrackets(accountColumn, s.account)}
                       </span>
                     )}
                   </div>

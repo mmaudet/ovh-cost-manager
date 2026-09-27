@@ -743,14 +743,15 @@ describe('Overview tab', () => {
     // The inventory's services about to expire, which the header counts too (#123): see
     // fixtures/infrastructure.js
     describe('services about to expire', () => {
-      // Those of every configured account, soonest first, each named by its account: its
-      // name, or else its NIC handle. The server leaves out those of the Unknown account and of
-      // the account no longer configured, which no import refreshes.
+      // Those of every configured account, soonest first, each named by its account in
+      // brackets, as Compare's servers are: its name, or else its NIC handle. The server leaves
+      // out those of the Unknown account and of the account no longer configured, which no
+      // import refreshes.
       const everyAccountsExpiring = [
         'Expirations proches',
-        'Serveurs dédiés', 'backup-server', 'Lyon subsidiary', 'Expire dans 5 jours',
-        'VPS', 'vps-0a1b2c3d.vps.ovh.net', 'Lyon subsidiary', 'Expire dans 25 jours',
-        'VPS', 'staging-vps', 'yy2222-ovh', 'Expire dans 27 jours',
+        'Serveurs dédiés', 'backup-server', '(Lyon subsidiary)', 'Expire dans 5 jours',
+        'VPS', 'vps-0a1b2c3d.vps.ovh.net', '(Lyon subsidiary)', 'Expire dans 25 jours',
+        'VPS', 'staging-vps', '(yy2222-ovh)', 'Expire dans 27 jours',
       ];
 
       it('are those of the account selected, in the card and in the header', async () => {
@@ -796,7 +797,7 @@ describe('Overview tab', () => {
         await selectLanguage(user, 'en');
 
         expect(texts(expirationCard('Expiring soon')).slice(0, 5)).toEqual([
-          'Expiring soon', 'Dedicated Servers', 'backup-server', 'Lyon subsidiary',
+          'Expiring soon', 'Dedicated Servers', 'backup-server', '(Lyon subsidiary)',
           'Expires in 5 days',
         ]);
       });
@@ -832,7 +833,7 @@ describe('Overview tab', () => {
 
         expect(texts(expirationCard())).toEqual([
           'Expirations proches',
-          'Serveurs dédiés', 'backup-server', 'Lyon subsidiary', 'Expire dans 2 jours',
+          'Serveurs dédiés', 'backup-server', '(Lyon subsidiary)', 'Expire dans 2 jours',
         ]);
         expect(texts(headerBadge('Expirations proches'))).toEqual(['1', 'Expirations proches']);
 
@@ -850,9 +851,8 @@ describe('Overview tab', () => {
       ])('name no account with %s', async (_, accounts) => {
         await renderDashboard({ ...severalAccounts, accounts });
 
-        expect(texts(expirationCard())).toEqual(everyAccountsExpiring.filter((text) => ![
-          'Lyon subsidiary', 'yy2222-ovh',
-        ].includes(text)));
+        expect(texts(expirationCard()))
+          .toEqual(everyAccountsExpiring.filter((text) => !text.startsWith('(')));
       });
     });
   });

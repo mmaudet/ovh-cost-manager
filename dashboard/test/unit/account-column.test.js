@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { translations } from '../../src/i18n/translations.js';
-import { accountColumnOf, accountsOf } from '../../src/utils/accounts.js';
+import { accountColumnOf, accountInBrackets, accountsOf } from '../../src/utils/accounts.js';
 import {
   lyonAccount, removedAccount, unknownAccount, unnamedAccount,
 } from '../fixtures/accounts.js';
@@ -72,5 +72,21 @@ describe('accountColumnOf', () => {
 
     expect(column.label).toBe('Account');
     expect(column.nameOf(null)).toBe('Unknown account');
+  });
+});
+
+// How a line that names a service, rather than a table, names its account too (#123)
+describe('accountInBrackets', () => {
+  const column = accountColumnOf(accounts, null, inFrench);
+
+  // So that it does not read as part of the service's name
+  it('is the name of the account in brackets', () => {
+    expect(accountInBrackets(column, lyonAccount.nic)).toBe('(Lyon subsidiary)');
+    expect(accountInBrackets(column, removedAccount.nic)).toBe('(zz3333-ovh)');
+    expect(accountInBrackets(column, null)).toBe('(Compte inconnu)');
+  });
+
+  it('is none without the Account column', () => {
+    expect(accountInBrackets(null, lyonAccount.nic)).toBeNull();
   });
 });

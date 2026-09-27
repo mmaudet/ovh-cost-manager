@@ -5,6 +5,7 @@ import Accordion from '../components/Accordion.jsx';
 import { SortIcon } from '../components/SortIcon.jsx';
 import ProjectProductComparison from '../components/ProjectProductComparison.jsx';
 import { Variation } from '../components/Variation.jsx';
+import { accountInBrackets } from '../utils/accounts.js';
 import { formatMonthLabel } from '../utils/format.js';
 import { firstRowOfEachProject, projectComparisonRows } from '../utils/projectComparison.js';
 
@@ -274,7 +275,7 @@ const CompareTab = ({
                           <>
                             {' '}
                             <span className="text-gray-400">
-                              ({accountColumn.nameOf(srv.account)})
+                              {accountInBrackets(accountColumn, srv.account)}
                             </span>
                           </>
                         )}
