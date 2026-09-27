@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { screen, within } from '@testing-library/react';
 import { account } from './fixtures/account.js';
+import { severalAccounts } from './fixtures/accounts.js';
 import { api, holdBack } from './support/api.js';
 import { captureFileDownloads } from './support/downloads.js';
 import {
@@ -10,6 +11,7 @@ import {
   openTab,
   renderDashboard,
   rowsOf,
+  selectAccount,
   selectLanguage,
   selectMonth,
   settle,
@@ -42,8 +44,9 @@ describe('Web Cloud tab', () => {
 
     await openTab(user, 'Web Cloud');
 
-    expect(api.fetchWebCloudSummary).toHaveBeenCalledWith('2025-10-01', '2026-09-30');
-    expect(api.fetchWebCloudItems).toHaveBeenCalledWith('2025-10-01', '2026-09-30');
+    // For all accounts (null), as the instance knows a single one: the request names none
+    expect(api.fetchWebCloudSummary).toHaveBeenCalledWith('2025-10-01', '2026-09-30', null);
+    expect(api.fetchWebCloudItems).toHaveBeenCalledWith('2025-10-01', '2026-09-30', null);
   });
 
   it('covers the rolling 12 months that end on the selected month', async () => {
@@ -327,4 +330,69 @@ describe('Web Cloud tab', () => {
       `${BOM}"Service";"Family";"Bill wording";"Bill lines";"First billed";"Last billed";"Cost (EUR)"`,
     );
   });
+});
+
+// With several accounts in the instance (#122), see fixtures/accounts.js and
+// fixtures/web-cloud.js: the tab shows the services of the account selected in the header,
+// or those of every account, by default
+describe('Web Cloud tab with several accounts', () => {
+  it('shows the services of the account selected, and of all accounts again', async () => {
+    const { user } = await renderDashboard(severalAccounts);
+    await openTab(user, 'Web Cloud');
+
+    await selectAccount(user, 'Lyon subsidiary');
+
+    expect(texts(familyCards())).toEqual([
+      'Domaines', '1', '15,99€',
+      'Zones DNS', '0',
+      'Hébergements', '1', '71,88€',
+      'Emails', '1', '11,88€',
+      'Options', '1', '11,88€',
+      'Total', '111,63€',
+    ]);
+    expect(familyHeadings()).toEqual([
+      ['Domaines (1)', '15,99€', 'Tout afficher', 'CSV'],
+      ['Hébergements (1)', '71,88€', 'Tout afficher', 'CSV'],
+      ['Emails (1)', '11,88€', 'Tout afficher', 'CSV'],
+      ['Options (1)', '11,88€', 'Tout afficher', 'CSV'],
+    ]);
+    expect(rowsOf(familyTable('Emails'))).toEqual([
+      tableHeader,
+      ['example.com', 'Email Pro example.com - 2 comptes - 1 mois', '2026-09-01', '11,88€'],
+    ]);
+
+    await selectAccount(user, 'Tous les comptes');
+
+    expect(texts(familyCards())).toEqual([
+      'Domaines', '2', '28,48€',
+      'Zones DNS', '1', '1,20€',
+      'Hébergements', '1', '71,88€',
+      'Emails', '3', '44,52€',
+      'Options', '1', '11,88€',
+      'Total', '157,96€',
+    ]);
+  });
+
+  // July, its only month: the 12 months that end on it
+  it("shows the Unknown account's services, over the 12 months that end on its latest month",
+    async () => {
+      const { user } = await renderDashboard(severalAccounts);
+      await openTab(user, 'Web Cloud');
+
+      await selectAccount(user, 'Compte inconnu');
+
+      expect(texts(periodLine())).toContain('(août 2025 → juil. 2026)');
+      expect(texts(familyCards())).toEqual([
+        'Domaines', '0',
+        'Zones DNS', '1', '1,20€',
+        'Hébergements', '0',
+        'Emails', '0',
+        'Options', '0',
+        'Total', '1,20€',
+      ]);
+      expect(rowsOf(familyTable('Zones DNS'))).toEqual([
+        tableHeader,
+        ['example.com', 'Zone DNS Anycast example.com - 12 mois', '2026-07-01', '1,20€'],
+      ]);
+    });
 });

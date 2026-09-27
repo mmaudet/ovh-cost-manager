@@ -101,8 +101,8 @@ export default function Dashboard() {
   const accounts = accountList ? accountsOf(accountList) : (accountsFailed ? [] : undefined);
 
   // The account the page shows, page-wide: null for all accounts, undefined until the page
-  // knows it. The months list and the KPI cards of the month's figures follow it; the other
-  // cards and the tabs follow it in the next tickets (#116 to #123).
+  // knows it. The months list, the KPI cards of the month's figures and the Web Cloud tab
+  // follow it; the other cards and tabs follow it in the next tickets (#116 to #123).
   const { selectedAccount, selectAccount } = useSelectedAccount(accounts);
   // The Account column of the lists, which name the account of each row with all accounts
   // shown, when the page offers several (#121): null when they name none
@@ -209,7 +209,7 @@ export default function Dashboard() {
     selectedMonth, holdsSelectedMonth, activeTab, selectedProject, selectedAccount,
   });
 
-  const webCloudTab = useWebCloudTab({ selectedMonth, activeTab });
+  const webCloudTab = useWebCloudTab({ selectedMonth, activeTab, selectedAccount });
 
   const infrastructureTab = useInfrastructureTab({
     selectedMonth, activeTab, selectedResourceType,
