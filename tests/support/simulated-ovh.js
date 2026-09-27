@@ -17,6 +17,9 @@ const path = require('path');
 // the real API does.
 const routes = new Map();
 
+// The account that the API key reads, which GET /me names by its NIC handle
+const ACCOUNT = { nic: 'xx1111-ovh', currency: 'EUR' };
+
 // What require('ovh') returns: a function of the credentials, which returns the client
 const ovh = () => ({
   requestPromised: (method, route) => {
@@ -34,6 +37,9 @@ const jsonfile = {
 const ok = (value) => () => Promise.resolve(value);
 const fail = (error, message) => () => Promise.reject({ error, message });
 
+// What GET /me answers for an account, its fields that the import reads
+const me = ({ nic, currency }) => ok({ nichandle: nic, currency: { code: currency } });
+
 // Every table emptied, those that a full import keeps included
 function emptyDatabase(db) {
   const database = db.getDb();
@@ -48,8 +54,9 @@ function emptyDatabase(db) {
 
 /**
  * Loads data/db.js and data/import.js on a throwaway database for the tests of the calling
- * file. Each test starts with no route served, an empty database, a silent console, and
- * fake timers, on which the retry delays cost no real time.
+ * file. Each test starts with GET /me served for ACCOUNT, and no other route, an empty
+ * database, a silent console, fake timers, on which the retry delays cost no real time,
+ * and a process.exit that only records its code, as an import that fails exits.
  * @param {string} prefix - The prefix of the throwaway directory
  * @returns {{db: object, importer: object}} Both set before the first test runs
  */
@@ -78,7 +85,9 @@ function useThrowawayImport(prefix) {
     jest.spyOn(console, 'log').mockImplementation(() => {});
     jest.spyOn(console, 'warn').mockImplementation(() => {});
     jest.spyOn(console, 'error').mockImplementation(() => {});
+    jest.spyOn(process, 'exit').mockImplementation(() => {});
     routes.clear();
+    routes.set('/me', me(ACCOUNT));
     emptyDatabase(loaded.db);
   });
 
@@ -90,4 +99,4 @@ function useThrowawayImport(prefix) {
   return loaded;
 }
 
-module.exports = { ovh, jsonfile, routes, ok, fail, useThrowawayImport };
+module.exports = { ovh, jsonfile, routes, ok, fail, me, ACCOUNT, useThrowawayImport };

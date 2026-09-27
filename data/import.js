@@ -180,6 +180,28 @@ function parseArgs() {
   return params;
 }
 
+// The account that the API key reads, as GET /me names it: its NIC handle, which every row
+// that the import writes carries, and its currency. A key created for the versions before
+// may lack the right GET /me, to which OVH answers 403 "This call has not been granted":
+// the error names the right.
+async function readAccount() {
+  let me;
+  try {
+    me = await withRetry(() => ovh.requestPromised('GET', '/me'));
+  } catch (err) {
+    if (errorStatus(err) === 403 && /not been granted/i.test(err?.message)) {
+      throw new Error('The API key lacks the right GET /me, which tells the import the account '
+        + 'it imports: request a consumer key granted GET /me');
+    }
+    throw err;
+  }
+  if (typeof me?.nichandle !== 'string' || me.nichandle === '') {
+    throw new Error('GET /me answered no NIC handle, which tells the import the account it '
+      + 'imports');
+  }
+  return { nic: me.nichandle, currency: me.currency?.code ?? null };
+}
+
 // Fetch all cloud projects
 async function fetchProjects() {
   console.log('Fetching cloud projects...');
@@ -295,7 +317,8 @@ function sumConsumptionEntries(entries) {
   return entries.reduce((sum, e) => sum + (e?.price?.value || 0), 0);
 }
 
-async function importConsumption() {
+// The consumption of the account whose NIC handle is `nic`
+async function importConsumption(nic) {
   console.log('\n--- Importing consumption data ---');
 
   const currentEntries = await fetchConsumptionCurrent();
@@ -315,7 +338,8 @@ async function importConsumption() {
       current_total: currentTotal,
       forecast_total: forecastTotal,
       currency,
-      raw_data: JSON.stringify({ current: currentEntries, forecast: forecastEntries })
+      raw_data: JSON.stringify({ current: currentEntries, forecast: forecastEntries }),
+      account: nic
     });
     console.log(`  Current: ${currentTotal} ${currency}, Forecast: ${forecastTotal} ${currency} (${(currentEntries || []).length} services)`);
   }
@@ -342,7 +366,8 @@ async function importConsumption() {
           service_type: entry?.elements?.[0]?.planFamily || null,
           total,
           currency: entryCurrency,
-          raw_data: JSON.stringify(entry)
+          raw_data: JSON.stringify(entry),
+          account: nic
         });
       }
       console.log(`  Imported ${historyEntries.length} history entries`);
@@ -356,7 +381,8 @@ async function importConsumption() {
 
 // --- Phase 2: Account balance, debts, credits ---
 
-async function importAccountData() {
+// The balance and the credit movements of the account whose NIC handle is `nic`
+async function importAccountData(nic) {
   console.log('\n--- Importing account data ---');
 
   let debtBalance = 0;
@@ -391,7 +417,8 @@ async function importAccountData() {
               amount: mov?.amount?.value || 0,
               date: mov?.creationDate || null,
               description: mov?.description || '',
-              movement_type: mov?.type || ''
+              movement_type: mov?.type || '',
+              account: nic
             });
           } catch (err) {
             console.error(`    Error fetching movement ${movId}: ${err.message}`);
@@ -426,7 +453,8 @@ async function importAccountData() {
     debt_balance: debtBalance,
     credit_balance: creditBalance,
     deposit_total: depositTotal,
-    currency: 'EUR'
+    currency: 'EUR',
+    account: nic
   });
 }
 
@@ -465,7 +493,8 @@ function removeUnlistedServices(answer, deleteNotIn, kind) {
   return answer;
 }
 
-async function importInventory(projectMap) {
+// The inventories of the account whose NIC handle is `nic`
+async function importInventory(projectMap, nic) {
     // Private Cloud Hosts
     if (ovh.requestPromised && db.inventory.upsertPrivateCloudHost) {
       try {
@@ -603,7 +632,8 @@ async function importInventory(projectMap) {
         disk_info: JSON.stringify(hwSpecs.disk || hwSpecs.diskGroups || []),
         bandwidth: hwSpecs.bandwidth?.InternetToOvh?.value || 0,
         expiration_date: serviceInfos.expiration || null,
-        renewal_type: serviceInfos.renew?.automatic ? 'automatic' : (serviceInfos.renew?.manualPayment ? 'manual' : '')
+        renewal_type: serviceInfos.renew?.automatic ? 'automatic' : (serviceInfos.renew?.manualPayment ? 'manual' : ''),
+        account: nic
       });
     });
     console.log(`  Found ${serverNames.length} dedicated servers`);
@@ -657,7 +687,8 @@ async function importInventory(projectMap) {
         disk_gb: info.model?.disk || 0,
         expiration_date: serviceInfos.expiration || null,
         renewal_type: serviceInfos.renew?.automatic ? 'automatic' : (serviceInfos.renew?.manualPayment ? 'manual' : ''),
-        ip_addresses: JSON.stringify(ips)
+        ip_addresses: JSON.stringify(ips),
+        account: nic
       });
     });
     console.log(`  Found ${vpsNames.length} VPS instances`);
@@ -693,7 +724,8 @@ async function importInventory(projectMap) {
         total_size_gb: info.size || 0,
         used_size_gb: 0,
         share_count: Array.isArray(shares) ? shares.length : 0,
-        expiration_date: serviceInfos.expiration || null
+        expiration_date: serviceInfos.expiration || null,
+        account: nic
       });
     });
     console.log(`  Found ${storageIds.length} storage services`);
@@ -1120,10 +1152,6 @@ async function runImport(params) {
     console.log('\n=== FULL IMPORT ===');
     console.log('This will clear the imported data and reimport it. The consumption of each');
     console.log('project is kept: OVH cannot give its past months again.\n');
-    // Clear all data in a transaction for atomicity
-    db.transaction(() => {
-      db.clearAll();
-    });
   } else if (params.diff) {
     importType = 'differential';
     if (params.since) {
@@ -1159,15 +1187,38 @@ async function runImport(params) {
     process.exit(1);
   }
 
-  // Start import log
+  // Start import log: the other imports check it, so it comes before any call to the API
   const importId = db.importLog.start(importType, fromDate, toDate);
+  // The account imported, once GET /me has named it
+  let account = null;
 
   try {
+    // Before any data is written or cleared: a key that cannot tell the account writes none
+    account = await readAccount();
+    console.log(`Account: ${account.nic}`);
+    // The rows stored before the account was recorded are its own: with one account, all
+    // those of an existing database, at the first import after the upgrade
+    const attributed = db.transaction(() => {
+      db.accounts.upsert(account);
+      return db.accounts.attributeRowsWithoutAccount(account.nic);
+    });
+    if (attributed > 0) {
+      console.log(`  Attributed ${attributed} rows stored before to the account ${account.nic}`);
+    }
+
+    if (params.full) {
+      // Clear all data in a transaction for atomicity. The import log keeps this import's
+      // entry, which the other imports check.
+      db.transaction(() => {
+        db.clearAll(importId);
+      });
+    }
+
     // Fetch and store projects
     const projects = await fetchProjects();
     const projectMap = {};
     for (const project of projects) {
-      db.projects.upsert(project);
+      db.projects.upsert({ ...project, account: account.nic });
       projectMap[project.id] = project.name;
       stats.projects++;
     }
@@ -1175,7 +1226,7 @@ async function runImport(params) {
     // Phase 3: Import inventory and build resource type map
     let resourceTypeMap = {};
     if (params.includeInventory) {
-      resourceTypeMap = await importInventory(projectMap);
+      resourceTypeMap = await importInventory(projectMap, account.nic);
     }
 
     // Fetch bills
@@ -1206,7 +1257,7 @@ async function runImport(params) {
         // This ensures atomic write: either all data is written or none
         db.transaction(() => {
           // Store bill
-          db.bills.upsert(bill);
+          db.bills.upsert({ ...bill, account: account.nic });
 
           // Update payment info if available
           if (paymentInfo) {
@@ -1255,12 +1306,12 @@ async function runImport(params) {
 
     // Phase 1: Import consumption data
     if (params.includeConsumption) {
-      await importConsumption();
+      await importConsumption(account.nic);
     }
 
     // Phase 2: Import account data
     if (params.includeAccount) {
-      await importAccountData();
+      await importAccountData(account.nic);
     }
 
     // Phase 4: Import cloud project details
@@ -1270,6 +1321,7 @@ async function runImport(params) {
 
     // Complete import log
     db.importLog.complete(importId, stats);
+    db.accounts.recordImport(account.nic, { status: 'success' });
 
     console.log('\n=== IMPORT COMPLETE ===');
     console.log(`Projects: ${stats.projects}`);
@@ -1279,6 +1331,9 @@ async function runImport(params) {
 
   } catch (err) {
     db.importLog.fail(importId, err.message);
+    if (account) {
+      db.accounts.recordImport(account.nic, { status: 'failed', error: err.message });
+    }
     console.error('\n=== IMPORT FAILED ===');
     console.error(err.message);
     process.exit(1);

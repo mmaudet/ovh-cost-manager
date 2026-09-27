@@ -1,6 +1,17 @@
 -- OVH Bills Database Schema
 -- SQLite database for storing OVH billing data
 
+-- The OVH accounts that the imports read (see CONTEXT.md), by the NIC handle that GET /me
+-- names. The tables that the OVH API feeds hold it in their `account` column, or reach it
+-- through the bill or the project their rows belong to.
+CREATE TABLE IF NOT EXISTS accounts (
+  nic TEXT PRIMARY KEY NOT NULL, -- NIC handle
+  currency TEXT,                 -- The currency the account bills in
+  last_import_at DATETIME,       -- When its last import ended, NULL until one has
+  last_import_status TEXT,       -- 'success', 'failed'
+  last_import_error TEXT         -- Why its last import failed
+);
+
 -- Cloud Projects
 CREATE TABLE IF NOT EXISTS projects (
   id TEXT PRIMARY KEY,           -- OVH Project UUID
@@ -8,7 +19,8 @@ CREATE TABLE IF NOT EXISTS projects (
   description TEXT,
   status TEXT,
   created_at DATETIME,
-  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  account TEXT                   -- NIC handle of its account
 );
 
 -- Bills (invoices)
@@ -21,7 +33,8 @@ CREATE TABLE IF NOT EXISTS bills (
   currency TEXT DEFAULT 'EUR',
   pdf_url TEXT,
   html_url TEXT,
-  imported_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  imported_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  account TEXT                   -- NIC handle of its account
 );
 
 -- Bill details (line items)
@@ -83,7 +96,8 @@ CREATE TABLE IF NOT EXISTS consumption_snapshots (
   current_total REAL,
   forecast_total REAL,
   currency TEXT DEFAULT 'EUR',
-  raw_data TEXT  -- JSON brut pour détails par service
+  raw_data TEXT, -- JSON brut pour détails par service
+  account TEXT                   -- NIC handle of its account
 );
 
 CREATE INDEX IF NOT EXISTS idx_consumption_snapshots_date ON consumption_snapshots(snapshot_date);
@@ -97,7 +111,8 @@ CREATE TABLE IF NOT EXISTS consumption_history (
   total REAL,
   currency TEXT DEFAULT 'EUR',
   raw_data TEXT,
-  imported_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  imported_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  account TEXT                   -- NIC handle of its account
 );
 
 CREATE INDEX IF NOT EXISTS idx_consumption_history_period ON consumption_history(period_start, period_end);
@@ -109,7 +124,8 @@ CREATE TABLE IF NOT EXISTS account_balance (
   debt_balance REAL DEFAULT 0,
   credit_balance REAL DEFAULT 0,
   deposit_total REAL DEFAULT 0,
-  currency TEXT DEFAULT 'EUR'
+  currency TEXT DEFAULT 'EUR',
+  account TEXT                   -- NIC handle of its account
 );
 
 -- Credit movements
@@ -120,7 +136,8 @@ CREATE TABLE IF NOT EXISTS credit_movements (
   date DATETIME,
   description TEXT,
   movement_type TEXT,
-  imported_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  imported_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  account TEXT                   -- NIC handle of its account
 );
 
 CREATE INDEX IF NOT EXISTS idx_credit_movements_date ON credit_movements(date);
@@ -139,7 +156,8 @@ CREATE TABLE IF NOT EXISTS dedicated_servers (
   bandwidth INTEGER,               -- Mbps
   expiration_date DATE,
   renewal_type TEXT,
-  imported_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  imported_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  account TEXT                      -- NIC handle of its account
 );
 
 -- VPS instances inventory
@@ -156,7 +174,8 @@ CREATE TABLE IF NOT EXISTS vps_instances (
   expiration_date DATE,
   renewal_type TEXT,
   ip_addresses TEXT,                -- JSON array
-  imported_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  imported_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  account TEXT                      -- NIC handle of its account
 );
 
 -- Storage services inventory
@@ -169,7 +188,8 @@ CREATE TABLE IF NOT EXISTS storage_services (
   used_size_gb REAL,
   share_count INTEGER,
   expiration_date DATE,
-  imported_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  imported_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  account TEXT                      -- NIC handle of its account
 );
 
 -- Cloud project consumption details

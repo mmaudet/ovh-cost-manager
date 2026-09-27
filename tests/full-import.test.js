@@ -131,6 +131,18 @@ describe('a full import', () => {
     });
   });
 
+  // Its own entry is the one that the other imports check while it runs
+  test('clears the log of the imports before it, but for its own entry', async () => {
+    const earlier = db.importLog.start('differential', '2026-08-01', '2026-09-15');
+    db.importLog.complete(earlier, { bills: 1, details: 2, projects: 0 });
+    serveProjects();
+
+    await importFull();
+
+    expect(db.importLog.getAll().map(entry => [entry.type, entry.status]))
+      .toEqual([['full', 'success']]);
+  });
+
   // Only the latest balance and consumption snapshots are read, which the import fetches
   // again, as it fetches every credit movement and the consumption history
   test('clears the account and consumption snapshots, which it imports again', async () => {
