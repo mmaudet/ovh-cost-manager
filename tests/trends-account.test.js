@@ -7,12 +7,8 @@
  * account), and no parameter every account, as before. Any other value is refused.
  */
 
+const { LYON, PARIS, NEW_ACCOUNT, REFUSED, bill, project } = require('./support/accounts');
 const { startOcm } = require('./support/ocm-server');
-
-const LYON = 'xx1111-ovh';
-const PARIS = 'yy2222-ovh';
-// An account that an import recorded, but that has no bill yet
-const NEW_ACCOUNT = 'zz3333-ovh';
 
 // A bill line of a Public Cloud project, for its instances of a flavour: those of a GPU
 // flavour make its GPU costs
@@ -28,13 +24,6 @@ const serviceLine = (id, billId, resourceType, price) => ({
   service_type: 'Other', resource_type: resourceType,
 });
 
-const project = (db, id, name, account) => db.projects.upsert({
-  id, name, description: name, status: 'ok', created_at: null, account,
-});
-const bill = (db, id, date, account) => db.bills.upsert({
-  id, date, price_without_tax: 0, price_with_tax: 0, tax: 0, currency: 'EUR',
-  pdf_url: null, html_url: null, account,
-});
 // An instance of a project, of the flavour of its plan
 const instance = (db, id, projectId, name, planCode) => db.cloudDetails.upsertInstance({
   id, project_id: projectId, name, flavor: planCode.split('.')[0], plan_code: planCode,
@@ -87,11 +76,6 @@ function seed(db) {
   instance(db, 'instance-4', 'project-legacy', 'legacy-gpu', 'l4-90.consumption');
 }
 
-// What the server answers for a parameter it refuses
-const REFUSED = {
-  error: "Invalid 'account' parameter: expected the NIC handle of an account, or unknown",
-};
-
 let ocm;
 
 beforeAll(async () => {
@@ -101,12 +85,6 @@ beforeAll(async () => {
 afterAll(async () => {
   await ocm?.stop();
 });
-
-// The status and the JSON body of the answer to a path of the server
-async function get(path) {
-  const res = await fetch(`${ocm.url}${path}`);
-  return { status: res.status, body: await res.json() };
-}
 
 // A month of the monthly trend, as the route answers it: named in French only
 const MONTH_NAMES = { '05': 'Mai', '06': 'Jun', '07': 'Jul', '08': 'Aoû', '09': 'Sep' };
@@ -121,7 +99,7 @@ const DOMAINS = { key: 'domain', label: 'Domains', color: '#8b5cf6' };
 const THREE_MONTHS = 'months=3&end=2026-09';
 
 describe('GET /api/analysis/monthly-trend', () => {
-  const trend = (parameters) => get(`/api/analysis/monthly-trend?${parameters}`);
+  const trend = (parameters) => ocm.get(`/api/analysis/monthly-trend?${parameters}`);
 
   test('adds up every account without the parameter, as before', async () => {
     expect(await trend(THREE_MONTHS)).toEqual({
@@ -175,7 +153,7 @@ describe('GET /api/analysis/monthly-trend', () => {
 });
 
 describe('GET /api/analysis/monthly-trend-by-category', () => {
-  const trend = (parameters) => get(`/api/analysis/monthly-trend-by-category?${parameters}`);
+  const trend = (parameters) => ocm.get(`/api/analysis/monthly-trend-by-category?${parameters}`);
 
   test('adds up every account without the parameter, as before', async () => {
     expect(await trend(THREE_MONTHS)).toEqual({
@@ -242,7 +220,7 @@ describe('GET /api/analysis/monthly-trend-by-category', () => {
 });
 
 describe('GET /api/gpu/summary', () => {
-  const gpuCosts = (parameters) => get(`/api/gpu/summary?${parameters}`);
+  const gpuCosts = (parameters) => ocm.get(`/api/gpu/summary?${parameters}`);
   // July to September 2026
   const threeMonths = 'from=2026-07-01&to=2026-09-30';
 
@@ -250,8 +228,9 @@ describe('GET /api/gpu/summary', () => {
   const ofProject = (name, id, total) => ({
     project_name: name, project_id: id, total, gpu_flavors: '',
   });
+  const MODEL_COLORS = { 'NVIDIA L4': '#22c55e', 'NVIDIA T4': '#06b6d4' };
   const ofModel = (model, total, count) => ({
-    gpu_model: model, total, count, color: { 'NVIDIA L4': '#22c55e', 'NVIDIA T4': '#06b6d4' }[model],
+    gpu_model: model, total, count, color: MODEL_COLORS[model],
   });
   const gpuInstance = (id, name, projectName, projectId, planCode) => ({
     id, name, project_name: projectName, project_id: projectId, plan_code: planCode,
@@ -349,11 +328,11 @@ describe('an account the server does not know', () => {
     ['several values', `account=${LYON}&account=${PARIS}`],
   ])('is refused by the routes of the Trends tab, naming the parameter: %s',
     async (_, parameter) => {
-      expect(await get(`/api/analysis/monthly-trend?${THREE_MONTHS}&${parameter}`))
+      expect(await ocm.get(`/api/analysis/monthly-trend?${THREE_MONTHS}&${parameter}`))
         .toEqual({ status: 400, body: REFUSED });
-      expect(await get(`/api/analysis/monthly-trend-by-category?${THREE_MONTHS}&${parameter}`))
+      expect(await ocm.get(`/api/analysis/monthly-trend-by-category?${THREE_MONTHS}&${parameter}`))
         .toEqual({ status: 400, body: REFUSED });
-      expect(await get(`/api/gpu/summary?from=2026-07-01&to=2026-09-30&${parameter}`))
+      expect(await ocm.get(`/api/gpu/summary?from=2026-07-01&to=2026-09-30&${parameter}`))
         .toEqual({ status: 400, body: REFUSED });
     });
 });

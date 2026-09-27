@@ -113,7 +113,7 @@ async function spawnOcm(envOf, config, seed) {
  * @param {function(object)} [options.seed] - writes to its database before it
  *   starts, through the data layer (data/db.js) that it is handed
  * @returns {Promise<{ url: string, output: function(): string,
- *   logged: function(string): Promise, stop: function }>}
+ *   logged: function(string): Promise, get: function(string): Promise, stop: function }>}
  */
 async function startOcm(envOf, { config, seed } = {}) {
   const { home, url, env, child, exited, output } = await spawnOcm(envOf, config, seed);
@@ -121,6 +121,11 @@ async function startOcm(envOf, { config, seed } = {}) {
   const server = {
     url,
     output,
+    // Resolves with the status and the JSON body of the server's answer to a path
+    get: async (path) => {
+      const res = await fetch(`${url}${path}`);
+      return { status: res.status, body: await res.json() };
+    },
     // Resolves once the server's output holds this text, which reaches the
     // test apart from the answers, and may come after them. Rejects, with the
     // output, after a wait shorter than Jest's default timeout.
