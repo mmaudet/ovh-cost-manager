@@ -72,12 +72,9 @@ function loadAccounts() {
   ].join('\n'));
 }
 
-// The OVH API client of the account being read or imported: runImport() creates one from the
-// credentials of each account, and sets it for each in turn
-let ovh = null;
-
-// A client of the OVH API for these credentials. Loaded when first used, as before: the tests
-// of the lock run this script with the client disabled.
+// A client of the OVH API for these credentials. Each function that calls the API takes the
+// client of the account it reads first, `ovh`. The client is loaded when first used, as
+// before: the tests of the lock run this script with it disabled.
 function createClient(credentials) {
   // A copy: the client writes the settings of its endpoint in what it is given
   return require('ovh')({ ...credentials });
@@ -210,13 +207,14 @@ function parseArgs() {
 /**
  * Reads the account that the API key gives access to, from GET /me: the import needs its
  * NIC handle before it writes anything, as every row it writes carries it.
+ * @param {object} ovh - The OVH API client of the key's credentials
  * @returns {Promise<{nic: string, currency: ?string}>} Its NIC handle, and the code of the
  *   currency it bills in
  * @throws {Error} When GET /me fails. A key created before the import needed GET /me may
  *   not be granted it: OVH then answers 403 "This call has not been granted", and the
  *   error names the right that the key lacks.
  */
-async function readAccount() {
+async function readAccount(ovh) {
   let me;
   try {
     me = await withRetry(() => ovh.requestPromised('GET', '/me'));
@@ -264,9 +262,9 @@ async function readEveryAccount(entries) {
   const accounts = [];
   for (const entry of entries) {
     try {
-      ovh = createClient(entry.credentials);
-      const { nic, currency } = await readAccount();
-      accounts.push({ entry, nic, currency, client: ovh });
+      const client = createClient(entry.credentials);
+      const { nic, currency } = await readAccount(client);
+      accounts.push({ entry, nic, currency, client });
       console.log(entries.length > 1 ? `Account ${entry.label}: ${nic}` : `Account: ${nic}`);
     } catch (err) {
       accounts.push({ entry, error: err });
@@ -330,7 +328,7 @@ function failureMessage(accounts, failed) {
 }
 
 // Fetch all cloud projects
-async function fetchProjects() {
+async function fetchProjects(ovh) {
   console.log('Fetching cloud projects...');
   const projectIds = await ovh.requestPromised('GET', '/cloud/project');
   
@@ -351,7 +349,7 @@ async function fetchProjects() {
 }
 
 // Fetch bills in date range
-async function fetchBills(fromDate, toDate) {
+async function fetchBills(ovh, fromDate, toDate) {
   console.log(`Fetching bills from ${fromDate || 'beginning'} to ${toDate || 'now'}...`);
 
   const params = {};
@@ -365,7 +363,7 @@ async function fetchBills(fromDate, toDate) {
 }
 
 // Fetch bill details
-async function fetchBillDetails(billId) {
+async function fetchBillDetails(ovh, billId) {
   // Retried as the calls of the other items are
   const bill = await withRetry(() => ovh.requestPromised('GET', `/me/bill/${billId}`));
   const detailIds = await withRetry(
@@ -405,7 +403,7 @@ async function fetchBillDetails(billId) {
 
 // --- Phase 1: Consumption data ---
 
-async function fetchConsumptionCurrent() {
+async function fetchConsumptionCurrent(ovh) {
   console.log('Fetching current consumption...');
   try {
     const data = await ovh.requestPromised('GET', '/me/consumption/usage/current');
@@ -416,7 +414,7 @@ async function fetchConsumptionCurrent() {
   }
 }
 
-async function fetchConsumptionForecast() {
+async function fetchConsumptionForecast(ovh) {
   console.log('Fetching consumption forecast...');
   try {
     const data = await ovh.requestPromised('GET', '/me/consumption/usage/forecast');
@@ -427,7 +425,7 @@ async function fetchConsumptionForecast() {
   }
 }
 
-async function fetchConsumptionHistory() {
+async function fetchConsumptionHistory(ovh) {
   console.log('Fetching consumption history...');
   try {
     const data = await ovh.requestPromised('GET', '/me/consumption/usage/history');
@@ -447,13 +445,14 @@ function sumConsumptionEntries(entries) {
 /**
  * Imports the consumption of the account: the month's usage so far and its forecast, as a
  * snapshot, and the history of the past year.
+ * @param {object} ovh - The OVH API client of the account
  * @param {string} nic - The NIC handle of the account, which every row it stores carries
  */
-async function importConsumption(nic) {
+async function importConsumption(ovh, nic) {
   console.log('\n--- Importing consumption data ---');
 
-  const currentEntries = await fetchConsumptionCurrent();
-  const forecastEntries = await fetchConsumptionForecast();
+  const currentEntries = await fetchConsumptionCurrent(ovh);
+  const forecastEntries = await fetchConsumptionForecast(ovh);
 
   // API returns arrays of per-service consumption entries
   const currentTotal = sumConsumptionEntries(currentEntries);
@@ -515,9 +514,10 @@ async function importConsumption(nic) {
 /**
  * Imports the balance of the account: its debt, credits and deposits, as a snapshot, and
  * the movements of its credits.
+ * @param {object} ovh - The OVH API client of the account
  * @param {string} nic - The NIC handle of the account, which every row it stores carries
  */
-async function importAccountData(nic) {
+async function importAccountData(ovh, nic) {
   console.log('\n--- Importing account data ---');
 
   let debtBalance = 0;
@@ -593,7 +593,7 @@ async function importAccountData(nic) {
   });
 }
 
-async function fetchBillPayment(billId) {
+async function fetchBillPayment(ovh, billId) {
   try {
     const payment = await ovh.requestPromised('GET', `/me/bill/${billId}/payment`);
     return {
@@ -631,13 +631,14 @@ function removeUnlistedServices(answer, deleteNotIn, kind) {
 /**
  * Imports the inventories of the dedicated servers, VPS and NetApp storage services, and
  * removes the services that OVH no longer lists.
+ * @param {object} ovh - The OVH API client of the account
  * @param {Object<string, string>} projectMap - The name of each Public Cloud project, by id
  * @param {string} nic - The NIC handle of the account, which every service it stores
  *   carries: without it, each service fails to be stored, as a failed item
  * @returns {Promise<Object<string, string>>} The resource type of each project and service,
  *   by the id that a bill line names it with, in its domain
  */
-async function importInventory(projectMap, nic) {
+async function importInventory(ovh, projectMap, nic) {
     // Private Cloud Hosts
     if (ovh.requestPromised && db.inventory.upsertPrivateCloudHost) {
       try {
@@ -954,7 +955,7 @@ const STORAGE_CLASS_LABELS = {
   HIGH_PERF: 'High Performance'
 };
 
-async function detectStorageClass(projectId, regionName, bucketName) {
+async function detectStorageClass(ovh, projectId, regionName, bucketName) {
   try {
     const objects = await withRetry(() => ovh.requestPromised(
       'GET',
@@ -980,7 +981,7 @@ async function detectStorageClass(projectId, regionName, bucketName) {
  * Throws when a call still fails after its retries, so that a partial list
  * never replaces the stored inventory.
  */
-async function fetchObjectStorageBuckets(projectId) {
+async function fetchObjectStorageBuckets(ovh, projectId) {
   const regions = await withRetry(() => ovh.requestPromised('GET', `/cloud/project/${projectId}/region`));
   const buckets = [];
 
@@ -1008,7 +1009,7 @@ async function fetchObjectStorageBuckets(projectId) {
           project_id: projectId,
           name: b.name,
           region: b.region || regionName,
-          storage_class: await detectStorageClass(projectId, regionName, b.name),
+          storage_class: await detectStorageClass(ovh, projectId, regionName, b.name),
           status: null,
           objects_count: b.objectsCount ?? null,
           objects_size: b.objectsSize ?? null,
@@ -1085,7 +1086,9 @@ function usagePeriod(usage) {
   return { start: month.from, end: to && to < month.to ? to : month.to };
 }
 
-async function importCloudDetails(projectIds) {
+// Imports the resources and the consumption of each Public Cloud project of the account,
+// through `ovh`, its OVH API client
+async function importCloudDetails(ovh, projectIds) {
   console.log('\n--- Importing cloud project details ---');
 
   // The month of the current consumption: the latest that the usage of a project reports
@@ -1259,7 +1262,7 @@ async function importCloudDetails(projectIds) {
 
     // Object storage buckets (S3 + Cold Archive)
     try {
-      const buckets = await fetchObjectStorageBuckets(projectId);
+      const buckets = await fetchObjectStorageBuckets(ovh, projectId);
       // Replace the snapshot only once the whole fetch succeeded, so a failed
       // call never leaves the dashboard with an empty bucket list.
       db.transaction(() => {
@@ -1291,15 +1294,16 @@ function billsStartOf(nic, params) {
  * Imports one account through `ovh`, the client of its credentials: its projects, its bills
  * from the day that billsStartOf() gives, and the datasets that the options ask for. Every
  * row it writes carries the account's NIC handle, or reaches it through its bill or project.
+ * @param {object} ovh - The OVH API client of the account
  * @param {string} nic - The NIC handle of the account
  * @param {object} run - The run: `params`, its options, `importType`, as its log entry names
  *   it, `toDate`, the day it imports the bills to, and `stats`, which the account adds to
  * @throws {Error} When a call that the account cannot be imported without fails, which fails
  *   the account
  */
-async function importAccount(nic, { params, importType, toDate, stats }) {
+async function importAccount(ovh, nic, { params, importType, toDate, stats }) {
   // Fetch and store projects
-  const projects = await fetchProjects();
+  const projects = await fetchProjects(ovh);
   const projectMap = {};
   for (const project of projects) {
     db.projects.upsert({ ...project, account: nic });
@@ -1310,11 +1314,11 @@ async function importAccount(nic, { params, importType, toDate, stats }) {
   // Phase 3: Import inventory and build resource type map
   let resourceTypeMap = {};
   if (params.includeInventory) {
-    resourceTypeMap = await importInventory(projectMap, nic);
+    resourceTypeMap = await importInventory(ovh, projectMap, nic);
   }
 
   // Fetch bills
-  const billIds = await fetchBills(billsStartOf(nic, params), toDate);
+  const billIds = await fetchBills(ovh, billsStartOf(nic, params), toDate);
 
   // Process each bill
   console.log('\nProcessing bills...');
@@ -1329,12 +1333,12 @@ async function importAccount(nic, { params, importType, toDate, stats }) {
     }
 
     try {
-      const { bill, details } = await fetchBillDetails(billId);
+      const { bill, details } = await fetchBillDetails(ovh, billId);
 
       // Fetch payment info if account import is enabled (Phase 2)
       let paymentInfo = null;
       if (params.includeAccount) {
-        paymentInfo = await fetchBillPayment(billId);
+        paymentInfo = await fetchBillPayment(ovh, billId);
       }
 
       // Process and store bill + details in a transaction
@@ -1390,17 +1394,17 @@ async function importAccount(nic, { params, importType, toDate, stats }) {
 
   // Phase 1: Import consumption data
   if (params.includeConsumption) {
-    await importConsumption(nic);
+    await importConsumption(ovh, nic);
   }
 
   // Phase 2: Import account data
   if (params.includeAccount) {
-    await importAccountData(nic);
+    await importAccountData(ovh, nic);
   }
 
   // Phase 4: Import cloud project details
   if (params.includeCloudDetails) {
-    await importCloudDetails(Object.keys(projectMap));
+    await importCloudDetails(ovh, Object.keys(projectMap));
   }
 }
 
@@ -1553,9 +1557,8 @@ async function runImport(params) {
 
     for (const account of accounts.filter(({ error }) => !error)) {
       if (several) console.log(`\n=== ACCOUNT ${describeAccount(account)} ===`);
-      ovh = account.client;
       try {
-        await importAccount(account.nic, { params, importType, toDate, stats });
+        await importAccount(account.client, account.nic, { params, importType, toDate, stats });
         db.accounts.recordImport(account.nic, { status: 'success' });
       } catch (err) {
         // The next accounts are imported all the same
@@ -1591,23 +1594,10 @@ async function runImport(params) {
   }
 }
 
-// The phases that run on their own, as their tests run them, read the OVH API through the
-// client of the first configured account, unless an import has set one
-function onItsOwn(phase) {
-  return (...args) => {
-    ovh ??= createClient(loadAccounts().accounts[0].credentials);
-    return phase(...args);
-  };
-}
-
 // Run, unless required by the tests
 if (require.main === module) {
   const params = parseArgs();
   runImport(params);
 }
 
-module.exports = {
-  importCloudDetails: onItsOwn(importCloudDetails),
-  importInventory: onItsOwn(importInventory),
-  runImport,
-};
+module.exports = { importCloudDetails, importInventory, runImport };

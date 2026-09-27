@@ -4,7 +4,7 @@
  * consumption of each month is kept.
  */
 
-const { routes, ok, fail, useThrowawayImport } = require('./support/simulated-ovh');
+const { client, routes, ok, fail, useThrowawayImport } = require('./support/simulated-ovh');
 const { ACCOUNT } = require('./support/accounts');
 
 jest.mock('ovh', () => require('./support/simulated-ovh').ovh);
@@ -43,7 +43,7 @@ function serveProject() {
 
 // Retry delays run on fake timers, so a rate-limited call costs no real time
 async function importProject() {
-  const done = importer.importCloudDetails([PROJECT]);
+  const done = importer.importCloudDetails(client, [PROJECT]);
   await jest.runAllTimersAsync();
   await done;
 }
@@ -318,7 +318,7 @@ describe('project consumption import', () => {
       hourlyUsage: oneInstance('b2-7', 31),
     }));
 
-    const done = importer.importCloudDetails([PROJECT, 'proj-2']);
+    const done = importer.importCloudDetails(client, [PROJECT, 'proj-2']);
     await jest.runAllTimersAsync();
     await done;
 

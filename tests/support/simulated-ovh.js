@@ -63,6 +63,10 @@ const ovh = (credentials) => {
   };
 };
 
+// The client of the account of the tests, as the import creates it from the configuration by
+// default: for the tests that run a phase of the import on its own
+const client = ovh(CREDENTIALS);
+
 // The places where the import reads its configuration, in the order it reads them: the
 // config.json of the repository, then those of ~/my-ovh-bills, the legacy one last
 const CONFIG_FILES = {
@@ -208,6 +212,6 @@ function useThrowawayImport(prefix) {
 }
 
 module.exports = {
-  ovh, jsonfile, routes, calls, clientCredentials, CREDENTIALS, CONFIG_FILES, ok, fail, me,
-  serveAccount, useConfig, useConfigFiles, useThrowawayImport,
+  ovh, jsonfile, client, routes, calls, clientCredentials, CREDENTIALS, CONFIG_FILES, ok, fail,
+  me, serveAccount, useConfig, useConfigFiles, useThrowawayImport,
 };
