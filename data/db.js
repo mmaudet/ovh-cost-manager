@@ -781,9 +781,11 @@ const consumptionOps = {
     return db.prepare(query).all(...params);
   },
 
-  clearHistory: () => {
+  // Clears the consumption history of an account, by its NIC handle, which its import then
+  // replaces: the other accounts' history, and that of no account, stay (#114)
+  clearHistory: (account) => {
     const db = getDb();
-    db.exec('DELETE FROM consumption_history');
+    db.prepare('DELETE FROM consumption_history WHERE account = ?').run(account);
   }
 };
 

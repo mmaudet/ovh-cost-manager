@@ -227,3 +227,44 @@ describe.each(Object.entries(KINDS))('a %s that two accounts list', (_, { table,
     expect(accountsOf(table)).toEqual([[SHARED, PARIS.nic]]);
   });
 });
+
+// Serves on these routes an account's consumption: nothing yet this month, and a history of
+// one month, which OVH gives for the past year
+function serveConsumption(accountRoutes, month, total) {
+  accountRoutes.set('/me/consumption/usage/current', ok([]));
+  accountRoutes.set('/me/consumption/usage/forecast', ok([]));
+  accountRoutes.set('/me/consumption/usage/history', ok([{
+    beginDate: `${month}-01T00:00:00+02:00`,
+    endDate: `${month}-28T23:59:59+02:00`,
+    price: { value: total, currencyCode: 'EUR' },
+    elements: [{ planFamily: 'consumption' }],
+  }]));
+}
+
+// The consumption history stored, as [NIC handle of its account, month, total]
+const storedHistory = () => db.getDb().prepare(`
+  SELECT account, period_start, total FROM consumption_history ORDER BY account, period_start
+`).all().map(row => [row.account, row.period_start, row.total]);
+
+describe('the consumption history', () => {
+  test('is replaced for the importing account only', async () => {
+    const lyon = serveAccount(LYON);
+    const paris = serveAccount(PARIS);
+    for (const served of [lyon, paris]) {
+      serveProjects(served.routes);
+      serveBills(served.routes, []);
+    }
+    serveConsumption(lyon.routes, '2026-07', 100);
+    serveConsumption(paris.routes, '2026-07', 200);
+    useAccounts({ served: lyon }, { served: paris });
+    await importSeptember({ includeConsumption: true });
+    // A month later, OVH gives Lyon a history that has moved on
+    serveConsumption(lyon.routes, '2026-08', 110);
+
+    await importSeptember({ account: LYON.nic, includeConsumption: true });
+
+    expect(storedHistory()).toEqual([
+      [LYON.nic, '2026-08-01', 110], [PARIS.nic, '2026-07-01', 200],
+    ]);
+  });
+});

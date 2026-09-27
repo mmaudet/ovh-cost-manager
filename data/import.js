@@ -414,21 +414,24 @@ async function importConsumption(ovh, nic) {
     });
 
     if (Array.isArray(historyEntries) && historyEntries.length > 0) {
-      db.consumption.clearHistory();
-      // History entries are already full objects (not IDs to fetch individually)
-      for (const entry of historyEntries) {
-        const total = entry?.price?.value || 0;
-        const entryCurrency = entry?.price?.currencyCode || 'EUR';
-        db.consumption.insertHistory({
-          period_start: entry?.beginDate?.split('T')[0] || '',
-          period_end: entry?.endDate?.split('T')[0] || '',
-          service_type: entry?.elements?.[0]?.planFamily || null,
-          total,
-          currency: entryCurrency,
-          raw_data: JSON.stringify(entry),
-          account: nic
-        });
-      }
+      // The account's history replaced whole, and its own only (#114)
+      db.transaction(() => {
+        db.consumption.clearHistory(nic);
+        // History entries are already full objects (not IDs to fetch individually)
+        for (const entry of historyEntries) {
+          const total = entry?.price?.value || 0;
+          const entryCurrency = entry?.price?.currencyCode || 'EUR';
+          db.consumption.insertHistory({
+            period_start: entry?.beginDate?.split('T')[0] || '',
+            period_end: entry?.endDate?.split('T')[0] || '',
+            service_type: entry?.elements?.[0]?.planFamily || null,
+            total,
+            currency: entryCurrency,
+            raw_data: JSON.stringify(entry),
+            account: nic
+          });
+        }
+      });
       console.log(`  Imported ${historyEntries.length} history entries`);
     } else {
       console.log('  No history entries found');
