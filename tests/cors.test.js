@@ -1,12 +1,19 @@
 /**
- * Tests for the origin check of the CORS middleware.
+ * Tests for the origin check, and for its middleware, which runs before the
+ * CORS one.
  *
  * The dashboard's own origin must pass: Chromium sends an Origin header on the
  * page's module script and stylesheet, which Vite marks crossorigin, even
  * though they are same-origin (#76).
  */
 
-const { createOriginCheck, readAllowedOrigins } = require('../server/cors');
+const express = require('express');
+const {
+  createOriginCheck,
+  createOriginCheckMiddleware,
+  readAllowedOrigins,
+} = require('../server/cors');
+const { serve } = require('./support/http');
 
 // Built as the server builds it at startup: in production, with no listed
 // origins, and without a trusted proxy unless the check's name says otherwise
@@ -292,5 +299,77 @@ describe('the origin check, from an allowedOrigins string of config.json', () =>
     'https://ocm',
   ])('rejects %s, a part or an extension of a listed origin', (origin) => {
     expect(check(origin, elsewhere)).toBe(false);
+  });
+});
+
+describe('createOriginCheckMiddleware', () => {
+  const refused = { Origin: 'https://evil.example' };
+  // A stand-in for the console
+  const logger = { log: jest.fn(), warn: jest.fn(), error: jest.fn() };
+  let server;
+
+  // The check, then a route: server/index.js mounts it before the API and the
+  // static files
+  beforeAll(async () => {
+    const app = express();
+    app.use(createOriginCheckMiddleware(
+      { ...settings, allowedOrigins: ['https://reports.example.com'] },
+      logger
+    ));
+    app.all('/api/months', (req, res) => res.json({ route: 'months' }));
+    server = await serve(app);
+  });
+
+  afterAll(() => server.close());
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  // A preflight, and the simple requests a page sends without one, such as a
+  // form's POST: the route must not run
+  test.each(['GET', 'POST', 'OPTIONS'])(
+    'answers 403 to %s from a refused origin, with a JSON error',
+    async (method) => {
+      const res = await server.request(method, '/api/months', refused);
+      expect(res.status).toBe(403);
+      expect(JSON.parse(res.body)).toEqual({ error: 'Origin not allowed' });
+    }
+  );
+
+  // The answer depends on the Origin: a cache must not give it for another
+  test('varies its 403 on Origin', async () => {
+    const res = await server.request('GET', '/api/months', refused);
+    expect(res.headers.vary).toBe('Origin');
+  });
+
+  test('logs a refused request on one line, the origin quoted, and nothing else', async () => {
+    await server.request('GET', '/api/months', refused);
+    expect(logger.warn.mock.calls).toEqual([
+      ['CORS: Blocked request from origin: "https://evil.example"'],
+    ]);
+    expect(logger.log).not.toHaveBeenCalled();
+    expect(logger.error).not.toHaveBeenCalled();
+  });
+
+  // An Origin header may hold kilobytes: the log keeps 267 characters, the
+  // length of the longest origin, https:// with a domain name of 253
+  // characters and :65535
+  test('shortens a long origin in the log', async () => {
+    await server.request('GET', '/api/months', { Origin: `https://${'a'.repeat(8000)}.example` });
+    expect(logger.warn.mock.calls).toEqual([
+      [`CORS: Blocked request from origin: "https://${'a'.repeat(256)}..."`],
+    ]);
+  });
+
+  test.each([
+    ['no Origin', {}],
+    ['a listed origin', { Origin: 'https://reports.example.com' }],
+    ['the request\'s own origin', { Origin: 'https://ocm.example.com', Host: 'ocm.example.com' }],
+  ])('passes a request with %s on, and logs nothing', async (_, headers) => {
+    const res = await server.request('GET', '/api/months', headers);
+    expect(res.status).toBe(200);
+    expect(JSON.parse(res.body)).toEqual({ route: 'months' });
+    expect(logger.warn).not.toHaveBeenCalled();
   });
 });
