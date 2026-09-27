@@ -1,30 +1,9 @@
 import { useState } from 'react';
 import { offersAccounts } from '../utils/accounts.js';
+import { readStored, store } from '../utils/storage.js';
 
 // Where the browser keeps the account selected, next to the language
 const STORAGE_KEY = 'ovh-dashboard-account';
-
-// The id of the account selected on an earlier visit, null for all accounts. A browser can
-// refuse storage, as some private windows do: the page then opens on all accounts.
-function rememberedAccount() {
-  try {
-    return localStorage.getItem(STORAGE_KEY) || null;
-  } catch {
-    return null;
-  }
-}
-
-function rememberAccount(account) {
-  try {
-    if (account === null) {
-      localStorage.removeItem(STORAGE_KEY);
-    } else {
-      localStorage.setItem(STORAGE_KEY, account);
-    }
-  } catch {
-    // Not remembered: the choice lasts until the page closes
-  }
-}
 
 /**
  * The account the page shows (#115): page-wide state, which the dashboard shell holds (ADR
@@ -40,11 +19,12 @@ function rememberAccount(account) {
  *   selects another account, or all of them with null
  */
 export function useSelectedAccount(accounts) {
-  const [chosenAccount, setChosenAccount] = useState(rememberedAccount);
+  // The account selected on an earlier visit, null for all accounts
+  const [chosenAccount, setChosenAccount] = useState(() => readStored(STORAGE_KEY) || null);
 
   const selectAccount = (account) => {
     setChosenAccount(account);
-    rememberAccount(account);
+    store(STORAGE_KEY, account);
   };
 
   if (chosenAccount === null) {

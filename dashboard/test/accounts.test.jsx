@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { screen, within } from '@testing-library/react';
 import {
   lyonAccount, removedAccount, severalAccounts, unknownAccount, unnamedAccount,
@@ -15,6 +15,7 @@ import {
   renderDashboard,
   reopenDashboard,
   selectAccount,
+  selectLanguage,
   selectMonth,
   texts,
 } from './support/render.jsx';
@@ -273,5 +274,28 @@ describe('account selector', () => {
       expect(accountSelector()).not.toBeInTheDocument();
       expectAllAccountsAsked();
     });
+
+    // As some private windows do, or a browser that blocks the data of sites: the page opens
+    // on its defaults, and what the user selects lasts until it closes
+    it('lets the page open, and select an account and a language, when the browser refuses storage',
+      async () => {
+        const refuse = () => {
+          throw new DOMException('The operation is insecure.', 'SecurityError');
+        };
+        for (const method of ['getItem', 'setItem', 'removeItem']) {
+          vi.spyOn(Storage.prototype, method).mockImplementation(refuse);
+        }
+
+        const { user } = await renderDashboard(severalAccounts);
+
+        expect(accountSelector()).toHaveDisplayValue('Tous les comptes');
+        expect(monthCost()).toEqual(allAccountsCost);
+
+        await selectAccount(user, 'Lyon subsidiary');
+        await selectLanguage(user, 'en');
+
+        expect(texts(cardOf('Total monthly cost')))
+          .toEqual(['Total monthly cost', '890.40€', '+45.5% vs previous month']);
+      });
   });
 });

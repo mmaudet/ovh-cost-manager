@@ -1,12 +1,13 @@
 import { useState, useEffect, createContext, useContext } from 'react';
 import { translations } from '../i18n/translations';
+import { readStored, store } from '../utils/storage.js';
 
 const LanguageContext = createContext();
 
 export function LanguageProvider({ children, defaultLanguage = 'fr' }) {
   const [language, setLanguage] = useState(() => {
-    // Check localStorage first
-    const saved = localStorage.getItem('ovh-dashboard-language');
+    // The language of an earlier visit first, which the browser may not have kept
+    const saved = readStored('ovh-dashboard-language');
     if (saved && (saved === 'fr' || saved === 'en')) {
       return saved;
     }
@@ -14,7 +15,7 @@ export function LanguageProvider({ children, defaultLanguage = 'fr' }) {
   });
 
   useEffect(() => {
-    localStorage.setItem('ovh-dashboard-language', language);
+    store('ovh-dashboard-language', language);
   }, [language]);
 
   const t = (key) => {
