@@ -1,5 +1,8 @@
 <p align="center">
-  <img src="docs/logo.png" alt="OVH Cost Manager" width="300">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/logo-dark.png">
+    <img src="docs/logo.png" alt="OVH Cost Manager" width="480">
+  </picture>
 </p>
 
 <h1 align="center">OVH Cost Manager</h1>
@@ -17,6 +20,8 @@
 
 ## Screenshots
 
+The screenshots show anonymised data.
+
 ### Overview
 ![Overview - Service breakdown and top projects](docs/screenshots/overview.png)
 
@@ -25,6 +30,12 @@
 
 ### Historical Trends
 ![Trends - 12-month cost evolution](docs/screenshots/trends.png)
+
+### Public Cloud
+![Public Cloud - Projects, and the cost of each resource of an open project](docs/screenshots/public-cloud.png)
+
+### Web Cloud
+![Web Cloud - Domains, DNS zones, hosting and email over 12 rolling months](docs/screenshots/web-cloud.png)
 
 ## Features
 
