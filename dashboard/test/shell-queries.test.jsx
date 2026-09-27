@@ -145,8 +145,8 @@ describe('query keys', () => {
       // The months list and the summaries of the KPI cards, on September, the current month's
       // consumption and forecast (#116), the figures of the month that the Overview shows
       // (#118), and the queries of the Compare (#119), Trends (#120), Public Cloud (#121), Web
-      // Cloud (#122) and Infrastructure (#123) tabs, and the Backup tab's Veeam backups (#119):
-      // the other queries follow the account in the next tickets (#117 to #123)
+      // Cloud (#122) and Infrastructure (#123) tabs, and the Backup tab's Veeam backups (#119).
+      // Not the configuration, which gives the budgets of every account at once (#117).
       expect(sorted(allKeys().filter((key) => key.includes(lyonAccount.id)))).toEqual(sorted([
         ['months', 'xx1111-ovh'],
         ['summary', '2026-09-01', '2026-09-30', 'xx1111-ovh'],

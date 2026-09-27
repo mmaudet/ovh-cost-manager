@@ -1,5 +1,5 @@
-// The accounts of the instance (#110), as the page offers them to select, and the queries
-// that follow the account shown (#115)
+// The accounts of the instance (#110), as the page offers them to select, the queries that
+// follow the account shown (#115), and the budget that its figures are compared with (#117)
 
 /**
  * The accounts that GET /api/accounts lists, in its order, as the page uses them. The route
@@ -120,6 +120,25 @@ export function scopeLabel(accounts, selectedAccount, t) {
   if (accounts === undefined || !offersAccounts(accounts)) return null;
   if (selectedAccount === null) return t('allAccounts');
   return accountLabel(accounts.find(({ id }) => id === selectedAccount), t);
+}
+
+/**
+ * The budget that the page compares the figures it shows with (#117): the dashboard budget
+ * for all accounts, or else the budget of the account shown, which config.json gives it, so
+ * that an account is never compared with the budget of all of them. A single-account
+ * installation shows all accounts, and keeps the dashboard budget.
+ * @param {?string|undefined} selectedAccount - The account shown (useSelectedAccount()): null
+ *   for all accounts, or else the id of one
+ * @param {number} dashboardBudget - The dashboard budget, as the page holds it: config.json's,
+ *   or the one that the user typed for the visit
+ * @param {Object<string, number>|undefined} accountBudgets - The budget of each account that
+ *   has one, by its id, as the configuration route gives them: undefined while it loads
+ * @returns {?number} Null for an account without a budget of its own, or while the
+ *   configuration loads
+ */
+export function budgetOf(selectedAccount, dashboardBudget, accountBudgets) {
+  if (selectedAccount === null) return dashboardBudget;
+  return accountBudgets?.[selectedAccount] ?? null;
 }
 
 // Whether the key and the request of a query name the account shown: not for all accounts,
