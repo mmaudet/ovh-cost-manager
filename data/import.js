@@ -278,6 +278,18 @@ async function fetchProjects(ovh) {
   return projects;
 }
 
+// Claims for the account, `nic`, the bills stored before the accounts that its API lists:
+// those of its full bill list, without dates, as the differential import starts from the
+// account's latest bill, and skips those stored (#114)
+async function claimBillsOfBefore(ovh, nic) {
+  console.log('Claiming the bills stored before the accounts...');
+  const billIds = await ovh.requestPromised('GET', '/me/bill');
+  if (!Array.isArray(billIds)) {
+    throw new Error(`the bill list is ${util.inspect(billIds)}, not an array`);
+  }
+  console.log(`  Claimed ${db.accounts.claimBills(nic, billIds)} of them`);
+}
+
 // Fetch bills in date range
 async function fetchBills(ovh, fromDate, toDate) {
   console.log(`Fetching bills from ${fromDate || 'beginning'} to ${toDate || 'now'}...`);
@@ -469,6 +481,12 @@ async function importAccountData(ovh, nic) {
   // Fetch credit balances
   try {
     const balanceIds = await ovh.requestPromised('GET', '/me/credit/balance');
+    // The movements stored before the accounts are the account's that lists their balance,
+    // with several accounts configured (#114)
+    if (Array.isArray(balanceIds)) {
+      const claimed = db.accounts.claimCreditMovements(nic, balanceIds);
+      if (claimed > 0) console.log(`  Claimed ${claimed} credit movements stored before`);
+    }
     for (const balanceId of balanceIds) {
       try {
         const balance = await ovh.requestPromised('GET', `/me/credit/balance/${balanceId}`);
@@ -1290,6 +1308,11 @@ async function importBill(ovh, billId, { nic, params, projectMap, resourceTypeMa
 async function importAccount(ovh, nic, { params, importType, toDate, heartbeat }) {
   const imported = { projects: 0, bills: 0, details: 0 };
   try {
+    // With several accounts configured, the rows stored before the accounts are each
+    // account's whose API lists them (#114): its bills first, before its latest bill tells
+    // where its import starts. The writers of its projects and services claim those it lists.
+    if (db.accounts.hasRowsWithoutAccount('bills')) await claimBillsOfBefore(ovh, nic);
+
     // The projects first: their ids tell the bill lines of Public Cloud
     const projects = await fetchProjects(ovh);
     const projectMap = {};
@@ -1474,7 +1497,7 @@ async function runImport(params) {
     // Each account named is recorded, with the name and budget of its entry, and the
     // failure of one that bills in another currency
     const [only] = accounts;
-    const attributed = db.transaction(() => {
+    const migrated = db.transaction(() => {
       for (const { entry, nic, lastNic, currency, error } of accounts) {
         if (nic) {
           db.accounts.upsert({ nic, currency, name: entry.name, budget: entry.budget });
@@ -1492,11 +1515,22 @@ async function runImport(params) {
       db.accounts.recordConfiguration(attempts.map(({ nic, lastNic }) => nic ?? lastNic ?? null));
       // Rows stored before the upgrade carry no account. With a single account configured,
       // they can only be its own: they get it at the first import, and none is left after.
-      // With several, whose they are is for each account's API to tell (#114).
-      return !several && only.nic ? db.accounts.attributeRowsWithoutAccount(only.nic) : 0;
+      if (!several) {
+        return { attributed: only.nic ? db.accounts.attributeRowsWithoutAccount(only.nic) : 0 };
+      }
+      // With several, each account claims those that its API lists as it is imported (#114),
+      // and those that none claims are the Unknown account's. The balance and consumption
+      // snapshots cannot be claimed: they go, once an account is to record its own.
+      const importing = accounts.some(({ nic, error }) => nic && !error);
+      return { deleted: importing ? db.accounts.deleteSnapshotsWithoutAccount() : 0 };
     });
-    if (attributed > 0) {
-      console.log(`  Attributed ${attributed} rows stored before to the account ${only.nic}`);
+    if (migrated.attributed > 0) {
+      console.log(`  Attributed ${migrated.attributed} rows stored before to the account `
+        + `${only.nic}`);
+    }
+    if (migrated.deleted > 0) {
+      console.log(`  Deleted ${migrated.deleted} balance and consumption snapshots stored `
+        + 'before the accounts, which no account can claim');
     }
 
     // A full import clears each account that it imports, once every account has named itself,

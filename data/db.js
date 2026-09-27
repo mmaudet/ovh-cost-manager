@@ -553,6 +553,64 @@ const accountsOps = {
   },
 
   /**
+   * @param {string} [table] - One of ACCOUNT_TABLES, or all of them when none is given
+   * @returns {boolean} Whether it holds rows without an account: rows stored before the
+   *   accounts that no account has claimed, which are the Unknown account's (see CONTEXT.md)
+   */
+  hasRowsWithoutAccount: (table) => {
+    const db = getDb();
+    return (table === undefined ? ACCOUNT_TABLES : [table]).some(name => db
+      .prepare(`SELECT EXISTS (SELECT 1 FROM ${name} WHERE account IS NULL) AS found`)
+      .get().found === 1);
+  },
+
+  /**
+   * Gives the account the bills without an account that its API lists (#114): with several
+   * accounts configured, the bills stored before the accounts are each account's whose full
+   * bill list names them. Those that no account lists keep none.
+   * @param {string} nic - The NIC handle of the account
+   * @param {Array<string>} billIds - Every bill that its API lists, by number
+   * @returns {number} How many it claimed
+   */
+  claimBills: (nic, billIds) => {
+    const db = getDb();
+    return db.prepare(`
+      UPDATE bills SET account = ?
+      WHERE account IS NULL AND id IN (SELECT CAST(value AS TEXT) FROM json_each(?))
+    `).run(nic, JSON.stringify(billIds)).changes;
+  },
+
+  /**
+   * Gives the account the credit movements without an account of the balances that its API
+   * lists (#114), as claimBills() does for the bills: even a movement that OVH no longer
+   * gives. One whose key the account already has keeps none.
+   * @param {string} nic - The NIC handle of the account
+   * @param {Array<string>} balanceNames - The names of the credit balances that its API lists
+   * @returns {number} How many it claimed
+   */
+  claimCreditMovements: (nic, balanceNames) => {
+    const db = getDb();
+    return db.prepare(`
+      UPDATE OR IGNORE credit_movements SET account = ?
+      WHERE account IS NULL AND balance_name IN (SELECT CAST(value AS TEXT) FROM json_each(?))
+    `).run(nic, JSON.stringify(balanceNames)).changes;
+  },
+
+  /**
+   * Deletes the balance and consumption snapshots without an account (#114): with several
+   * accounts configured, no account can claim the account-wide figures stored before the
+   * accounts, of which only the latest is read. Each account's import records its own.
+   * @returns {number} How many it deleted
+   */
+  deleteSnapshotsWithoutAccount: () => {
+    const db = getDb();
+    const remove = db.transaction(() => ['account_balance', 'consumption_snapshots']
+      .reduce((deleted, table) => deleted
+        + db.prepare(`DELETE FROM ${table} WHERE account IS NULL`).run().changes, 0));
+    return remove();
+  },
+
+  /**
    * Gives the account the services that its API lists but that another account holds, when
    * the latest bill with a line that names them, by its domain, is the account's: a service
    * that two accounts' APIs list belongs to the account that bills it (see SERVICE_TABLES).

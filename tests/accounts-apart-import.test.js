@@ -651,3 +651,155 @@ describe('a full import of every account', () => {
     expect(runs()).toEqual([['success', null]]);
   });
 });
+
+// Makes every row one that the version before the accounts stored: without an account, as
+// the migration of its database leaves them
+function forgetAccounts() {
+  for (const table of [...ROOT_TABLES, 'import_state']) {
+    db.getDb().exec(`UPDATE ${table} SET account = NULL`);
+  }
+}
+
+// The ids of the rows without an account in each table, whose account is unknown
+const idsWithoutAccount = () => Object.fromEntries(ROOT_TABLES.map(table => [table,
+  db.getDb().prepare(`SELECT id FROM ${table} WHERE account IS NULL ORDER BY id`).all()
+    .map(row => row.id)]));
+
+// The ids of the rows of the tables of the snapshots and the history, whatever their account
+const allIdsIn = (table) => db.getDb().prepare(`SELECT id FROM ${table} ORDER BY id`).all()
+  .map(row => row.id);
+
+describe('the rows stored before the accounts, with several accounts configured', () => {
+  // Lyon and Paris, whose APIs list nothing but what each test serves
+  function serveLyonAndParis() {
+    const lyon = serveAccount(LYON);
+    const paris = serveAccount(PARIS);
+    for (const served of [lyon, paris]) {
+      serveProjects(served.routes);
+      serveInventories(served.routes);
+      serveBills(served.routes, []);
+    }
+    useAccounts({ served: lyon }, { served: paris });
+    return { lyon, paris };
+  }
+
+  // A differential import, as the cron runs it, once a day, with every dataset
+  const importAsTheCron = () => runImport({
+    diff: true, includeConsumption: true, includeAccount: true, includeInventory: true,
+    includeCloudDetails: true,
+  });
+
+  // Each account's differential import starts from its own latest bill, and skips those
+  // stored: the bills of before are claimed from the account's whole list, without dates
+  test('are claimed by each account whose full bill list names them', async () => {
+    const { lyon, paris } = serveLyonAndParis();
+    storeBill('FR-P0', '2026-08-01', PARIS.nic);
+    storeBill('FR-X0', '2026-07-01', PARIS.nic);
+    forgetAccounts();
+    serveBills(lyon.routes, [['FR-L1', '2026-09-01']]);
+    serveBills(paris.routes, [['FR-P0', '2026-08-01'], ['FR-P1', '2026-09-01']]);
+
+    await runImport({ diff: true });
+
+    expect(accountsOf('bills')).toEqual([
+      ['FR-L1', LYON.nic], ['FR-P0', PARIS.nic], ['FR-P1', PARIS.nic], ['FR-X0', null],
+    ]);
+    const undated = calls.filter(call => call.route === '/me/bill' && call.params === undefined);
+    expect(undated.map(call => call.consumerKey))
+      .toEqual([lyon.credentials.consumerKey, paris.credentials.consumerKey]);
+  });
+
+  // A project's consumption reaches its account through its project
+  test('are claimed by each account whose API lists them: projects, with their consumption, '
+    + 'and services', async () => {
+    const { paris } = serveLyonAndParis();
+    storeDataOf(PARIS.nic, 'P');
+    forgetAccounts();
+    serveProjects(paris.routes, ['proj-P-used']);
+    serveInventories(paris.routes, { servers: ['ns-P'], vps: ['vps-P'] });
+
+    await runImport({ diff: true, includeInventory: true });
+
+    expect(accountsOf('projects')).toEqual([['proj-P-idle', null], ['proj-P-used', PARIS.nic]]);
+    expect(contentOf(PARIS.nic).project_consumption).toHaveLength(1);
+    expect(storedServices()).toEqual({
+      servers: [['ns-P', PARIS.nic]], vps: [['vps-P', PARIS.nic]], storage: [['netapp-P', null]],
+    });
+  });
+
+  test('leave the services to the run that imports the inventories', async () => {
+    const { paris } = serveLyonAndParis();
+    storeServer('ns-P', PARIS.nic);
+    forgetAccounts();
+    serveInventories(paris.routes, { servers: ['ns-P'] });
+
+    await runImport({ diff: true });
+
+    expect(accountsOf('dedicated_servers')).toEqual([['ns-P', null]]);
+  });
+
+  // Those of a balance that its API lists, even those that OVH no longer gives
+  test('are claimed, for the credit movements, by the account that lists their balance',
+    async () => {
+      const { paris } = serveLyonAndParis();
+      for (const [id, balance] of [['PREPAID_ACCOUNT_1', 'PREPAID_ACCOUNT'], ['OLD_1', 'OLD']]) {
+        db.balance.insertCreditMovement({
+          id, balance_name: balance, amount: 50, date: '2026-08-01', description: 'Voucher',
+          movement_type: 'VOUCHER', account: PARIS.nic,
+        });
+      }
+      forgetAccounts();
+      serveBalance(paris.routes, { PREPAID_ACCOUNT: [[2, -5]] });
+
+      await runImport({ diff: true, includeAccount: true });
+
+      expect(storedMovements()).toEqual([
+        [null, 'OLD_1', 50],
+        [PARIS.nic, 'PREPAID_ACCOUNT_1', 50],
+        [PARIS.nic, 'PREPAID_ACCOUNT_2', -5],
+      ]);
+    });
+
+  // No account can claim them, and each account's import records its own
+  test('lose their balance and consumption snapshots', async () => {
+    serveLyonAndParis();
+    storeDataOf(PARIS.nic, 'P');
+    forgetAccounts();
+    db.balance.insertBalance({
+      debt_balance: 0, credit_balance: 10, deposit_total: 0, currency: 'EUR', account: LYON.nic,
+    });
+
+    await runImport({ diff: true });
+
+    expect(db.getDb().prepare('SELECT account FROM account_balance').all())
+      .toEqual([{ account: LYON.nic }]);
+    expect(allIdsIn('consumption_snapshots')).toEqual([]);
+  });
+
+  // They are the Unknown account's: OVH cannot give some of them again, such as the
+  // consumption of past months
+  test('keep no account when no account claims them, and none is deleted', async () => {
+    const { lyon, paris } = serveLyonAndParis();
+    storeDataOf(PARIS.nic, 'P');
+    forgetAccounts();
+    const history = allIdsIn('consumption_history');
+    for (const served of [lyon, paris]) {
+      serveConsumption(served.routes, '2026-08', 100);
+      serveBalance(served.routes, {});
+    }
+
+    await importAsTheCron();
+
+    expect(idsWithoutAccount()).toEqual({
+      bills: ['FR-P0'],
+      projects: ['proj-P-idle', 'proj-P-used'],
+      dedicated_servers: ['ns-P'],
+      vps_instances: ['vps-P'],
+      storage_services: ['netapp-P'],
+      account_balance: [],
+      consumption_snapshots: [],
+      consumption_history: history,
+      credit_movements: ['PREPAID_ACCOUNT_1'],
+    });
+  });
+});

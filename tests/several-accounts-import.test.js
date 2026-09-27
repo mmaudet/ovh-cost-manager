@@ -646,7 +646,8 @@ describe('a full import of several accounts', () => {
 });
 
 describe('the rows stored before the accounts', () => {
-  // Which account they belong to is for #114 to tell, from what each account's API lists
+  // Each is the account's whose API lists it (#114): no account lists this one, which stays
+  // the Unknown account's
   test('are given to no account when several accounts are configured', async () => {
     db.getDb().prepare(`
       INSERT INTO bills (id, date, price_without_tax, currency)
