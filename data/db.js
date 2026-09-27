@@ -130,38 +130,51 @@ function addColumnIfNotExists(database, table, column, type) {
 }
 
 /**
+ * Runs a migration that writes, when it is needed: it reads first, whether it is, and only
+ * then takes the write lock, under which it checks again, as the server and the import may
+ * open an old database together. A database already migrated opens without the write lock,
+ * which the import may hold while it writes (#114).
+ * @param {object} database - The database, as getDb() opens it
+ * @param {function(): boolean} needed - Whether the migration is needed
+ * @param {function()} migrate - The migration
+ */
+function migrateWhenNeeded(database, needed, migrate) {
+  if (!needed()) return;
+  database.transaction(() => {
+    if (needed()) migrate();
+  }).immediate();
+}
+
+/**
  * Gives a table the key that schema.sql defines for it now, which SQLite cannot change in
  * place (#114): its rows, with their rowids, go to the table as schema.sql creates it anew,
- * with its indexes. In a transaction that takes the write lock first, and only if the table
- * still has its former key then: the server and the import may open an old database
- * together.
+ * with its indexes. To run in a transaction, see migrateWhenNeeded().
  * @param {object} database - The database, as getDb() opens it
  * @param {string} table - The table
  * @param {string[]} columns - The columns of its rows, which both of its forms have
- * @param {function(): boolean} hasFormerKey - Whether the table still has its former key
  */
-function rekeyTable(database, table, columns, hasFormerKey) {
-  const rekey = database.transaction(() => {
-    if (!hasFormerKey()) return;
-    const former = `${table}_former_key`;
-    database.exec(`ALTER TABLE ${table} RENAME TO ${former}`);
-    // Its indexes follow it under their names, which schema.sql would find taken: they go,
-    // and schema.sql creates them again on the new table
-    const indexes = database.prepare(`
-      SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = ? AND sql IS NOT NULL
-    `).all(former);
-    for (const { name } of indexes) database.exec(`DROP INDEX ${name}`);
-    database.exec(fs.readFileSync(SCHEMA_PATH, 'utf8'));
-    const list = columns.join(', ');
-    database.exec(`INSERT INTO ${table} (rowid, ${list}) SELECT rowid, ${list} FROM ${former}`);
-    database.exec(`DROP TABLE ${former}`);
-  });
-  rekey.immediate();
+function rekeyTable(database, table, columns) {
+  const former = `${table}_former_key`;
+  database.exec(`ALTER TABLE ${table} RENAME TO ${former}`);
+  // Its indexes follow it under their names, which schema.sql would find taken: they go, and
+  // schema.sql creates them again on the new table
+  const indexes = database.prepare(`
+    SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = ? AND sql IS NOT NULL
+  `).all(former);
+  for (const { name } of indexes) database.exec(`DROP INDEX ${name}`);
+  database.exec(fs.readFileSync(SCHEMA_PATH, 'utf8'));
+  const list = columns.join(', ');
+  database.exec(`INSERT INTO ${table} (rowid, ${list}) SELECT rowid, ${list} FROM ${former}`);
+  database.exec(`DROP TABLE ${former}`);
 }
 
 // Whether a column of a table is not part of its key, or does not exist
 const outOfKey = (database, table, column) => !database.pragma(`table_info(${table})`)
   .some(({ name, pk }) => name === column && pk > 0);
+
+// Whether a table has a column
+const hasColumn = (database, table, column) => database.pragma(`table_info(${table})`)
+  .some(({ name }) => name === column);
 
 /**
  * Initialize and return database connection
@@ -198,14 +211,13 @@ function getDb() {
     // The place of each account in the configuration, which each run records (#114). An
     // account recorded before was configured at its last import: each takes its place in the
     // order the accounts were first recorded, until the next run records the configuration.
-    db.transaction(() => {
-      if (addColumnIfNotExists(db, 'accounts', 'position', 'INTEGER')) {
-        db.exec(`
-          UPDATE accounts SET position =
-            (SELECT COUNT(*) FROM accounts AS earlier WHERE earlier.rowid < accounts.rowid)
-        `);
-      }
-    }).immediate();
+    migrateWhenNeeded(db, () => !hasColumn(db, 'accounts', 'position'), () => {
+      addColumnIfNotExists(db, 'accounts', 'position', 'INTEGER');
+      db.exec(`
+        UPDATE accounts SET position =
+          (SELECT COUNT(*) FROM accounts AS earlier WHERE earlier.rowid < accounts.rowid)
+      `);
+    });
     // How many bills stored before the accounts each account claimed, which tells whether
     // the database was one account's (#114)
     addColumnIfNotExists(db, 'accounts', 'claimed_bills', 'INTEGER NOT NULL DEFAULT 0');
@@ -213,13 +225,14 @@ function getDb() {
     addColumnIfNotExists(db, 'import_log', 'heartbeat_at', 'DATETIME');
     // The credit movements keyed by their account too (#114): their ids, which join the name
     // of their balance and their number, can be those of another account's
-    rekeyTable(db, 'credit_movements', [
-      'id', 'balance_name', 'amount', 'date', 'description', 'movement_type', 'imported_at',
-      'account',
-    ], () => outOfKey(db, 'credit_movements', 'account'));
+    migrateWhenNeeded(db, () => outOfKey(db, 'credit_movements', 'account'), () =>
+      rekeyTable(db, 'credit_movements', [
+        'id', 'balance_name', 'amount', 'date', 'description', 'movement_type', 'imported_at',
+        'account',
+      ]));
     // The import state kept by account (#114). What an import recorded before carries none.
-    rekeyTable(db, 'import_state', ['key', 'value', 'updated_at'],
-      () => outOfKey(db, 'import_state', 'account'));
+    migrateWhenNeeded(db, () => outOfKey(db, 'import_state', 'account'), () =>
+      rekeyTable(db, 'import_state', ['key', 'value', 'updated_at']));
   }
   return db;
 }
