@@ -23,14 +23,87 @@ const ACCOUNT = { nic: LYON, currency: 'EUR' };
 // A time as SQLite's CURRENT_TIMESTAMP writes it: UTC, to the second
 const SQLITE_TIME = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/;
 
-// A project and a bill of an account, written through the data layer (data/db.js)
-const project = (db, id, name, account) => db.projects.upsert({
-  id, name, description: name, status: 'ok', created_at: null, account,
-});
+// A bill of an account, written through the data layer (data/db.js)
 const bill = (db, id, date, account) => db.bills.upsert({
   id, date, price_without_tax: 0, price_with_tax: 0, tax: 0, currency: 'EUR',
   pdf_url: null, html_url: null, account,
 });
+
+// The writers of the rows below write a row of an account through the data layer, and one of
+// the Unknown account, null, as the database held it before the accounts: the data layer
+// refuses a row without an account. `writeOfAccount` writes the row of an account.
+function write(db, table, row, writeOfAccount) {
+  if (row.account !== null) return writeOfAccount(row);
+  const { account, ...rest } = row;
+  const columns = Object.keys(rest);
+  return db.getDb().prepare(`
+    INSERT INTO ${table} (${columns.join(', ')})
+    VALUES (${columns.map((column) => `@${column}`).join(', ')})
+  `).run(rest);
+}
+
+// Dates a snapshot, given what its write returned, at a time as SQLite writes it: without
+// one, it keeps the time it was written at
+function takeAt(db, table, { lastInsertRowid }, takenAt) {
+  if (takenAt === undefined) return;
+  db.getDb().prepare(`UPDATE ${table} SET snapshot_date = ? WHERE id = ?`)
+    .run(takenAt, lastInsertRowid);
+}
+
+// A Public Cloud project of an account
+const project = (db, id, name, account) => write(db, 'projects', {
+  id, name, description: name, status: 'ok', created_at: null, account,
+}, (row) => db.projects.upsert(row));
+
+// What a Public Cloud project consumed in a period, from the first day of a month to the day
+// of the import, for `total`; its account is its project's
+const consumption = (db, projectId, [from, to], total) => db.cloudDetails.insertConsumption({
+  project_id: projectId, period_start: from, period_end: to, resource_type: 'instance',
+  resource_id: `${projectId}-instance`, resource_name: 'b3-8', quantity: 312, unit: 'Hour',
+  unit_price: 0, total_price: total, region: 'GRA11',
+});
+
+// The month of the current consumption that the import of an account's consumption recorded,
+// its first day
+const consumptionMonth = (db, account, month) => write(db, 'import_state', {
+  key: 'consumption_month', value: month, account,
+}, (row) => db.cloudDetails.setCurrentConsumptionMonth(row.value, row.account));
+
+// A consumption snapshot of an account, which its import records from what OVH tells of the
+// month in a period: the consumption so far, the forecast, and their details
+function snapshot(db, account, [from, to], { current, forecast, details = {}, takenAt }) {
+  const written = write(db, 'consumption_snapshots', {
+    period_start: from, period_end: to, current_total: current, forecast_total: forecast,
+    currency: 'EUR', raw_data: JSON.stringify(details), account,
+  }, (row) => db.consumption.insertSnapshot(row));
+  takeAt(db, 'consumption_snapshots', written, takenAt);
+}
+
+// An entry of the consumption history of an account, as its import stores each that OVH
+// gives for a period
+const historyEntry = (db, account, [from, to], serviceType, total) => write(db,
+  'consumption_history', {
+    period_start: from, period_end: to, service_type: serviceType, total, currency: 'EUR',
+    raw_data: '{}', account,
+  }, (row) => db.consumption.insertHistory(row));
+
+// A balance of an account: its debt, its credits and its deposits
+function balance(db, account, { debt, credit, deposit, takenAt }) {
+  const written = write(db, 'account_balance', {
+    debt_balance: debt, credit_balance: credit, deposit_total: deposit, currency: 'EUR',
+    account,
+  }, (row) => db.balance.insertBalance(row));
+  takeAt(db, 'account_balance', written, takenAt);
+}
+
+// A movement of a credit of an account, whose balance the start of its id names: a voucher
+// when it adds, a use when it takes
+const movement = (db, account, { id, amount, date, description = `Movement ${id}` }) => write(
+  db, 'credit_movements', {
+    id, balance_name: id.split('_')[0], amount, date, description,
+    movement_type: amount > 0 ? 'VOUCHER' : 'USE', account,
+  }, (row) => db.balance.insertCreditMovement(row),
+);
 
 // What the server answers to an account parameter it refuses (server/account-parameter.js)
 const REFUSED = {
@@ -40,4 +113,5 @@ const REFUSED = {
 
 module.exports = {
   ACCOUNT, SQLITE_TIME, LYON, PARIS, NEW_ACCOUNT, UNKNOWN_ACCOUNT, project, bill, REFUSED,
+  consumption, consumptionMonth, snapshot, historyEntry, balance, movement,
 };

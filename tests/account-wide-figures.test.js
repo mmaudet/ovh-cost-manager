@@ -9,7 +9,8 @@
  */
 
 const {
-  LYON, PARIS, NEW_ACCOUNT, UNKNOWN_ACCOUNT, REFUSED, SQLITE_TIME, project,
+  LYON, PARIS, NEW_ACCOUNT, UNKNOWN_ACCOUNT, REFUSED, SQLITE_TIME, project, consumption,
+  consumptionMonth, snapshot, historyEntry, balance, movement,
 } = require('./support/accounts');
 const { startOcm } = require('./support/ocm-server');
 
@@ -21,93 +22,10 @@ const ISO_TIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
 // server's time zone
 const inUtc = () => ({ TZ: 'UTC' });
 
-// A balance of an account, taken at a time, as its import stores it: the Unknown account's
-// is written as the database held it, since the writers refuse a row without an account
-function storeBalance(db, account, takenAt, { debt, credit, deposit }) {
-  const balance = {
-    debt_balance: debt, credit_balance: credit, deposit_total: deposit, currency: 'EUR',
-  };
-  const sqlite = db.getDb();
-  const { lastInsertRowid } = account === null
-    ? sqlite.prepare(`
-      INSERT INTO account_balance (debt_balance, credit_balance, deposit_total, currency)
-      VALUES (@debt_balance, @credit_balance, @deposit_total, @currency)
-    `).run(balance)
-    : db.balance.insertBalance({ ...balance, account });
-  sqlite.prepare('UPDATE account_balance SET snapshot_date = ? WHERE id = ?')
-    .run(takenAt, lastInsertRowid);
-}
-
-// A movement of a credit of an account, the Unknown account's written as the database held it
-function storeMovement(db, account, { id, amount, date }) {
-  const movement = {
-    id, balance_name: id.split('_')[0], amount, date, description: `Movement ${id}`,
-    movement_type: amount > 0 ? 'VOUCHER' : 'USE',
-  };
-  if (account !== null) {
-    db.balance.insertCreditMovement({ ...movement, account });
-    return;
-  }
-  db.getDb().prepare(`
-    INSERT INTO credit_movements
-      (id, balance_name, amount, date, description, movement_type, account)
-    VALUES (@id, @balance_name, @amount, @date, @description, @movement_type, NULL)
-  `).run(movement);
-}
-
-// An entry of the consumption history of an account, as its import stores each one that OVH
-// gives, the Unknown account's written as the database held it
-function storeHistory(db, account, [from, to], serviceType, total) {
-  const entry = {
-    period_start: from, period_end: to, service_type: serviceType, total, currency: 'EUR',
-    raw_data: '{}',
-  };
-  if (account !== null) {
-    db.consumption.insertHistory({ ...entry, account });
-    return;
-  }
-  db.getDb().prepare(`
-    INSERT INTO consumption_history (period_start, period_end, service_type, total, currency,
-      raw_data)
-    VALUES (@period_start, @period_end, @service_type, @total, @currency, @raw_data)
-  `).run(entry);
-}
-
 // The periods of the history: whole months
 const JUNE = ['2026-06-01', '2026-06-30'];
 const JULY = ['2026-07-01', '2026-07-31'];
 const AUGUST = ['2026-08-01', '2026-08-31'];
-
-// A consumption snapshot of an account, taken at a time, as its import stores the month's
-// consumption so far and its forecast that OVH gives
-function storeSnapshot(db, account, takenAt, [from, to], { current, forecast, details = {} }) {
-  const { lastInsertRowid } = db.consumption.insertSnapshot({
-    period_start: from, period_end: to, current_total: current, forecast_total: forecast,
-    currency: 'EUR', raw_data: JSON.stringify(details), account,
-  });
-  db.getDb().prepare('UPDATE consumption_snapshots SET snapshot_date = ? WHERE id = ?')
-    .run(takenAt, lastInsertRowid);
-}
-
-// What a Public Cloud project consumed from the first day of a month to the last import
-const storeProjectConsumption = (db, projectId, [from, to], totalPrice) =>
-  db.cloudDetails.insertConsumption({
-    project_id: projectId, period_start: from, period_end: to, resource_type: 'instance',
-    resource_id: `${projectId}-instance`, resource_name: 'b3-8', quantity: 312, unit: 'Hour',
-    unit_price: 0, total_price: totalPrice, region: 'GRA11',
-  });
-
-// The Unknown account's Public Cloud project, and the month of the current consumption that
-// the last import before the accounts recorded, written as the database held them
-function storeProjectWithoutAccount(db, projectId, month) {
-  const sqlite = db.getDb();
-  sqlite.prepare(
-    "INSERT INTO projects (id, name, description, status) VALUES (?, 'Legacy', 'Legacy', 'ok')",
-  ).run(projectId);
-  sqlite.prepare(
-    "INSERT INTO import_state (key, value, account) VALUES ('consumption_month', ?, NULL)",
-  ).run(month);
-}
 
 // The periods of the current consumption: September, up to the last import of each account
 const SEPTEMBER_TO_14 = ['2026-09-01', '2026-09-14'];
@@ -129,39 +47,42 @@ function seed(db) {
   db.accounts.upsert({ nic: PARIS, currency: 'EUR' });
   db.accounts.upsert({ nic: NEW_ACCOUNT, currency: 'EUR' });
 
-  storeBalance(db, null, '2026-06-30 08:00:00', { debt: 1, credit: 4.75, deposit: 0 });
-  storeBalance(db, LYON, '2026-09-13 04:02:00', { debt: 5, credit: 20, deposit: 0 });
-  storeBalance(db, LYON, '2026-09-14 04:02:00', { debt: 12.5, credit: 50.25, deposit: 100 });
-  storeBalance(db, PARIS, '2026-09-14 04:01:00', { debt: 7.5, credit: 0, deposit: 30 });
+  balance(db, null, { debt: 1, credit: 4.75, deposit: 0, takenAt: '2026-06-30 08:00:00' });
+  balance(db, LYON, { debt: 5, credit: 20, deposit: 0, takenAt: '2026-09-13 04:02:00' });
+  balance(db, LYON, { debt: 12.5, credit: 50.25, deposit: 100, takenAt: '2026-09-14 04:02:00' });
+  balance(db, PARIS, { debt: 7.5, credit: 0, deposit: 30, takenAt: '2026-09-14 04:01:00' });
 
-  storeMovement(db, LYON, { id: 'VOUCHER_1', amount: 50, date: '2026-08-01T10:00:00+02:00' });
-  storeMovement(db, LYON, { id: 'VOUCHER_2', amount: -20, date: '2026-09-01T10:00:00+02:00' });
+  movement(db, LYON, { id: 'VOUCHER_1', amount: 50, date: '2026-08-01T10:00:00+02:00' });
+  movement(db, LYON, { id: 'VOUCHER_2', amount: -20, date: '2026-09-01T10:00:00+02:00' });
   // The same id as Lyon's: two accounts' movements can share their ids (#114)
-  storeMovement(db, PARIS, { id: 'VOUCHER_1', amount: 30, date: '2026-08-15T10:00:00+02:00' });
-  storeMovement(db, null, { id: 'PREPAID_1', amount: 10, date: '2026-06-01T10:00:00+02:00' });
+  movement(db, PARIS, { id: 'VOUCHER_1', amount: 30, date: '2026-08-15T10:00:00+02:00' });
+  movement(db, null, { id: 'PREPAID_1', amount: 10, date: '2026-06-01T10:00:00+02:00' });
 
-  storeHistory(db, null, JUNE, 'consumption', 80);
+  historyEntry(db, null, JUNE, 'consumption', 80);
   // Of another service type than Lyon's July
-  storeHistory(db, null, JULY, 'cloud', 20);
-  storeHistory(db, LYON, JULY, 'consumption', 175.5);
-  storeHistory(db, LYON, AUGUST, 'consumption', 190.25);
-  storeHistory(db, PARIS, AUGUST, 'consumption', 60);
+  historyEntry(db, null, JULY, 'cloud', 20);
+  historyEntry(db, LYON, JULY, 'consumption', 175.5);
+  historyEntry(db, LYON, AUGUST, 'consumption', 190.25);
+  historyEntry(db, PARIS, AUGUST, 'consumption', 60);
   // A second entry of Paris's for August, as OVH may give an account several for a period
-  storeHistory(db, PARIS, AUGUST, 'storage', 12);
+  historyEntry(db, PARIS, AUGUST, 'storage', 12);
 
-  storeSnapshot(db, LYON, '2026-09-10 04:02:00', ['2026-09-01', '2026-09-10'],
-    { current: 60, forecast: 180 });
-  storeSnapshot(db, LYON, '2026-09-14 04:02:00', SEPTEMBER_TO_14,
-    { current: 87.5, forecast: 192.25, details: LYON_DETAILS });
-  storeSnapshot(db, PARIS, '2026-09-15 04:01:00', SEPTEMBER_TO_15, { current: 0, forecast: 0 });
+  snapshot(db, LYON, ['2026-09-01', '2026-09-10'],
+    { current: 60, forecast: 180, takenAt: '2026-09-10 04:02:00' });
+  snapshot(db, LYON, SEPTEMBER_TO_14,
+    { current: 87.5, forecast: 192.25, details: LYON_DETAILS, takenAt: '2026-09-14 04:02:00' });
+  snapshot(db, PARIS, SEPTEMBER_TO_15,
+    { current: 0, forecast: 0, takenAt: '2026-09-15 04:01:00' });
   // Lyon's project, whose consumption the snapshot of Lyon's already tells
   project(db, 'project-production', 'Production', LYON);
-  storeProjectConsumption(db, 'project-production', SEPTEMBER_TO_14, 300);
+  consumption(db, 'project-production', SEPTEMBER_TO_14, 300);
   project(db, 'project-staging', 'Staging', PARIS);
-  storeProjectConsumption(db, 'project-staging', SEPTEMBER_TO_15, 12.25);
-  for (const nic of [LYON, PARIS]) db.cloudDetails.setCurrentConsumptionMonth('2026-09-01', nic);
-  storeProjectWithoutAccount(db, 'project-legacy', '2026-08-01');
-  storeProjectConsumption(db, 'project-legacy', AUGUST, 40);
+  consumption(db, 'project-staging', SEPTEMBER_TO_15, 12.25);
+  for (const nic of [LYON, PARIS]) consumptionMonth(db, nic, '2026-09-01');
+  // The Unknown account's project, in the month of the last import before the accounts
+  project(db, 'project-legacy', 'Legacy', null);
+  consumptionMonth(db, null, '2026-08-01');
+  consumption(db, 'project-legacy', AUGUST, 40);
 }
 
 let ocm;
@@ -192,7 +113,7 @@ describe('GET /api/account/balance', () => {
     });
   });
 
-  test("gives the latest balance of the account whose NIC handle it gives", async () => {
+  test('gives the latest balance of the account whose NIC handle it gives', async () => {
     expect(await ocm.get(`/api/account/balance${of(LYON)}`)).toEqual({
       status: 200, body: balance('2026-09-14 04:02:00', 12.5, 50.25, 100),
     });
@@ -464,9 +385,9 @@ describe('the forecast of the accounts that their projects tell', () => {
     db.accounts.upsert({ nic: PARIS, currency: 'EUR' });
     project(db, 'project-lyon', 'Lyon', LYON);
     project(db, 'project-paris', 'Paris', PARIS);
-    storeProjectConsumption(db, 'project-lyon', SEPTEMBER_TO_15, 70);
-    storeProjectConsumption(db, 'project-paris', ['2026-09-01', to], consumed);
-    for (const nic of [LYON, PARIS]) db.cloudDetails.setCurrentConsumptionMonth('2026-09-01', nic);
+    consumption(db, 'project-lyon', SEPTEMBER_TO_15, 70);
+    consumption(db, 'project-paris', ['2026-09-01', to], consumed);
+    for (const nic of [LYON, PARIS]) consumptionMonth(db, nic, '2026-09-01');
   };
 
   // Lyon forecasts 150 €, 70 € over 14 days for the 30 days of September, and Paris 60 €
