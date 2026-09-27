@@ -539,14 +539,15 @@ async function fetchBillPayment(ovh, billId) {
 
 // Removes the services of a kind that the answer of its inventory list call, all those that
 // exist now, no longer names: those cancelled since an import stored them, which only a full
-// import removed before (#74). Anything but a list, such as the null that the ovh client
-// answers for an empty body, fails like the call, and the import keeps every service of that
-// kind. Returns the names of the list.
-function removeUnlistedServices(answer, deleteNotIn, kind) {
+// import removed before (#74). Only the services of the account, `nic`, whose API answered:
+// another account's services are not in its list (#114). Anything but a list, such as the
+// null that the ovh client answers for an empty body, fails like the call, and the import
+// keeps every service of that kind. Returns the names of the list.
+function removeUnlistedServices(answer, deleteNotIn, kind, nic) {
   if (!Array.isArray(answer)) {
     throw new Error(`the list is ${util.inspect(answer)}, not an array`);
   }
-  const removed = deleteNotIn(answer);
+  const removed = deleteNotIn(answer, nic);
   // An empty list is OVH's answer once none is left, which removes them all: a warning, for a
   // list that would be empty by mistake
   if (answer.length === 0 && removed > 0) {
@@ -559,7 +560,7 @@ function removeUnlistedServices(answer, deleteNotIn, kind) {
 
 /**
  * Imports the inventories of the dedicated servers, VPS and NetApp storage services, and
- * removes the services that OVH no longer lists.
+ * removes the account's services that its API no longer lists.
  * @param {object} ovh - The OVH API client of the account
  * @param {Object<string, string>} projectMap - The name of each Public Cloud project, by id
  * @param {string} nic - The NIC handle of the account, which every service it stores
@@ -671,7 +672,7 @@ async function importInventory(ovh, projectMap, nic) {
     console.log('Fetching dedicated servers...');
     const serverNames = removeUnlistedServices(
       await ovh.requestPromised('GET', '/dedicated/server'),
-      db.inventory.deleteServersNotIn, 'dedicated servers',
+      db.inventory.deleteServersNotIn, 'dedicated servers', nic,
     );
 
     await runInBatches(serverNames, async (name) => {
@@ -719,6 +720,7 @@ async function importInventory(ovh, projectMap, nic) {
     console.log('Fetching VPS instances...');
     const vpsNames = removeUnlistedServices(
       await ovh.requestPromised('GET', '/vps'), db.inventory.deleteVpsNotIn, 'VPS instances',
+      nic,
     );
 
     await runInBatches(vpsNames, async (name) => {
@@ -774,7 +776,7 @@ async function importInventory(ovh, projectMap, nic) {
     console.log('Fetching storage services...');
     const storageIds = removeUnlistedServices(
       await ovh.requestPromised('GET', '/storage/netapp'),
-      db.inventory.deleteStorageNotIn, 'NetApp storage services',
+      db.inventory.deleteStorageNotIn, 'NetApp storage services', nic,
     );
 
     await runInBatches(storageIds, async (sid) => {

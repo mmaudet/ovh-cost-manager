@@ -777,20 +777,22 @@ const balanceOps = {
 };
 
 // Makes the function that deletes the services of an inventory table whose id is not in
-// `ids`, the list the OVH API gave of all those that exist now: the services cancelled since
-// an import stored them (#74). `serviceType`, for a table whose list covers one type of its
-// services only, leaves the others alone. The ids compare as text, as the table stores them:
-// json_each() gives a number as an integer, which no text equals. The function returns how
-// many it deleted.
+// `ids`, the list that the OVH API of an account gave of all those that exist now: the
+// services cancelled since an import stored them (#74). It deletes only the services of that
+// account, `account`, its NIC handle: another account's services, and those that no account
+// holds, are not in its list (#114). `serviceType`, for a table whose list covers one type of
+// its services only, leaves the others alone. The ids compare as text, as the table stores
+// them: json_each() gives a number as an integer, which no text equals. The function returns
+// how many it deleted.
 function deleteNotIn(table, serviceType = null) {
   const ofType = serviceType === null ? '' : 'service_type = ? AND ';
   const typeParams = serviceType === null ? [] : [serviceType];
-  return (ids) => {
+  return (ids, account) => {
     const db = getDb();
     return db.prepare(`
       DELETE FROM ${table}
-      WHERE ${ofType}id NOT IN (SELECT CAST(value AS TEXT) FROM json_each(?))
-    `).run(...typeParams, JSON.stringify(ids)).changes;
+      WHERE account = ? AND ${ofType}id NOT IN (SELECT CAST(value AS TEXT) FROM json_each(?))
+    `).run(account, ...typeParams, JSON.stringify(ids)).changes;
   };
 }
 
@@ -856,7 +858,8 @@ const inventoryOps = {
     return db.prepare('SELECT * FROM storage_services ORDER BY display_name').all();
   },
 
-  // The services cancelled since an import stored them go, see deleteNotIn() (#74)
+  // The services of an account cancelled since an import stored them go, see deleteNotIn()
+  // (#74, #114)
   deleteServersNotIn: deleteNotIn('dedicated_servers'),
   deleteVpsNotIn: deleteNotIn('vps_instances'),
   // Their list, /storage/netapp, names the NetApp services only
