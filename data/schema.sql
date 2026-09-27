@@ -14,8 +14,10 @@ CREATE TABLE IF NOT EXISTS accounts (
   budget INTEGER,                -- The budget of that entry
   position INTEGER,              -- Its place in the configuration of the last run, from 0,
                                  -- NULL when that one does not list it any more (#114)
-  claimed_bills INTEGER NOT NULL DEFAULT 0 -- How many bills stored before the accounts it
+  claimed_bills INTEGER NOT NULL DEFAULT 0, -- How many bills stored before the accounts it
                                  -- claimed, over every run (#114)
+  last_success_at DATETIME       -- When its last import that succeeded ended, NULL until one
+                                 -- has: its data is as fresh as that import left it (#124)
 );
 
 -- Cloud Projects

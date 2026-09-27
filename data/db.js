@@ -133,6 +133,15 @@ function getDb() {
     // How many bills stored before the accounts each account claimed, which tells whether
     // the database was one account's (#114)
     addColumnIfNotExists(db, 'accounts', 'claimed_bills', 'INTEGER NOT NULL DEFAULT 0');
+    // When each account's last import that succeeded ended (#124). An earlier version kept
+    // how the last import ended only: that of an account whose last import succeeded is its
+    // last that did, and an account whose last import failed has none that it can tell.
+    migrateWhenNeeded(db, () => !hasColumn(db, 'accounts', 'last_success_at'), () => {
+      addColumnIfNotExists(db, 'accounts', 'last_success_at', 'DATETIME');
+      db.exec(`
+        UPDATE accounts SET last_success_at = last_import_at WHERE last_import_status = 'success'
+      `);
+    });
     // What keeps the lock of a long import (#113)
     addColumnIfNotExists(db, 'import_log', 'heartbeat_at', 'DATETIME');
     // The credit movements keyed by their account too (#114): their ids, which join the name
@@ -490,7 +499,8 @@ const accountsOps = {
 
   /**
    * Records how the last import of the account ended, and that it ended now, for the
-   * accounts route to tell whether its data is fresh.
+   * accounts route to tell whether its data is fresh: when it succeeded, that it is the last
+   * that did, as one that fails leaves the data as the last that succeeded left it (#124).
    * @param {string} nic - The NIC handle of the account
    * @param {object} result
    * @param {string} result.status - 'success' or 'failed'
@@ -498,13 +508,17 @@ const accountsOps = {
    */
   recordImport: (nic, { status, error = null }) => {
     const db = getDb();
+    // CURRENT_TIMESTAMP is the same time throughout the statement
     return db.prepare(`
       UPDATE accounts SET
         last_import_at = CURRENT_TIMESTAMP,
-        last_import_status = ?,
-        last_import_error = ?
-      WHERE nic = ?
-    `).run(status, error, nic);
+        last_import_status = @status,
+        last_import_error = @error,
+        last_success_at = CASE
+          WHEN @status = 'success' THEN CURRENT_TIMESTAMP ELSE last_success_at
+        END
+      WHERE nic = @nic
+    `).run({ status, error, nic });
   },
 
   /**
@@ -550,12 +564,12 @@ const accountsOps = {
   /**
    * @returns {object[]} Every account recorded: those that the configuration of the last run
    *   lists, in its order, then the others by NIC handle. Each gives the accounts table's
-   *   nic, currency, last_import_at, last_import_status, last_import_error, name and budget,
-   *   and `configured`, whether that configuration lists it.
+   *   nic, currency, last_import_at, last_import_status, last_import_error, last_success_at,
+   *   name and budget, and `configured`, whether that configuration lists it.
    */
   getAll: () => getDb().prepare(`
-    SELECT nic, currency, last_import_at, last_import_status, last_import_error, name, budget,
-      position IS NOT NULL AS configured
+    SELECT nic, currency, last_import_at, last_import_status, last_import_error,
+      last_success_at, name, budget, position IS NOT NULL AS configured
     FROM accounts
     ORDER BY position IS NULL, position, nic
   `).all().map(account => ({ ...account, configured: account.configured === 1 }))

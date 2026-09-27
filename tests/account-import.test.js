@@ -262,13 +262,15 @@ describe('an import', () => {
       last_import_at: expect.stringMatching(SQLITE_TIME),
       last_import_status: 'success',
       last_import_error: null,
+      last_success_at: expect.stringMatching(SQLITE_TIME),
       name: null,
       budget: null,
       configured: true,
     }]);
-    // It ended during the import
+    // It ended during the import, and it succeeded: the last that did (#124)
     const ended = accounts[0].last_import_at;
     expect(started <= ended && ended <= sqliteNow()).toBe(true);
+    expect(accounts[0].last_success_at).toBe(ended);
   });
 
   test('records on the account that its import failed, and why', async () => {
@@ -284,11 +286,35 @@ describe('an import', () => {
       last_import_at: expect.stringMatching(SQLITE_TIME),
       last_import_status: 'failed',
       last_import_error: 'Internal server error',
+      last_success_at: null,
       name: null,
       budget: null,
       configured: true,
     }]);
   });
+
+  // Its data is as fresh as that import left it, whatever the imports that failed since
+  // (#124)
+  test('keeps on the account when its last import that succeeded ended, once one fails',
+    async () => {
+      serveBills();
+      await importSeptember();
+      // That import ended on 14 September
+      const succeeded = '2026-09-14 04:02:30';
+      db.getDb().prepare('UPDATE accounts SET last_import_at = ?, last_success_at = ?')
+        .run(succeeded, succeeded);
+      routes.set('/cloud/project', fail(500, 'Internal server error'));
+
+      await importSeptember();
+
+      expect(process.exit).toHaveBeenCalledWith(1);
+      const [recorded] = db.accounts.getAll();
+      expect(recorded).toMatchObject({
+        last_import_status: 'failed', last_import_error: 'Internal server error',
+        last_success_at: succeeded,
+      });
+      expect(recorded.last_import_at > succeeded).toBe(true);
+    });
 });
 
 describe('a writer of a table that the OVH API feeds', () => {
