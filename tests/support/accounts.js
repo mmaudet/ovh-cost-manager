@@ -23,12 +23,6 @@ const ACCOUNT = { nic: LYON, currency: 'EUR' };
 // A time as SQLite's CURRENT_TIMESTAMP writes it: UTC, to the second
 const SQLITE_TIME = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/;
 
-// A bill of an account, written through the data layer (data/db.js)
-const bill = (db, id, date, account) => db.bills.upsert({
-  id, date, price_without_tax: 0, price_with_tax: 0, tax: 0, currency: 'EUR',
-  pdf_url: null, html_url: null, account,
-});
-
 // The writers of the rows below write a row of an account through the data layer, and one of
 // the Unknown account, null, as the database held it before the accounts: the data layer
 // refuses a row without an account. `writeOfAccount` writes the row of an account.
@@ -41,6 +35,12 @@ function write(db, table, row, writeOfAccount) {
     VALUES (${columns.map((column) => `@${column}`).join(', ')})
   `).run(rest);
 }
+
+// A bill of an account
+const bill = (db, id, date, account) => write(db, 'bills', {
+  id, date, price_without_tax: 0, price_with_tax: 0, tax: 0, currency: 'EUR',
+  pdf_url: null, html_url: null, account,
+}, (row) => db.bills.upsert(row));
 
 // Dates a snapshot, given what its write returned, at a time as SQLite writes it: without
 // one, it keeps the time it was written at
@@ -105,6 +105,25 @@ const movement = (db, account, { id, amount, date, description = `Movement ${id}
   }, (row) => db.balance.insertCreditMovement(row),
 );
 
+// A dedicated server, a VPS and a storage service of an account's inventory, as its import
+// stores them (#123): its id, its name, and its expiration date, null when it is not known
+const server = (db, account, { id, name, expires = null }) => write(db, 'dedicated_servers', {
+  id, display_name: name, reverse: id, datacenter: 'rbx8', os: 'debian12_64', state: 'ok',
+  cpu: 'Intel Xeon-E 2388G', ram_size: 65536, disk_info: '[]', bandwidth: 1000,
+  expiration_date: expires, renewal_type: 'automatic', account,
+}, (row) => db.inventory.upsertServer(row));
+
+const vps = (db, account, { id, name, expires = null }) => write(db, 'vps_instances', {
+  id, display_name: name, model: 'vps-le-2-2-40', zone: 'Region OpenStack: os-gra7',
+  state: 'running', os: 'Debian 12', vcpus: 2, ram_mb: 2048, disk_gb: 40,
+  expiration_date: expires, renewal_type: 'automatic', ip_addresses: '["192.0.2.10"]', account,
+}, (row) => db.inventory.upsertVps(row));
+
+const storage = (db, account, { id, name, expires = null }) => write(db, 'storage_services', {
+  id, service_type: 'netapp', display_name: name, region: 'eu-west-gra', total_size_gb: 1024,
+  used_size_gb: 0, share_count: 3, expiration_date: expires, account,
+}, (row) => db.inventory.upsertStorage(row));
+
 // What the server answers to an account parameter it refuses (server/account-parameter.js)
 const REFUSED = {
   error: "Invalid 'account' parameter: expected the NIC handle of an account, or "
@@ -113,5 +132,6 @@ const REFUSED = {
 
 module.exports = {
   ACCOUNT, SQLITE_TIME, LYON, PARIS, NEW_ACCOUNT, UNKNOWN_ACCOUNT, project, bill, REFUSED,
-  consumption, consumptionMonth, snapshot, historyEntry, balance, movement,
+  consumption, consumptionMonth, snapshot, historyEntry, balance, movement, server, vps,
+  storage,
 };

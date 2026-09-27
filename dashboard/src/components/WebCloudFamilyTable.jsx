@@ -1,3 +1,5 @@
+import { accountCsvColumns } from '../utils/accounts.js';
+
 // One Web Cloud family: service name, latest bill wording, last billed month. With the
 // Account column of the lists, null when they show none, each service's account too (#122):
 // the items then carry its name, accountName.
@@ -35,7 +37,8 @@ const WebCloudTable = ({ items, accountColumn, language, fmt }) => (
 
 /**
  * The columns of a family's CSV file, for downloadCSV(): the account's after the service's
- * when the table shows it, for a spreadsheet to pivot the services by account (#122).
+ * when the table shows it, for a spreadsheet to pivot the services by account (#122, see
+ * accountCsvColumns()).
  * @param {string} language - The page's, 'fr' or 'en'
  * @param {?{ label: string }} accountColumn - The Account column of the lists
  *   (accountColumnOf()), null when they show none
@@ -43,7 +46,7 @@ const WebCloudTable = ({ items, accountColumn, language, fmt }) => (
  */
 const webCloudCsvColumns = (language, accountColumn) => [
   { key: 'name', label: language === 'en' ? 'Service' : 'Service' },
-  ...(accountColumn ? [{ key: 'accountName', label: accountColumn.label }] : []),
+  ...accountCsvColumns(accountColumn),
   { key: 'category', label: language === 'en' ? 'Family' : 'Famille' },
   { key: 'description', label: language === 'en' ? 'Bill wording' : 'Libellé de facture' },
   { key: 'lineCount', label: language === 'en' ? 'Bill lines' : 'Lignes de facture' },

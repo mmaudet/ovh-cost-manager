@@ -1,20 +1,35 @@
 import { describe, it, expect } from 'vitest';
 import { act } from '@testing-library/react';
+import { translations } from '../../src/i18n/translations.js';
 import { useInfrastructureTab } from '../../src/tabs/useInfrastructureTab.js';
+import { accountColumnOf, accountsOf } from '../../src/utils/accounts.js';
+import { lyonAccount, removedAccount, severalAccounts } from '../fixtures/accounts.js';
 import { months } from '../fixtures/calendar.js';
 import { api } from '../support/api.js';
 import { renderTabHook, TAB_IDS, WAITING } from '../support/hooks.jsx';
 
 // The state and data queries of the Infrastructure tab, as the dashboard shell sees them:
-// what the hook requests and returns for the selected month, the active tab and the
-// resource type whose bill lines are open.
+// what the hook requests and returns for the selected month, the active tab, the resource
+// type whose bill lines are open, the account shown, null for all accounts, and the Account
+// column of the lists, null when they name no account (#123).
 
 const [september, august] = months;
-// What the shell passes while the Infrastructure tab is open on September, with no
-// resource type open
+// What the shell passes while the Infrastructure tab is open on September, which the months
+// of the account shown hold, with no resource type open, for all accounts, and lists that
+// name no account, as with a single account (ADR 0001)
 const onInfrastructure = {
-  selectedMonth: september, activeTab: 'infrastructure', selectedResourceType: null,
+  selectedMonth: september,
+  holdsSelectedMonth: true,
+  activeTab: 'infrastructure',
+  selectedResourceType: null,
+  selectedAccount: null,
+  accountColumn: null,
 };
+// The Account column of the lists, as the shell builds it for all accounts shown, when the
+// instance knows several
+const accountColumn = accountColumnOf(
+  accountsOf(severalAccounts.accounts), null, (key) => translations.fr[key],
+);
 
 // The dedicated servers of the inventory, as [id, display name]
 const servers = (inventory) => inventory.map(({ id, display_name }) => [id, display_name]);
@@ -105,7 +120,7 @@ describe('useInfrastructureTab', () => {
       { ...onInfrastructure, selectedResourceType: 'backup' });
 
     expect(api.fetchResourceTypeDetails)
-      .toHaveBeenCalledWith('backup', '2026-09-01', '2026-09-30');
+      .toHaveBeenCalledWith('backup', '2026-09-01', '2026-09-30', null);
     // Most expensive service first, as the server sorts them
     expect(billLines(result.current.resourceTypeDetails)).toEqual([
       ['vm-app-1.example.com', 40],
@@ -121,19 +136,35 @@ describe('useInfrastructureTab', () => {
       { ...onInfrastructure, activeTab: 'overview', selectedResourceType: 'dedicated_server' });
 
     expect(api.fetchResourceTypeDetails)
-      .toHaveBeenCalledWith('dedicated_server', '2026-09-01', '2026-09-30');
+      .toHaveBeenCalledWith('dedicated_server', '2026-09-01', '2026-09-30', null);
     expect(billLines(result.current.resourceTypeDetails))
       .toEqual([['ns3000001.ip-203-0-113.eu', 270]]);
   });
 
   it('waits for a month before requesting the bill lines of a resource type', async () => {
-    const { result, queryClient } = await renderTabHook(useInfrastructureTab,
-      { ...onInfrastructure, selectedMonth: null, selectedResourceType: 'dedicated_server' });
+    const { result, queryClient } = await renderTabHook(useInfrastructureTab, {
+      ...onInfrastructure, selectedMonth: null, holdsSelectedMonth: false,
+      selectedResourceType: 'dedicated_server',
+    });
 
     expect(api.fetchResourceTypeDetails).not.toHaveBeenCalled();
     expect(result.current.resourceTypeDetails).toEqual([]);
     // The query waits for a month, rather than failing for the lack of one
     const key = ['resourceTypeDetails', 'dedicated_server', undefined, undefined];
+    expect(queryClient.getQueryState(key)).toMatchObject(WAITING);
+  });
+
+  // While the months of the account just selected load, or when it lacks the month selected,
+  // until the shell selects its latest month (#115): the bill lines of that month would never
+  // show (#120)
+  it('waits until the months of the account shown hold the month selected', async () => {
+    const { result, queryClient } = await renderTabHook(useInfrastructureTab, {
+      ...onInfrastructure, holdsSelectedMonth: false, selectedResourceType: 'dedicated_server',
+    });
+
+    expect(api.fetchResourceTypeDetails).not.toHaveBeenCalled();
+    expect(result.current.resourceTypeDetails).toEqual([]);
+    const key = ['resourceTypeDetails', 'dedicated_server', '2026-09-01', '2026-09-30'];
     expect(queryClient.getQueryState(key)).toMatchObject(WAITING);
   });
 
@@ -157,7 +188,7 @@ describe('useInfrastructureTab', () => {
     await rerender({ ...onInfrastructure, selectedMonth: august, selectedResourceType: 'backup' });
 
     expect(api.fetchResourceTypeDetails)
-      .toHaveBeenCalledWith('backup', '2026-08-01', '2026-08-31');
+      .toHaveBeenCalledWith('backup', '2026-08-01', '2026-08-31', null);
     expect(billLines(result.current.resourceTypeDetails)).toEqual([
       ['vm-app-1.example.com', 25],
       ['vm-db-1.example.com', 15],
@@ -171,13 +202,141 @@ describe('useInfrastructureTab', () => {
     await rerender({ ...onInfrastructure, selectedResourceType: 'dedicated_server' });
 
     expect(api.fetchResourceTypeDetails)
-      .toHaveBeenCalledWith('dedicated_server', '2026-09-01', '2026-09-30');
+      .toHaveBeenCalledWith('dedicated_server', '2026-09-01', '2026-09-30', null);
     expect(billLines(result.current.resourceTypeDetails))
       .toEqual([['ns3000001.ip-203-0-113.eu', 270]]);
 
     await rerender(onInfrastructure);
 
     expect(result.current.resourceTypeDetails).toEqual([]);
+  });
+
+  // With several accounts in the instance (#123): see fixtures/accounts.js
+  describe('account shown', () => {
+    const shown = (selectedAccount, props = {}) =>
+      ({ ...onInfrastructure, selectedAccount, ...props });
+
+    it('requests the inventory of the account selected, and caches it under its id',
+      async () => {
+        const { result, keysOf } = await renderTabHook(useInfrastructureTab,
+          shown(lyonAccount.id), severalAccounts);
+
+        for (const request of [
+          api.fetchInventoryServers, api.fetchInventoryVps, api.fetchInventoryStorage,
+        ]) {
+          expect(request).toHaveBeenCalledWith('xx1111-ovh');
+        }
+        expect(servers(result.current.inventoryServers))
+          .toEqual([['ns3000001.ip-203-0-113.eu', 'backup-server']]);
+        expect(vpsInstances(result.current.inventoryVps))
+          .toEqual([['vps-0a1b2c3d.vps.ovh.net', 'vps-le-2-2-40', 'Region OpenStack: os-gra7']]);
+        expect(storageServices(result.current.inventoryStorage))
+          .toEqual([['netapp-5f2c9a1e', 'shared-files', 'netapp']]);
+        // After the other parts of the key, as the shell's queries that follow the account
+        expect(keysOf('inventoryServers')).toEqual([['inventoryServers', 'xx1111-ovh']]);
+        expect(keysOf('inventoryVps')).toEqual([['inventoryVps', 'xx1111-ovh']]);
+        expect(keysOf('inventoryStorage')).toEqual([['inventoryStorage', 'xx1111-ovh']]);
+      });
+
+    it('requests the bill lines of the account selected, and caches them under its id',
+      async () => {
+        const { result, keysOf } = await renderTabHook(useInfrastructureTab,
+          shown('yy2222-ovh', { selectedResourceType: 'backup' }), severalAccounts);
+
+        expect(api.fetchResourceTypeDetails)
+          .toHaveBeenCalledWith('backup', '2026-09-01', '2026-09-30', 'yy2222-ovh');
+        expect(billLines(result.current.resourceTypeDetails)).toEqual([
+          ['vm-app-1.example.com', 40],
+          ['vm-db-1.example.com', 30],
+          ['vm-files-1.example.com', 20],
+        ]);
+        expect(keysOf('resourceTypeDetails'))
+          .toEqual([['resourceTypeDetails', 'backup', '2026-09-01', '2026-09-30', 'yy2222-ovh']]);
+      });
+
+    it('follows the account selected, and all accounts again', async () => {
+      const { result, rerender, keysOf } = await renderTabHook(useInfrastructureTab,
+        shown(null), severalAccounts);
+
+      await rerender(shown(removedAccount.id));
+
+      expect(servers(result.current.inventoryServers))
+        .toEqual([['ns3000003.ip-203-0-113.eu', 'db-server']]);
+      expect(result.current.inventoryVps).toEqual([]);
+
+      await rerender(shown(null));
+
+      expect(servers(result.current.inventoryServers)).toEqual([
+        ['ns3000001.ip-203-0-113.eu', 'backup-server'],
+        ['ns3000003.ip-203-0-113.eu', 'db-server'],
+        ['ns3000004.ip-203-0-113.eu', 'legacy-server'],
+        ['ns3000002.ip-198-51-100.eu', 'ns3000002.ip-198-51-100.eu'],
+      ]);
+      // Each account keeps its own answers
+      expect(keysOf('inventoryServers')).toEqual([
+        ['inventoryServers'],
+        ['inventoryServers', 'zz3333-ovh'],
+      ]);
+    });
+
+    // The servers that the Compare tab lists too (#35)
+    it('requests the servers of the account selected on the Compare tab', async () => {
+      const { result } = await renderTabHook(useInfrastructureTab,
+        shown('unknown', { activeTab: 'compare' }), severalAccounts);
+
+      expect(api.fetchInventoryServers).toHaveBeenCalledWith('unknown');
+      expect(servers(result.current.inventoryServers))
+        .toEqual([['ns3000004.ip-203-0-113.eu', 'legacy-server']]);
+    });
+
+    // For the list that names the account of each service: a service billed to several
+    // accounts once for each, which only all accounts have
+    it('requests the bill lines by account while the lists name the account of each service',
+      async () => {
+        const { result, keysOf } = await renderTabHook(useInfrastructureTab,
+          shown(null, { selectedResourceType: 'backup', accountColumn }), severalAccounts);
+
+        expect(api.fetchResourceTypeDetailsByAccount)
+          .toHaveBeenCalledWith('backup', '2026-09-01', '2026-09-30');
+        expect(api.fetchResourceTypeDetails).not.toHaveBeenCalled();
+        expect(result.current.resourceTypeDetails)
+          .toEqual(severalAccounts.resourceTypeDetailsByAccount.backup['2026-09']);
+        // For all accounts, which the column shows: its key names none
+        expect(keysOf('resourceTypeDetailsByAccount'))
+          .toEqual([['resourceTypeDetailsByAccount', 'backup', '2026-09-01', '2026-09-30']]);
+        expect(keysOf('resourceTypeDetails')).toEqual([]);
+      });
+
+    it('waits for the month of the bill lines by account, as for those of an account',
+      async () => {
+        const { queryClient } = await renderTabHook(useInfrastructureTab, shown(null, {
+          selectedResourceType: 'backup', accountColumn, holdsSelectedMonth: false,
+        }), severalAccounts);
+
+        expect(api.fetchResourceTypeDetailsByAccount).not.toHaveBeenCalled();
+        expect(queryClient.getQueryState(
+          ['resourceTypeDetailsByAccount', 'backup', '2026-09-01', '2026-09-30'],
+        )).toMatchObject(WAITING);
+      });
+
+    // Rather than ask for all accounts, while the page may yet show a remembered one
+    it('requests nothing while the page does not know the account it shows', async () => {
+      const { result, queryClient } = await renderTabHook(useInfrastructureTab,
+        shown(undefined, { selectedResourceType: 'backup' }), severalAccounts);
+
+      for (const request of [
+        api.fetchInventoryServers, api.fetchInventoryVps, api.fetchInventoryStorage,
+        api.fetchResourceTypeDetails,
+      ]) {
+        expect(request).not.toHaveBeenCalled();
+      }
+      expect(result.current.inventoryServers).toEqual([]);
+      // The queries wait for the account, under keys that name none yet
+      expect(queryClient.getQueryState(['inventoryServers', undefined])).toMatchObject(WAITING);
+      expect(queryClient.getQueryState(
+        ['resourceTypeDetails', 'backup', '2026-09-01', '2026-09-30', undefined],
+      )).toMatchObject(WAITING);
+    });
   });
 
   it('keeps the "show all" modal of the servers open when another tab opens', async () => {

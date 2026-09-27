@@ -5,6 +5,7 @@ import Accordion from '../components/Accordion.jsx';
 import { SortIcon } from '../components/SortIcon.jsx';
 import ProjectProductComparison from '../components/ProjectProductComparison.jsx';
 import { Variation } from '../components/Variation.jsx';
+import { accountInBrackets } from '../utils/accounts.js';
 import { formatMonthLabel } from '../utils/format.js';
 import { firstRowOfEachProject, projectComparisonRows } from '../utils/projectComparison.js';
 
@@ -263,10 +264,22 @@ const CompareTab = ({
               { key: 'dedicated_server', label: language === 'en'
                 ? `List of Dedicated Servers present on ${new Date().toLocaleDateString('en-GB')}`
                 : `Liste des Serveurs dédiés présents au ${new Date().toLocaleDateString('fr-FR')}`,
+                // Those of the account shown, each with its account in the Account column of
+                // the shell (accountColumn), when it shows one (#123)
                 details: inventoryServers.length > 0 && (
                   <ul className="text-xs text-gray-500 mt-1">
                     {inventoryServers.map(srv => (
-                      <li key={srv.id}>{srv.display_name || srv.id}</li>
+                      <li key={srv.id}>
+                        {srv.display_name || srv.id}
+                        {accountColumn && (
+                          <>
+                            {' '}
+                            <span className="text-gray-400">
+                              {accountInBrackets(accountColumn, srv.account)}
+                            </span>
+                          </>
+                        )}
+                      </li>
                     ))}
                   </ul>
                 ),
