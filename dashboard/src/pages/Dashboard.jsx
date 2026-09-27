@@ -11,6 +11,7 @@ import { useLanguage } from '../hooks/useLanguage.jsx';
 import { useSelectedAccount } from '../hooks/useSelectedAccount.js';
 import Logo from '../components/Logo';
 import { AccountSelector } from '../components/AccountSelector.jsx';
+import { HeaderSelect } from '../components/HeaderSelect.jsx';
 import { ResyncButton } from '../components/ResyncButton.jsx';
 import { accountQuery, accountsOf } from '../utils/accounts.js';
 import { formatCurrency, formatMonthLabel, yearMonthOf } from '../utils/format.js';
@@ -382,20 +383,19 @@ export default function Dashboard() {
             />
             {activeTab !== 'compare' && (
               <>
-                <select
+                <HeaderSelect
                   value={selectedMonth.value}
                   onChange={(e) => {
                     const month = months.find(m => m.value === e.target.value);
                     setSelectedMonth(month);
                   }}
-                  className="px-4 py-2 bg-white border border-gray-200 rounded-lg text-sm shadow-sm cursor-pointer"
                 >
                   {months.map(m => (
                     <option key={m.value} value={m.value}>
                       {formatMonthLabel(m.value, language)}
                     </option>
                   ))}
-                </select>
+                </HeaderSelect>
                 <div className="flex items-center gap-2">
                   <span className="text-sm text-gray-600">{t('export')}:</span>
                   <select
