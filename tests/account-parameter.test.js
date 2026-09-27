@@ -6,26 +6,14 @@
  * behind the dashboard's header take it: the months list, and a month's summary.
  */
 
+const { LYON, PARIS, NEW_ACCOUNT, REFUSED, bill, project } = require('./support/accounts');
 const { startOcm } = require('./support/ocm-server');
-
-const LYON = 'xx1111-ovh';
-const PARIS = 'yy2222-ovh';
-// An account that an import recorded, but that has no bill yet
-const NEW_ACCOUNT = 'zz3333-ovh';
 
 // A bill line of a Public Cloud project, or of no project for any other service
 const line = (id, billId, projectId, price) => ({
   id, bill_id: billId, project_id: projectId, domain: projectId || 'example.com',
   description: `${id} line`, quantity: 1, unit_price: price, total_price: price,
   service_type: 'Compute', resource_type: projectId ? 'cloud_project' : 'domain',
-});
-
-const project = (db, id, name, account) => db.projects.upsert({
-  id, name, description: name, status: 'ok', created_at: null, account,
-});
-const bill = (db, id, date, account) => db.bills.upsert({
-  id, date, price_without_tax: 0, price_with_tax: 0, tax: 0, currency: 'EUR',
-  pdf_url: null, html_url: null, account,
 });
 
 // Two accounts and the Unknown account, each billed in September and one other month.
@@ -80,11 +68,6 @@ const AUGUST = month('2026-08', 'Août 2026', '2026-08-01', '2026-08-31');
 const JUNE = month('2026-06', 'Juin 2026', '2026-06-01', '2026-06-30');
 const MAY = month('2026-05', 'Mai 2026', '2026-05-01', '2026-05-31');
 
-// What the server answers for a parameter it refuses
-const REFUSED = {
-  error: "Invalid 'account' parameter: expected the NIC handle of an account, or unknown",
-};
-
 // The summary of September, as /api/summary answers it with these figures, and with none
 const SEPTEMBER_DATES = 'from=2026-09-01&to=2026-09-30';
 const septemberSummary = (figures) => ({
@@ -110,38 +93,31 @@ afterAll(async () => {
   await ocm?.stop();
 });
 
-// The status and the JSON body of the answer to a path of the server, the one of the
-// seeded accounts unless told otherwise
-async function get(path, server = ocm) {
-  const res = await fetch(`${server.url}${path}`);
-  return { status: res.status, body: await res.json() };
-}
-
 describe('GET /api/months', () => {
   test('lists the months of every account without the parameter, as before', async () => {
-    expect(await get('/api/months')).toEqual({
+    expect(await ocm.get('/api/months')).toEqual({
       status: 200, body: [SEPTEMBER, AUGUST, JUNE, MAY],
     });
   });
 
   test('lists the months of the account whose NIC handle it gives', async () => {
-    expect(await get(`/api/months?account=${LYON}`)).toEqual({
+    expect(await ocm.get(`/api/months?account=${LYON}`)).toEqual({
       status: 200, body: [SEPTEMBER, AUGUST],
     });
-    expect(await get(`/api/months?account=${PARIS}`)).toEqual({
+    expect(await ocm.get(`/api/months?account=${PARIS}`)).toEqual({
       status: 200, body: [SEPTEMBER, JUNE],
     });
   });
 
   test('lists the months of the Unknown account: those of the bills without an account',
     async () => {
-      expect(await get('/api/months?account=unknown')).toEqual({
+      expect(await ocm.get('/api/months?account=unknown')).toEqual({
         status: 200, body: [SEPTEMBER, MAY],
       });
     });
 
   test('lists no month for an account recorded without a bill', async () => {
-    expect(await get(`/api/months?account=${NEW_ACCOUNT}`)).toEqual({ status: 200, body: [] });
+    expect(await ocm.get(`/api/months?account=${NEW_ACCOUNT}`)).toEqual({ status: 200, body: [] });
   });
 });
 
@@ -150,7 +126,7 @@ describe('GET /api/summary', () => {
   const summary = septemberSummary;
 
   test('adds up every account without the parameter, as before', async () => {
-    expect(await get(`/api/summary?${september}`)).toEqual({
+    expect(await ocm.get(`/api/summary?${september}`)).toEqual({
       status: 200,
       body: summary({
         total: 1020,
@@ -169,7 +145,7 @@ describe('GET /api/summary', () => {
   });
 
   test('gives the figures of the account whose NIC handle it gives', async () => {
-    expect(await get(`/api/summary?${september}&account=${LYON}`)).toEqual({
+    expect(await ocm.get(`/api/summary?${september}&account=${LYON}`)).toEqual({
       status: 200,
       body: summary({
         total: 700,
@@ -185,7 +161,7 @@ describe('GET /api/summary', () => {
 
   test('gives the figures of the Unknown account: those of the bills without an account',
     async () => {
-      expect(await get(`/api/summary?${september}&account=unknown`)).toEqual({
+      expect(await ocm.get(`/api/summary?${september}&account=unknown`)).toEqual({
         status: 200,
         body: summary({
           total: 80,
@@ -200,7 +176,7 @@ describe('GET /api/summary', () => {
     });
 
   test('gives no figure for an account recorded without a bill', async () => {
-    expect(await get(`/api/summary?${september}&account=${NEW_ACCOUNT}`)).toEqual({
+    expect(await ocm.get(`/api/summary?${september}&account=${NEW_ACCOUNT}`)).toEqual({
       status: 200, body: NOTHING_IN_SEPTEMBER,
     });
   });
@@ -219,8 +195,8 @@ describe('the Unknown account of a database whose every bill has an account', ()
   });
 
   test('has no month and no figure', async () => {
-    expect(await get('/api/months?account=unknown', claimed)).toEqual({ status: 200, body: [] });
-    expect(await get(`/api/summary?${SEPTEMBER_DATES}&account=unknown`, claimed)).toEqual({
+    expect(await claimed.get('/api/months?account=unknown')).toEqual({ status: 200, body: [] });
+    expect(await claimed.get(`/api/summary?${SEPTEMBER_DATES}&account=unknown`)).toEqual({
       status: 200, body: NOTHING_IN_SEPTEMBER,
     });
   });
@@ -233,8 +209,8 @@ describe('an account the server does not know', () => {
     ['an empty value', 'account='],
     ['several values', `account=${LYON}&account=${PARIS}`],
   ])('is refused, naming the parameter: %s', async (_, parameter) => {
-    expect(await get(`/api/months?${parameter}`)).toEqual({ status: 400, body: REFUSED });
-    expect(await get(`/api/summary?from=2026-09-01&to=2026-09-30&${parameter}`))
+    expect(await ocm.get(`/api/months?${parameter}`)).toEqual({ status: 400, body: REFUSED });
+    expect(await ocm.get(`/api/summary?from=2026-09-01&to=2026-09-30&${parameter}`))
       .toEqual({ status: 400, body: REFUSED });
   });
 });

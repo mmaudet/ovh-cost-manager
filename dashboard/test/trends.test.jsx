@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { screen, within } from '@testing-library/react';
 import { account } from './fixtures/account.js';
+import { lyonAccount, removedAccount, severalAccounts } from './fixtures/accounts.js';
 import { sinceJuly2025 } from './fixtures/trends.js';
 import { api } from './support/api.js';
 import {
@@ -9,6 +10,7 @@ import {
   openTab,
   optionsOf,
   renderDashboard,
+  selectAccount,
   selectLanguage,
   selectMonth,
   settle,
@@ -24,21 +26,24 @@ const legendItem = (resourceType) =>
   within(cardOf('Évolution par catégorie')).getByRole('button', { name: resourceType });
 // The grey that the dot of a hidden resource type turns to
 const hiddenSwatch = { backgroundColor: '#d1d5db' };
+// The account the page asks for the trends of by default: none, for all accounts (#120)
+const allAccounts = null;
 
 describe('Trends tab', () => {
   it('loads the trends when the page opens, and the GPU trend when the tab opens', async () => {
     const { user } = await renderDashboard();
 
     // Over the longest period the three billed months allow, up to the selected month
-    expect(api.fetchMonthlyTrend).toHaveBeenCalledWith(3, '2026-09');
-    expect(api.fetchMonthlyTrendByCategory).toHaveBeenCalledWith(3, '2026-09');
+    expect(api.fetchMonthlyTrend).toHaveBeenCalledWith(3, '2026-09', allAccounts);
+    expect(api.fetchMonthlyTrendByCategory).toHaveBeenCalledWith(3, '2026-09', allAccounts);
     // Only the GPU costs of the selected month so far, for the Overview
-    expect(api.fetchGpuSummary).not.toHaveBeenCalledWith('2026-07-01', '2026-09-30');
+    expect(api.fetchGpuSummary)
+      .not.toHaveBeenCalledWith('2026-07-01', '2026-09-30', allAccounts);
 
     await openTab(user, 'Tendances');
 
     // The same 3 months, from July to September
-    expect(api.fetchGpuSummary).toHaveBeenCalledWith('2026-07-01', '2026-09-30');
+    expect(api.fetchGpuSummary).toHaveBeenCalledWith('2026-07-01', '2026-09-30', allAccounts);
     expect(periodSelector()).toHaveDisplayValue('3 mois');
     expect(screen.getByRole('heading', { name: 'Évolution des coûts (total) sur 3 mois' }))
       .toBeInTheDocument();
@@ -117,7 +122,7 @@ describe('Trends tab', () => {
       await user.selectOptions(periodSelector(), '2 ans');
       await settle();
 
-      expect(api.fetchMonthlyTrend).toHaveBeenCalledWith(24, '2026-09');
+      expect(api.fetchMonthlyTrend).toHaveBeenCalledWith(24, '2026-09', allAccounts);
       expect(screen.getByRole('heading', { name: 'Évolution des coûts (total) sur 2 ans' }))
         .toBeInTheDocument();
       // From October 2024, before the first bill: a first month at 0 € (#65)
@@ -225,9 +230,9 @@ describe('Trends tab', () => {
     await selectMonth(user, 'Août 2026');
 
     // June to August
-    expect(api.fetchMonthlyTrend).toHaveBeenCalledWith(3, '2026-08');
-    expect(api.fetchMonthlyTrendByCategory).toHaveBeenCalledWith(3, '2026-08');
-    expect(api.fetchGpuSummary).toHaveBeenCalledWith('2026-06-01', '2026-08-31');
+    expect(api.fetchMonthlyTrend).toHaveBeenCalledWith(3, '2026-08', allAccounts);
+    expect(api.fetchMonthlyTrendByCategory).toHaveBeenCalledWith(3, '2026-08', allAccounts);
+    expect(api.fetchGpuSummary).toHaveBeenCalledWith('2026-06-01', '2026-08-31', allAccounts);
     expect(periodSelector()).toHaveDisplayValue('3 mois');
     // June, not billed, comes at 0 €: no growth to compute from it (#65)
     expect(texts(cardOf('Croissance sur la période')))
@@ -335,6 +340,163 @@ describe('Trends tab', () => {
     expect(texts(cardOf('Projection annuelle')))
       .toEqual(['Projection annuelle', 'N/A', 'Basé sur le dernier mois']);
     expect(screen.queryByText('Évolution des coûts GPU')).not.toBeInTheDocument();
+  });
+
+  // The account selected in the header (#115): the tab shows its trends, or those of all
+  // accounts, over the periods that its months offer (#120)
+  describe('account selected', () => {
+    // What the tab shows, as the user reads it: its figures, the resource types of the trend
+    // by resource type, and the GPU trend, null when it is left out
+    const trendsShown = () => ({
+      heading: screen.getByRole('heading', { name: /^Évolution des coûts \(total\)/ })
+        .textContent,
+      growth: texts(cardOf('Croissance sur la période')),
+      costliestMonth: texts(cardOf('Mois le plus coûteux')),
+      projection: texts(cardOf('Projection annuelle')),
+      resourceTypes: texts(cardOf('Évolution par catégorie')),
+      gpu: screen.queryByText('Évolution des coûts GPU')
+        && texts(cardOf('Évolution des coûts GPU')),
+    });
+    const growth = (value) => ['Croissance sur la période', value, 'Sur 3 mois'];
+    const costliestMonth = (month, cost) => ['Mois le plus coûteux', month, cost];
+    const projection = (value) => ['Projection annuelle', value, 'Basé sur le dernier mois'];
+    const resourceTypes = (...labels) => ['Évolution par catégorie', ...labels];
+    const threeMonths = 'Évolution des coûts (total) sur 3 mois';
+
+    // July to September, as for the account of the other tests
+    const allAccountsTrends = {
+      heading: threeMonths,
+      growth: growth('+27,6 %'),
+      costliestMonth: costliestMonth('sept. 2026', '1 250,40€'),
+      projection: projection('~15 004,80€'),
+      resourceTypes: resourceTypes(
+        'Public Cloud', 'Dedicated Servers', 'Backup', 'Domains', 'Licenses',
+      ),
+      gpu: ['Évolution des coûts GPU', 'Total: 730,50€'],
+    };
+
+    it('show the trends of all accounts by default', async () => {
+      const { user } = await renderDashboard(severalAccounts);
+
+      await openTab(user, 'Tendances');
+
+      expect(trendsShown()).toEqual(allAccountsTrends);
+    });
+
+    it('show the trends of the account selected, and of all accounts again', async () => {
+      const { user } = await renderDashboard(severalAccounts);
+      await openTab(user, 'Tendances');
+
+      await selectAccount(user, 'Lyon subsidiary');
+
+      // July to September, billed to Lyon: (890.40 - 680) / 680
+      expect(trendsShown()).toEqual({
+        heading: threeMonths,
+        growth: growth('+30,9 %'),
+        costliestMonth: costliestMonth('sept. 2026', '890,40€'),
+        projection: projection('~10 684,80€'),
+        resourceTypes: resourceTypes('Public Cloud', 'Dedicated Servers', 'Domains', 'Licenses'),
+        // Its Production project has all the GPU costs
+        gpu: ['Évolution des coûts GPU', 'Total: 730,50€'],
+      });
+
+      await selectAccount(user, 'Tous les comptes');
+
+      expect(trendsShown()).toEqual(allAccountsTrends);
+    });
+
+    // None of them was billed for GPUs, nor in the first month of its period: no GPU trend,
+    // and no growth to compute (#65)
+    it.each([
+      ['an account billed since August', 'yy2222-ovh', {
+        heading: threeMonths,
+        growth: growth('—'),
+        costliestMonth: costliestMonth('sept. 2026', '360,00€'),
+        projection: projection('~4 320,00€'),
+        resourceTypes: resourceTypes('Public Cloud', 'Backup', 'Domains', 'Licenses'),
+        gpu: null,
+      }],
+      // Up to August, its latest month, which the header selects
+      ['an account no longer configured', 'zz3333-ovh (non configuré)', {
+        heading: threeMonths,
+        growth: growth('—'),
+        costliestMonth: costliestMonth('août 2026', '200,00€'),
+        projection: projection('~2 400,00€'),
+        resourceTypes: resourceTypes('Dedicated Servers'),
+        gpu: null,
+      }],
+      // Up to July, its only month
+      ['the Unknown account', 'Compte inconnu', {
+        heading: threeMonths,
+        growth: growth('—'),
+        costliestMonth: costliestMonth('juil. 2026', '120,00€'),
+        projection: projection('~1 440,00€'),
+        resourceTypes: resourceTypes('Dedicated Servers', 'Domains'),
+        gpu: null,
+      }],
+    ])('show the trends of %s', async (_, label, trends) => {
+      const { user } = await renderDashboard(severalAccounts);
+      await openTab(user, 'Tendances');
+
+      await selectAccount(user, label);
+
+      expect(trendsShown()).toEqual(trends);
+    });
+
+    // The periods offered go up to the first one that covers the months of the account
+    // selected: the trends shown cover the same months
+    it('cover the months of the periods offered, those of the account selected', async () => {
+      // All accounts, billed since July 2025, offer up to 2 years
+      const { user } = await renderDashboard({ ...severalAccounts, ...sinceJuly2025 });
+      await openTab(user, 'Tendances');
+      expect(periodSelector()).toHaveDisplayValue('6 mois');
+
+      await selectAccount(user, 'Lyon subsidiary');
+
+      // Three months billed to Lyon: 3 months, and its trends over them
+      expect(optionsOf(periodSelector())).toEqual(['3 mois']);
+      expect(trendsShown()).toMatchObject({
+        heading: threeMonths,
+        growth: growth('+30,9 %'),
+        costliestMonth: costliestMonth('sept. 2026', '890,40€'),
+      });
+
+      await selectAccount(user, 'Tous les comptes');
+
+      // The 6 months of the default again
+      expect(optionsOf(periodSelector())).toEqual(['3 mois', '6 mois', '1 an', '2 ans']);
+      expect(periodSelector()).toHaveDisplayValue('6 mois');
+      expect(trendsShown().heading).toBe('Évolution des coûts (total) sur 6 mois');
+    });
+
+    it('ask for the trends of the account selected', async () => {
+      const { user } = await renderDashboard(severalAccounts);
+      await openTab(user, 'Tendances');
+
+      await selectAccount(user, 'Lyon subsidiary');
+
+      expect(api.fetchMonthlyTrend).toHaveBeenCalledWith(3, '2026-09', lyonAccount.id);
+      expect(api.fetchMonthlyTrendByCategory)
+        .toHaveBeenCalledWith(3, '2026-09', lyonAccount.id);
+      expect(api.fetchGpuSummary)
+        .toHaveBeenCalledWith('2026-07-01', '2026-09-30', lyonAccount.id);
+    });
+
+    // The month selected stays until the months list of the account loads, and says it lacks
+    // it: the header then selects the account's latest month, August (#115)
+    it('ask for no trend up to a month that the account selected lacks', async () => {
+      const { user } = await renderDashboard(severalAccounts);
+      await openTab(user, 'Tendances');
+
+      await selectAccount(user, 'zz3333-ovh (non configuré)');
+
+      expect(api.fetchMonthlyTrend).not.toHaveBeenCalledWith(3, '2026-09', removedAccount.id);
+      expect(api.fetchMonthlyTrendByCategory)
+        .not.toHaveBeenCalledWith(3, '2026-09', removedAccount.id);
+      expect(api.fetchGpuSummary)
+        .not.toHaveBeenCalledWith('2026-07-01', '2026-09-30', removedAccount.id);
+      expect(api.fetchMonthlyTrend).toHaveBeenCalledWith(3, '2026-08', removedAccount.id);
+    });
   });
 
   it('speaks English when the page does', async () => {

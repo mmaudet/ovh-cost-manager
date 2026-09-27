@@ -108,14 +108,15 @@ describe('query keys', () => {
 
   // A request for one account names it, and so does the key of its answers, after the key's
   // other parts: each account keeps its own answers (#115)
-  it('caches the months and the summaries of the account selected under keys that name it',
+  it('caches the queries that follow the account selected under keys that name it',
     async () => {
       const { user, allKeys } = await renderDashboard(severalAccounts);
 
       await selectAccount(user, 'Lyon subsidiary');
 
-      // The months list and the summaries of the KPI cards, on September: the other queries
-      // follow the account in the next tickets (#116 to #123)
+      // The months list and the summaries of the KPI cards, on September, and the Trends
+      // tab's queries (#120): the other queries follow the account in the next tickets (#116
+      // to #123)
       expect(sorted(allKeys().filter((key) => key.includes(lyonAccount.id)))).toEqual(sorted([
         ['months', 'xx1111-ovh'],
         ['summary', '2026-09-01', '2026-09-30', 'xx1111-ovh'],
@@ -123,6 +124,11 @@ describe('query keys', () => {
         // while that list loaded, there was no month before to ask for
         ['summary', undefined, undefined, 'xx1111-ovh'],
         ['summary', '2026-08-01', '2026-08-31', 'xx1111-ovh'],
+        // Over the 3 months up to September that its months allow, and the GPU trend over
+        // them, which only runs on the tab
+        ['monthlyTrend', 3, '2026-09', 'xx1111-ovh'],
+        ['monthlyTrendByCategory', 3, '2026-09', 'xx1111-ovh'],
+        ['gpuTrend', '2026-07-01', '2026-09-30', 'xx1111-ovh'],
       ]));
     });
 });

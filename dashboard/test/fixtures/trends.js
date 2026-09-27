@@ -192,3 +192,55 @@ export const sinceJuly2025 = {
     },
   },
 };
+
+// The label and the colour of each resource type, as the trend by resource type gives them
+const RESOURCE_TYPES = Object.fromEntries(
+  costByResourceType.categories.map((category) => [category.key, category]),
+);
+
+/**
+ * The cost trends of one of the accounts that billed the account above (see accounts.js,
+ * #120), keyed as its trends are: by the month they end on, then by their number of months.
+ * They add up what each resource type cost the account in each month billed to it: every
+ * month of the period, at 0 € when it was not billed, and its resource types, the most
+ * expensive over the period first.
+ * @param {string} first - The first month of the period, YYYY-MM
+ * @param {string} last - The month it ends on, YYYY-MM
+ * @param {object} billed - What each resource type cost in each month billed, such as
+ *   { '2026-08': { cloud_project: 190, backup: 40 } }
+ * @returns {{ monthlyTrend: object, monthlyTrendByCategory: object }}
+ */
+export function trendsOf(first, last, billed) {
+  const period = monthsFrom(first, last);
+  const costsIn = (yearMonth) => billed[yearMonth] ?? {};
+  const spentOn = (key) =>
+    period.reduce((sum, yearMonth) => sum + (costsIn(yearMonth)[key] ?? 0), 0);
+  const resourceTypes = [...new Set(Object.values(billed).flatMap(Object.keys))]
+    .sort((a, b) => spentOn(b) - spentOn(a));
+  // To the cent, as the routes round their sums
+  const totalIn = (yearMonth) => Math.round(
+    Object.values(costsIn(yearMonth)).reduce((sum, cost) => sum + cost, 0) * 100,
+  ) / 100;
+  return {
+    monthlyTrend: {
+      [last]: {
+        [period.length]: period.map((yearMonth) => ({
+          month: MONTH_NAMES[Number(yearMonth.slice(5)) - 1], yearMonth, cost: totalIn(yearMonth),
+        })),
+      },
+    },
+    monthlyTrendByCategory: {
+      [last]: {
+        [period.length]: {
+          categories: resourceTypes.map((key) => RESOURCE_TYPES[key]),
+          data: period.map((yearMonth) => ({
+            yearMonth,
+            ...Object.fromEntries(
+              resourceTypes.map((key) => [key, costsIn(yearMonth)[key] ?? 0]),
+            ),
+          })),
+        },
+      },
+    },
+  };
+}

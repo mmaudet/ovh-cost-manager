@@ -211,15 +211,18 @@ const billOps = {
   },
 
   /**
-   * @param {?string} [account] - The NIC handle of an account, whose bills alone count
+   * @param {?string} [account] - The account whose bills count (see accountCondition()):
+   *   every account's by default
    * @returns {?string} The date of the latest bill stored, of the account when one is given;
    *   null when there is none
    */
   getLatestDate: (account = null) => {
-    const db = getDb();
-    const result = account === null
-      ? db.prepare('SELECT MAX(date) as latest FROM bills').get()
-      : db.prepare('SELECT MAX(date) as latest FROM bills WHERE account = ?').get(account);
+    const ofAccount = accountCondition(account, 'b.account');
+    const result = getDb().prepare(`
+      SELECT MAX(b.date) as latest
+      FROM bills b
+      WHERE ${ofAccount.sql}
+    `).get(...ofAccount.params);
     return result?.latest;
   },
 
@@ -506,9 +509,11 @@ const analysisOps = {
 
   // The cost of every month between two dates, both included, 0 for a month without any
   // bill: a trend over N months gives N months (#65). Nothing when none of them has a bill,
-  // for the Trends tab to say it has no data.
-  monthlyTrend: (fromDate, toDate) => {
+  // for the Trends tab to say it has no data. On the bills of the account (see
+  // accountCondition()), every account's by default (#120).
+  monthlyTrend: (fromDate, toDate, account = null) => {
     const db = getDb();
+    const ofAccount = accountCondition(account, 'b.account');
     const billed = db.prepare(`
       SELECT
         strftime('%Y-%m', b.date) as month,
@@ -516,9 +521,10 @@ const analysisOps = {
       FROM bill_details d
       JOIN bills b ON d.bill_id = b.id
       WHERE b.date >= ? AND b.date <= ?
+        AND ${ofAccount.sql}
       GROUP BY strftime('%Y-%m', b.date)
       ORDER BY month
-    `).all(fromDate, toDate);
+    `).all(fromDate, toDate, ...ofAccount.params);
     if (billed.length === 0) return [];
     const totals = new Map(billed.map(({ month, total }) => [month, total]));
     return monthsOfWindow(fromDate, toDate)
@@ -528,9 +534,11 @@ const analysisOps = {
   // The cost of each resource type billed between two dates, both included, in every month
   // between them, 0 for a month it was not billed in: each resource type's trend gives
   // every month, as the monthly trend does (#65). Nothing when none of them has a bill,
-  // since no resource type was billed.
-  monthlyTrendByResourceType: (fromDate, toDate) => {
+  // since no resource type was billed. On the bills of the account (see accountCondition()),
+  // every account's by default: the resource types billed to it alone (#120).
+  monthlyTrendByResourceType: (fromDate, toDate, account = null) => {
     const db = getDb();
+    const ofAccount = accountCondition(account, 'b.account');
     const billed = db.prepare(`
       SELECT
         strftime('%Y-%m', b.date) as month,
@@ -539,9 +547,10 @@ const analysisOps = {
       FROM bill_details d
       JOIN bills b ON d.bill_id = b.id
       WHERE b.date >= ? AND b.date <= ?
+        AND ${ofAccount.sql}
       GROUP BY strftime('%Y-%m', b.date), COALESCE(d.resource_type, 'other')
       ORDER BY month
-    `).all(fromDate, toDate);
+    `).all(fromDate, toDate, ...ofAccount.params);
     const totals = new Map(billed.map((row) => [`${row.month} ${row.resource_type}`, row.total]));
     // In the order the query first gives them, which orders the resource types of equal cost
     // on the chart
@@ -1753,8 +1762,10 @@ const cloudDetailOps = {
     `).get(cloudDetailOps.getCurrentConsumptionMonth());
   },
 
-  // GPU cost summary from bill_details (covers full history) + project_consumption (current month)
-  getGpuSummary: (from, to) => {
+  // GPU cost summary from bill_details (covers full history) + project_consumption (current
+  // month), on the bills of the account (see accountCondition()), every account's by default
+  // (#120)
+  getGpuSummary: (from, to, account = null) => {
     const db = getDb();
 
     // GPU detection in bill_details.description
@@ -1788,18 +1799,22 @@ const cloudDetailOps = {
         ELSE 'GPU'
       END`;
 
-    let dateFilter = '';
-    const params = {};
-    if (from) { dateFilter += ' AND b.date >= @from'; params.from = from; }
-    if (to) { dateFilter += ' AND b.date <= @to'; params.to = to; }
+    // The GPU lines of the bills of the account (see accountCondition()), between the dates
+    // when they are given: the condition of every query below, and its arguments
+    const ofAccount = accountCondition(account, 'b.account');
+    const conditions = [GPU_DESC_WHERE, ofAccount.sql];
+    const args = [...ofAccount.params];
+    if (from) { conditions.push('b.date >= ?'); args.push(from); }
+    if (to) { conditions.push('b.date <= ?'); args.push(to); }
+    const where = conditions.join(' AND ');
 
     // Total GPU cost from bills
     const total = db.prepare(`
       SELECT SUM(bd.total_price) as total, COUNT(DISTINCT bd.domain) as project_count
       FROM bill_details bd
       JOIN bills b ON bd.bill_id = b.id
-      WHERE ${GPU_DESC_WHERE} ${dateFilter}
-    `).get(params);
+      WHERE ${where}
+    `).get(...args);
 
     // By GPU model from bills
     const byModel = db.prepare(`
@@ -1809,10 +1824,10 @@ const cloudDetailOps = {
         COUNT(*) as count
       FROM bill_details bd
       JOIN bills b ON bd.bill_id = b.id
-      WHERE ${GPU_DESC_WHERE} ${dateFilter}
+      WHERE ${where}
       GROUP BY gpu_model
       ORDER BY total DESC
-    `).all(params);
+    `).all(...args);
 
     // By project from bills
     const byProject = db.prepare(`
@@ -1823,10 +1838,10 @@ const cloudDetailOps = {
       FROM bill_details bd
       JOIN bills b ON bd.bill_id = b.id
       LEFT JOIN projects p ON bd.domain = p.id
-      WHERE ${GPU_DESC_WHERE} ${dateFilter}
+      WHERE ${where}
       GROUP BY bd.domain
       ORDER BY total DESC
-    `).all(params);
+    `).all(...args);
 
     // Get GPU flavors per project from project_consumption (current month detail)
     const projectFlavors = db.prepare(`
@@ -1854,10 +1869,10 @@ const cloudDetailOps = {
         SUM(bd.total_price) as total
       FROM bill_details bd
       JOIN bills b ON bd.bill_id = b.id
-      WHERE ${GPU_DESC_WHERE} ${dateFilter}
+      WHERE ${where}
       GROUP BY month
       ORDER BY month
-    `).all(params);
+    `).all(...args);
 
     return {
       total: total?.total || 0,
@@ -1868,19 +1883,22 @@ const cloudDetailOps = {
     };
   },
 
-  // GPU instances from cloud_instances (uses plan_code)
-  getGpuInstances: () => {
+  // GPU instances from cloud_instances (uses plan_code), of the projects of the account (see
+  // accountCondition()), every account's by default (#120)
+  getGpuInstances: (account = null) => {
     const db = getDb();
+    const ofAccount = accountCondition(account, 'p.account');
     return db.prepare(`
       SELECT ci.*, p.name as project_name
       FROM cloud_instances ci
       JOIN projects p ON ci.project_id = p.id
-      WHERE ci.plan_code LIKE 'l4-%' OR ci.plan_code LIKE 'l40s-%'
+      WHERE (ci.plan_code LIKE 'l4-%' OR ci.plan_code LIKE 'l40s-%'
         OR ci.plan_code LIKE 'a100-%' OR ci.plan_code LIKE 't1-%'
         OR ci.plan_code LIKE 't2-%' OR ci.plan_code LIKE 'h100-%'
-        OR ci.plan_code LIKE 'v100-%'
+        OR ci.plan_code LIKE 'v100-%')
+        AND ${ofAccount.sql}
       ORDER BY p.name, ci.name
-    `).all();
+    `).all(...ofAccount.params);
   }
 };
 

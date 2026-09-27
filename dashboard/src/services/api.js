@@ -60,15 +60,17 @@ export const fetchByService = async (from, to) => {
   return data;
 };
 
-// Trends over `months` months that end on the `end` month, 'YYYY-MM'
-export const fetchMonthlyTrend = async (months, end) => {
-  const { data } = await api.get('/analysis/monthly-trend', { params: { months, end } });
+// Trends over `months` months that end on the `end` month, 'YYYY-MM', of the account
+export const fetchMonthlyTrend = async (months, end, account = null) => {
+  const { data } = await api.get('/analysis/monthly-trend', {
+    params: { months, end, ...accountParams(account) },
+  });
   return data;
 };
 
-export const fetchMonthlyTrendByCategory = async (months, end) => {
+export const fetchMonthlyTrendByCategory = async (months, end, account = null) => {
   const { data } = await api.get('/analysis/monthly-trend-by-category', {
-    params: { months, end },
+    params: { months, end, ...accountParams(account) },
   });
   return data;
 };
@@ -187,9 +189,11 @@ export const fetchProjectInstanceTotal = async (projectId, from, to) => {
   return data;
 };
 
-// GPU costs
-export const fetchGpuSummary = async (from, to) => {
-  const { data } = await api.get('/gpu/summary', { params: { from, to } });
+// GPU costs, of the account
+export const fetchGpuSummary = async (from, to, account = null) => {
+  const { data } = await api.get('/gpu/summary', {
+    params: { from, to, ...accountParams(account) },
+  });
   return data;
 };
 
