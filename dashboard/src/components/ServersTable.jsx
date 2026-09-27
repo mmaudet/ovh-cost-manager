@@ -1,11 +1,14 @@
 import { fmtMemory } from '../utils/format.js';
 
-// Dedicated servers inventory, shared by the inline panel and its modal.
-const ServersTable = ({ servers, language, t }) => (
+// Dedicated servers inventory, shared by the inline panel and its modal. With the Account
+// column of the lists, null when they show none, each server's account too (#123): the
+// servers then carry its name, accountName.
+const ServersTable = ({ servers, accountColumn, language, t }) => (
   <table className="w-full text-sm">
     <thead>
       <tr className="border-b bg-gray-50">
         <th className="p-3 text-left font-medium">ID</th>
+        {accountColumn && <th className="p-3 text-left font-medium">{accountColumn.label}</th>}
         <th className="p-3 text-left font-medium">{t('datacenter')}</th>
         <th className="p-3 text-left font-medium">CPU</th>
         <th className="p-3 text-left font-medium">{t('ram')}</th>
@@ -18,6 +21,7 @@ const ServersTable = ({ servers, language, t }) => (
       {servers.map(s => (
         <tr key={s.id} className="border-b hover:bg-gray-50">
           <td className="p-3 font-medium">{s.display_name || s.id}</td>
+          {accountColumn && <td className="p-3 text-gray-600">{s.accountName}</td>}
           <td className="p-3">{s.datacenter}</td>
           <td className="p-3">{s.cpu}</td>
           {/* In the units and number format of the language, and in powers of 1024 (#88). The
@@ -36,9 +40,18 @@ const ServersTable = ({ servers, language, t }) => (
   </table>
 );
 
-const serverCsvColumns = (language) => [
+/**
+ * The columns of the servers' CSV file, for downloadCSV(): the account's after the server's
+ * id when the table shows it, for a spreadsheet to pivot the servers by account (#123).
+ * @param {string} language - The page's, 'fr' or 'en'
+ * @param {?{ label: string }} [accountColumn] - The Account column of the lists
+ *   (accountColumnOf()), null when they show none
+ * @returns {{ key: string, label: string }[]}
+ */
+const serverCsvColumns = (language, accountColumn = null) => [
   { key: 'display_name', label: language === 'en' ? 'Name' : 'Nom' },
   { key: 'id', label: 'ID' },
+  ...(accountColumn ? [{ key: 'accountName', label: accountColumn.label }] : []),
   { key: 'datacenter', label: language === 'en' ? 'Datacenter' : 'Datacentre' },
   { key: 'cpu', label: 'CPU' },
   // In megabytes, as the API gives them, named in the units of the language (#88)

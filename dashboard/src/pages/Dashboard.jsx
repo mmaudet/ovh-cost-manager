@@ -219,6 +219,7 @@ export default function Dashboard() {
 
   const infrastructureTab = useInfrastructureTab({
     selectedMonth, holdsSelectedMonth, activeTab, selectedResourceType, selectedAccount,
+    accountColumn,
   });
   // The Compare tab lists the dedicated servers too, those of the account shown (#123): the
   // shell passes them on, and the hook loads them on either tab (#35)
@@ -728,6 +729,7 @@ export default function Dashboard() {
         {activeTab === 'infrastructure' && (
           <InfrastructureTab
             {...infrastructureTab} language={language} t={t} fmt={fmt}
+            accountColumn={accountColumn}
             selectedMonth={selectedMonth} byResourceType={byResourceType}
             selectedResourceType={selectedResourceType}
             setSelectedResourceType={setSelectedResourceType}
@@ -825,7 +827,9 @@ export default function Dashboard() {
         selectedMonth={selectedMonth} accountColumn={accountColumn}
       />
 
-      <InfrastructureTabModals {...infrastructureTab} language={language} t={t} />
+      <InfrastructureTabModals
+        {...infrastructureTab} language={language} t={t} accountColumn={accountColumn}
+      />
     </div>
   );
 }

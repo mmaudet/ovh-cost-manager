@@ -187,6 +187,8 @@ const legacyServerRental = {
 };
 // The Veeam backups of September, which are the unnamed account's
 const septemberBackups = infrastructure.resourceTypeDetails.backup['2026-09'];
+// A service that bill lines name, as the account whose bills they are on billed it
+const billedTo = (account) => (line) => ({ ...line, account });
 
 export const infrastructureOfSeveralAccounts = {
   // By name, then by the NIC handle of their account, as the server sorts them
@@ -194,6 +196,12 @@ export const infrastructureOfSeveralAccounts = {
     inventoryServers: [billedServer, removedServer, legacyServer, deliveredServer],
     inventoryVps: [stagingVps, vps],
     inventoryStorage: [oldStorage, fileStorage],
+    // The bill lines of a resource type by service and account, for the list that names the
+    // account of each service: those of September by service, each billed to one account
+    resourceTypeDetailsByAccount: {
+      dedicated_server: { '2026-09': [serverRental].map(billedTo(LYON)) },
+      backup: { '2026-09': septemberBackups.map(billedTo(UNNAMED)) },
+    },
   },
   ofAccount: {
     [LYON]: {

@@ -152,6 +152,9 @@ const answers = {
   fetchResourceTypeDetails: (data, type, from, to, account) =>
     ofAccount(data, account).resourceTypeDetails?.[type]?.[periodKey(from, to)]
       ?? emptyAnswers.list(),
+  // And those by account, for all accounts only (#123)
+  fetchResourceTypeDetailsByAccount: (data, type, from, to) =>
+    data.resourceTypeDetailsByAccount?.[type]?.[periodKey(from, to)] ?? emptyAnswers.list(),
   fetchProjectConsumption: entryForProject('projectConsumption', emptyAnswers.list),
   fetchProjectInstances: entryForProject('projectInstances', emptyAnswers.list),
   fetchProjectVolumes: entryForProject('projectVolumes', emptyAnswers.list),

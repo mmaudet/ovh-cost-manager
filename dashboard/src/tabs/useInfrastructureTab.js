@@ -9,6 +9,7 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   fetchInventoryServers, fetchInventoryVps, fetchInventoryStorage, fetchResourceTypeDetails,
+  fetchResourceTypeDetailsByAccount,
 } from '../services/api.js';
 import { accountQuery } from '../utils/accounts.js';
 
@@ -24,10 +25,13 @@ import { accountQuery } from '../utils/accounts.js';
  * @param {?string} shell.selectedResourceType - The resource type whose bill lines are open
  * @param {?string|undefined} shell.selectedAccount - The account shown: null for all
  *   accounts, undefined while the page does not know it yet, which the queries wait for
+ * @param {?object} shell.accountColumn - The Account column of the lists
+ *   (accountColumnOf()), null when they name no account
  * @returns {object} What the shell spreads over the tab and its modal
  */
 const useInfrastructureTab = ({
   selectedMonth, holdsSelectedMonth, activeTab, selectedResourceType, selectedAccount,
+  accountColumn,
 }) => {
   const [showAllServers, setShowAllServers] = useState(false);
 
@@ -50,14 +54,27 @@ const useInfrastructureTab = ({
     'inventoryStorage', fetchInventoryStorage, activeTab === 'infrastructure',
   ));
 
-  // The bill lines of the open resource type in the month selected, whatever the tab (#56)
-  const { data: resourceTypeDetails = [] } = useQuery(accountQuery(selectedAccount, {
-    key: ['resourceTypeDetails', selectedResourceType, selectedMonth?.from, selectedMonth?.to],
-    fetch: (account) => fetchResourceTypeDetails(
-      selectedResourceType, selectedMonth.from, selectedMonth.to, account,
-    ),
-    enabled: !!selectedResourceType && holdsSelectedMonth,
-  }));
+  // The bill lines of the open resource type in the month selected, whatever the tab (#56):
+  // those of the account shown, or, while the lists name the account of each service, those
+  // of all accounts by account, a service billed to several accounts once for each. One query
+  // or the other, so that a single-account installation keeps the queries it had.
+  const detailsOf = [selectedResourceType, selectedMonth?.from, selectedMonth?.to];
+  const detailsEnabled = !!selectedResourceType && holdsSelectedMonth;
+  const { data: resourceTypeDetails = [] } = useQuery(accountColumn
+    ? {
+      queryKey: ['resourceTypeDetailsByAccount', ...detailsOf],
+      queryFn: () => fetchResourceTypeDetailsByAccount(
+        selectedResourceType, selectedMonth.from, selectedMonth.to,
+      ),
+      enabled: detailsEnabled,
+    }
+    : accountQuery(selectedAccount, {
+      key: ['resourceTypeDetails', ...detailsOf],
+      fetch: (account) => fetchResourceTypeDetails(
+        selectedResourceType, selectedMonth.from, selectedMonth.to, account,
+      ),
+      enabled: detailsEnabled,
+    }));
 
   return {
     inventoryServers,

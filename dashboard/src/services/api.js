@@ -167,6 +167,16 @@ export const fetchResourceTypeDetails = async (type, from, to, account = null) =
   return data;
 };
 
+// The same for all accounts, for the list that names the account of each service (#123):
+// each service once for each account whose bills billed it, with that account, rather than
+// once
+export const fetchResourceTypeDetailsByAccount = async (type, from, to) => {
+  const { data } = await api.get('/analysis/resource-type-details', {
+    params: { type, from, to, byAccount: true },
+  });
+  return data;
+};
+
 // Phase 4: Cloud project details
 export const fetchProjectConsumption = async (projectId, from, to) => {
   const { data } = await api.get(`/projects/${projectId}/consumption`, { params: { from, to } });
