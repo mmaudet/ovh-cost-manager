@@ -564,11 +564,15 @@ function removeUnlistedServices(answer, deleteNotIn, kind, nic) {
  * @param {object} ovh - The OVH API client of the account
  * @param {Object<string, string>} projectMap - The name of each Public Cloud project, by id
  * @param {string} nic - The NIC handle of the account, which every service it stores
- *   carries: without it, each service fails to be stored, as a failed item
- * @returns {Promise<Object<string, string>>} The resource type of each project and service,
- *   by the id that a bill line names it with, in its domain
+ *   carries, but one that another account holds (#114): without it, each service fails to be
+ *   stored, as a failed item
+ * @returns {Promise<{resourceTypes: Object<string, string>,
+ *   listed: Object<string, Array<string|number>>}>} The resource type of each project and
+ *   service, by the id that a bill line names it with, in its domain; and the services that
+ *   the account's API lists, by the table that stores them, for each kind whose list it gave
  */
 async function importInventory(ovh, projectMap, nic) {
+  const listed = {};
     // Private Cloud Hosts
     if (ovh.requestPromised && db.inventory.upsertPrivateCloudHost) {
       try {
@@ -674,6 +678,7 @@ async function importInventory(ovh, projectMap, nic) {
       await ovh.requestPromised('GET', '/dedicated/server'),
       db.inventory.deleteServersNotIn, 'dedicated servers', nic,
     );
+    listed.dedicated_servers = serverNames;
 
     await runInBatches(serverNames, async (name) => {
       const info = await ovh.requestPromised('GET', `/dedicated/server/${name}`);
@@ -722,6 +727,7 @@ async function importInventory(ovh, projectMap, nic) {
       await ovh.requestPromised('GET', '/vps'), db.inventory.deleteVpsNotIn, 'VPS instances',
       nic,
     );
+    listed.vps_instances = vpsNames;
 
     await runInBatches(vpsNames, async (name) => {
       const info = await ovh.requestPromised('GET', `/vps/${name}`);
@@ -778,6 +784,7 @@ async function importInventory(ovh, projectMap, nic) {
       await ovh.requestPromised('GET', '/storage/netapp'),
       db.inventory.deleteStorageNotIn, 'NetApp storage services', nic,
     );
+    listed.storage_services = storageIds;
 
     await runInBatches(storageIds, async (sid) => {
       const info = await ovh.requestPromised('GET', `/storage/netapp/${sid}`);
@@ -809,7 +816,7 @@ async function importInventory(ovh, projectMap, nic) {
   }
 
   // Build resource type mapping from inventory
-  return buildResourceTypeMap(projectMap);
+  return { resourceTypes: buildResourceTypeMap(projectMap), listed };
 }
 
 // Build mapping from domain to resource type
@@ -1289,9 +1296,9 @@ async function importAccount(ovh, nic, { params, importType, toDate, heartbeat }
 
     // Then the inventories, when asked: they tell the type of the services that bill lines
     // name
-    const resourceTypeMap = params.includeInventory
+    const { resourceTypes: resourceTypeMap, listed } = params.includeInventory
       ? await importInventory(ovh, projectMap, nic)
-      : {};
+      : { resourceTypes: {}, listed: {} };
     // Each dataset keeps the run's lock, as each bill and each project do: --all, which the
     // cron and the resync import, takes many calls for each
     heartbeat();
@@ -1317,6 +1324,15 @@ async function importAccount(ovh, nic, { params, importType, toDate, heartbeat }
         failedItemCount += 1;
         console.log(` ERROR: ${describeError(err)}`);
       }
+    }
+
+    // A service that another account's API lists too is the account's that bills it: its
+    // bills, now stored, may name one that an account imported before it stored (#114)
+    const takenOver = db.accounts.takeOverBilledRows(nic,
+      { projects: Object.keys(projectMap), ...listed });
+    if (takenOver > 0) {
+      console.log(`  Took over ${takenOver} services that another account's API lists too, `
+        + 'as the bills of this account name them');
     }
 
     // The other datasets, only when asked: each takes many calls

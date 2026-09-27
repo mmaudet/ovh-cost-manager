@@ -103,6 +103,16 @@ function projectGrouping(projectColumn, byAccount) {
   };
 }
 
+// The tables of the services that the APIs of two accounts can both list, such as a server
+// whose technical contact is one account and whose billing is another's (#114). A service is
+// stored once, and belongs to the account whose bill lines name it, or else to the first
+// configured account that lists it: the accounts are imported in the order of the
+// configuration, and a writer of these tables never changes the account of a service that
+// one holds. It gives a service without an account, stored before the accounts, to the
+// account that lists it. Then, once the account's bills are stored,
+// accounts.takeOverBilledRows() gives it the services that it lists and bills.
+const SERVICE_TABLES = ['projects', 'dedicated_servers', 'vps_instances', 'storage_services'];
+
 let db = null;
 
 /**
@@ -165,6 +175,8 @@ function closeDb() {
 
 // Project operations
 const projectOps = {
+  // Records a project that an account's API lists, see SERVICE_TABLES: one that another
+  // account holds stays that account's
   upsert: (project) => {
     const db = getDb();
     const stmt = db.prepare(`
@@ -175,7 +187,7 @@ const projectOps = {
         description = @description,
         status = @status,
         updated_at = CURRENT_TIMESTAMP,
-        account = @account
+        account = COALESCE(account, @account)
     `);
     return stmt.run(requireAccount('projects', project));
   },
@@ -472,6 +484,44 @@ const accountsOps = {
       return attributed;
     });
     return attribute();
+  },
+
+  /**
+   * Gives the account the services that its API lists but that another account holds, when
+   * the latest bill with a line that names them, by its domain, is the account's: a service
+   * that two accounts' APIs list belongs to the account that bills it (see SERVICE_TABLES).
+   * The import runs it once the account's bills are stored: they may name a service that an
+   * account imported before it stored first.
+   * @param {string} nic - The NIC handle of the account
+   * @param {Object<string, Array<string|number>>} listed - The ids of the services that its
+   *   API lists, by the table that stores them, one of SERVICE_TABLES
+   * @returns {number} How many services it took over
+   */
+  takeOverBilledRows: (nic, listed) => {
+    const db = getDb();
+    const billedBy = db.prepare(`
+      SELECT b.account FROM bill_details d JOIN bills b ON b.id = d.bill_id
+      WHERE d.domain = ? AND b.account IS NOT NULL
+      ORDER BY b.date DESC, b.id DESC
+      LIMIT 1
+    `);
+    const takeOver = db.transaction(() => {
+      let taken = 0;
+      for (const [table, ids] of Object.entries(listed)) {
+        if (!SERVICE_TABLES.includes(table)) throw new Error(`${table} stores no service`);
+        // Those that another account holds, which few are: the bills are read for them only
+        const heldByOthers = db.prepare(`
+          SELECT id FROM ${table}
+          WHERE account <> ? AND id IN (SELECT CAST(value AS TEXT) FROM json_each(?))
+        `).all(nic, JSON.stringify(ids));
+        const give = db.prepare(`UPDATE ${table} SET account = ? WHERE id = ?`);
+        for (const { id } of heldByOthers) {
+          if (billedBy.get(id)?.account === nic) taken += give.run(nic, id).changes;
+        }
+      }
+      return taken;
+    });
+    return takeOver();
   },
 
   /**
@@ -796,7 +846,8 @@ function deleteNotIn(table, serviceType = null) {
   };
 }
 
-// Inventory operations (Phase 3)
+// Inventory operations (Phase 3). The writers of the services keep the account of a service
+// that another account holds, see SERVICE_TABLES.
 const inventoryOps = {
   // Dedicated servers
   upsertServer: (server) => {
@@ -808,7 +859,7 @@ const inventoryOps = {
         display_name = @display_name, reverse = @reverse, datacenter = @datacenter, os = @os, state = @state,
         cpu = @cpu, ram_size = @ram_size, disk_info = @disk_info, bandwidth = @bandwidth,
         expiration_date = @expiration_date, renewal_type = @renewal_type, imported_at = CURRENT_TIMESTAMP,
-        account = @account
+        account = COALESCE(account, @account)
     `);
     return stmt.run(requireAccount('dedicated_servers', server));
   },
@@ -828,7 +879,7 @@ const inventoryOps = {
         display_name = @display_name, model = @model, zone = @zone, state = @state, os = @os,
         vcpus = @vcpus, ram_mb = @ram_mb, disk_gb = @disk_gb,
         expiration_date = @expiration_date, renewal_type = @renewal_type, ip_addresses = @ip_addresses, imported_at = CURRENT_TIMESTAMP,
-        account = @account
+        account = COALESCE(account, @account)
     `);
     return stmt.run(requireAccount('vps_instances', vps));
   },
@@ -848,7 +899,7 @@ const inventoryOps = {
         service_type = @service_type, display_name = @display_name, region = @region,
         total_size_gb = @total_size_gb, used_size_gb = @used_size_gb, share_count = @share_count,
         expiration_date = @expiration_date, imported_at = CURRENT_TIMESTAMP,
-        account = @account
+        account = COALESCE(account, @account)
     `);
     return stmt.run(requireAccount('storage_services', storage));
   },

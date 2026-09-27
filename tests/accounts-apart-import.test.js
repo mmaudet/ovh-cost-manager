@@ -152,3 +152,78 @@ describe('the removal of the services that OVH no longer lists', () => {
     });
   });
 });
+
+// A Public Cloud project of the account, as an earlier import stored it
+const storeProject = (id, nic) => db.projects.upsert({
+  id, name: id, description: null, status: 'ok', created_at: null, account: nic,
+});
+
+// The services that two accounts' APIs can list: the table that stores each kind, how an
+// account's API lists it, and how an earlier import stored one
+const KINDS = {
+  'Public Cloud project': {
+    table: 'projects', serve: (routes, ids) => serveProjects(routes, ids), store: storeProject,
+  },
+  'dedicated server': {
+    table: 'dedicated_servers',
+    serve: (routes, ids) => serveInventories(routes, { servers: ids }),
+    store: storeServer,
+  },
+  VPS: {
+    table: 'vps_instances',
+    serve: (routes, ids) => serveInventories(routes, { vps: ids }),
+    store: storeVps,
+  },
+  'NetApp storage service': {
+    table: 'storage_services',
+    serve: (routes, ids) => serveInventories(routes, { storage: ids }),
+    store: storeStorage,
+  },
+};
+
+describe.each(Object.entries(KINDS))('a %s that two accounts list', (_, { table, serve, store }) => {
+  const SHARED = 'svc-shared';
+
+  // Both accounts' APIs list it, with these bills, as serveBills() takes them. Lyon is
+  // configured first.
+  function serveBoth({ lyonBills = [], parisBills = [] } = {}) {
+    const lyon = serveAccount(LYON);
+    const paris = serveAccount(PARIS);
+    for (const [served, bills] of [[lyon, lyonBills], [paris, parisBills]]) {
+      serveProjects(served.routes);
+      serveInventories(served.routes);
+      serve(served.routes, [SHARED]);
+      serveBills(served.routes, bills);
+    }
+    useAccounts({ served: lyon }, { served: paris });
+  }
+
+  // Whichever lists it first: Lyon stores it before Paris's bills are imported
+  test.each([['Lyon', LYON], ['Paris', PARIS]])(
+    'is stored once, as %s, whose bill lines name it', async (__, billing) => {
+      const bill = [['FR-1', '2026-09-01', [SHARED]]];
+      serveBoth(billing === LYON ? { lyonBills: bill } : { parisBills: bill });
+
+      await importSeptember({ includeInventory: true });
+
+      expect(accountsOf(table)).toEqual([[SHARED, billing.nic]]);
+    });
+
+  test('goes to the first configured account that lists it, when no bill line names it',
+    async () => {
+      serveBoth();
+
+      await importSeptember({ includeInventory: true });
+
+      expect(accountsOf(table)).toEqual([[SHARED, LYON.nic]]);
+    });
+
+  test('is never taken over by another account that lists it', async () => {
+    serveBoth();
+    store(SHARED, PARIS.nic);
+
+    await importSeptember({ account: LYON.nic, includeInventory: true });
+
+    expect(accountsOf(table)).toEqual([[SHARED, PARIS.nic]]);
+  });
+});
