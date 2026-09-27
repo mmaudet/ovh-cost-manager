@@ -14,11 +14,12 @@ import { sortProjects } from '../utils/projectSort.js';
 // cards, the header, the Markdown report or other tabs too, and the budget with its setter,
 // which the month-end forecast card reads as well. Its lists, the breakdown by project and
 // the GPU projects, name the account of each project when the shell shows the Account column
-// (showAccountColumn), from the accounts of the instance. Its links navigate with the
-// shell's setters: what each one keeps open is in
+// (showAccountColumn), from the accounts of the instance: they then list the projects by
+// account that the hook requests, a project billed to several accounts once for each (#118).
+// Its links navigate with the shell's setters: what each one keeps open is in
 // docs/adr/0001-tab-state-lives-in-the-dashboard-shell.md (#56).
 const OverviewTab = ({
-  projectSort, handleProjectSort,
+  projectSort, handleProjectSort, projectsByAccount, gpuProjectsByAccount,
   language, t, fmt, accounts, showAccountColumn,
   summary, total, byService, byProject, byResourceType, gpuSummary,
   expiringServices, budget, setBudget,
@@ -28,6 +29,11 @@ const OverviewTab = ({
   // and its colour follow
   const budgetShare = budget ? total / budget : 0;
   const budgetUsage = Math.round(budgetShare * 100);
+
+  // The projects of the breakdown and of the GPU costs, by account for the Account column.
+  // The Top projects chart, which names no account, keeps each project once.
+  const breakdownProjects = showAccountColumn ? projectsByAccount : byProject;
+  const gpuProjects = showAccountColumn ? gpuProjectsByAccount : gpuSummary?.byProject;
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -218,11 +224,12 @@ const OverviewTab = ({
                     </tr>
                   </thead>
                   <tbody>
-                    {gpuSummary.byProject.map(p => {
+                    {gpuProjects.map(p => {
                       const share = gpuSummary.total ? p.total / gpuSummary.total : 0;
                       // A project billed to several accounts has a row for each (#118)
+                      const key = showAccountColumn ? `${p.project_id} ${p.account}` : p.project_id;
                       return (
-                        <tr key={`${p.project_id} ${p.account}`} className="border-b hover:bg-gray-50">
+                        <tr key={key} className="border-b hover:bg-gray-50">
                           <td className="p-2">
                             <button
                               className="text-blue-600 hover:text-blue-800 hover:underline text-left text-xs"
@@ -296,12 +303,13 @@ const OverviewTab = ({
               </tr>
             </thead>
             <tbody>
-              {sortProjects(byProject, projectSort).map((p, i) => {
+              {sortProjects(breakdownProjects, projectSort).map((p, i) => {
                 // With one decimal, 0,0 % of a Cloud total of 0 € included (#87)
                 const share = summary?.cloudTotal ? p.total / summary.cloudTotal : 0;
                 // A project billed to several accounts has a row for each (#118)
+                const key = showAccountColumn ? `${p.projectId} ${p.account}` : p.projectId || i;
                 return (
-                  <tr key={`${p.projectId || i} ${p.account}`} className="border-b hover:bg-gray-50">
+                  <tr key={key} className="border-b hover:bg-gray-50">
                     <td className="p-3">
                       <button
                         className="text-blue-600 hover:text-blue-800 hover:underline text-left"
@@ -326,7 +334,9 @@ const OverviewTab = ({
             </tbody>
             <tfoot>
               <tr className="bg-gray-50 font-semibold">
-                <td className="p-3" colSpan={showAccountColumn ? 2 : undefined}>{t('cloudTotal')}</td>
+                <td className="p-3" colSpan={showAccountColumn ? 2 : undefined}>
+                  {t('cloudTotal')}
+                </td>
                 <td className="p-3 text-right">{fmt(summary?.cloudTotal || 0)}€</td>
                 <td className="p-3 text-right">{formatPercent(1, language, { decimals: 0 })}</td>
               </tr>

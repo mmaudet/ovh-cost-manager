@@ -77,17 +77,30 @@ function accountCondition(account, column) {
 }
 
 /**
- * The order of the costs of projects, those of the breakdown by project and of the GPU costs,
- * whose `total` it sorts (#118): most expensive first; projects that cost the same by id, the
- * last first, as SQLite gave them before the queries told accounts apart; and the rows of a
- * project billed to several accounts by NIC handle, the Unknown account's last, as the Web
- * Cloud services (#122).
+ * How a query of the costs of projects, those of the breakdown by project and of the GPU
+ * costs, groups the bill lines of its bills `b` and orders the rows, whose `total` it sums
+ * (#118). By project, as before the accounts; or, for the Overview's lists that name the
+ * account of each project, by project and account: a project billed to several accounts, such
+ * as one moved from an account to another, then has a row for each, with the NIC handle of
+ * its account, null for the Unknown account, as a bill line belongs to the account of its bill
+ * (ADR 0002).
+ *
+ * Most expensive first; projects that cost the same by id, the last first, as SQLite gave
+ * them before the queries told accounts apart; and the rows of a project by account, by NIC
+ * handle, the Unknown account's last, as the Web Cloud services (#122).
  * @param {string} projectColumn - The column of the query that holds the id of the project
- * @param {string} accountColumn - The column that holds the NIC handle of the rows' account
- * @returns {string} What ORDER BY takes
+ * @param {boolean} byAccount - Whether to give a row to each project and account
+ * @returns {{ select: string, groupBy: string, orderBy: string }} What the query selects
+ *   besides, to follow its other columns, and what GROUP BY and ORDER BY take
  */
-function projectOrder(projectColumn, accountColumn) {
-  return `total DESC, ${projectColumn} DESC, ${accountColumn} IS NULL, ${accountColumn}`;
+function projectGrouping(projectColumn, byAccount) {
+  const byCost = `total DESC, ${projectColumn} DESC`;
+  if (!byAccount) return { select: '', groupBy: projectColumn, orderBy: byCost };
+  return {
+    select: ', b.account as account',
+    groupBy: `${projectColumn}, b.account`,
+    orderBy: `${byCost}, b.account IS NULL, b.account`,
+  };
 }
 
 let db = null;
@@ -511,31 +524,26 @@ const analysisOps = {
   // The costs of each project billed between two dates, most expensive first, on the bills of
   // the account (see accountCondition()), every account's by default. A project missing from
   // the projects table keeps the id of its bill lines, without a name: the dashboard tells
-  // such projects apart by their id (#55).
-  //
-  // Each row carries the account of the bills it adds up, the NIC handle that `account` holds
-  // or null for the Unknown account, as a bill line belongs to the account of its bill (ADR
-  // 0002). A project billed to several accounts, such as one moved from an account to
-  // another, has a row for each (#118): every account's rows are then those that each
-  // account's alone would give. In the order of projectOrder().
-  byProject: (fromDate, toDate, account = null) => {
+  // such projects apart by their id (#55). One row per project, or, with byAccount, per
+  // project and account, with its account (see projectGrouping(), #118).
+  byProject: (fromDate, toDate, account = null, { byAccount = false } = {}) => {
     const db = getDb();
     const ofAccount = accountCondition(account, 'b.account');
+    const grouping = projectGrouping('d.project_id', byAccount);
     return db.prepare(`
       SELECT
         d.project_id as project_id,
         p.name as project_name,
         SUM(d.total_price) as total,
-        COUNT(d.id) as details_count,
-        b.account as account
+        COUNT(d.id) as details_count${grouping.select}
       FROM bill_details d
       JOIN bills b ON d.bill_id = b.id
       LEFT JOIN projects p ON d.project_id = p.id
       WHERE b.date >= ? AND b.date <= ?
         AND d.project_id IS NOT NULL
         AND ${ofAccount.sql}
-      GROUP BY d.project_id, b.account
-      ORDER BY ${projectOrder('d.project_id', 'b.account')}
+      GROUP BY ${grouping.groupBy}
+      ORDER BY ${grouping.orderBy}
     `).all(fromDate, toDate, ...ofAccount.params);
   },
 
@@ -1871,9 +1879,9 @@ const cloudDetailOps = {
 
   // GPU cost summary from bill_details (covers full history) + project_consumption (current
   // month), on the bills of the account (see accountCondition()), every account's by default
-  // (#120). Each project carries the account of the bills it adds up, as those of
-  // analysis.byProject() do (#118).
-  getGpuSummary: (from, to, account = null) => {
+  // (#120). The projects come once each, or, with byAccount, once for each account that billed
+  // them, with that account, as those of analysis.byProject() do (#118).
+  getGpuSummary: (from, to, account = null, { byAccount = false } = {}) => {
     const db = getDb();
 
     // GPU detection in bill_details.description
@@ -1937,19 +1945,19 @@ const cloudDetailOps = {
       ORDER BY total DESC
     `).all(...args);
 
-    // By project from bills, and by account for a project billed to several (#118)
+    // By project from bills, and by account when asked (see projectGrouping(), #118)
+    const grouping = projectGrouping('bd.domain', byAccount);
     const byProject = db.prepare(`
       SELECT
         COALESCE(p.name, bd.domain) as project_name,
         bd.domain as project_id,
-        SUM(bd.total_price) as total,
-        b.account as account
+        SUM(bd.total_price) as total${grouping.select}
       FROM bill_details bd
       JOIN bills b ON bd.bill_id = b.id
       LEFT JOIN projects p ON bd.domain = p.id
       WHERE ${where}
-      GROUP BY bd.domain, b.account
-      ORDER BY ${projectOrder('bd.domain', 'b.account')}
+      GROUP BY ${grouping.groupBy}
+      ORDER BY ${grouping.orderBy}
     `).all(...args);
 
     // Get GPU flavors per project from project_consumption (current month detail)

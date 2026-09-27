@@ -5,10 +5,13 @@
  * account-parameter.test.js), a NIC handle that the accounts table records keeps the bill
  * lines of that account's bills, the reserved value `unknown` those of the bills without an
  * account (the Unknown account), and no parameter those of every account, as before. Any
- * other value is refused. The lists, the projects of the breakdown by project and of the GPU
- * costs, give the account of each row: that of the bills it adds up, null for the Unknown
- * account. The GPU costs take the account parameter since the Trends tab's #120, whose tests
- * cover it (trends-account.test.js).
+ * other value is refused. The GPU costs take the account parameter since the Trends tab's
+ * #120, whose tests cover it (trends-account.test.js).
+ *
+ * The projects of the breakdown by project and of the GPU costs come once each, as before,
+ * unless the request asks for them by account (byAccount=true): each project then comes once
+ * for each account that billed it, with that account, null for the Unknown account. Only the
+ * Overview's lists that name the account of each project ask so.
  */
 
 const { LYON, PARIS, NEW_ACCOUNT, REFUSED, bill, project } = require('./support/accounts');
@@ -29,8 +32,8 @@ const serviceLine = (id, billId, domain, serviceType, resourceType, price) => ({
 });
 
 // Two accounts and the Unknown account, billed in September, and Lyon in August too. Staging
-// moved from Lyon to Paris during September: Lyon paid for it until then. Every NIC handle,
-// name and amount is made up.
+// moved from Lyon to Paris during September: Lyon paid 50 € for its GPU instances until then,
+// Paris 230 € since. Every NIC handle, name and amount is made up.
 function seed(db) {
   db.accounts.upsert({ nic: LYON, currency: 'EUR', name: 'Lyon subsidiary' });
   db.accounts.upsert({ nic: PARIS, currency: 'EUR' });
@@ -52,7 +55,7 @@ function seed(db) {
   db.details.insertMany([
     instanceLine('FR1001-1', 'FR1001', 'project-production', 'l4-90', 'AI/ML', 400),
     instanceLine('FR1001-2', 'FR1001', 'project-production', 'b3-8', 'Compute', 200),
-    instanceLine('FR1001-3', 'FR1001', 'project-staging', 'b3-16', 'Compute', 50),
+    instanceLine('FR1001-3', 'FR1001', 'project-staging', 'l40s-180', 'Compute', 50),
     serviceLine('FR1001-4', 'FR1001', 'ns3000001.ip-203-0-113.eu', 'Compute',
       'dedicated_server', 100),
     instanceLine('FR1002-1', 'FR1002', 'project-production', 'l4-90', 'AI/ML', 500),
@@ -116,35 +119,43 @@ describe('GET /api/analysis/by-service', () => {
 
 describe('GET /api/analysis/by-project', () => {
   const route = '/api/analysis/by-project';
-  const production = (total, detailsCount) => ({
-    projectId: 'project-production', projectName: 'Production', total, detailsCount,
-    account: LYON,
+  // A project of the breakdown, and the same for the account of the bills it adds up
+  const billed = (projectId, projectName, total, detailsCount) => ({
+    projectId, projectName, total, detailsCount,
   });
-  const staging = (total, detailsCount, account) => ({
-    projectId: 'project-staging', projectName: 'Staging', total, detailsCount, account,
-  });
-  const legacy = {
-    projectId: 'project-legacy', projectName: 'Legacy', total: 60, detailsCount: 1,
-    account: null,
-  };
+  const production = billed('project-production', 'Production', 600, 2);
+  const staging = (total, detailsCount) =>
+    billed('project-staging', 'Staging', total, detailsCount);
+  const legacy = billed('project-legacy', 'Legacy', 60, 1);
+  const ofAccount = (row, account) => ({ ...row, account });
 
-  // Each project once for each account whose bills it was billed on: Staging, moved from Lyon
-  // to Paris, is in both, as it is in the projects of each of them
-  test('lists the projects of every account without the parameter, with the account of each',
+  // Staging once, at what every account paid for it
+  test('lists each project once for every account without the parameter, as before',
     async () => {
-      expect(await septemberOf(route)).toEqual({
+      const everyAccount = { status: 200, body: [production, staging(280, 3), legacy] };
+
+      expect(await septemberOf(route)).toEqual(everyAccount);
+      expect(await ocm.get(`${route}?${SEPTEMBER}&byAccount=false`)).toEqual(everyAccount);
+    });
+
+  // For the Overview's breakdown, which names the account of each project: Staging, moved
+  // from Lyon to Paris, comes for each, as it does in the projects of each account
+  test('lists each project for each account that billed it, with the account, when asked to',
+    async () => {
+      expect(await ocm.get(`${route}?${SEPTEMBER}&byAccount=true`)).toEqual({
         status: 200,
-        body: [production(600, 2), staging(230, 2, PARIS), legacy, staging(50, 1, LYON)],
+        body: [
+          ofAccount(production, LYON), ofAccount(staging(230, 2), PARIS),
+          ofAccount(legacy, null), ofAccount(staging(50, 1), LYON),
+        ],
       });
     });
 
   test('lists the projects billed to the account whose NIC handle it gives', async () => {
     expect(await septemberOf(route, LYON)).toEqual({
-      status: 200, body: [production(600, 2), staging(50, 1, LYON)],
+      status: 200, body: [production, staging(50, 1)],
     });
-    expect(await septemberOf(route, PARIS)).toEqual({
-      status: 200, body: [staging(230, 2, PARIS)],
-    });
+    expect(await septemberOf(route, PARIS)).toEqual({ status: 200, body: [staging(230, 2)] });
   });
 
   test('lists those of the Unknown account: the bills without an account', async () => {
@@ -153,6 +164,30 @@ describe('GET /api/analysis/by-project', () => {
 
   test('lists none for an account recorded without a bill', async () => {
     expect(await septemberOf(route, NEW_ACCOUNT)).toEqual({ status: 200, body: [] });
+  });
+});
+
+// The lists of projects that name no account: Staging comes once, at what every account paid
+// for it, rather than once for each
+describe('the other lists of the projects of every account', () => {
+  test('give each project once among the top projects of the summary', async () => {
+    expect((await septemberOf('/api/summary')).body.topProjects).toEqual([
+      { name: 'Production', value: 600 },
+      { name: 'Staging', value: 280 },
+      { name: 'Legacy', value: 60 },
+    ]);
+  });
+
+  test('export each project once in the costs by project', async () => {
+    const res = await fetch(`${ocm.url}/api/export/by-project?${SEPTEMBER}`);
+
+    // Read as text, without the byte order mark that starts the file
+    expect((await res.text()).split('\n')).toEqual([
+      '"Projet";"ID Projet";"Total HT";"Nb Lignes"',
+      '"Production";"project-production";600;2',
+      '"Staging";"project-staging";280;3',
+      '"Legacy";"project-legacy";60;1',
+    ]);
   });
 });
 
@@ -194,25 +229,33 @@ describe('GET /api/analysis/by-resource-type', () => {
 
 // The rest of the GPU costs, and their account parameter, are the Trends tab's tests'
 describe('the projects of GET /api/gpu/summary', () => {
-  const gpuProjectsOf = async (account) =>
-    (await septemberOf('/api/gpu/summary', account)).body.byProject;
+  const gpuProjectsOf = async (parameters = '') =>
+    (await ocm.get(`/api/gpu/summary?${SEPTEMBER}${parameters}`)).body.byProject;
   // A project of the GPU costs; no consumption was imported to tell its GPU flavours
-  const gpuProject = (projectName, projectId, total, account) => ({
-    project_name: projectName, project_id: projectId, total, gpu_flavors: '', account,
+  const gpuProject = (projectName, projectId, total) => ({
+    project_name: projectName, project_id: projectId, total, gpu_flavors: '',
   });
-  const production = gpuProject('Production', 'project-production', 400, LYON);
-  const staging = gpuProject('Staging', 'project-staging', 80, PARIS);
-  const legacy = gpuProject('Legacy', 'project-legacy', 60, null);
+  const production = gpuProject('Production', 'project-production', 400);
+  const staging = (total) => gpuProject('Staging', 'project-staging', total);
+  const legacy = gpuProject('Legacy', 'project-legacy', 60);
+  const ofAccount = (row, account) => ({ ...row, account });
 
-  test('give the account of the bills each one adds up, for every account', async () => {
-    expect(await gpuProjectsOf()).toEqual([production, staging, legacy]);
+  test('come once each for every account, as before', async () => {
+    expect(await gpuProjectsOf()).toEqual([production, staging(130), legacy]);
+  });
+
+  test('come for each account that billed them, with the account, when asked to', async () => {
+    expect(await gpuProjectsOf('&byAccount=true')).toEqual([
+      ofAccount(production, LYON), ofAccount(staging(80), PARIS), ofAccount(legacy, null),
+      ofAccount(staging(50), LYON),
+    ]);
   });
 
   test('are those of the account whose NIC handle it gives, or of the Unknown account',
     async () => {
-      expect(await gpuProjectsOf(LYON)).toEqual([production]);
-      expect(await gpuProjectsOf(PARIS)).toEqual([staging]);
-      expect(await gpuProjectsOf('unknown')).toEqual([legacy]);
+      expect(await gpuProjectsOf(`&account=${LYON}`)).toEqual([production, staging(50)]);
+      expect(await gpuProjectsOf(`&account=${PARIS}`)).toEqual([staging(80)]);
+      expect(await gpuProjectsOf('&account=unknown')).toEqual([legacy]);
     });
 });
 
@@ -233,4 +276,18 @@ describe('an account the server does not know', () => {
           .toEqual({ status: 400, body: REFUSED });
       }
     });
+});
+
+// Rather than list the projects once, or by account, when a request asks for neither
+describe('a byAccount parameter other than true or false', () => {
+  test.each([
+    ['another value', 'byAccount=yes'],
+    ['several values', 'byAccount=true&byAccount=true'],
+  ])('is refused by the lists of projects, naming it: %s', async (_, parameter) => {
+    for (const route of ['/api/analysis/by-project', '/api/gpu/summary']) {
+      expect(await ocm.get(`${route}?${SEPTEMBER}&${parameter}`)).toEqual({
+        status: 400, body: { error: "Invalid 'byAccount' parameter: expected true or false" },
+      });
+    }
+  });
 });

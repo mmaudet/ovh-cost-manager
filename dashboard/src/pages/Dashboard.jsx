@@ -206,7 +206,7 @@ export default function Dashboard() {
   // Each tab's state and queries, in the order of the tab bar: its hook runs on every render,
   // before the loading screen, so that the tab keeps them while another one is open (ADR 0001)
 
-  const overviewTab = useOverviewTab();
+  const overviewTab = useOverviewTab({ selectedMonth, holdsSelectedMonth, showAccountColumn });
 
   const compareTab = useCompareTab({ months, selectedMonth, activeTab });
 

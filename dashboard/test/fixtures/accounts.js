@@ -75,8 +75,7 @@ const lyonProduction = { ...production, account: lyonAccount.nic };
 const unnamedStaging = { ...staging, account: unnamedAccount.nic };
 const unknownSandbox = { ...sandbox, account: null };
 
-// The projects of account.js, and the account that billed them: as the breakdown by project
-// and the GPU costs list them since #118, each project with the account of its bills
+// The projects of account.js, and the account whose bills billed them
 const accountOfProject = {
   'project-production': lyonAccount.nic,
   'project-staging': unnamedAccount.nic,
@@ -85,20 +84,14 @@ const accountOfProject = {
 const mapPeriods = (entries, change) => Object.fromEntries(
   Object.entries(entries).map(([period, entry]) => [period, change(entry)]),
 );
-// The costs by project of account.js, for all accounts, and for one
-const projectsOfAllAccounts = mapPeriods(account.byProject, (projects) => projects.map(
-  (project) => ({ ...project, account: accountOfProject[project.projectId] }),
+// The costs by project of account.js that an account billed
+const projectsOf = ({ nic }) => mapPeriods(account.byProject, (projects) => projects.filter(
+  (project) => accountOfProject[project.projectId] === nic,
 ));
-const projectsOf = ({ nic }) => mapPeriods(projectsOfAllAccounts, (projects) => projects.filter(
-  (project) => project.account === nic,
-));
-// The GPU costs of account.js, all of Production: for all accounts, and for Lyon
-const gpuCostsOfAllAccounts = mapPeriods(account.gpuSummary, (gpu) => ({
-  ...gpu,
-  byProject: gpu.byProject.map(
-    (project) => ({ ...project, account: accountOfProject[project.project_id] }),
-  ),
-}));
+// Projects with the account of each, as the routes list them by account (#118)
+const withAccounts = (projects, idOf) => projects.map(
+  (project) => ({ ...project, account: accountOfProject[idOf(project)] }),
+);
 
 // The costs of September by service type and by resource type of the accounts billed that
 // month, which add up to those of account.js
@@ -115,8 +108,13 @@ export const severalAccounts = {
   ...webCloudOfSeveralAccounts.all,
   accounts: [lyonAccount, unnamedAccount, removedAccount, unknownAccount],
   projectsEnriched: [lyonProduction, unnamedStaging, unknownSandbox],
-  byProject: projectsOfAllAccounts,
-  gpuSummary: gpuCostsOfAllAccounts,
+  // The projects of the breakdown by project and of the GPU costs, for all accounts, once for
+  // each account that billed them, with that account: as the Overview asks for them when its
+  // lists name the account of each project (#118)
+  projectsByAccount: mapPeriods(account.byProject,
+    (projects) => withAccounts(projects, (project) => project.projectId)),
+  gpuProjectsByAccount: mapPeriods(account.gpuSummary,
+    (gpu) => withAccounts(gpu.byProject, (project) => project.project_id)),
   ofAccount: {
     [lyonAccount.id]: {
       byService: {
@@ -137,9 +135,9 @@ export const severalAccounts = {
       // Its Production project has all the GPU costs of every account: those of the months
       // of the Overview, and of the Trends tab's 3 months up to September (#120)
       gpuSummary: {
-        '2026-09': gpuCostsOfAllAccounts['2026-09'],
-        '2026-08': gpuCostsOfAllAccounts['2026-08'],
-        '2026-07/2026-09': gpuCostsOfAllAccounts['2026-07/2026-09'],
+        '2026-09': account.gpuSummary['2026-09'],
+        '2026-08': account.gpuSummary['2026-08'],
+        '2026-07/2026-09': account.gpuSummary['2026-07/2026-09'],
       },
       months: [september, august, july],
       summary: {

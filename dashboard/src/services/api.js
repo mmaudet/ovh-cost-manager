@@ -51,12 +51,27 @@ export const fetchProjectsEnriched = async (account = null) => {
   return data;
 };
 
-// The costs of each project billed to the account, each with the account of its bills (#118)
+// The costs of each project billed to the account, once each
 export const fetchByProject = async (from, to, account = null) => {
   const { data } = await api.get('/analysis/by-project', {
     params: { from, to, ...accountParams(account) },
   });
   return data;
+};
+
+// The Overview's lists of projects that name the account of each, for all accounts (#118):
+// each project once for each account whose bills billed it, with that account, rather than
+// once. The costs by project, and the GPU costs by project.
+export const fetchProjectsByAccount = async (from, to) => {
+  const { data } = await api.get('/analysis/by-project', {
+    params: { from, to, byAccount: true },
+  });
+  return data;
+};
+
+export const fetchGpuProjectsByAccount = async (from, to) => {
+  const { data } = await api.get('/gpu/summary', { params: { from, to, byAccount: true } });
+  return data.byProject;
 };
 
 export const fetchByService = async (from, to, account = null) => {

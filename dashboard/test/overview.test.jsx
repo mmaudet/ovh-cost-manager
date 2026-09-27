@@ -5,7 +5,9 @@ import {
   lyonAccount, removedAccount, severalAccounts, unknownAccount, unnamedAccount,
 } from './fixtures/accounts.js';
 import { api } from './support/api.js';
+import { captureFileDownloads } from './support/downloads.js';
 import {
+  accordionOf,
   cardOf,
   cardRowOf,
   cloudProjectRow,
@@ -576,29 +578,71 @@ describe('Overview tab', () => {
       ]);
     });
 
-    // As the server lists it: each account's share of the project apart
-    it('lists a project billed to two accounts once for each', async () => {
-      // Staging, moved from Lyon to yy2222-ovh during September
-      const [production] = severalAccounts.byProject['2026-09'];
-      const staging = (total, detailsCount, { nic }) => ({
-        projectId: 'project-staging', projectName: 'Staging', total, detailsCount, account: nic,
-      });
-      await renderDashboard({
-        ...severalAccounts,
-        byProject: {
-          ...severalAccounts.byProject,
-          '2026-09': [production, staging(170, 8, unnamedAccount), staging(50, 3, lyonAccount)],
-        },
+    // Staging, moved from Lyon to yy2222-ovh during September: the server lists its costs once
+    // for all accounts, and once for each account when asked by account (#118)
+    const [production] = severalAccounts.projectsByAccount['2026-09'];
+    const staging = (total, detailsCount, { nic }) => ({
+      projectId: 'project-staging', projectName: 'Staging', total, detailsCount, account: nic,
+    });
+    const stagingMoved = {
+      ...severalAccounts,
+      projectsByAccount: {
+        ...severalAccounts.projectsByAccount,
+        '2026-09': [production, staging(170, 8, unnamedAccount), staging(50, 3, lyonAccount)],
+      },
+    };
+
+    it('lists a project billed to two accounts once for each, with the account of each',
+      async () => {
+        await renderDashboard(stagingMoved);
+
+        expect(projectRows()).toEqual([
+          ['Projet○', 'Compte', 'Montant▼', '%'],
+          ['Production', 'Lyon subsidiary', '610,40€', '73,5 %'],
+          ['Staging', 'yy2222-ovh', '170,00€', '20,5 %'],
+          ['Staging', 'Lyon subsidiary', '50,00€', '6,0 %'],
+          ['Total Cloud', '830,40€', '100 %'],
+        ]);
       });
 
-      expect(projectRows()).toEqual([
-        ['Projet○', 'Compte', 'Montant▼', '%'],
-        ['Production', 'Lyon subsidiary', '610,40€', '73,5 %'],
-        ['Staging', 'yy2222-ovh', '170,00€', '20,5 %'],
-        ['Staging', 'Lyon subsidiary', '50,00€', '6,0 %'],
-        ['Total Cloud', '830,40€', '100 %'],
-      ]);
-    });
+    // What names no account lists each project once, at what every account paid for it
+    it('keeps a project billed to two accounts once in the Markdown report and on Compare',
+      async () => {
+        const { user } = await renderDashboard(stagingMoved);
+        const downloadedFiles = captureFileDownloads();
+
+        await user.selectOptions(screen.getByDisplayValue('Choisir...'), 'Markdown');
+
+        const [report] = await downloadedFiles();
+        expect(report.content.split('\n').filter((line) => line.startsWith('| Staging')))
+          .toEqual(['| Staging | 220,00€ |']);
+
+        await openTab(user, 'Comparaison');
+
+        const projectComparison = screen.getByRole('button', { name: /^Comparaison par projet/ });
+        expect(rowsOf(within(accordionOf(projectComparison)).getByRole('table'))).toEqual([
+          ['Projet○', 'Août 2026▼', 'Septembre 2026○', 'Variation○'],
+          ['Production', '512,00€', '610,40€', '+19,2 %'],
+          ['Staging', '190,00€', '220,00€', '+15,8 %'],
+        ]);
+      });
+
+    // Only the lists that name the account of each project ask for their projects by account
+    it('asks for its projects by account only while its lists name the account of each',
+      async () => {
+        const { user } = await renderDashboard(severalAccounts);
+        const byAccount = [api.fetchProjectsByAccount, api.fetchGpuProjectsByAccount];
+        for (const fetchByAccount of byAccount) {
+          expect(fetchByAccount).toHaveBeenCalledWith('2026-09-01', '2026-09-30');
+        }
+        await selectAccount(user, 'Lyon subsidiary');
+
+        await selectMonth(user, 'Août 2026');
+
+        for (const fetchByAccount of byAccount) {
+          expect(fetchByAccount).not.toHaveBeenCalledWith('2026-08-01', '2026-08-31');
+        }
+      });
 
     it('shows the Account column again once all accounts are selected', async () => {
       const { user } = await renderDashboard(severalAccounts);
@@ -620,13 +664,14 @@ describe('Overview tab', () => {
 
       expect(projectRows()).toEqual(projectsOfOneAccount);
       expect(texts(gpuCosts())).toEqual(gpuCostsOfOneAccount);
+      expect(api.fetchProjectsByAccount).not.toHaveBeenCalled();
+      expect(api.fetchGpuProjectsByAccount).not.toHaveBeenCalled();
     });
 
     it('names the Unknown account in the Account column, in the language of the page',
       async () => {
         // An account, and the Unknown account, whose bills paid for a project that no account
         // claimed since
-        const [production] = severalAccounts.byProject['2026-09'];
         const legacy = {
           projectId: 'project-legacy', projectName: 'Legacy', total: 220, detailsCount: 11,
           account: null,
@@ -634,7 +679,9 @@ describe('Overview tab', () => {
         const { user } = await renderDashboard({
           ...severalAccounts,
           accounts: [lyonAccount, unknownAccount],
-          byProject: { ...severalAccounts.byProject, '2026-09': [production, legacy] },
+          projectsByAccount: {
+            ...severalAccounts.projectsByAccount, '2026-09': [production, legacy],
+          },
         });
 
         expect(projectRows()).toEqual([

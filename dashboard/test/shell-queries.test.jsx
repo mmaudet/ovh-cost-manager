@@ -54,6 +54,12 @@ describe('query keys', () => {
       ['consumptionCurrent'],
       ['consumptionForecast'],
       ['expiringServices'],
+      // The Overview tab's: its projects by account, which wait for lists that name the
+      // account of each project, as a single account never has them (#118)
+      ['projectsByAccount', undefined, undefined],
+      ['projectsByAccount', '2026-09-01', '2026-09-30'],
+      ['gpuProjectsByAccount', undefined, undefined],
+      ['gpuProjectsByAccount', '2026-09-01', '2026-09-30'],
       // The Compare tab's: month A, August, whose summary shares the key of the shell's
       // month before (#50). Month B, September, shares the shell's keys.
       ['byService', '2026-08-01', '2026-08-31'],

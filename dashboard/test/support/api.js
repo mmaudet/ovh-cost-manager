@@ -120,6 +120,9 @@ const answers = {
   // The Overview's figures follow it too (#118)
   fetchByProject: entryForPeriodOfAccount('byProject', emptyAnswers.list),
   fetchByService: entryForPeriodOfAccount('byService', emptyAnswers.list),
+  // And its lists by account, for all accounts only (#118)
+  fetchProjectsByAccount: entryForPeriod('projectsByAccount', emptyAnswers.list),
+  fetchGpuProjectsByAccount: entryForPeriod('gpuProjectsByAccount', emptyAnswers.list),
   // Trends: by the month they end on, then by their number of months, and those of the
   // account the page selects (#120)
   fetchMonthlyTrend: (data, months, end, account) =>
