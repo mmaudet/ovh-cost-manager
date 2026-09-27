@@ -296,6 +296,18 @@ export function swatchOf(legendItem) {
   return legendItem.querySelector('span');
 }
 
+// The status of each import of the import history's table, with its tone, as the colour of
+// its text shows it: green for a success, amber for a warning, red for an error, and blue
+// while it runs
+export function importStatusesOf(table) {
+  const tones = { green: 'success', amber: 'warning', red: 'error', blue: 'running' };
+  return [...table.querySelectorAll('tbody tr')].map((row) => {
+    const status = row.cells[2].querySelector('span');
+    const colour = status.className.match(/\btext-(green|amber|red|blue)-\d+\b/)?.[1];
+    return [normalize(status.textContent), tones[colour]];
+  });
+}
+
 // The tone of a variation, as the colour of its text shows it: an increase in red, a
 // decrease in green, and neither in grey (#87)
 export function toneOf(variation) {

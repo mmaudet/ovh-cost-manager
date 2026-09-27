@@ -42,6 +42,14 @@ const IMPORT_STATUS_KEYS = {
   failed: 'importStatusFailed',
   partial: 'importStatusPartial'
 };
+// The colour of each import_log status: a partial import, one that some accounts failed and
+// the others imported (#113), is a warning. Any other status is an error.
+const IMPORT_STATUS_TONES = {
+  running: 'text-blue-600',
+  success: 'text-green-600',
+  partial: 'text-amber-600',
+  failed: 'text-red-600'
+};
 
 // The colours of each tone of the "vs previous month" variation: red when the cost grows,
 // green when it shrinks, grey when the variation rounds to 0 (#87)
@@ -637,11 +645,7 @@ export default function Dashboard() {
                       </td>
                       <td className="py-1 px-2 text-gray-600">{t(IMPORT_TYPE_KEYS[h.type] || h.type)}</td>
                       <td className="py-1 px-2">
-                        <span className={
-                          h.status === 'success' ? 'text-green-600'
-                          : h.status === 'running' ? 'text-blue-600'
-                          : 'text-red-600'
-                        }>
+                        <span className={IMPORT_STATUS_TONES[h.status] || IMPORT_STATUS_TONES.failed}>
                           {t(IMPORT_STATUS_KEYS[h.status] || h.status)}
                         </span>
                       </td>
