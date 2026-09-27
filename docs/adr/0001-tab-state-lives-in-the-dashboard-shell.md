@@ -29,13 +29,13 @@ month B is the latest month, the selected one: its summary, costs by resource ty
 Veeam backups share their keys (`summary`, `byResourceType`, `backupStats`). Month A is the
 second latest billed month (`months[1]`): when it is the month just before the latest one,
 as it is unless nothing was billed that month, its summary shares its key with the shell's
-month before. While the lists show the Account column, with all accounts shown, the
-Compare hook asks for the projects of its months by account, under the key of the Overview
-hook's projects by account (`projectsByAccount`, #119). The Compare hook owns the months it
-picks, and a shared key only means a shared cache, not a shared owner. A query that follows the account selected in the header
-carries that account in its key, after the other parts, and none when all accounts are
-shown, as its request names the account or not (#115): two queries share a key only for
-the same account, or both for all accounts.
+month before. While the lists show the Account column, with all accounts shown, the Compare
+hook asks for the projects of its months by account, under the key of the Overview hook's
+projects by account (`projectsByAccount`, #119). The Compare hook owns the months it picks,
+and a shared key only means a shared cache, not a shared owner. A query that follows the
+account selected in the header carries that account in its key, after the other parts, and
+none when all accounts are shown, as its request names the account or not (#115): two
+queries share a key only for the same account, or both for all accounts.
 
 What stays open depends on how the user moves around the page (#56):
 

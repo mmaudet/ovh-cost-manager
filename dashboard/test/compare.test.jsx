@@ -882,7 +882,10 @@ describe('Compare tab', () => {
         expect(projectComparisons()).toEqual(['Production (Projet)']);
         expect(infrastructureCosts()).toEqual([
           // (270 - 70) / 70
-          ['Liste des Serveurs dédiés présents au 15/09/2026', '70,00€', '270,00€', '+285,7 %'],
+          [
+            'Liste des Serveurs dédiés présents au 15/09/2026',
+            '70,00€', '270,00€', '+285,7 %',
+          ],
           nothingIn('VPS'),
           nothingIn('Stockage'),
           nothingIn('Load Balancer'),
@@ -1100,7 +1103,8 @@ describe('Compare tab', () => {
         });
         await openTab(user, 'Comparaison');
 
-        expect(projectRows()[3]).toEqual(['Legacy', 'Compte inconnu', '0,00€', '20,00€', '—']);
+        expect(projectRows()[3])
+          .toEqual(['Legacy', 'Compte inconnu', '0,00€', '20,00€', '—']);
 
         await selectLanguage(user, 'en');
 
