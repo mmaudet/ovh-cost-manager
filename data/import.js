@@ -11,6 +11,7 @@
  *   node import.js --diff                    # Differential import (since last import)
  *   node import.js --diff --since 2025-06-01 # Differential from specific date
  *   node import.js --diff --account xx1111-ovh  # The account of this NIC handle only
+ *   node import.js --full --account xx1111-ovh  # Clears that account only, and reimports it
  */
 
 const path = require('path');
@@ -1372,6 +1373,7 @@ function printUsage() {
   console.error('  --include-cloud-details Import cloud project instances, quotas, consumption');
   console.error('  --all                   Import all additional data');
   console.error('  --account <NIC handle>  Import the configured account of this NIC handle only');
+  console.error('                          (with --full, clear and reimport that account only)');
 }
 
 // The summary that ends a run which imported its accounts, or some of them
@@ -1403,13 +1405,6 @@ async function runImport(params) {
     process.exit(1);
     return;
   }
-  // Clearing the data of a single account comes with #114
-  if (params.full && params.account) {
-    console.error('Error: --full clears every account, so it cannot be limited to one with '
-      + '--account yet: run --full alone, or --account with --diff or --from');
-    process.exit(1);
-    return;
-  }
 
   // The accounts, before the lock is taken: a malformed configuration imports nothing
   let configuration;
@@ -1433,8 +1428,11 @@ async function runImport(params) {
     fromDate = null;
     toDate = null;
     console.log('\n=== FULL IMPORT ===');
-    console.log('This will clear the imported data and reimport it. The consumption of each');
-    console.log('project is kept: OVH cannot give its past months again.\n');
+    console.log(params.account
+      ? `This will clear the imported data of the account ${params.account} and reimport it.`
+      : 'This will clear the imported data of each account it can import, and reimport it.');
+    console.log('The consumption of each project is kept: OVH cannot give its past months '
+      + 'again.\n');
   } else if (params.diff) {
     importType = 'differential';
     if (params.since) {
@@ -1501,25 +1499,30 @@ async function runImport(params) {
       console.log(`  Attributed ${attributed} rows stored before to the account ${only.nic}`);
     }
 
-    // Cleared only once every account has named itself, and in one transaction: it would drop
-    // the data of an account that it cannot import again. Until an account can be cleared
-    // alone (#114), a full import clears every account or none, which the run's error then
-    // says. The import log keeps the entry of this import, which the other imports check.
+    // A full import clears each account that it imports, once every account has named itself,
+    // in one transaction (#114). An account that it cannot import keeps its data, which the
+    // run's error then says, as do an account no longer configured and the rows without an
+    // account. A full import of every account starts the import log again, but for the entry
+    // of this import, which the other imports check; one of a single account keeps it, as it
+    // holds the other accounts' imports.
+    const importable = accounts.filter(({ error }) => !error);
     const unimportable = accounts.filter(({ error }) => error);
-    const clearedNothing = params.full && unimportable.length > 0 && several;
-    if (params.full && unimportable.length === 0) {
+    if (params.full && importable.length > 0) {
       db.transaction(() => {
-        db.clearAll(importId);
+        for (const { nic } of importable) db.clearAccount(nic);
+        if (!params.account) db.importLog.clearAllBut(importId);
       });
-    } else if (clearedNothing) {
-      console.warn('Clearing nothing, as some accounts cannot be imported: '
+    }
+    const keptAtFull = params.full && several && unimportable.length > 0;
+    if (keptAtFull) {
+      console.warn('Keeping the data of the accounts that cannot be imported: '
         + `${joinWithAnd(unimportable.map(describeAccount))}`);
     }
 
     // The run's entry of the import log is the lock that the other imports check: the run
     // shows that it is alive as it goes, however long it takes
     const heartbeat = () => db.importLog.heartbeat(importId);
-    for (const account of accounts.filter(({ error }) => !error)) {
+    for (const account of importable) {
       if (several) console.log(`\n=== ACCOUNT ${describeAccount(account)} ===`);
       const { imported, error } = await importAccount(account.client, account.nic,
         { params, importType, toDate, heartbeat });
@@ -1538,8 +1541,9 @@ async function runImport(params) {
 
     const failed = accounts.filter(({ error }) => error);
     if (failed.length > 0) {
-      const notCleared = '. Nothing was cleared, as a full import clears every account or none';
-      const message = failureMessage(accounts, several) + (clearedNothing ? notCleared : '');
+      const kept = '. A full import clears only the accounts that it can import: the data of '
+        + `${joinWithAnd(unimportable.map(describeAccount))} was kept`;
+      const message = failureMessage(accounts, several) + (keptAtFull ? kept : '');
       if (failed.length === accounts.length) throw new Error(message);
       db.importLog.partial(importId, stats, message);
       printSummary('IMPORT PARTIAL', stats);

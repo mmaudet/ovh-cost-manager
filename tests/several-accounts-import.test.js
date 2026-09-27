@@ -605,21 +605,6 @@ describe('an import limited to one account (--account)', () => {
     expect(db.importLog.getAll()).toEqual([]);
     expect(calls).toEqual([]);
   });
-
-  // Clearing a single account's data comes with #114
-  test('is refused with --full, which clears every account', async () => {
-    const lyon = serveAccount(LYON);
-    useAccounts({ served: lyon });
-
-    await runImport({ full: true, account: LYON.nic });
-
-    expect(process.exit).toHaveBeenCalledWith(1);
-    expect(console.error).toHaveBeenCalledWith('Error: --full clears every account, so it '
-      + 'cannot be limited to one with --account yet: run --full alone, or --account with '
-      + '--diff or --from');
-    expect(db.importLog.getAll()).toEqual([]);
-    expect(calls).toEqual([]);
-  });
 });
 
 describe('a full import of several accounts', () => {
@@ -639,26 +624,25 @@ describe('a full import of several accounts', () => {
     expect(runs()).toEqual([['success', null]]);
   });
 
-  // Clearing would drop the data of the account that it cannot import again
-  test('clears nothing when an account cannot be read, and imports the others', async () => {
-    const lyon = serveAccount(LYON);
-    storeBill('FR-L0', '2026-08-01', LYON.nic);
-    storeBill('FR-P0', '2026-08-01', PARIS.nic);
-    serveBills(lyon.routes, [['FR-L1', '2026-09-01']]);
-    useAccounts({ served: lyon }, { served: REVOKED });
+  // Clearing would drop the data of the account that it cannot import again (#114)
+  test('clears the accounts it can read, and imports them, when another cannot be read',
+    async () => {
+      const lyon = serveAccount(LYON);
+      storeBill('FR-L0', '2026-08-01', LYON.nic);
+      storeBill('FR-P0', '2026-08-01', PARIS.nic);
+      serveBills(lyon.routes, [['FR-L1', '2026-09-01']]);
+      useAccounts({ served: lyon }, { served: REVOKED });
 
-    await runImport({ full: true });
+      await runImport({ full: true });
 
-    expect(storedBills()).toEqual([
-      ['FR-L0', LYON.nic], ['FR-L1', LYON.nic], ['FR-P0', PARIS.nic],
-    ]);
-    // Said where the import history shows it, not only in the console
-    expect(runs()).toEqual([[
-      'partial',
-      '1 of 2 accounts failed: accounts[1]: This credential is not valid. Nothing was cleared, '
-        + 'as a full import clears every account or none',
-    ]]);
-  });
+      expect(storedBills()).toEqual([['FR-L1', LYON.nic], ['FR-P0', PARIS.nic]]);
+      // Said where the import history shows it, not only in the console
+      expect(runs()).toEqual([[
+        'partial',
+        '1 of 2 accounts failed: accounts[1]: This credential is not valid. A full import '
+          + 'clears only the accounts that it can import: the data of accounts[1] was kept',
+      ]]);
+    });
 });
 
 describe('the rows stored before the accounts', () => {

@@ -479,6 +479,13 @@ const importLogOps = {
     return db.prepare('SELECT * FROM import_log ORDER BY id DESC').all();
   },
 
+  // Clears the log of every import but the one given: a full import of every account starts
+  // the log again, but for its own entry, which tells the other imports that it runs
+  clearAllBut: (id) => {
+    const db = getDb();
+    return db.prepare('DELETE FROM import_log WHERE id IS NOT ?').run(id);
+  },
+
   // Records that the running import is alive, which keeps its lock: a run over several
   // accounts, or over an account's whole history, can take longer than 30 minutes (#113)
   heartbeat: (id) => {
@@ -2163,13 +2170,14 @@ const cloudDetailOps = {
 };
 
 /**
- * Clears the imported data, for a full import. What the import cannot fetch again is kept:
- * the consumption of each project, of which OVH gives the current month only (#54), with
- * the month of its last import (import_state) and the projects it belongs to. The account
- * and consumption snapshots are cleared: only their latest is read, which the import
- * fetches again.
- * @param {?number} [importId] - The import log entry of the full import, which is kept, as
- *   it tells the other imports that this one runs. The rest of the log is cleared.
+ * Clears the imported data of every account, and of none, as a full import did before #114:
+ * a full import now clears each account that it imports again, see clearAccount(). What an
+ * import cannot fetch again is kept: the consumption of each project, of which OVH gives the
+ * current month only (#54), with the month of its last import (import_state) and the
+ * projects it belongs to. The account and consumption snapshots are cleared: only their
+ * latest is read, which an import fetches again.
+ * @param {?number} [importId] - The import log entry to keep, as it tells the other imports
+ *   that one runs. The rest of the log is cleared.
  */
 function clearAll(importId = null) {
   const db = getDb();
@@ -2191,6 +2199,41 @@ function clearAll(importId = null) {
   db.exec('DELETE FROM dedicated_servers');
   db.exec('DELETE FROM vps_instances');
   db.exec('DELETE FROM storage_services');
+}
+
+/**
+ * Clears the imported data of an account, for a full import of it (#114): its bills and
+ * their lines, its inventories, the resources of its projects, its balance and consumption
+ * snapshots, its credit movements and its consumption history, which the import fetches
+ * again. What it cannot fetch again is kept, as clearAll() keeps it: the consumption of each
+ * of its projects, with the month of its last import and the projects it belongs to. Another
+ * account's data, and the rows without an account, stay, with the projects of this account
+ * whose lines are on another account's bills.
+ * @param {string} nic - The NIC handle of the account
+ */
+function clearAccount(nic) {
+  const db = getDb();
+  const run = (sql) => db.prepare(sql).run(nic);
+  // First the rows that reference its bills and its projects
+  run('DELETE FROM bill_details WHERE bill_id IN (SELECT id FROM bills WHERE account = ?)');
+  for (const table of [
+    'cloud_instances', 'project_quotas', 'object_storage_buckets', 'cloud_volumes',
+    'cloud_snapshots',
+  ]) {
+    run(`DELETE FROM ${table} WHERE project_id IN (SELECT id FROM projects WHERE account = ?)`);
+  }
+  run('DELETE FROM bills WHERE account = ?');
+  run(`
+    DELETE FROM projects WHERE account = ?
+      AND id NOT IN (SELECT project_id FROM project_consumption)
+      AND id NOT IN (SELECT project_id FROM bill_details WHERE project_id IS NOT NULL)
+  `);
+  for (const table of [
+    'consumption_snapshots', 'consumption_history', 'account_balance', 'credit_movements',
+    'dedicated_servers', 'vps_instances', 'storage_services',
+  ]) {
+    run(`DELETE FROM ${table} WHERE account = ?`);
+  }
 }
 
 /**
@@ -2318,6 +2361,7 @@ module.exports = {
   getDb,
   closeDb,
   clearAll,
+  clearAccount,
   transaction,
   allocateProRata,
   UNKNOWN_ACCOUNT,

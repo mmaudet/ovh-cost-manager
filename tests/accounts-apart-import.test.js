@@ -7,7 +7,7 @@
 const {
   ok, calls, serveAccount, useConfig, useThrowawayImport,
 } = require('./support/simulated-ovh');
-const { asBefore114 } = require('./support/database-before');
+const { ROOT_TABLES, asBefore114 } = require('./support/database-before');
 
 jest.mock('ovh', () => require('./support/simulated-ovh').ovh);
 jest.mock('jsonfile', () => require('./support/simulated-ovh').jsonfile);
@@ -455,5 +455,199 @@ describe('the accounts that the configuration lists', () => {
       expect(routesCalledWith(paris)).toEqual([]);
       expect(placesInConfiguration()).toEqual([[LYON.nic, 0], [PARIS.nic, null]]);
     });
+  });
+});
+
+// A bill of the account, as an earlier import stored it, with one line
+function storeBill(id, date, nic) {
+  db.bills.upsert({
+    id, date, price_without_tax: 10, price_with_tax: 12, tax: 2, currency: 'EUR',
+    pdf_url: null, html_url: null, account: nic,
+  });
+  db.details.insert({
+    id: `${id}_D1`, bill_id: id, project_id: null, domain: 'example.com',
+    description: 'Service example.com', quantity: 1, unit_price: 10, total_price: 10,
+    service_type: 'Other',
+  });
+}
+
+// What an earlier import stored for the account, whose rows `tag` tells apart: a bill of
+// August, a service of each inventory, its balance and consumption snapshots, a credit
+// movement, its consumption history, a project whose consumption is kept, with the month of
+// that consumption, and a project with an instance
+function storeDataOf(nic, tag) {
+  storeBill(`FR-${tag}0`, '2026-08-01', nic);
+  storeServer(`ns-${tag}`, nic);
+  storeVps(`vps-${tag}`, nic);
+  storeStorage(`netapp-${tag}`, nic);
+  db.balance.insertBalance({
+    debt_balance: 0, credit_balance: 50, deposit_total: 0, currency: 'EUR', account: nic,
+  });
+  db.consumption.insertSnapshot({
+    period_start: '2026-09-01', period_end: '2026-09-14', current_total: 100,
+    forecast_total: 200, currency: 'EUR', raw_data: '{}', account: nic,
+  });
+  db.balance.insertCreditMovement({
+    id: 'PREPAID_ACCOUNT_1', balance_name: 'PREPAID_ACCOUNT', amount: 50, date: '2026-09-01',
+    description: 'Voucher', movement_type: 'VOUCHER', account: nic,
+  });
+  db.consumption.insertHistory({
+    period_start: '2026-07-01', period_end: '2026-07-31', service_type: 'consumption',
+    total: 90, currency: 'EUR', raw_data: '{}', account: nic,
+  });
+  storeProject(`proj-${tag}-used`, nic);
+  db.cloudDetails.insertConsumption({
+    project_id: `proj-${tag}-used`, period_start: '2026-09-01', period_end: '2026-09-14',
+    resource_type: 'instance', resource_id: 'inst-1', resource_name: 'b2-7', quantity: 100,
+    unit: 'Hour', unit_price: 0, total_price: 12.25, region: 'GRA11',
+  });
+  db.cloudDetails.setCurrentConsumptionMonth('2026-09-01', nic);
+  storeProject(`proj-${tag}-idle`, nic);
+  db.cloudDetails.upsertInstance({
+    id: `inst-${tag}`, project_id: `proj-${tag}-idle`, name: 'web-1', flavor: 'b2-7',
+    region: 'GRA11', status: 'ACTIVE', created_at: null, monthly_billing: 0,
+  });
+}
+
+// The rows of the account in each table that the imports feed: those that carry its NIC
+// handle, and those whose bill or project does
+function contentOf(nic) {
+  const rows = (sql) => db.getDb().prepare(sql).all(nic);
+  const ofItsProjects = (table) => rows(`
+    SELECT child.* FROM ${table} child JOIN projects p ON p.id = child.project_id
+    WHERE p.account = ?
+  `);
+  return {
+    ...Object.fromEntries(ROOT_TABLES.map(table =>
+      [table, rows(`SELECT * FROM ${table} WHERE account = ?`)])),
+    bill_details: rows(`
+      SELECT d.* FROM bill_details d JOIN bills b ON b.id = d.bill_id WHERE b.account = ?
+    `),
+    project_consumption: ofItsProjects('project_consumption'),
+    cloud_instances: ofItsProjects('cloud_instances'),
+    import_state: rows('SELECT * FROM import_state WHERE account = ?'),
+  };
+}
+
+// The ids of the account's rows in each table, as contentOf() gives them
+const idsOf = (nic) => Object.fromEntries(Object.entries(contentOf(nic))
+  .map(([table, rows]) => [table, rows.map(row => row.id ?? row.key)]));
+
+// What the account holds once a full import cleared it, and imported again a bill of
+// September and no project: the consumption of a project, which OVH cannot give again, is
+// kept, with the project and the month of its last import
+const clearedAndImportedAgain = (tag) => ({
+  bills: [`FR-${tag}1`],
+  projects: [`proj-${tag}-used`],
+  dedicated_servers: [],
+  vps_instances: [],
+  storage_services: [],
+  account_balance: [],
+  consumption_snapshots: [],
+  consumption_history: [],
+  credit_movements: [],
+  bill_details: [`FR-${tag}1_D1`],
+  project_consumption: [expect.any(Number)],
+  cloud_instances: [],
+  import_state: ['consumption_month'],
+});
+
+// How each run of the import log ended, as [status, error]
+const runs = () => db.importLog.getAll().map(entry => [entry.status, entry.error_message]);
+
+describe('a full import of one account (--full --account)', () => {
+  // Lyon and Paris with what an earlier import stored for each; Lyon's API now lists a bill
+  // of September and no project
+  function storeLyonAndParis() {
+    const lyon = serveAccount(LYON);
+    const paris = serveAccount(PARIS);
+    storeDataOf(LYON.nic, 'L');
+    storeDataOf(PARIS.nic, 'P');
+    serveProjects(lyon.routes);
+    serveBills(lyon.routes, [['FR-L1', '2026-09-01']]);
+    return { lyon, paris };
+  }
+
+  test('clears that account\'s data only, and imports it again', async () => {
+    const { lyon, paris } = storeLyonAndParis();
+    const ofParis = contentOf(PARIS.nic);
+    useAccounts({ served: lyon }, { served: paris });
+
+    await runImport({ full: true, account: LYON.nic });
+
+    expect(idsOf(LYON.nic)).toEqual(clearedAndImportedAgain('L'));
+    expect(contentOf(PARIS.nic)).toEqual(ofParis);
+    expect(runs()).toEqual([['success', null]]);
+    expect(routesCalledWith(paris)).toEqual(['/me']);
+  });
+
+  // It holds the imports of the other accounts
+  test('keeps the log of the imports', async () => {
+    const { lyon, paris } = storeLyonAndParis();
+    const earlier = db.importLog.start('differential', '2026-08-01', '2026-09-14');
+    db.importLog.complete(earlier, { bills: 2, details: 2, projects: 4 });
+    useAccounts({ served: lyon }, { served: paris });
+
+    await runImport({ full: true, account: LYON.nic });
+
+    expect(db.importLog.getAll().map(entry => [entry.type, entry.status]))
+      .toEqual([['full', 'success'], ['differential', 'success']]);
+  });
+
+  test('clears nothing when that account cannot be read', async () => {
+    const { paris } = storeLyonAndParis();
+    db.accounts.upsert({ nic: LYON.nic, currency: 'EUR', name: 'Lyon' });
+    const before = [contentOf(LYON.nic), contentOf(PARIS.nic)];
+    useAccounts({ served: REVOKED, name: 'Lyon' }, { served: paris });
+
+    await runImport({ full: true, account: LYON.nic });
+
+    expect([contentOf(LYON.nic), contentOf(PARIS.nic)]).toEqual(before);
+    expect(runs()).toEqual([[
+      'failed',
+      '1 of 1 account failed: "Lyon": This credential is not valid. A full import clears only '
+        + 'the accounts that it can import: the data of "Lyon" was kept',
+    ]]);
+  });
+});
+
+describe('a full import of every account', () => {
+  // Each account that it can import again: Paris's key is revoked, and its entry's name is
+  // the one that an import recorded it with
+  test('clears only the accounts that it can import, and says so', async () => {
+    const lyon = serveAccount(LYON);
+    storeDataOf(LYON.nic, 'L');
+    storeDataOf(PARIS.nic, 'P');
+    db.accounts.upsert({ nic: PARIS.nic, currency: 'EUR', name: 'Paris' });
+    const ofParis = contentOf(PARIS.nic);
+    serveProjects(lyon.routes);
+    serveBills(lyon.routes, [['FR-L1', '2026-09-01']]);
+    useAccounts({ served: lyon }, { served: REVOKED, name: 'Paris' });
+
+    await runImport({ full: true });
+
+    expect(idsOf(LYON.nic)).toEqual(clearedAndImportedAgain('L'));
+    expect(contentOf(PARIS.nic)).toEqual(ofParis);
+    expect(runs()).toEqual([[
+      'partial',
+      '1 of 2 accounts failed: "Paris": This credential is not valid. A full import clears '
+        + 'only the accounts that it can import: the data of "Paris" was kept',
+    ]]);
+  });
+
+  test('keeps the data of an account removed from the configuration', async () => {
+    const lyon = serveAccount(LYON);
+    storeDataOf(LYON.nic, 'L');
+    storeDataOf(PARIS.nic, 'P');
+    const ofParis = contentOf(PARIS.nic);
+    serveProjects(lyon.routes);
+    serveBills(lyon.routes, [['FR-L1', '2026-09-01']]);
+    useAccounts({ served: lyon });
+
+    await runImport({ full: true });
+
+    expect(idsOf(LYON.nic)).toEqual(clearedAndImportedAgain('L'));
+    expect(contentOf(PARIS.nic)).toEqual(ofParis);
+    expect(runs()).toEqual([['success', null]]);
   });
 });
