@@ -570,20 +570,18 @@ function registerRoutes() {
     }
   });
 
-  // The month of the latest bill of an account, as req.account holds it, or of any account
-  // for null (#120): YYYY-MM, or undefined when nothing was billed to it
-  const latestBilledMonth = (account) => db.bills.getMonths(account)[0];
+  // The month of the latest bill, YYYY-MM, or undefined when nothing was billed
+  const latestBilledMonth = () => db.bills.getLatestDate()?.slice(0, 7);
 
   // The trend over the `months` months that end on the `end` month (YYYY-MM), that one
   // included: 6 months, and the month of the latest bill, by default. Each of them, at 0
   // for a month without any bill, or none when none of them has a bill (#65). That of the
-  // account the request asks for, its latest bill included, or of every account without one
-  // (#120).
+  // account the request asks for, or of every account without one (#120). By default, it
+  // ends on the latest bill of any account for one account too: the trends of the accounts
+  // then cover the same months, and add up to that of every account.
   app.get('/api/analysis/monthly-trend', accountParameter, (req, res) => {
     try {
-      const { valid, error, from, to } = trendWindowFromQuery(
-        req.query, latestBilledMonth(req.account),
-      );
+      const { valid, error, from, to } = trendWindowFromQuery(req.query, latestBilledMonth());
       if (!valid) {
         return res.status(400).json({ error });
       }
@@ -614,9 +612,7 @@ function registerRoutes() {
   // account included (#120).
   app.get('/api/analysis/monthly-trend-by-category', accountParameter, (req, res) => {
     try {
-      const { valid, error, from, to } = trendWindowFromQuery(
-        req.query, latestBilledMonth(req.account),
-      );
+      const { valid, error, from, to } = trendWindowFromQuery(req.query, latestBilledMonth());
       if (!valid) {
         return res.status(400).json({ error });
       }

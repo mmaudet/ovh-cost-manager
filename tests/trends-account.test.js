@@ -140,14 +140,28 @@ describe('GET /api/analysis/monthly-trend', () => {
       });
     });
 
-    test('ends on the month of the latest bill of the account it gives', async () => {
-      // July, not September
-      expect(await trend(`months=3&account=${PARIS}`)).toEqual({
-        status: 200,
-        body: [month('2026-05', 150), month('2026-06', 0), month('2026-07', 240)],
+    // So that the months of an account's trend are those of every account's
+    test('ends on that month for an account too, at 0 € in the months not billed to it',
+      async () => {
+        // Paris was last billed in July
+        expect(await trend(`months=3&account=${PARIS}`)).toEqual({
+          status: 200,
+          body: [month('2026-07', 240), month('2026-08', 0), month('2026-09', 0)],
+        });
+        // None: no months, as over months without any bill (#65)
+        expect(await trend(`months=3&account=${NEW_ACCOUNT}`))
+          .toEqual({ status: 200, body: [] });
       });
-      // None: no months, as with no bill at all
-      expect(await trend(`months=3&account=${NEW_ACCOUNT}`)).toEqual({ status: 200, body: [] });
+
+    test('gives trends of the accounts that add up to that of every account', async () => {
+      const costsOf = async (parameters) =>
+        (await trend(parameters)).body.map(({ cost }) => cost);
+      const ofEachAccount = await Promise.all([LYON, PARIS, 'unknown']
+        .map((account) => costsOf(`months=3&account=${account}`)));
+
+      expect(ofEachAccount[0].map((_, index) =>
+        ofEachAccount.reduce((sum, costs) => sum + costs[index], 0)))
+        .toEqual(await costsOf('months=3'));
     });
   });
 });
@@ -203,16 +217,17 @@ describe('GET /api/analysis/monthly-trend-by-category', () => {
       .toEqual({ status: 200, body: { categories: [], data: [] } });
   });
 
-  test('ends on the month of the latest bill of the account it gives, without an end month',
+  // As the monthly trend does
+  test('ends on the month of the latest bill for an account too, without an end month',
     async () => {
       expect(await trend(`months=3&account=${PARIS}`)).toEqual({
         status: 200,
         body: {
           categories: [PUBLIC_CLOUD, DOMAINS],
           data: [
-            { yearMonth: '2026-05', cloud_project: 150, domain: 0 },
-            { yearMonth: '2026-06', cloud_project: 0, domain: 0 },
             { yearMonth: '2026-07', cloud_project: 200, domain: 40 },
+            { yearMonth: '2026-08', cloud_project: 0, domain: 0 },
+            { yearMonth: '2026-09', cloud_project: 0, domain: 0 },
           ],
         },
       });
