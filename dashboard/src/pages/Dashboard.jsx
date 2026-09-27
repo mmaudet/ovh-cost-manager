@@ -97,9 +97,10 @@ export default function Dashboard() {
   const accounts = accountList ? accountsOf(accountList) : (accountsFailed ? [] : undefined);
 
   // The account the page shows, page-wide: null for all accounts, undefined until the page
-  // knows it. The months list, the KPI cards of the month's figures, the Overview's figures
-  // (#118), the Compare tab and the Veeam backups (#119) and the Web Cloud tab follow it; the
-  // other cards and tabs follow it in the next tickets (#116 to #123).
+  // knows it. The months list, the KPI cards of the month's figures and of the current month's
+  // consumption (#116), the Overview's figures (#118), the Compare tab and the Veeam backups
+  // (#119) and the Web Cloud tab follow it; the other cards and tabs follow it in the next
+  // tickets (#117 to #123).
   const { selectedAccount, selectAccount } = useSelectedAccount(accounts);
   // The Account column of the lists, which name the account of each row with all accounts
   // shown, when the page offers several (#121): null when they name none
@@ -180,16 +181,17 @@ export default function Dashboard() {
     refetchInterval: (query) => (query.state.data?.running ? 30000 : false)
   });
 
-  // The current month's consumption so far and its month-end forecast, for the KPI cards
-  const { data: consumptionCurrent } = useQuery({
-    queryKey: ['consumptionCurrent'],
-    queryFn: fetchConsumptionCurrent
-  });
+  // The current month's consumption so far and its month-end forecast, for the KPI cards: the
+  // account shown's, or the sum of the accounts' for all accounts (#116)
+  const { data: consumptionCurrent } = useQuery(accountQuery(selectedAccount, {
+    key: ['consumptionCurrent'],
+    fetch: fetchConsumptionCurrent,
+  }));
 
-  const { data: consumptionForecast } = useQuery({
-    queryKey: ['consumptionForecast'],
-    queryFn: fetchConsumptionForecast
-  });
+  const { data: consumptionForecast } = useQuery(accountQuery(selectedAccount, {
+    key: ['consumptionForecast'],
+    fetch: fetchConsumptionForecast,
+  }));
 
   const { data: expiringServices = [] } = useQuery({
     queryKey: ['expiringServices'],

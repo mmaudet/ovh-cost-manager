@@ -35,12 +35,25 @@ const costCard = (cost, variation) => ['Coût total du mois', cost, variation];
 const allAccountsCost = costCard('1 250,40€', '+20,0 % vs mois précédent');
 const lyonCost = costCard('890,40€', '+45,5 % vs mois précédent');
 
+// The cards of the current month's consumption and of its month-end forecast (#116), on the
+// 15th of September, as the user reads them: the consumption and where it comes from, the
+// forecast and the days that it extrapolates
+const consumption = () => texts(cardOf('Consommation en cours'));
+const forecast = () => texts(cardOf('Prévision fin de mois'));
+const consumptionCard = (amount, projects) => [
+  'Consommation en cours', '15 septembre 2026', amount, `Public Cloud · ${projects} projets cloud`,
+];
+const forecastCard = (amount) => [
+  'Prévision fin de mois', 'Septembre 2026', amount, '14/30 jours',
+];
+
 // The dropdowns of the page, in their order, each as the option it shows
 const dropdownsShown = () => screen.getAllByRole('combobox').map((select) => texts(select)[0]);
 
 // The account selector of the header (#115): the accounts the instance knows, all of them by
-// default. The month selector and the KPI cards of the month's figures follow the account
-// selected; the other cards and the tabs follow it in the next tickets (#116 to #123).
+// default. The month selector, the KPI cards of the month's figures and those of the current
+// month's consumption (#116) follow the account selected; the other cards and the tabs follow
+// it in the next tickets (#117 to #123).
 describe('account selector', () => {
   describe('in the header', () => {
     it.each([
@@ -146,6 +159,49 @@ describe('account selector', () => {
       expect(monthCost()).toEqual(costCard('120,00€', 'Pas de données précédentes'));
       expect(cloudTotal()).toEqual(['Total Cloud', '0,00€', 'Public Cloud']);
       expect(activeProjects()).toEqual(['Projets actifs', '0', 'avec consommation']);
+    });
+
+    // The sum of the accounts', which their projects tell over the same days
+    it("show the current month's consumption and forecast of all accounts by default",
+      async () => {
+        await renderDashboard(severalAccounts);
+
+        expect(consumption()).toEqual(consumptionCard('402,35€', 2));
+        expect(forecast()).toEqual(forecastCard('862,18€'));
+      });
+
+    it("show the current month's consumption and forecast of the account selected",
+      async () => {
+        const { user } = await renderDashboard(severalAccounts);
+
+        await selectAccount(user, 'Lyon subsidiary');
+
+        expect(consumption()).toEqual(consumptionCard('350,00€', 1));
+        expect(forecast()).toEqual(forecastCard('750,00€'));
+
+        await selectAccount(user, 'yy2222-ovh');
+
+        expect(consumption()).toEqual(consumptionCard('52,35€', 1));
+        expect(forecast()).toEqual(forecastCard('112,18€'));
+
+        await selectAccount(user, 'Tous les comptes');
+
+        expect(consumption()).toEqual(consumptionCard('402,35€', 2));
+        expect(forecast()).toEqual(forecastCard('862,18€'));
+      });
+
+    // Its import stopped in August, before any consumption this month: the cards show none,
+    // rather than the consumption of all accounts, with the card of its resources of August
+    it('show no consumption for an account that has none this month', async () => {
+      const { user } = await renderDashboard(severalAccounts);
+
+      await selectAccount(user, 'zz3333-ovh (non configuré)');
+
+      expect(texts(cardRowOf('Consommation en cours'))).toEqual([
+        'Consommation en cours', '15 septembre 2026', '0,00€', 'Prévision fin de mois',
+        'Prévision fin de mois', 'Septembre 2026', '0,00€', 'Prévision fin de mois',
+        'Total ressources', '1', '1 Serveurs dédiés · 0 VPS · 0 Projets Cloud',
+      ]);
     });
   });
 

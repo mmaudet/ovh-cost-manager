@@ -11,10 +11,10 @@ import { webCloudOfSeveralAccounts } from './web-cloud.js';
 // The accounts route lists them as it does since #114: with their id, the value of the
 // account parameter, whether config.json still lists them, and which one is the Unknown
 // account, and, since #124, when the last import of each that succeeded ended. What the page
-// asks for with an account, such as its months list, its summaries, the figures of the months
-// that the Compare tab compares (#119), its Public Cloud (#121) and its Web Cloud services
-// (#122), is under `ofAccount`, by the id of the account (see support/api.js). web-cloud.js
-// gives the Web Cloud services for all accounts too.
+// asks for with an account, such as its months list, its summaries, its current consumption
+// (#116), the figures of the months that the Compare tab compares (#119), its Public Cloud
+// (#121) and its Web Cloud services (#122), is under `ofAccount`, by the id of the account
+// (see support/api.js). web-cloud.js gives the Web Cloud services for all accounts too.
 
 const [september, august, july] = months;
 // The Public Cloud projects of account.js
@@ -111,6 +111,18 @@ const domains = (value) => resourceType('Domains', 'domain', '#8b5cf6', value, 2
 const dedicatedServers = (value) =>
   resourceType('Dedicated Servers', 'dedicated_server', '#ef4444', value, 1, 1);
 
+// The current month's consumption and month-end forecast of an account that one Public Cloud
+// project consumed in, as the consumption routes answer (#116): up to the 15th of September,
+// as account.js, whose own add up those of its accounts, which cover the same 14 days
+const consumptionOf = ({ current, forecast, progress }) => ({
+  consumptionCurrent: {
+    ...account.consumptionCurrent, current_total: current, project_count: 1,
+  },
+  consumptionForecast: {
+    ...account.consumptionForecast, forecast_total: forecast, current_total: current, progress,
+  },
+});
+
 export const severalAccounts = {
   ...account,
   ...webCloudOfSeveralAccounts.all,
@@ -173,6 +185,8 @@ export const severalAccounts = {
         '2026-09': { cloud_project: 610.4, dedicated_server: 270, license: 10 },
       }),
       projectsEnriched: [lyonProduction],
+      // What its Production project consumed: 350 € over 14 days, 750 € over 30
+      ...consumptionOf({ current: 350, forecast: 750, progress: 47 }),
       // Its Cloud total of September: every figure of all accounts but those of Staging
       publicCloudStats: {
         '2026-09': publicCloudFigures({
@@ -228,6 +242,8 @@ export const severalAccounts = {
         '2026-09': { cloud_project: 220, backup: 90, domain: 35, license: 15 },
       }),
       projectsEnriched: [unnamedStaging],
+      // What its Staging project consumed
+      ...consumptionOf({ current: 52.35, forecast: 112.18, progress: 47 }),
       // Its Cloud total of September: the instances of Staging, and the registry
       publicCloudStats: {
         '2026-09': publicCloudFigures({

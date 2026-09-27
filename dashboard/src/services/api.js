@@ -119,14 +119,15 @@ export const fetchUser = async () => {
   return data;
 };
 
-// Phase 1: Consumption
-export const fetchConsumptionCurrent = async () => {
-  const { data } = await api.get('/consumption/current');
+// Phase 1: Consumption. The current month's consumption so far and its month-end forecast of
+// the account, the sum of the accounts' for all accounts (#116)
+export const fetchConsumptionCurrent = async (account = null) => {
+  const { data } = await api.get('/consumption/current', { params: accountParams(account) });
   return data;
 };
 
-export const fetchConsumptionForecast = async () => {
-  const { data } = await api.get('/consumption/forecast');
+export const fetchConsumptionForecast = async (account = null) => {
+  const { data } = await api.get('/consumption/forecast', { params: accountParams(account) });
   return data;
 };
 
