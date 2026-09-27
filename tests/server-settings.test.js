@@ -22,6 +22,26 @@ test('refuses an auth section that is not an object', async () => {
   expect(output).toMatch(/auth in .*config\.json must be an object, not true/);
 }, 20000);
 
+// 0 says what false says, and a count above 10, far above any real chain of
+// proxies, would let a client choose the address that rate limiting sees
+test.each(['0', '11'])('refuses TRUST_PROXY=%s, naming it', async (value) => {
+  const { code, output } = await runOcmUntilExit({ TRUST_PROXY: value });
+  expect(code).toBe(1);
+  expect(output)
+    .toContain(`TRUST_PROXY must be true, false or an integer from 1 to 10, not "${value}"`);
+}, 20000);
+
+// TRUST_PROXY drives the CORS and Host checks and the session cookie too:
+// the log says it with rate limiting off, as the server runs here by default
+test('logs the proxies it trusts at startup, with rate limiting off too', async () => {
+  const ocm = await startOcm(() => ({ TRUST_PROXY: '2' }));
+  try {
+    await ocm.logged('Trust proxy: 2 proxies');
+  } finally {
+    await ocm.stop();
+  }
+}, 30000);
+
 test('refuses an IMPORT_ENABLED other than true or false', async () => {
   const { code, output } = await runOcmUntilExit({ IMPORT_ENABLED: 'no' });
   expect(code).toBe(1);

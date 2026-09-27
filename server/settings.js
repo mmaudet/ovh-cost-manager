@@ -5,6 +5,14 @@
  * than turn a protection off.
  */
 
+// How the errors name what config.json must hold, where a JSON string, such
+// as "true" or "100", is refused
+const JSON_BOOLEANS = 'true or false (JSON booleans)';
+const A_JSON_NUMBER = '(a JSON number)';
+
+// The most proxies TRUST_PROXY counts, far above any real chain of them
+const MAX_PROXIES = 10;
+
 /**
  * Reads a true/false setting: from the environment, the text true or false,
  * in any case; from config.json, the JSON booleans true or false. auto too
@@ -20,23 +28,20 @@
  *   unset, or empty in the environment
  */
 function parseBoolean(value, { name, fromFile = false, auto = false }) {
-  if (value === undefined || (!fromFile && value === '')) {
+  if (isUnset(value, fromFile)) {
     return undefined;
   }
-  if (fromFile && typeof value === 'boolean') {
-    return value;
+  const boolean = asBoolean(value, fromFile);
+  if (boolean !== null) {
+    return boolean;
   }
-  const text = typeof value === 'string' ? value.toLowerCase() : null;
-  if (!fromFile && (text === 'true' || text === 'false')) {
-    return text === 'true';
-  }
-  if (auto && text === 'auto') {
+  if (auto && typeof value === 'string' && value.toLowerCase() === 'auto') {
     return 'auto';
   }
   const expected = fromFile
-    ? `true or false (JSON booleans)${auto ? ', or "auto"' : ''}`
+    ? `${JSON_BOOLEANS}${auto ? ', or "auto"' : ''}`
     : `true${auto ? ', false or auto' : ' or false'}`;
-  throw new Error(`${name} must be ${expected}, not ${JSON.stringify(value)}`);
+  throw refusal(name, expected, value);
 }
 
 /**
@@ -53,15 +58,47 @@ function parseBoolean(value, { name, fromFile = false, auto = false }) {
  *   the environment
  */
 function parsePositiveInteger(value, { name, fromFile = false }) {
-  if (value === undefined || (!fromFile && value === '')) {
+  if (isUnset(value, fromFile)) {
     return undefined;
   }
-  const number = fromFile || !/^\d+$/.test(value) ? value : Number(value);
-  if (typeof number === 'number' && Number.isSafeInteger(number) && number > 0) {
+  const number = asPositiveInteger(value, fromFile);
+  if (number !== null) {
     return number;
   }
-  const expected = fromFile ? 'a positive integer (a JSON number)' : 'a positive integer';
-  throw new Error(`${name} must be ${expected}, not ${JSON.stringify(value)}`);
+  throw refusal(name, `a positive integer${fromFile ? ` ${A_JSON_NUMBER}` : ''}`, value);
+}
+
+/**
+ * Reads TRUST_PROXY, how many proxies the server trusts: true (one proxy),
+ * false (none), or an integer from 1 to 10, digits in the environment and a
+ * JSON number in config.json. Anything else throws, naming the setting: a
+ * count above the real number of proxies lets a client choose the address
+ * that rate limiting sees.
+ *
+ * @param {*} value - the variable's text, or the value in config.json
+ * @param {object} setting
+ * @param {string} setting.name - the setting, as the error names it
+ * @param {boolean} [setting.fromFile] - whether the value comes from config.json
+ * @returns {number|undefined} the number of proxies, 0 for false, or undefined
+ *   when unset, or empty in the environment
+ */
+function parseProxyCount(value, { name, fromFile = false }) {
+  if (isUnset(value, fromFile)) {
+    return undefined;
+  }
+  const trusted = asBoolean(value, fromFile);
+  if (trusted !== null) {
+    return trusted ? 1 : 0;
+  }
+  const count = asPositiveInteger(value, fromFile);
+  if (count !== null && count <= MAX_PROXIES) {
+    return count;
+  }
+  const integer = `an integer from 1 to ${MAX_PROXIES}`;
+  const expected = fromFile
+    ? `${JSON_BOOLEANS}, or ${integer} ${A_JSON_NUMBER}`
+    : `true, false or ${integer}`;
+  throw refusal(name, expected, value);
 }
 
 /**
@@ -79,13 +116,12 @@ function parsePositiveInteger(value, { name, fromFile = false }) {
  *   in the environment
  */
 function parseList(value, { name, fromFile = false }) {
-  if (value === undefined || (!fromFile && value === '')) {
+  if (isUnset(value, fromFile)) {
     return undefined;
   }
   const entries = typeof value === 'string' ? value.split(',') : value;
   if (!Array.isArray(entries) || !entries.every((entry) => typeof entry === 'string')) {
-    throw new Error(`${name} must be an array of strings or a comma-separated string, `
-      + `not ${JSON.stringify(value)}`);
+    throw refusal(name, 'an array of strings or a comma-separated string', value);
   }
   return entries.map((entry) => entry.trim()).filter((entry) => entry !== '');
 }
@@ -120,4 +156,40 @@ function readSection(parent, key, { name }) {
   throw new Error(`${name} must be an object, not ${shown}`);
 }
 
-module.exports = { parseBoolean, parsePositiveInteger, parseList, readSection };
+// Whether a setting is unset: absent, or empty in the environment, as a
+// compose file passes a variable that .env leaves out
+function isUnset(value, fromFile) {
+  return value === undefined || (!fromFile && value === '');
+}
+
+// The error of a value that the setting does not take, which it quotes
+function refusal(name, expected, value) {
+  return new Error(`${name} must be ${expected}, not ${JSON.stringify(value)}`);
+}
+
+// The value as a boolean, or null when it is none: from the environment, the
+// text true or false, in any case; from config.json, a JSON boolean
+function asBoolean(value, fromFile) {
+  if (fromFile) {
+    return typeof value === 'boolean' ? value : null;
+  }
+  const text = typeof value === 'string' ? value.toLowerCase() : null;
+  return text === 'true' || text === 'false' ? text === 'true' : null;
+}
+
+// The value as a positive integer, or null when it is none: from the
+// environment, digits only; from config.json, a JSON number
+function asPositiveInteger(value, fromFile) {
+  const number = fromFile || !/^\d+$/.test(value) ? value : Number(value);
+  return typeof number === 'number' && Number.isSafeInteger(number) && number > 0
+    ? number
+    : null;
+}
+
+module.exports = {
+  parseBoolean,
+  parsePositiveInteger,
+  parseProxyCount,
+  parseList,
+  readSection,
+};

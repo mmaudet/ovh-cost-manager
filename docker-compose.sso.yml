@@ -38,7 +38,8 @@
 #   OIDC_BASE_URL=http://ocm.${SSO_DOMAIN}
 #                                  # The dashboard's public URL: https:// behind a TLS
 #                                  # terminator (docs/deployment.md#https)
-#   TRUST_PROXY=true               # Whether OCM trusts the relay, its proxy. It
+#   TRUST_PROXY=true               # The proxies OCM trusts: 2 with a TLS terminator in
+#                                  # front of the relay (docs/deployment.md#https). It
 #                                  # overrides rateLimit.trustProxy of config.json
 #   ALLOWED_HOSTS=                 # Hosts the server answers, against DNS rebinding
 #   IMPORT_ENABLED, IMPORT_INTERVAL, IMPORT_FLAGS

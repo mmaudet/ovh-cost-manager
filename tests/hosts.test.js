@@ -9,11 +9,11 @@
 
 const { createHostCheck, createHostCheckMiddleware } = require('../server/hosts');
 
-// Built as the server builds it at startup, without a trusted proxy unless the
-// check's name says otherwise
+// Built as the server builds it at startup, with trustProxy the number of
+// proxies it trusts: trusting none unless the check's name says otherwise
 const allowedHosts = ['ocm.example.com', 'ocm.lan:3001'];
-const direct = createHostCheck({ allowedHosts, trustProxy: false });
-const behindTrustedProxy = createHostCheck({ allowedHosts, trustProxy: true });
+const direct = createHostCheck({ allowedHosts, trustProxy: 0 });
+const behindTrustedProxy = createHostCheck({ allowedHosts, trustProxy: 1 });
 
 // Whether the check passes a request with these headers, named as Node names them
 function passes(check, headers) {
@@ -22,7 +22,7 @@ function passes(check, headers) {
 
 describe('createHostCheck', () => {
   describe('when ALLOWED_HOSTS is not set', () => {
-    const unset = createHostCheck({ allowedHosts: [], trustProxy: false });
+    const unset = createHostCheck({ allowedHosts: [], trustProxy: 0 });
 
     test.each(['ocm.example.com', 'evil.example', 'ocm.example.com/admin', '', undefined])(
       'allows the Host %p',
@@ -32,7 +32,7 @@ describe('createHostCheck', () => {
     );
 
     test('allows any X-Forwarded-Host behind a trusted proxy', () => {
-      const check = createHostCheck({ allowedHosts: [], trustProxy: true });
+      const check = createHostCheck({ allowedHosts: [], trustProxy: 1 });
       expect(passes(check, { host: 'ocm.example.com', 'x-forwarded-host': 'evil.example' }))
         .toBe(true);
     });
@@ -41,7 +41,7 @@ describe('createHostCheck', () => {
     test.each([[['', ' ']], [' , '], [undefined]])(
       'takes %p as not set',
       (setting) => {
-        const check = createHostCheck({ allowedHosts: setting, trustProxy: false });
+        const check = createHostCheck({ allowedHosts: setting, trustProxy: 0 });
         expect(passes(check, { host: 'evil.example' })).toBe(true);
       }
     );
@@ -52,7 +52,7 @@ describe('createHostCheck', () => {
     ['a comma-separated string', 'ocm.example.com, ocm.lan:3001'],
     ['an array', ['ocm.example.com', 'ocm.lan:3001']],
   ])('with the hosts as %s', (_, setting) => {
-    const check = createHostCheck({ allowedHosts: setting, trustProxy: false });
+    const check = createHostCheck({ allowedHosts: setting, trustProxy: 0 });
 
     test('allows each listed host', () => {
       expect(passes(check, { host: 'ocm.example.com' })).toBe(true);
@@ -66,7 +66,7 @@ describe('createHostCheck', () => {
 
   // As "allowedHosts": 3001 in config.json gives: the check must not turn off
   test('keeps the check on, without throwing, for a setting of another type', () => {
-    const check = createHostCheck({ allowedHosts: 3001, trustProxy: false });
+    const check = createHostCheck({ allowedHosts: 3001, trustProxy: 0 });
     expect(passes(check, { host: 'evil.example' })).toBe(false);
   });
 
@@ -88,7 +88,7 @@ describe('createHostCheck', () => {
   test('ignores the blanks around the listed hosts', () => {
     const check = createHostCheck({
       allowedHosts: ['ocm.example.com', ' ocm.lan:3001 '],
-      trustProxy: false,
+      trustProxy: 0,
     });
     expect(passes(check, { host: 'ocm.lan:3001' })).toBe(true);
   });
@@ -106,7 +106,7 @@ describe('createHostCheck', () => {
   });
 
   test('reads the listed hosts as it reads Host', () => {
-    const check = createHostCheck({ allowedHosts: ['OCM.Example.com:443'], trustProxy: false });
+    const check = createHostCheck({ allowedHosts: ['OCM.Example.com:443'], trustProxy: 0 });
     expect(passes(check, { host: 'ocm.example.com' })).toBe(true);
   });
 
@@ -143,7 +143,7 @@ describe('createHostCheck', () => {
   test('allows a loopback Host behind a proxy when it is listed, as the proxy\'s upstream', () => {
     const check = createHostCheck({
       allowedHosts: [...allowedHosts, '127.0.0.1:3001'],
-      trustProxy: false,
+      trustProxy: 0,
     });
     expect(passes(check, { host: '127.0.0.1:3001', 'x-forwarded-for': '203.0.113.7' }))
       .toBe(true);
@@ -162,7 +162,7 @@ describe('createHostCheck', () => {
     const container = 'ovh-cost-manager:3001';
     const proxied = createHostCheck({
       allowedHosts: [...allowedHosts, container],
-      trustProxy: true,
+      trustProxy: 1,
     });
 
     test('allows a listed X-Forwarded-Host when the proxy is trusted', () => {
@@ -237,6 +237,20 @@ describe('createHostCheck', () => {
     });
   });
 
+  // TRUST_PROXY=2, behind a TLS terminator and the relay: the server trusts
+  // two proxies, and the check reads X-Forwarded-Host as behind one
+  test('reads the last X-Forwarded-Host with trustProxy: 2, as with 1', () => {
+    const behindTwoProxies = createHostCheck({ allowedHosts, trustProxy: 2 });
+    expect(passes(behindTwoProxies, {
+      host: 'ocm.example.com',
+      'x-forwarded-host': 'evil.example, ocm.example.com',
+    })).toBe(true);
+    expect(behindTwoProxies({
+      host: 'ocm.example.com',
+      'x-forwarded-host': 'ocm.example.com, evil.example',
+    })).toEqual({ allowed: false, header: 'X-Forwarded-Host', host: 'evil.example' });
+  });
+
   // Browsers send a well-formed Host. URL alone would read a path, a user, a
   // query or a tab around ocm.example.com as ocm.example.com itself.
   test.each([
@@ -256,7 +270,7 @@ describe('createHostCheck', () => {
   });
 
   test('rejects a request without Host, not reading it as the host undefined', () => {
-    const check = createHostCheck({ allowedHosts: ['undefined'], trustProxy: false });
+    const check = createHostCheck({ allowedHosts: ['undefined'], trustProxy: 0 });
     expect(passes(check, {})).toBe(false);
   });
 
@@ -270,7 +284,7 @@ describe('createHostCheck', () => {
   // As a URL or a typo in ALLOWED_HOSTS gives: the check must not turn off
   const misconfigured = {
     allowedHosts: ['https://ocm.example.com', 'ocm.lan:port'],
-    trustProxy: false,
+    trustProxy: 0,
   };
 
   test('keeps the check on when no listed host is well-formed', () => {
@@ -309,7 +323,7 @@ describe('createHostCheck', () => {
 });
 
 describe('createHostCheckMiddleware', () => {
-  const settings = { allowedHosts, trustProxy: false };
+  const settings = { allowedHosts, trustProxy: 0 };
   const HOUR = 60 * 60 * 1000;
 
   // The log starts over every hour
@@ -350,7 +364,7 @@ describe('createHostCheckMiddleware', () => {
     'is not built when ALLOWED_HOSTS is %p, so that nothing runs or logs',
     (setting) => {
       const logger = makeLogger();
-      expect(createHostCheckMiddleware({ allowedHosts: setting, trustProxy: false }, logger))
+      expect(createHostCheckMiddleware({ allowedHosts: setting, trustProxy: 0 }, logger))
         .toBeNull();
       expect(logger.log).not.toHaveBeenCalled();
       expect(logger.warn).not.toHaveBeenCalled();
@@ -360,7 +374,7 @@ describe('createHostCheckMiddleware', () => {
   test('logs the hosts it allows once built, as it compares them', () => {
     const logger = makeLogger();
     createHostCheckMiddleware(
-      { allowedHosts: 'OCM.Example.com:443, ocm.lan:3001', trustProxy: false },
+      { allowedHosts: 'OCM.Example.com:443, ocm.lan:3001', trustProxy: 0 },
       logger
     );
     expect(logger.log.mock.calls).toEqual([[
@@ -375,7 +389,7 @@ describe('createHostCheckMiddleware', () => {
     const logger = makeLogger();
     createHostCheckMiddleware({
       allowedHosts: ['https://ocm.example.com', 'ocm.lan:port', 'ocm.lan:3001'],
-      trustProxy: false,
+      trustProxy: 0,
     }, logger);
     expect(logger.warn.mock.calls).toEqual([
       ['Host check: ignoring "https://ocm.example.com" in the allowed hosts:'
@@ -391,7 +405,7 @@ describe('createHostCheckMiddleware', () => {
   test('keeps the check on when it ignores every entry, and says so', () => {
     const logger = makeLogger();
     const hostCheck = createHostCheckMiddleware(
-      { allowedHosts: 'https://ocm.example.com', trustProxy: false },
+      { allowedHosts: 'https://ocm.example.com', trustProxy: 0 },
       logger
     );
     expect(logger.log.mock.calls).toEqual([[
@@ -426,7 +440,7 @@ describe('createHostCheckMiddleware', () => {
 
   test('names the header of the host it blocked', () => {
     const logger = makeLogger();
-    const hostCheck = createHostCheckMiddleware({ allowedHosts, trustProxy: true }, logger);
+    const hostCheck = createHostCheckMiddleware({ allowedHosts, trustProxy: 1 }, logger);
     run(hostCheck, { host: 'ocm.example.com', 'x-forwarded-host': 'evil.example' });
     expect(logger.warn.mock.calls).toEqual([
       ['Host check: Blocked request with X-Forwarded-Host: evil.example'],

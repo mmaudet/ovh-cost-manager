@@ -48,7 +48,9 @@ function readAllowedOrigins(fileConfig, env = process.env, source = 'config.json
  *   origin is compared whole, where a string, compared as a list, let through
  *   any part of it
  * @param {boolean} settings.isDev - true unless NODE_ENV is 'production'
- * @param {boolean} settings.trustProxy - whether the server trusts its proxy (TRUST_PROXY)
+ * @param {number} settings.trustProxy - how many proxies the server trusts
+ *   (TRUST_PROXY), 0 for none: from one on, the check reads the forwarded
+ *   headers, the same way whatever the number
  * @returns {function(string|undefined, RequestFacts): boolean} whether a request
  *   with this Origin header passes
  */
