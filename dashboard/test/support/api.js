@@ -140,8 +140,13 @@ const answers = {
   fetchProjectVolumes: entryForProject('projectVolumes', emptyAnswers.list),
   fetchProjectSnapshots: entryForProject('projectSnapshots', emptyAnswers.list),
   fetchProjectSavingsPlans: entryForProject('projectSavingsPlans', emptyAnswers.list),
-  fetchWebCloudSummary: entryForPeriod('webCloudSummary', emptyAnswers.webCloudSummary),
-  fetchWebCloudItems: entryForPeriod('webCloudItems', emptyAnswers.list),
+  // The Web Cloud services follow the account the page selects (#122)
+  fetchWebCloudSummary: (data, from, to, account) =>
+    entryForPeriod('webCloudSummary', emptyAnswers.webCloudSummary)(
+      ofAccount(data, account), from, to,
+    ),
+  fetchWebCloudItems: (data, from, to, account) =>
+    entryForPeriod('webCloudItems', emptyAnswers.list)(ofAccount(data, account), from, to),
   fetchProjectQuotas: (data, projectId) => data.projectQuotas?.[projectId] ?? emptyAnswers.list(),
   fetchProjectBuckets: entryForProject('projectBuckets', emptyAnswers.list),
   fetchProjectInstanceTotal: entryForProject('projectInstanceTotal', emptyAnswers.instanceTotal),

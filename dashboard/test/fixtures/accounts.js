@@ -2,6 +2,7 @@ import { account } from './account.js';
 import { months } from './calendar.js';
 import { publicCloudFigures } from './public-cloud.js';
 import { trendsOf } from './trends.js';
+import { webCloudOfSeveralAccounts } from './web-cloud.js';
 
 // Several OVHcloud accounts in one instance (#110): the synthetic account of account.js, as
 // the accounts that billed it. Their costs add up to its figures, which the page gets for all
@@ -9,9 +10,10 @@ import { trendsOf } from './trends.js';
 //
 // The accounts route lists them as it does since #114: with their id, the value of the
 // account parameter, whether config.json still lists them, and which one is the Unknown
-// account. What the page asks for with an account, such as its months list, its summaries
-// and its Public Cloud (#121), is under `ofAccount`, by the id of the account (see
-// support/api.js).
+// account. What the page asks for with an account, such as its months list, its summaries,
+// its Public Cloud (#121) and its Web Cloud services (#122), is under `ofAccount`, by the id
+// of the account (see support/api.js). web-cloud.js gives the Web Cloud services for all
+// accounts too.
 
 const [september, august, july] = months;
 // The Public Cloud projects of account.js
@@ -75,6 +77,7 @@ const unknownSandbox = { ...sandbox, account: null };
 
 export const severalAccounts = {
   ...account,
+  ...webCloudOfSeveralAccounts.all,
   accounts: [lyonAccount, unnamedAccount, removedAccount, unknownAccount],
   projectsEnriched: [lyonProduction, unnamedStaging, unknownSandbox],
   ofAccount: {
@@ -113,6 +116,7 @@ export const severalAccounts = {
           objectStorage: { count: 3, total: 25 },
         }),
       },
+      ...webCloudOfSeveralAccounts.ofAccount[lyonAccount.id],
     },
     [unnamedAccount.id]: {
       months: [september, august],
@@ -139,6 +143,7 @@ export const severalAccounts = {
           registry: { count: 1, total: 40 },
         }),
       },
+      ...webCloudOfSeveralAccounts.ofAccount[unnamedAccount.id],
     },
     [removedAccount.id]: {
       months: [august, july],
@@ -157,6 +162,7 @@ export const severalAccounts = {
         '2026-07': { dedicated_server: 180 },
         '2026-08': { dedicated_server: 200 },
       }),
+      ...webCloudOfSeveralAccounts.ofAccount[removedAccount.id],
     },
     [unknownAccount.id]: {
       months: [july],
@@ -172,6 +178,7 @@ export const severalAccounts = {
       }),
       // Never billed
       projectsEnriched: [unknownSandbox],
+      ...webCloudOfSeveralAccounts.ofAccount[unknownAccount.id],
     },
   },
 };

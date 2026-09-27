@@ -13,11 +13,20 @@ const WEB_CLOUD_CATEGORIES = [
   { key: 'option', labelKey: 'hostingOptions', color: 'text-gray-600' }
 ];
 
+// The services of a family, in the order the server lists them, as its table and its CSV file
+// show them: with the name of the account of each when they show an Account column (#122)
+const servicesOf = (family, { webCloudItems, accountColumn }) => {
+  const services = webCloudItems.filter((item) => item.category === family);
+  if (!accountColumn) return services;
+  return services.map((item) => ({ ...item, accountName: accountColumn.nameOf(item.account) }));
+};
+
 // The Web Cloud tab, which the shell renders while it is active: what useWebCloudTab()
-// returns, with the shell's language, translations (t) and amount format (fmt).
+// returns, with the shell's language, translations (t) and amount format (fmt), and the
+// Account column of the lists, null when they show none (#122).
 const WebCloudTab = ({
   webCloudPeriod, webCloudSummary, webCloudItems, loadingWebCloud, failedWebCloud,
-  setShowAllWebCloud, language, t, fmt,
+  setShowAllWebCloud, accountColumn, language, t, fmt,
 }) => (
   <div className="space-y-6">
     <div className="text-sm text-gray-500">
@@ -76,7 +85,7 @@ const WebCloudTab = ({
       </div>
     ) : (
       WEB_CLOUD_CATEGORIES.map(cat => {
-        const items = webCloudItems.filter(i => i.category === cat.key);
+        const items = servicesOf(cat.key, { webCloudItems, accountColumn });
         if (!items.length) return null;
         const total = items.reduce((sum, i) => sum + (i.total || 0), 0);
         return (
@@ -91,14 +100,16 @@ const WebCloudTab = ({
                 onShowAll={() => setShowAllWebCloud(cat.key)}
                 onExport={() => downloadCSV(
                   items,
-                  webCloudCsvColumns(language),
+                  webCloudCsvColumns(language, accountColumn),
                   `ovh-${cat.key}-${webCloudPeriod ? webCloudPeriod.from.slice(0, 7) + '-to-' + webCloudPeriod.to.slice(0, 7) : 'export'}`
                 )}
               />
             </h3>
             {/* ~11 rows before scrolling, the full list is one click away */}
             <div className="overflow-auto max-h-[430px]">
-              <WebCloudTable items={items} language={language} fmt={fmt} />
+              <WebCloudTable
+                items={items} accountColumn={accountColumn} language={language} fmt={fmt}
+              />
             </div>
           </div>
         );
@@ -112,12 +123,12 @@ const WebCloudTab = ({
 // docs/adr/0001-tab-state-lives-in-the-dashboard-shell.md
 const WebCloudTabModals = ({
   webCloudPeriod, webCloudItems, showAllWebCloud, setShowAllWebCloud,
-  language, t, fmt,
+  accountColumn, language, t, fmt,
 }) => (
   <>
     {(() => {
       const cat = WEB_CLOUD_CATEGORIES.find(c => c.key === showAllWebCloud);
-      const items = cat ? webCloudItems.filter(i => i.category === cat.key) : [];
+      const items = cat ? servicesOf(cat.key, { webCloudItems, accountColumn }) : [];
       return (
         <Modal
           open={!!cat}
@@ -136,13 +147,15 @@ const WebCloudTabModals = ({
               language={language}
               onExport={() => downloadCSV(
                 items,
-                webCloudCsvColumns(language),
+                webCloudCsvColumns(language, accountColumn),
                 `ovh-${cat.key}-${webCloudPeriod ? webCloudPeriod.from.slice(0, 7) + '-to-' + webCloudPeriod.to.slice(0, 7) : 'export'}`
               )}
             />
           )}
         >
-          <WebCloudTable items={items} language={language} fmt={fmt} />
+          <WebCloudTable
+            items={items} accountColumn={accountColumn} language={language} fmt={fmt}
+          />
         </Modal>
       );
     })()}

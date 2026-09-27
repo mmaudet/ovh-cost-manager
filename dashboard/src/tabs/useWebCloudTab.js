@@ -4,28 +4,37 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { fetchWebCloudSummary, fetchWebCloudItems } from '../services/api.js';
+import { accountQuery } from '../utils/accounts.js';
 import { webCloudPeriodEndingOn } from '../utils/webCloudPeriod.js';
 
-const useWebCloudTab = ({ selectedMonth, activeTab }) => {
+// The services of the account shown (#122): selectedAccount, the shell's, is null for all
+// accounts, and undefined while the page does not know it yet, which the queries wait for.
+// They wait too until the months of the account shown hold the month selected,
+// holdsSelectedMonth, as the shell checks it: not while they load, nor when the account lacks
+// the month, until the shell selects its latest month (#115). The 12 months that end on a
+// month the account lacks would never show (#120).
+const useWebCloudTab = ({ selectedMonth, holdsSelectedMonth, activeTab, selectedAccount }) => {
   const [showAllWebCloud, setShowAllWebCloud] = useState(null); // category key, null when closed
 
   const webCloudPeriod = webCloudPeriodEndingOn(selectedMonth);
+  // The queries run once the tab is open, on a month that the account shown has
+  const enabled = holdsSelectedMonth && activeTab === 'webcloud';
 
   const {
     data: webCloudSummary, isPending: summaryPending, isError: summaryFailed,
-  } = useQuery({
-    queryKey: ['webCloudSummary', webCloudPeriod?.from, webCloudPeriod?.to],
-    queryFn: () => fetchWebCloudSummary(webCloudPeriod.from, webCloudPeriod.to),
-    enabled: !!webCloudPeriod && activeTab === 'webcloud'
-  });
+  } = useQuery(accountQuery(selectedAccount, {
+    key: ['webCloudSummary', webCloudPeriod?.from, webCloudPeriod?.to],
+    fetch: (account) => fetchWebCloudSummary(webCloudPeriod.from, webCloudPeriod.to, account),
+    enabled,
+  }));
 
   const {
     data: webCloudItems = [], isPending: itemsPending, isError: itemsFailed,
-  } = useQuery({
-    queryKey: ['webCloudItems', webCloudPeriod?.from, webCloudPeriod?.to],
-    queryFn: () => fetchWebCloudItems(webCloudPeriod.from, webCloudPeriod.to),
-    enabled: !!webCloudPeriod && activeTab === 'webcloud'
-  });
+  } = useQuery(accountQuery(selectedAccount, {
+    key: ['webCloudItems', webCloudPeriod?.from, webCloudPeriod?.to],
+    fetch: (account) => fetchWebCloudItems(webCloudPeriod.from, webCloudPeriod.to, account),
+    enabled,
+  }));
 
   return {
     webCloudPeriod,

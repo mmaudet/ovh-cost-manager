@@ -1274,24 +1274,28 @@ function registerRoutes() {
   // Web Cloud (domains, DNS, hosting, email)
   // ========================
 
-  app.get('/api/web-cloud/summary', (req, res) => {
+  // The Web Cloud services billed over a period, and their count and cost by family: those
+  // of the account the request asks for, or of every account without one (#122)
+  app.get('/api/web-cloud/summary', accountParameter, (req, res) => {
     try {
       const { from, to } = req.query;
       const validation = validateDateRange(from, to);
       if (!validation.valid) return res.status(400).json({ error: validation.error });
-      res.json(db.webCloud.getSummary(from, to));
+      res.json(db.webCloud.getSummary(from, to, req.account));
     } catch (err) {
       res.status(500).json({ error: err.message });
     }
   });
 
-  app.get('/api/web-cloud/items', (req, res) => {
+  app.get('/api/web-cloud/items', accountParameter, (req, res) => {
     try {
       const { from, to } = req.query;
       const validation = validateDateRange(from, to);
       if (!validation.valid) return res.status(400).json({ error: validation.error });
-      const items = db.webCloud.getItems(from, to).map(i => ({
+      const items = db.webCloud.getItems(from, to, req.account).map(i => ({
         name: i.name,
+        // The NIC handle of the account whose bills billed it, null for the Unknown account
+        account: i.account,
         category: i.category,
         description: i.description,
         lineCount: i.line_count,

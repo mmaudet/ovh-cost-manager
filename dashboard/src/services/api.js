@@ -165,13 +165,18 @@ export const fetchProjectSavingsPlans = async (projectId, from, to) => {
   return data;
 };
 
-export const fetchWebCloudSummary = async (from, to) => {
-  const { data } = await api.get('/web-cloud/summary', { params: { from, to } });
+// The Web Cloud services billed to the account (#122), and their count and cost by family
+export const fetchWebCloudSummary = async (from, to, account = null) => {
+  const { data } = await api.get('/web-cloud/summary', {
+    params: { from, to, ...accountParams(account) },
+  });
   return data;
 };
 
-export const fetchWebCloudItems = async (from, to) => {
-  const { data } = await api.get('/web-cloud/items', { params: { from, to } });
+export const fetchWebCloudItems = async (from, to, account = null) => {
+  const { data } = await api.get('/web-cloud/items', {
+    params: { from, to, ...accountParams(account) },
+  });
   return data;
 };
 

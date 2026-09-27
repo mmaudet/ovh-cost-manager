@@ -115,8 +115,8 @@ describe('query keys', () => {
       await selectAccount(user, 'Lyon subsidiary');
 
       // The months list and the summaries of the KPI cards, on September, and the queries of
-      // the Trends (#120) and Public Cloud (#121) tabs: the other queries follow the account
-      // in the next tickets (#116 to #123)
+      // the Trends (#120), Public Cloud (#121) and Web Cloud (#122) tabs: the other queries
+      // follow the account in the next tickets (#116 to #123)
       expect(sorted(allKeys().filter((key) => key.includes(lyonAccount.id)))).toEqual(sorted([
         ['months', 'xx1111-ovh'],
         ['summary', '2026-09-01', '2026-09-30', 'xx1111-ovh'],
@@ -133,6 +133,9 @@ describe('query keys', () => {
         // tab. The resources of a project follow the project, which belongs to one account.
         ['projectsEnriched', 'xx1111-ovh'],
         ['publicCloudStats', '2026-09-01', '2026-09-30', 'xx1111-ovh'],
+        // The Web Cloud tab's, for the 12 months that end on September (#122)
+        ['webCloudSummary', '2025-10-01', '2026-09-30', 'xx1111-ovh'],
+        ['webCloudItems', '2025-10-01', '2026-09-30', 'xx1111-ovh'],
       ]));
     });
 });

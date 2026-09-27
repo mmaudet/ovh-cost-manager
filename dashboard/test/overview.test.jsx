@@ -179,7 +179,8 @@ describe('Overview tab', () => {
       await user.click(webCloudDetailButton());
       await settle();
 
-      expect(api.fetchWebCloudItems).toHaveBeenCalledWith('2025-10-01', '2026-09-30');
+      // For all accounts (null)
+      expect(api.fetchWebCloudItems).toHaveBeenCalledWith('2025-10-01', '2026-09-30', null);
       expect(screen.getByText('12 mois glissants')).toBeInTheDocument();
       expect(screen.queryByText('Répartition par service')).not.toBeInTheDocument();
     });

@@ -2022,6 +2022,15 @@ function transaction(fn) {
   return database.transaction(fn)(database);
 }
 
+// Orders two rows' accounts, NIC handles or null for the Unknown account: by NIC handle, the
+// Unknown account last, and the same account as equal
+function compareAccounts(a, b) {
+  if (a === b) return 0;
+  if (a === null) return 1;
+  if (b === null) return -1;
+  return a.localeCompare(b);
+}
+
 /**
  * Web Cloud operations (domains, DNS zones, hosting, email, options).
  *
@@ -2033,22 +2042,30 @@ function transaction(fn) {
  */
 const webCloudOps = {
   /**
-   * One row per service (bill `domain` field) with its family and cost.
+   * One row per service (bill `domain` field) with its family and cost, and the account whose
+   * bills billed it: its NIC handle, null for the Unknown account.
+   * @param {string} fromDate
+   * @param {string} toDate
+   * @param {?string} [account] - The account whose bills count (see accountCondition()):
+   *   every account's by default
    */
-  getItems: (fromDate, toDate) => {
+  getItems: (fromDate, toDate, account = null) => {
     const db = getDb();
+    const ofAccount = accountCondition(account, 'b.account');
     const rows = db.prepare(`
       SELECT d.domain as domain,
              d.description as description,
              d.total_price as price,
              b.date as date,
+             b.account as account,
              COALESCE(d.resource_type, 'other') as resource_type
       FROM bill_details d
       JOIN bills b ON d.bill_id = b.id
       WHERE b.date >= ? AND b.date <= ?
         AND COALESCE(d.resource_type, 'other') IN ('domain', 'other', 'web_cloud')
         AND d.project_id IS NULL
-    `).all(fromDate, toDate);
+        AND ${ofAccount.sql}
+    `).all(fromDate, toDate, ...ofAccount.params);
 
     // The Infrastructure tab leaves the 'domain' and 'web_cloud' types out, so
     // a line of those types the wording does not place still lands here. An
@@ -2061,10 +2078,13 @@ const webCloudOps = {
       if (!category) continue;
 
       // A domain and its DNS zone share the same `domain` value, so the family
-      // is part of the key: they are two billable services.
-      const key = `${category}|${row.domain}`;
+      // is part of the key: they are two billable services. So is the account: a
+      // service billed on two accounts' bills, as one that moved from an account
+      // to another, is a service of each, with its own cost (#122).
+      const key = JSON.stringify([category, row.domain, row.account]);
       const item = byService.get(key) || {
         name: row.domain,
+        account: row.account,
         category,
         description: row.description,
         total: 0,
@@ -2082,14 +2102,24 @@ const webCloudOps = {
       byService.set(key, item);
     }
 
-    return [...byService.values()].sort((a, b) => b.total - a.total || a.name.localeCompare(b.name));
+    // Most expensive first, then by name. A service that costs the same on several accounts
+    // comes by the NIC handle of each, the Unknown account's last, rather than in the order
+    // the import wrote its bill lines in; the services of one account keep their order.
+    return [...byService.values()].sort((a, b) => b.total - a.total
+      || a.name.localeCompare(b.name)
+      || compareAccounts(a.account, b.account));
   },
 
   /**
-   * Count and cost per family, for the summary cards.
+   * Count and cost per family, for the summary cards, of the services that getItems() lists:
+   * a service billed to several accounts counts once for each.
+   * @param {string} fromDate
+   * @param {string} toDate
+   * @param {?string} [account] - The account whose bills count (see accountCondition()):
+   *   every account's by default
    */
-  getSummary: (fromDate, toDate) => {
-    const items = webCloudOps.getItems(fromDate, toDate);
+  getSummary: (fromDate, toDate, account = null) => {
+    const items = webCloudOps.getItems(fromDate, toDate, account);
     const summary = {};
     for (const category of WEB_CLOUD_FAMILIES) {
       summary[category] = { count: 0, total: 0 };
