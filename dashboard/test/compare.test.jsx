@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { screen, within } from '@testing-library/react';
 import { account, everyResourceType, threeBilledProjects } from './fixtures/account.js';
+import { severalAccounts } from './fixtures/accounts.js';
 import { months } from './fixtures/calendar.js';
 import { api } from './support/api.js';
 import {
@@ -10,9 +11,11 @@ import {
   firstColumnOf,
   headerOf,
   openTab,
+  optionsOf,
   renderDashboard,
   rowTextsOf,
   rowsOf,
+  selectAccount,
   selectLanguage,
   settle,
   sortTable,
@@ -757,5 +760,63 @@ describe('Compare tab', () => {
       ['Product/Type', 'August 2026', 'September 2026', 'Variation'],
       ['instance', '0.00€', '234.25€', '—'],
     ]);
+  });
+
+  // Several accounts in the instance (#119): the tab compares two months of the account
+  // selected in the header, or of every account, by default. See fixtures/accounts.js.
+  describe('with several accounts', () => {
+    // The dropdowns of months A and B, the only ones whose options are all months
+    const monthDropdowns = () => screen.getAllByRole('combobox')
+      .filter((select) => optionsOf(select).every((option) => /^\p{L}+ \d{4}$/u.test(option)));
+    // Months A and B, as their dropdowns show them
+    const comparedMonths = () => monthDropdowns().map((select) => texts(select)[0]);
+
+    // The dropdowns list the months of the account selected (#115): they show the months
+    // compared, rather than a month they do not list
+    describe('months A and B', () => {
+      it('stay as picked while the account selected was billed in both', async () => {
+        const { user } = await renderDashboard(severalAccounts);
+        await openTab(user, 'Comparaison');
+        await pickMonth(user, 'Août 2026', 'Juillet 2026');
+
+        await selectAccount(user, 'Lyon subsidiary');
+
+        expect(comparedMonths()).toEqual(['Juillet 2026', 'Septembre 2026']);
+      });
+
+      it('are those the tab opens on for an account that lacks either', async () => {
+        const { user } = await renderDashboard(severalAccounts);
+        await openTab(user, 'Comparaison');
+
+        // Not billed in September, month B
+        await selectAccount(user, 'zz3333-ovh (non configuré)');
+
+        for (const select of monthDropdowns()) {
+          expect(optionsOf(select)).toEqual(['Août 2026', 'Juillet 2026']);
+        }
+        expect(comparedMonths()).toEqual(['Juillet 2026', 'Août 2026']);
+
+        // Billed in July only: that month, compared with itself
+        await selectAccount(user, 'Compte inconnu');
+
+        expect(comparedMonths()).toEqual(['Juillet 2026', 'Juillet 2026']);
+
+        // Billed in every month
+        await selectAccount(user, 'Tous les comptes');
+
+        expect(comparedMonths()).toEqual(['Juillet 2026', 'Juillet 2026']);
+      });
+
+      it('keep the months picked that the account selected was billed in', async () => {
+        const { user } = await renderDashboard(severalAccounts);
+        await openTab(user, 'Comparaison');
+        await pickMonth(user, 'Août 2026', 'Juillet 2026');
+
+        // Not billed in July, month A
+        await selectAccount(user, 'yy2222-ovh');
+
+        expect(comparedMonths()).toEqual(['Août 2026', 'Septembre 2026']);
+      });
+    });
   });
 });

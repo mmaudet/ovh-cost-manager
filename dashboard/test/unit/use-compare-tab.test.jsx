@@ -7,12 +7,13 @@ import { renderTabHook, TAB_IDS, WAITING } from '../support/hooks.jsx';
 import { settle } from '../support/query-client.js';
 
 // The state and data queries of the Compare tab, as the dashboard shell sees them: what the
-// hook requests and returns for the months list, the selected month and the active tab.
+// hook requests and returns for the months list and the active tab. The months list is that
+// of the account shown in the header (#115), which the shell passes on.
 
 const [september, august, july] = months;
 // What the shell passes on the render where the months list arrives: it selects its own
-// month in that commit, on the same condition as the defaults of months A and B
-const monthsArrive = { months, selectedMonth: null };
+// month in that commit, as months A and B get their defaults
+const monthsArrive = { months };
 const onCompare = { ...monthsArrive, activeTab: 'compare' };
 
 // Months A and B, as [A, B]
@@ -35,7 +36,7 @@ describe('useCompareTab', () => {
     it('are the month before the latest one and the latest one once the list loads',
       async () => {
         const { result, rerender } = await renderTabHook(useCompareTab,
-          { months: [], selectedMonth: null, activeTab: 'overview' });
+          { months: [], activeTab: 'overview' });
         // No month yet: nothing to compare
         expect(result.current.compareMonthA).toBeNull();
         expect(result.current.compareMonthB).toBeNull();
@@ -47,31 +48,66 @@ describe('useCompareTab', () => {
 
     it('are both the only month when a single month was billed', async () => {
       const { result } = await renderTabHook(useCompareTab,
-        { months: [september], selectedMonth: null, activeTab: 'overview' });
+        { months: [september], activeTab: 'overview' });
 
       expect(compared(result.current)).toEqual(['2026-09', '2026-09']);
-    });
-
-    it('get no default once the shell has selected its month', async () => {
-      const { result } = await renderTabHook(useCompareTab,
-        { months, selectedMonth: september, activeTab: 'compare' });
-
-      expect(result.current.compareMonthA).toBeNull();
-      expect(result.current.compareMonthB).toBeNull();
     });
 
     it('stay as picked when the months list loads again with a month more', async () => {
       // August and September only, then July too, as after a full import
       const { result, rerender, queryClient } = await renderTabHook(useCompareTab,
         { ...onCompare, months: [september, august] });
-      await rerender({ ...onCompare, months: [september, august], selectedMonth: september });
       act(() => result.current.setCompareMonthA(september));
       act(() => result.current.setCompareMonthB(august));
       await settle(queryClient);
 
-      await rerender({ ...onCompare, selectedMonth: september });
+      await rerender(onCompare);
 
       expect(compared(result.current)).toEqual(['2026-09', '2026-08']);
+    });
+
+    // The months list of another account, selected in the header (#119): the months compared
+    // are always months of the account shown, which the dropdowns of the tab list
+    describe('with the months of another account', () => {
+      it('stay as picked while that account was billed in both', async () => {
+        const { result, rerender, queryClient } = await renderTabHook(useCompareTab, onCompare);
+        act(() => result.current.setCompareMonthA(september));
+        act(() => result.current.setCompareMonthB(july));
+        await settle(queryClient);
+
+        // An account billed in September and July, not in August
+        await rerender({ ...onCompare, months: [september, july] });
+
+        expect(compared(result.current)).toEqual(['2026-09', '2026-07']);
+      });
+
+      it('are those the tab opens on for that account when it lacks either', async () => {
+        const { result, rerender } = await renderTabHook(useCompareTab, onCompare);
+
+        // Not billed in September, month B: its latest month is August, and July the one
+        // before, though August is month A
+        await rerender({ ...onCompare, months: [august, july] });
+
+        expect(compared(result.current)).toEqual(['2026-07', '2026-08']);
+
+        // Not billed in July, month A now
+        await rerender({ ...onCompare, months: [september, august] });
+
+        expect(compared(result.current)).toEqual(['2026-08', '2026-09']);
+
+        // Billed in July only: that month, compared with itself
+        await rerender({ ...onCompare, months: [july] });
+
+        expect(compared(result.current)).toEqual(['2026-07', '2026-07']);
+      });
+
+      it('stay while the months of that account load', async () => {
+        const { result, rerender } = await renderTabHook(useCompareTab, onCompare);
+
+        await rerender({ ...onCompare, months: [] });
+
+        expect(compared(result.current)).toEqual(['2026-08', '2026-09']);
+      });
     });
   });
 
@@ -101,7 +137,7 @@ describe('useCompareTab', () => {
 
   it('requests nothing before the months list loads', async () => {
     const { queryClient } = await renderTabHook(useCompareTab,
-      { months: [], selectedMonth: null, activeTab: 'compare' });
+      { months: [], activeTab: 'compare' });
 
     // Nor the costs by resource type and the Veeam backups (#32)
     for (const name of FIGURES) {
@@ -119,7 +155,7 @@ describe('useCompareTab', () => {
     const { rerender } = await renderTabHook(useCompareTab,
       { ...monthsArrive, activeTab: 'overview' });
 
-    await rerender({ months, selectedMonth: september, activeTab: 'compare' });
+    await rerender(onCompare);
 
     // Their costs by resource type and their Veeam backups too (#32)
     for (const name of FIGURES) {
@@ -253,7 +289,7 @@ describe('useCompareTab', () => {
     act(() => result.current.handleCompareSort('diff'));
     await settle(queryClient);
 
-    await rerender({ months, selectedMonth: september, activeTab: 'overview' });
+    await rerender({ months, activeTab: 'overview' });
 
     expect(compared(result.current)).toEqual(['2026-07', '2026-08']);
     expect(result.current.compareSort).toEqual({ column: 'diff', direction: 'desc' });

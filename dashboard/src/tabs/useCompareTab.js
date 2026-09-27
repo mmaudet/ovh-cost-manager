@@ -1,8 +1,10 @@
 // The Compare tab's state and data queries, in a hook that the dashboard shell calls on
 // every render: see docs/adr/0001-tab-state-lives-in-the-dashboard-shell.md
 //
-// Months A and B get their defaults when the months list first loads, while the shell has no
-// month selected yet: the shell then selects the latest month, in the same commit.
+// Months A and B are months of the months list, that of the account shown in the header
+// (#115), which its dropdowns list. They get their defaults when the list first loads: the
+// shell then selects the latest month, in the same commit. They get them again when the list
+// of an account selected since lacks either of them (#119).
 
 import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
@@ -10,7 +12,7 @@ import {
   fetchSummary, fetchByProject, fetchByService, fetchByResourceType, fetchBackupStats,
 } from '../services/api.js';
 
-const useCompareTab = ({ months, selectedMonth, activeTab }) => {
+const useCompareTab = ({ months, activeTab }) => {
   const [compareMonthA, setCompareMonthA] = useState(null);
   const [compareMonthB, setCompareMonthB] = useState(null);
   const [compareSort, setCompareSort] = useState({ column: 'totalA', direction: 'desc' });
@@ -22,20 +24,23 @@ const useCompareTab = ({ months, selectedMonth, activeTab }) => {
     }));
   };
 
-  // Set default months when data loads
+  // Whether the months list holds a month compared: not before months A and B have their
+  // defaults, nor while the list of the account just selected loads, nor when that account
+  // was not billed that month
+  const holds = (month) => months.some((m) => m.value === month?.value);
+  const holdsMonthA = holds(compareMonthA);
+  const holdsMonthB = holds(compareMonthB);
+
+  // Months A and B by default: the second latest billed month and the latest one, or the only
+  // month twice. Once the list has loaded without either of them, the tab compares the months
+  // it opens on, rather than keep a month that its dropdowns do not list (#119): as the shell
+  // selects the latest month of an account that lacks the month selected (#115).
   useEffect(() => {
-    if (months.length > 0 && !selectedMonth) {
-      // For the comparison:
-      // A = previous month, B = latest month
-      if (months.length > 1) {
-        setCompareMonthA(months[1]);
-        setCompareMonthB(months[0]);
-      } else {
-        setCompareMonthA(months[0]);
-        setCompareMonthB(months[0]);
-      }
+    if (months.length > 0 && !(holdsMonthA && holdsMonthB)) {
+      setCompareMonthA(months[1] ?? months[0]);
+      setCompareMonthB(months[0]);
     }
-  }, [months, selectedMonth]);
+  }, [months, holdsMonthA, holdsMonthB]);
 
   // Comparison data
   const { data: compareDataA } = useQuery({
