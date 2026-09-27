@@ -249,6 +249,22 @@ const detailOps = {
   }
 };
 
+// Ends the import log entry of an import that imported its accounts, or some of them: what
+// they imported, its status, 'success' or 'partial', and the error that names the accounts
+// that failed, null when none did
+function endImport(id, stats, status, errorMessage) {
+  return getDb().prepare(`
+    UPDATE import_log SET
+      completed_at = CURRENT_TIMESTAMP,
+      bills_imported = ?,
+      details_imported = ?,
+      projects_imported = ?,
+      status = ?,
+      error_message = ?
+    WHERE id = ?
+  `).run(stats.bills, stats.details, stats.projects, status, errorMessage, id);
+}
+
 // Import log operations
 const importLogOps = {
   start: (type, fromDate, toDate) => {
@@ -261,19 +277,7 @@ const importLogOps = {
     return result.lastInsertRowid;
   },
 
-  complete: (id, stats) => {
-    const db = getDb();
-    const stmt = db.prepare(`
-      UPDATE import_log SET
-        completed_at = CURRENT_TIMESTAMP,
-        bills_imported = ?,
-        details_imported = ?,
-        projects_imported = ?,
-        status = 'success'
-      WHERE id = ?
-    `);
-    return stmt.run(stats.bills, stats.details, stats.projects, id);
-  },
+  complete: (id, stats) => endImport(id, stats, 'success', null),
 
   fail: (id, errorMessage) => {
     const db = getDb();
@@ -287,22 +291,8 @@ const importLogOps = {
     return stmt.run(errorMessage, id);
   },
 
-  // Ends an import that some of its accounts failed, and the others imported (#113): what
-  // they imported, and the error that names the accounts that failed
-  partial: (id, stats, errorMessage) => {
-    const db = getDb();
-    const stmt = db.prepare(`
-      UPDATE import_log SET
-        completed_at = CURRENT_TIMESTAMP,
-        bills_imported = ?,
-        details_imported = ?,
-        projects_imported = ?,
-        status = 'partial',
-        error_message = ?
-      WHERE id = ?
-    `);
-    return stmt.run(stats.bills, stats.details, stats.projects, errorMessage, id);
-  },
+  // Ends an import that some of its accounts failed, and the others imported (#113)
+  partial: (id, stats, errorMessage) => endImport(id, stats, 'partial', errorMessage),
 
   getLatest: () => {
     const db = getDb();
