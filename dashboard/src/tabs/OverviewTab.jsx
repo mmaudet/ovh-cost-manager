@@ -8,14 +8,19 @@ import { sortProjects } from '../utils/projectSort.js';
 
 // The Overview tab, which the shell renders while it is active: what useOverviewTab()
 // returns, with the shell's language, translations (t) and amount format (fmt), and what
-// the shell holds for the whole page: the month's figures and the services about to expire,
-// which load at page start for the KPI cards, the header, the Markdown report or other tabs
-// too, and the budget with its setter, which the month-end forecast card reads as well. Its
-// links navigate with the shell's setters: what each one keeps open is in
+// the shell holds for the whole page: the month's figures, of the account selected in the
+// header (#118), and the services about to expire, which load at page start for the KPI
+// cards, the header, the Markdown report or other tabs too, and the budget with its setter,
+// which the month-end forecast card reads as well. Its lists, the breakdown by project and
+// the GPU projects, name the account of each project in the Account column of the shell
+// (accountColumn), when it shows one: they then list the projects by account that the hook
+// requests, a project billed to several accounts once for each (#118).
+// Its links navigate with the shell's setters: what each one keeps open is in
 // docs/adr/0001-tab-state-lives-in-the-dashboard-shell.md (#56).
 const OverviewTab = ({
-  projectSort, handleProjectSort,
-  language, t, fmt, summary, total, byService, byProject, byResourceType, gpuSummary,
+  projectSort, handleProjectSort, projectsByAccount, gpuProjectsByAccount,
+  language, t, fmt, accountColumn,
+  summary, total, byService, byProject, byResourceType, gpuSummary,
   expiringServices, budget, setBudget,
   setActiveTab, setSelectedProject, setSelectedResourceType,
 }) => {
@@ -23,6 +28,11 @@ const OverviewTab = ({
   // and its colour follow
   const budgetShare = budget ? total / budget : 0;
   const budgetUsage = Math.round(budgetShare * 100);
+
+  // The projects of the breakdown and of the GPU costs, by account for the Account column.
+  // The Top projects chart, which names no account, keeps each project once.
+  const breakdownProjects = accountColumn ? projectsByAccount : byProject;
+  const gpuProjects = accountColumn ? gpuProjectsByAccount : gpuSummary?.byProject;
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -205,15 +215,20 @@ const OverviewTab = ({
                   <thead>
                     <tr className="border-b bg-gray-50">
                       <th className="p-2 text-left font-medium">{t('project')}</th>
+                      {accountColumn && (
+                        <th className="p-2 text-left font-medium">{accountColumn.label}</th>
+                      )}
                       <th className="p-2 text-left font-medium">{t('gpuFlavors')}</th>
                       <th className="p-2 text-right font-medium">{t('amount')}</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {gpuSummary.byProject.map(p => {
+                    {gpuProjects.map(p => {
                       const share = gpuSummary.total ? p.total / gpuSummary.total : 0;
+                      // A project billed to several accounts has a row for each (#118)
+                      const key = accountColumn ? `${p.project_id} ${p.account}` : p.project_id;
                       return (
-                        <tr key={p.project_id} className="border-b hover:bg-gray-50">
+                        <tr key={key} className="border-b hover:bg-gray-50">
                           <td className="p-2">
                             <button
                               className="text-blue-600 hover:text-blue-800 hover:underline text-left text-xs"
@@ -225,6 +240,11 @@ const OverviewTab = ({
                               {p.project_name}
                             </button>
                           </td>
+                          {accountColumn && (
+                            <td className="p-2 text-xs text-gray-600">
+                              {accountColumn.nameOf(p.account)}
+                            </td>
+                          )}
                           <td className="p-2">
                             <div className="flex flex-wrap gap-1">
                               {(p.gpu_flavors || '').split(',').map(f => (
@@ -246,7 +266,7 @@ const OverviewTab = ({
                   </tbody>
                   <tfoot>
                     <tr className="bg-gray-50 font-semibold">
-                      <td className="p-2" colSpan="2">{t('gpuTotal')}</td>
+                      <td className="p-2" colSpan={2 + (accountColumn ? 1 : 0)}>{t('gpuTotal')}</td>
                       <td className="p-2 text-right">{fmt(gpuSummary.total)}€</td>
                     </tr>
                   </tfoot>
@@ -271,6 +291,9 @@ const OverviewTab = ({
                 >
                   {t('project')}<SortIcon column="name" current={projectSort} />
                 </th>
+                {accountColumn && (
+                  <th className="p-3 text-left font-medium">{accountColumn.label}</th>
+                )}
                 <th
                   className="p-3 text-right font-medium cursor-pointer hover:bg-gray-100 select-none"
                   onClick={() => handleProjectSort('total')}
@@ -281,11 +304,13 @@ const OverviewTab = ({
               </tr>
             </thead>
             <tbody>
-              {sortProjects(byProject, projectSort).map((p, i) => {
+              {sortProjects(breakdownProjects, projectSort).map((p, i) => {
                 // With one decimal, 0,0 % of a Cloud total of 0 € included (#87)
                 const share = summary?.cloudTotal ? p.total / summary.cloudTotal : 0;
+                // A project billed to several accounts has a row for each (#118)
+                const key = accountColumn ? `${p.projectId} ${p.account}` : p.projectId || i;
                 return (
-                  <tr key={p.projectId || i} className="border-b hover:bg-gray-50">
+                  <tr key={key} className="border-b hover:bg-gray-50">
                     <td className="p-3">
                       <button
                         className="text-blue-600 hover:text-blue-800 hover:underline text-left"
@@ -297,6 +322,9 @@ const OverviewTab = ({
                         {p.projectName}
                       </button>
                     </td>
+                    {accountColumn && (
+                      <td className="p-3 text-gray-600">{accountColumn.nameOf(p.account)}</td>
+                    )}
                     <td className="p-3 text-right font-medium">{fmt(p.total)}€</td>
                     <td className="p-3 text-right text-gray-500">
                       {formatPercent(share, language)}
@@ -307,7 +335,9 @@ const OverviewTab = ({
             </tbody>
             <tfoot>
               <tr className="bg-gray-50 font-semibold">
-                <td className="p-3">{t('cloudTotal')}</td>
+                <td className="p-3" colSpan={1 + (accountColumn ? 1 : 0)}>
+                  {t('cloudTotal')}
+                </td>
                 <td className="p-3 text-right">{fmt(summary?.cloudTotal || 0)}€</td>
                 <td className="p-3 text-right">{formatPercent(1, language, { decimals: 0 })}</td>
               </tr>

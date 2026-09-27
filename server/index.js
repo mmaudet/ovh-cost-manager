@@ -364,6 +364,21 @@ function registerRoutes() {
     isRecordedAccount: db.accounts.isRecorded,
   });
 
+  // The byAccount parameter of the lists of the costs of projects (#118): req.byAccount,
+  // whether a request asks for each project once for each account that billed it, with that
+  // account, as the Overview's lists that name the account of each project do, rather than
+  // once. true or false, false without it; any other value is refused.
+  const byAccountParameter = (req, res, next) => {
+    const { byAccount } = req.query;
+    if (byAccount !== undefined && byAccount !== 'true' && byAccount !== 'false') {
+      return res.status(400).json({
+        error: "Invalid 'byAccount' parameter: expected true or false",
+      });
+    }
+    req.byAccount = byAccount === 'true';
+    return next();
+  };
+
   // ========================
   // Projects Endpoints
   // ========================
@@ -467,7 +482,11 @@ function registerRoutes() {
   // Analysis Endpoints
   // ========================
 
-  app.get('/api/analysis/by-project', (req, res) => {
+  // The costs of each project of a period, for the account the request asks for, or for
+  // every account without one (#118). Once each, as before, or, by account, once for each
+  // account that billed it, with that account: its NIC handle, or null for the Unknown
+  // account.
+  app.get('/api/analysis/by-project', accountParameter, byAccountParameter, (req, res) => {
     try {
       const { from, to } = req.query;
       const validation = validateDateRange(from, to);
@@ -475,14 +494,15 @@ function registerRoutes() {
         return res.status(400).json({ error: validation.error });
       }
 
-      const data = db.analysis.byProject(from, to);
+      const data = db.analysis.byProject(from, to, req.account, { byAccount: req.byAccount });
 
       // Format response
       const result = data.map(row => ({
         projectId: row.project_id,
         projectName: row.project_name || 'Unknown',
         total: Math.round(row.total * 100) / 100,
-        detailsCount: row.details_count
+        detailsCount: row.details_count,
+        ...(req.byAccount ? { account: row.account } : {})
       }));
 
       res.json(result);
@@ -491,7 +511,9 @@ function registerRoutes() {
     }
   });
 
-  app.get('/api/analysis/by-service', (req, res) => {
+  // The costs of each service type of a period, for the account the request asks for, or for
+  // every account without one (#118)
+  app.get('/api/analysis/by-service', accountParameter, (req, res) => {
     try {
       const { from, to } = req.query;
       const validation = validateDateRange(from, to);
@@ -499,7 +521,7 @@ function registerRoutes() {
         return res.status(400).json({ error: validation.error });
       }
 
-      const data = db.analysis.byService(from, to);
+      const data = db.analysis.byService(from, to, req.account);
 
       // Define colors for each service type
       const colors = {
@@ -1183,7 +1205,9 @@ function registerRoutes() {
     }
   });
 
-  app.get('/api/analysis/by-resource-type', (req, res) => {
+  // The costs of each resource type of a period, for the account the request asks for, or for
+  // every account without one (#118)
+  app.get('/api/analysis/by-resource-type', accountParameter, (req, res) => {
     try {
       const { from, to } = req.query;
       const validation = validateDateRange(from, to);
@@ -1191,7 +1215,7 @@ function registerRoutes() {
         return res.status(400).json({ error: validation.error });
       }
 
-      const data = db.inventory.byResourceType(from, to);
+      const data = db.inventory.byResourceType(from, to, req.account);
 
       const result = data.map(row => ({
         name: RESOURCE_TYPE_LABELS[row.resource_type] || row.resource_type || 'Other',
@@ -1453,11 +1477,15 @@ function registerRoutes() {
   // ========================
 
   // The GPU costs of the account the request asks for, and the GPU instances of its projects,
-  // or those of every account without one (#120)
-  app.get('/api/gpu/summary', accountParameter, (req, res) => {
+  // or those of every account without one (#120). Its projects come once each, or, by
+  // account, once for each account that billed them, with that account: its NIC handle, or
+  // null for the Unknown account (#118).
+  app.get('/api/gpu/summary', accountParameter, byAccountParameter, (req, res) => {
     try {
       const { from, to } = req.query;
-      const gpuData = db.cloudDetails.getGpuSummary(from || null, to || null, req.account);
+      const gpuData = db.cloudDetails.getGpuSummary(
+        from || null, to || null, req.account, { byAccount: req.byAccount },
+      );
       const gpuInstances = db.cloudDetails.getGpuInstances(req.account);
 
       const modelColors = {
@@ -1482,7 +1510,8 @@ function registerRoutes() {
           project_name: p.project_name,
           project_id: p.project_id,
           total: Math.round(p.total * 100) / 100,
-          gpu_flavors: p.gpu_flavors
+          gpu_flavors: p.gpu_flavors,
+          ...(req.byAccount ? { account: p.account } : {})
         })),
         monthlyTrend: gpuData.monthlyTrend.map(m => ({
           month: m.month,

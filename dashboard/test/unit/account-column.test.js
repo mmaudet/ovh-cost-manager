@@ -32,6 +32,9 @@ describe('accountColumnOf', () => {
   it('is a column of the lists with all accounts shown, when there are two or more', () => {
     expect(accountColumnOf(accountsOf([lyonAccount, unnamedAccount]), null, inFrench))
       .toEqual({ label: 'Compte', nameOf: expect.any(Function) });
+    // The Unknown account counts among them (#118)
+    expect(accountColumnOf(accountsOf([lyonAccount, unknownAccount]), null, inFrench))
+      .toEqual({ label: 'Compte', nameOf: expect.any(Function) });
   });
 
   describe('what it shows for the account of a row', () => {
@@ -45,6 +48,14 @@ describe('accountColumnOf', () => {
     it('is else its NIC handle, whether or not config.json still lists it', () => {
       expect(nameOf(unnamedAccount.nic)).toBe('yy2222-ovh');
       expect(nameOf(removedAccount.nic)).toBe('zz3333-ovh');
+    });
+
+    // Which the account selector says, but not the column (#118)
+    it('is the name alone of an account that config.json no longer lists', () => {
+      const named = accountsOf([lyonAccount, { ...removedAccount, name: 'Paris branch' }]);
+
+      expect(accountColumnOf(named, null, inFrench).nameOf(removedAccount.nic))
+        .toBe('Paris branch');
     });
 
     it('is the NIC handle of an account that the accounts route does not list', () => {

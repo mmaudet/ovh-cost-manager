@@ -1,13 +1,23 @@
-// The Overview tab's state, in a hook that the dashboard shell calls on every render: see
-// docs/adr/0001-tab-state-lives-in-the-dashboard-shell.md
+// The Overview tab's state and data queries, in a hook that the dashboard shell calls on
+// every render: see docs/adr/0001-tab-state-lives-in-the-dashboard-shell.md
 //
-// The tab queries nothing of its own: the KPI cards, the header, the Markdown report or
-// other tabs read what it shows as well, so the shell requests it at page start and passes
-// it on. The budget stays in the shell too, since the month-end forecast card reads it.
+// Most of what the tab shows, the shell requests at page start, for the account selected in
+// the header, and passes on: the KPI cards, the header, the Markdown report or other tabs
+// read it as well. So do the costs by project and the GPU costs, once for each project. The
+// budget stays in the shell too, since the month-end forecast card reads it.
+//
+// The tab queries only what its lists alone show when they name the account of each project,
+// with all accounts shown (#118): their projects once for each account that billed them.
+// Everything else lists each project once, as before.
 
 import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { fetchGpuProjectsByAccount, fetchProjectsByAccount } from '../services/api.js';
 
-const useOverviewTab = () => {
+// selectedMonth: the month of the header, which the months of the account shown hold when
+// holdsSelectedMonth says so, as the shell checks it. accountColumn: the Account column of
+// the lists (accountColumnOf()), null when they name no account.
+const useOverviewTab = ({ selectedMonth, holdsSelectedMonth, accountColumn }) => {
   const [projectSort, setProjectSort] = useState({ column: 'total', direction: 'desc' });
 
   const handleProjectSort = (column) => {
@@ -17,9 +27,26 @@ const useOverviewTab = () => {
     }));
   };
 
+  // The projects of the month by account, for all accounts, while the lists name the account
+  // of each: the breakdown by project, and the GPU costs by project. As the shell's queries of
+  // the month, they wait until the months of the account shown hold it.
+  const byAccount = (key, fetch) => ({
+    queryKey: [key, selectedMonth?.from, selectedMonth?.to],
+    queryFn: () => fetch(selectedMonth.from, selectedMonth.to),
+    enabled: accountColumn !== null && holdsSelectedMonth,
+  });
+  const { data: projectsByAccount = [] } = useQuery(
+    byAccount('projectsByAccount', fetchProjectsByAccount),
+  );
+  const { data: gpuProjectsByAccount = [] } = useQuery(
+    byAccount('gpuProjectsByAccount', fetchGpuProjectsByAccount),
+  );
+
   return {
     projectSort,
     handleProjectSort,
+    projectsByAccount,
+    gpuProjectsByAccount,
   };
 };
 

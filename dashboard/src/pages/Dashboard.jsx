@@ -101,8 +101,9 @@ export default function Dashboard() {
   const accounts = accountList ? accountsOf(accountList) : (accountsFailed ? [] : undefined);
 
   // The account the page shows, page-wide: null for all accounts, undefined until the page
-  // knows it. The months list, the KPI cards of the month's figures and the Web Cloud tab
-  // follow it; the other cards and tabs follow it in the next tickets (#116 to #123).
+  // knows it. The months list, the KPI cards of the month's figures, the Overview's figures
+  // (#118) and the Web Cloud tab follow it; the other cards and tabs follow it in the next
+  // tickets (#116 to #123).
   const { selectedAccount, selectAccount } = useSelectedAccount(accounts);
   // The Account column of the lists, which name the account of each row with all accounts
   // shown, when the page offers several (#121): null when they name none
@@ -144,30 +145,32 @@ export default function Dashboard() {
     }),
   );
 
-  const { data: byService = [] } = useQuery({
-    queryKey: ['byService', selectedMonth?.from, selectedMonth?.to],
-    queryFn: () => fetchByService(selectedMonth.from, selectedMonth.to),
-    enabled: !!selectedMonth
-  });
+  // The Overview's figures of the month selected, once the account shown has it, as its
+  // summary (#118): the Markdown report and other tabs read them too
+  const { data: byService = [] } = useQuery(accountQuery(selectedAccount, {
+    key: ['byService', selectedMonth?.from, selectedMonth?.to],
+    fetch: (account) => fetchByService(selectedMonth.from, selectedMonth.to, account),
+    enabled: holdsSelectedMonth,
+  }));
 
-  const { data: byProject = [] } = useQuery({
-    queryKey: ['byProject', selectedMonth?.from, selectedMonth?.to],
-    queryFn: () => fetchByProject(selectedMonth.from, selectedMonth.to),
-    enabled: !!selectedMonth
-  });
+  const { data: byProject = [] } = useQuery(accountQuery(selectedAccount, {
+    key: ['byProject', selectedMonth?.from, selectedMonth?.to],
+    fetch: (account) => fetchByProject(selectedMonth.from, selectedMonth.to, account),
+    enabled: holdsSelectedMonth,
+  }));
 
-  const { data: byResourceType = [] } = useQuery({
-    queryKey: ['byResourceType', selectedMonth?.from, selectedMonth?.to],
-    queryFn: () => fetchByResourceType(selectedMonth.from, selectedMonth.to),
-    enabled: !!selectedMonth
-  });
+  const { data: byResourceType = [] } = useQuery(accountQuery(selectedAccount, {
+    key: ['byResourceType', selectedMonth?.from, selectedMonth?.to],
+    fetch: (account) => fetchByResourceType(selectedMonth.from, selectedMonth.to, account),
+    enabled: holdsSelectedMonth,
+  }));
 
   // GPU costs of the selected month, for the Overview and the Public Cloud tab
-  const { data: gpuSummary } = useQuery({
-    queryKey: ['gpuSummary', selectedMonth?.from, selectedMonth?.to],
-    queryFn: () => fetchGpuSummary(selectedMonth.from, selectedMonth.to),
-    enabled: !!selectedMonth
-  });
+  const { data: gpuSummary } = useQuery(accountQuery(selectedAccount, {
+    key: ['gpuSummary', selectedMonth?.from, selectedMonth?.to],
+    fetch: (account) => fetchGpuSummary(selectedMonth.from, selectedMonth.to, account),
+    enabled: holdsSelectedMonth,
+  }));
 
   const { data: importStatus } = useQuery({
     queryKey: ['importStatus'],
@@ -197,7 +200,7 @@ export default function Dashboard() {
   // Each tab's state and queries, in the order of the tab bar: its hook runs on every render,
   // before the loading screen, so that the tab keeps them while another one is open (ADR 0001)
 
-  const overviewTab = useOverviewTab();
+  const overviewTab = useOverviewTab({ selectedMonth, holdsSelectedMonth, accountColumn });
 
   const compareTab = useCompareTab({ months, selectedMonth, activeTab });
 
@@ -597,6 +600,7 @@ export default function Dashboard() {
         {activeTab === 'overview' && (
           <OverviewTab
             {...overviewTab} language={language} t={t} fmt={fmt}
+            accountColumn={accountColumn}
             summary={summary} total={total} byService={byService} byProject={byProject}
             byResourceType={byResourceType} gpuSummary={gpuSummary}
             expiringServices={expiringServices} budget={budget} setBudget={setBudget}

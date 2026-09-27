@@ -102,19 +102,27 @@ const ofAccount = (data, account = null) => {
   return data.ofAccount?.[account] ?? {};
 };
 
+// Answers that read the entry of a key for the period of the request, in the
+// dataset that answers for the account it names, the last argument
+const entryForPeriodOfAccount = (key, empty) => (data, from, to, account) =>
+  entryForPeriod(key, empty)(ofAccount(data, account), from, to);
+
 // Every function of src/services/api.js, with how it answers:
 // (dataset, ...arguments of the call) => answer
 const answers = {
   fetchAccounts: entry('accounts', emptyAnswers.list),
   // The months list and the summaries follow the account the page selects
   fetchMonths: (data, account) => entry('months', emptyAnswers.list)(ofAccount(data, account)),
-  fetchSummary: (data, from, to, account) =>
-    entryForPeriod('summary', emptyAnswers.summary)(ofAccount(data, account), from, to),
+  fetchSummary: entryForPeriodOfAccount('summary', emptyAnswers.summary),
   // So do the Public Cloud projects and figures (#121), not the resources of a project
   fetchProjectsEnriched: (data, account) =>
     entry('projectsEnriched', emptyAnswers.list)(ofAccount(data, account)),
-  fetchByProject: entryForPeriod('byProject', emptyAnswers.list),
-  fetchByService: entryForPeriod('byService', emptyAnswers.list),
+  // The Overview's figures follow it too (#118)
+  fetchByProject: entryForPeriodOfAccount('byProject', emptyAnswers.list),
+  fetchByService: entryForPeriodOfAccount('byService', emptyAnswers.list),
+  // And its lists by account, for all accounts only (#118)
+  fetchProjectsByAccount: entryForPeriod('projectsByAccount', emptyAnswers.list),
+  fetchGpuProjectsByAccount: entryForPeriod('gpuProjectsByAccount', emptyAnswers.list),
   // Trends: by the month they end on, then by their number of months, and those of the
   // account the page selects (#120)
   fetchMonthlyTrend: (data, months, end, account) =>
@@ -132,7 +140,7 @@ const answers = {
   fetchInventoryVps: entry('inventoryVps', emptyAnswers.list),
   fetchInventoryStorage: entry('inventoryStorage', emptyAnswers.list),
   fetchExpiringServices: entry('expiringServices', emptyAnswers.list),
-  fetchByResourceType: entryForPeriod('byResourceType', emptyAnswers.list),
+  fetchByResourceType: entryForPeriodOfAccount('byResourceType', emptyAnswers.list),
   fetchResourceTypeDetails: (data, type, from, to) =>
     data.resourceTypeDetails?.[type]?.[periodKey(from, to)] ?? emptyAnswers.list(),
   fetchProjectConsumption: entryForProject('projectConsumption', emptyAnswers.list),
@@ -141,21 +149,14 @@ const answers = {
   fetchProjectSnapshots: entryForProject('projectSnapshots', emptyAnswers.list),
   fetchProjectSavingsPlans: entryForProject('projectSavingsPlans', emptyAnswers.list),
   // The Web Cloud services follow the account the page selects (#122)
-  fetchWebCloudSummary: (data, from, to, account) =>
-    entryForPeriod('webCloudSummary', emptyAnswers.webCloudSummary)(
-      ofAccount(data, account), from, to,
-    ),
-  fetchWebCloudItems: (data, from, to, account) =>
-    entryForPeriod('webCloudItems', emptyAnswers.list)(ofAccount(data, account), from, to),
+  fetchWebCloudSummary: entryForPeriodOfAccount('webCloudSummary', emptyAnswers.webCloudSummary),
+  fetchWebCloudItems: entryForPeriodOfAccount('webCloudItems', emptyAnswers.list),
   fetchProjectQuotas: (data, projectId) => data.projectQuotas?.[projectId] ?? emptyAnswers.list(),
   fetchProjectBuckets: entryForProject('projectBuckets', emptyAnswers.list),
   fetchProjectInstanceTotal: entryForProject('projectInstanceTotal', emptyAnswers.instanceTotal),
   // The GPU costs of a period, of the account the page selects (#120)
-  fetchGpuSummary: (data, from, to, account) =>
-    entryForPeriod('gpuSummary', emptyAnswers.gpuSummary)(ofAccount(data, account), from, to),
-  fetchPublicCloudStats: (data, from, to, account) => entryForPeriod(
-    'publicCloudStats', emptyAnswers.publicCloudStats,
-  )(ofAccount(data, account), from, to),
+  fetchGpuSummary: entryForPeriodOfAccount('gpuSummary', emptyAnswers.gpuSummary),
+  fetchPublicCloudStats: entryForPeriodOfAccount('publicCloudStats', emptyAnswers.publicCloudStats),
   fetchBackupStats: entryForPeriod('backupStats', emptyAnswers.backupStats),
 };
 

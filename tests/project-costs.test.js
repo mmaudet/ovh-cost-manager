@@ -87,4 +87,95 @@ describe('costs by project', () => {
       costs('project-gone-2', null, 15, 1),
     ]);
   });
+
+  // For the Overview's lists that name the account of each project (#118): that of the bills
+  // of a project missing from the projects table too
+  test('gives each project the account of its bills when listed by account', () => {
+    const ofAccount = (row) => ({ ...row, account: ACCOUNT.nic });
+
+    expect(db.analysis.byProject('2026-10-01', '2026-10-31', null, { byAccount: true })).toEqual([
+      ofAccount(costs('project-gone-1', null, 40, 1)),
+      ofAccount(costs('project-production', 'Production', 30, 1)),
+      ofAccount(costs('project-gone-2', null, 15, 1)),
+    ]);
+  });
+
+  // The order that the breakdown by project, its Top projects chart, the GPU costs by project
+  // and the top five projects of the summary give projects that cost the same (#118)
+  describe('that cost the same', () => {
+    // A bill line of the GPU instances of a project: a cost of the project, and a GPU cost
+    const gpuLine = (id, billId, projectId, price) => ({
+      ...line(id, billId, projectId, price), description: 'instances l4-90 GRA11',
+    });
+    // The projects of the rows, in their order, and the account of each
+    const idsOf = (rows) => rows.map((row) => row.project_id);
+    const accountsOf = (rows) => rows.map((row) => [row.project_id, row.account]);
+
+    beforeAll(() => {
+      // In November, three projects at 120 € each on one bill, written in this order
+      project('project-kilo', 'Kilo');
+      project('project-bravo', 'Bravo');
+      project('project-echo', 'Echo');
+      bill('FR0011', '2026-11-05');
+      db.details.insertMany([
+        gpuLine('FR0011-1', 'FR0011', 'project-kilo', 120),
+        gpuLine('FR0011-2', 'FR0011', 'project-bravo', 120),
+        gpuLine('FR0011-3', 'FR0011', 'project-echo', 120),
+      ]);
+
+      // In December, Kilo at 60 € on the bills of another account and of the Unknown
+      // account, written first, and of the account
+      db.bills.upsert({
+        id: 'FR0013', date: '2026-12-05', price_without_tax: 0, price_with_tax: 0, tax: 0,
+        currency: 'EUR', pdf_url: null, html_url: null, account: 'yy2222-ovh',
+      });
+      db.getDb().prepare(
+        "INSERT INTO bills (id, date, currency, account) VALUES (?, ?, 'EUR', NULL)",
+      ).run('FR0014', '2026-12-05');
+      bill('FR0012', '2026-12-05');
+      db.details.insertMany([
+        gpuLine('FR0014-1', 'FR0014', 'project-kilo', 60),
+        gpuLine('FR0013-1', 'FR0013', 'project-kilo', 60),
+        gpuLine('FR0012-1', 'FR0012', 'project-kilo', 60),
+      ]);
+    });
+
+    // As the queries gave them before they told accounts apart, and whatever the order of
+    // their bill lines: listed by account too
+    test('come by id, the last first', () => {
+      const byId = ['project-kilo', 'project-echo', 'project-bravo'];
+      const byAccount = { byAccount: true };
+
+      expect(idsOf(db.analysis.byProject('2026-11-01', '2026-11-30'))).toEqual(byId);
+      expect(idsOf(db.analysis.byProject('2026-11-01', '2026-11-30', null, byAccount)))
+        .toEqual(byId);
+      expect(idsOf(db.cloudDetails.getGpuSummary('2026-11-01', '2026-11-30').byProject))
+        .toEqual(byId);
+      expect(idsOf(db.cloudDetails.getGpuSummary('2026-11-01', '2026-11-30', null, byAccount)
+        .byProject)).toEqual(byId);
+    });
+
+    // As the Web Cloud services billed to several accounts (#122)
+    test('come for each account that billed them by NIC handle, the Unknown account last', () => {
+      const ofEachAccount = [
+        ['project-kilo', ACCOUNT.nic], ['project-kilo', 'yy2222-ovh'], ['project-kilo', null],
+      ];
+      const byAccount = { byAccount: true };
+
+      expect(accountsOf(db.analysis.byProject('2026-12-01', '2026-12-31', null, byAccount)))
+        .toEqual(ofEachAccount);
+      expect(accountsOf(db.cloudDetails.getGpuSummary('2026-12-01', '2026-12-31', null, byAccount)
+        .byProject)).toEqual(ofEachAccount);
+    });
+
+    // Unless listed by account
+    test('come once for all the accounts that billed them', () => {
+      const once = [['project-kilo', 180]];
+      const totalsOf = (rows) => rows.map((row) => [row.project_id, row.total]);
+
+      expect(totalsOf(db.analysis.byProject('2026-12-01', '2026-12-31'))).toEqual(once);
+      expect(totalsOf(db.cloudDetails.getGpuSummary('2026-12-01', '2026-12-31').byProject))
+        .toEqual(once);
+    });
+  });
 });
