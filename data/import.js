@@ -1460,19 +1460,19 @@ async function runImport(params) {
       console.log(`  Attributed ${attributed} rows stored before to the account ${only.nic}`);
     }
 
-    if (params.full) {
-      const unimportable = accounts.filter(({ error }) => error);
-      if (unimportable.length === 0) {
-        // Cleared only once every account has named itself, and in one transaction: it
-        // would drop the data of an account that it cannot import again. The import log
-        // keeps the entry of this import, which the other imports check.
-        db.transaction(() => {
-          db.clearAll(importId);
-        });
-      } else if (several) {
-        console.warn('Clearing nothing, as some accounts cannot be imported: '
-          + `${joinWithAnd(unimportable.map(describeAccount))}`);
-      }
+    // Cleared only once every account has named itself, and in one transaction: it would drop
+    // the data of an account that it cannot import again. Until an account can be cleared
+    // alone (#114), a full import clears every account or none, which the run's error then
+    // says. The import log keeps the entry of this import, which the other imports check.
+    const unimportable = accounts.filter(({ error }) => error);
+    const clearedNothing = params.full && unimportable.length > 0 && several;
+    if (params.full && unimportable.length === 0) {
+      db.transaction(() => {
+        db.clearAll(importId);
+      });
+    } else if (clearedNothing) {
+      console.warn('Clearing nothing, as some accounts cannot be imported: '
+        + `${joinWithAnd(unimportable.map(describeAccount))}`);
     }
 
     // The run's entry of the import log is the lock that the other imports check: the run
@@ -1495,11 +1495,10 @@ async function runImport(params) {
     }
 
     const failed = accounts.filter(({ error }) => error);
-    if (failed.length === accounts.length) {
-      throw new Error(failureMessage(accounts, several));
-    }
     if (failed.length > 0) {
-      const message = failureMessage(accounts, several);
+      const notCleared = '. Nothing was cleared, as a full import clears every account or none';
+      const message = failureMessage(accounts, several) + (clearedNothing ? notCleared : '');
+      if (failed.length === accounts.length) throw new Error(message);
       db.importLog.partial(importId, stats, message);
       printSummary('IMPORT PARTIAL', stats);
       console.error(message);

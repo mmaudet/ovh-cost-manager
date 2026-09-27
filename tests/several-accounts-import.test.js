@@ -549,9 +549,12 @@ describe('a full import of several accounts', () => {
     expect(storedBills()).toEqual([
       ['FR-L0', LYON.nic], ['FR-L1', LYON.nic], ['FR-P0', PARIS.nic],
     ]);
-    expect(runs()).toEqual([
-      ['partial', '1 of 2 accounts failed: accounts[1]: This credential is not valid'],
-    ]);
+    // Said where the import history shows it, not only in the console
+    expect(runs()).toEqual([[
+      'partial',
+      '1 of 2 accounts failed: accounts[1]: This credential is not valid. Nothing was cleared, '
+        + 'as a full import clears every account or none',
+    ]]);
   });
 });
 
