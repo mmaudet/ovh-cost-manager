@@ -234,8 +234,9 @@ export default function Dashboard() {
 
   // Select the latest month when the months list loads without the month selected: when the
   // page opens, as useCompareTab sets months A and B then, in the same commit, and when the
-  // account selected was not billed that month (#115), as useCompareTab sets them again when
-  // it was not billed in either (#119)
+  // account selected was not billed that month (#115). useCompareTab sets months A and B
+  // again when the list of the account selected lacks one of them, or when they are the same
+  // month (#119).
   useEffect(() => {
     if (months.length > 0 && !holdsSelectedMonth) {
       setSelectedMonth(months[0]);

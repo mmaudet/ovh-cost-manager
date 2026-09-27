@@ -48,8 +48,9 @@ What stays open depends on how the user moves around the page (#56):
 - the account selector keeps the open project open while the account shown lists it: with
   an account that does not, no project is open, until one that lists it is shown (#121);
 - it keeps the months that the Compare tab compares while the account shown was billed in
-  both: with an account that lacks either, the tab compares the months it opens on for that
-  account, its second latest billed month and its latest one (#119).
+  both and they are two months: with an account that lacks either, or after one billed in
+  a single month, the tab compares the months it opens on for that account, its second
+  latest billed month and its latest one (#119). The user may pick one month for both.
 
 A tab module may also export pieces that the shell renders in place, outside the tab, so
 that the page's markup stays as it is: the Trends period selector (`TrendsPeriodSelector`),

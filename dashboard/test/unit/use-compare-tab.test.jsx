@@ -116,6 +116,28 @@ describe('useCompareTab', () => {
 
         expect(compared(result.current)).toEqual(['2026-08', '2026-09']);
       });
+
+      // As after the Unknown account, billed in July only, which compares July with itself
+      it('are those the tab opens on for that account when they are the same month', async () => {
+        const { result, rerender } = await renderTabHook(useCompareTab,
+          { ...onCompare, months: [july] });
+        expect(compared(result.current)).toEqual(['2026-07', '2026-07']);
+
+        await rerender(onCompare);
+
+        expect(compared(result.current)).toEqual(['2026-08', '2026-09']);
+      });
+    });
+
+    // The months of another account move them, not the user, who may compare a month with
+    // itself, as before several accounts
+    it('stay as picked when the user picks the same month for both', async () => {
+      const { result, queryClient } = await renderTabHook(useCompareTab, onCompare);
+
+      act(() => result.current.setCompareMonthA(september));
+      await settle(queryClient);
+
+      expect(compared(result.current)).toEqual(['2026-09', '2026-09']);
     });
   });
 
@@ -410,10 +432,12 @@ describe('useCompareTab', () => {
       expect(resourceTypes(result.current.byResourceTypeB))
         .toEqual([['dedicated_server', 90], ['domain', 30]]);
 
+      // Back to the months the tab opens on, rather than July twice
       await rerender(onCompare);
 
-      expect(result.current.compareDataA.total).toBe(980);
-      expect(result.current.compareDataB.total).toBe(980);
+      expect(compared(result.current)).toEqual(['2026-08', '2026-09']);
+      expect(result.current.compareDataA.total).toBe(1042);
+      expect(result.current.compareDataB.total).toBe(1250.4);
     });
 
     // An account selected on an earlier visit, until the accounts list tells whether the page

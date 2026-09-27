@@ -140,6 +140,19 @@ describe('Compare tab', () => {
       ]);
     });
 
+    // Only the months of another account selected in the header move them (#119)
+    it('stay as picked when the user picks the same month for both', async () => {
+      const { user } = await renderDashboard();
+      await openTab(user, 'Comparaison');
+
+      await pickMonth(user, 'Août 2026', 'Septembre 2026');
+
+      expect(texts(comparedTotals())).toEqual([
+        'Mois A :', 'Septembre 2026', 'VS', 'Mois B :', 'Septembre 2026',
+        '1 250,40€', 'Septembre 2026', '0,0 %', '1 250,40€', 'Septembre 2026',
+      ]);
+    });
+
     it('are the same month when a single month was billed', async () => {
       const { user } = await renderDashboard({ ...account, months: [months[0]] });
 
@@ -802,11 +815,20 @@ describe('Compare tab', () => {
         await selectAccount(user, 'Compte inconnu');
 
         expect(comparedMonths()).toEqual(['Juillet 2026', 'Juillet 2026']);
+      });
 
-        // Billed in every month
+      // Rather than keep comparing July with itself, which all accounts were billed in too
+      it('are those the tab opens on after an account billed in a single month', async () => {
+        const { user } = await renderDashboard(severalAccounts);
+        await openTab(user, 'Comparaison');
+        await selectAccount(user, 'Compte inconnu');
+
         await selectAccount(user, 'Tous les comptes');
 
-        expect(comparedMonths()).toEqual(['Juillet 2026', 'Juillet 2026']);
+        expect(texts(comparedTotals())).toEqual([
+          'Mois A :', 'Août 2026', 'VS', 'Mois B :', 'Septembre 2026',
+          '1 042,00€', 'Août 2026', '+20,0 %', '1 250,40€', 'Septembre 2026',
+        ]);
       });
 
       it('are those the tab opens on for an account not billed in the month A picked',

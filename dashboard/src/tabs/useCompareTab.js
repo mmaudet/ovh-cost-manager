@@ -1,7 +1,7 @@
 // The Compare tab's state and data queries, in a hook that the dashboard shell calls on
 // every render: see docs/adr/0001-tab-state-lives-in-the-dashboard-shell.md
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   fetchSummary, fetchByProject, fetchByService, fetchByResourceType, fetchBackupStats,
@@ -13,8 +13,9 @@ import { accountQuery } from '../utils/accounts.js';
  * The state and data queries of the Compare tab, which compares two months of the account
  * shown in the header (#119). Months A and B are months of the months list, that account's
  * (#115), which the tab's dropdowns list. They get their defaults when the list first loads:
- * the shell then selects the latest month, in the same commit. They get them again when the
- * list of an account selected since lacks either of them.
+ * the shell then selects the latest month, in the same commit. When the list of an account
+ * selected since loads, they stay if it holds both and they are two months, and get that
+ * account's defaults otherwise.
  * @param {object} shell - What the dashboard shell passes on, on every render
  * @param {object[]} shell.months - The months billed to the account shown, the latest first
  * @param {string} shell.activeTab - The tab open: the queries run on the Compare tab only
@@ -46,16 +47,25 @@ const useCompareTab = ({ months, activeTab, selectedAccount, accountColumn }) =>
   const holdsMonthA = holds(compareMonthA);
   const holdsMonthB = holds(compareMonthB);
 
+  // The months list that months A and B were last checked against. The tab checks them when
+  // another list loads, not when the user picks one: the user may compare a month with itself.
+  const checkedMonths = useRef(null);
+
   // Months A and B by default: the second latest billed month and the latest one, or the only
-  // month twice. Once the list has loaded without either of them, the tab compares the months
-  // it opens on, rather than keep a month that its dropdowns do not list (#119): as the shell
-  // selects the latest month of an account that lacks the month selected (#115).
+  // month twice. Once a list has loaded, the tab keeps them only if it holds both and they
+  // are two months (#119). It compares the months it opens on otherwise, rather than a month
+  // that its dropdowns do not list, as the shell selects the latest month of an account that
+  // lacks the month selected (#115), or one month with itself, as a single-month account
+  // left them.
   useEffect(() => {
-    if (months.length > 0 && !(holdsMonthA && holdsMonthB)) {
+    if (months.length === 0 || months === checkedMonths.current) return;
+    checkedMonths.current = months;
+    const keeps = holdsMonthA && holdsMonthB && compareMonthA.value !== compareMonthB.value;
+    if (!keeps) {
       setCompareMonthA(months[1] ?? months[0]);
       setCompareMonthB(months[0]);
     }
-  }, [months, holdsMonthA, holdsMonthB]);
+  }, [months, holdsMonthA, holdsMonthB, compareMonthA, compareMonthB]);
 
   // A figure of month A or B, for the account shown (#119), once the tab is open. Each month
   // waits until the months list holds it, as the shell's queries of its month do: no request
