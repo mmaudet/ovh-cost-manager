@@ -19,6 +19,7 @@ const { createOriginCheckMiddleware, readAllowedOrigins } = require('./cors');
 const { createHostCheckMiddleware } = require('./hosts');
 const { importsEnabled } = require('./imports');
 const { trendWindowFromQuery } = require('./months');
+const { consumptionForecast, currentConsumption } = require('./consumption');
 const { readConfigFile } = require('./config-file');
 const { buildRateLimitConfig } = require('./rate-limit-config');
 const { isHealthCheck } = require('./auth/health');
@@ -998,100 +999,42 @@ function registerRoutes() {
   // Consumption Endpoints (Phase 1)
   // ========================
 
-  app.get('/api/consumption/current', (req, res) => {
+  // What tells the consumption of the account a request asks for, or of every account without
+  // one, and that of every account, whose latest month is the current one (#116)
+  const consumptionOfAccounts = (account) => {
+    const every = db.consumption.getCurrentByAccount();
+    return { every, asked: account === null ? every : db.consumption.getCurrentByAccount(account) };
+  };
+
+  // The current month's consumption so far of the account the request asks for, or, without
+  // one, the sum of the accounts' (#116), in the current month: the latest that an account's
+  // covers. An account whose latest is of an earlier month has none. When the last imports of
+  // the accounts fall on either side of a month's end, those of the month before add nothing
+  // until they are imported again. See server/consumption.js.
+  app.get('/api/consumption/current', accountParameter, (req, res) => {
     try {
-      const snapshot = db.consumption.getLatestSnapshot();
-      // If /me/consumption data is 0, use actual cloud project consumption instead
-      const snapshotTotal = snapshot?.current_total || 0;
-      if (snapshotTotal === 0) {
-        const cloudSummary = db.cloudDetails.getConsumptionSummary();
-        if (cloudSummary && cloudSummary.total > 0) {
-          return res.json({
-            snapshot_date: snapshot?.snapshot_date || new Date().toISOString(),
-            period_start: cloudSummary.period_start,
-            period_end: cloudSummary.period_end,
-            current_total: Math.round(cloudSummary.total * 100) / 100,
-            source: 'cloud_projects',
-            project_count: cloudSummary.project_count,
-            currency: 'EUR'
-          });
-        }
-      }
-      if (!snapshot) {
-        return res.json({ current_total: 0, currency: 'EUR' });
-      }
-      const details = snapshot.raw_data ? JSON.parse(snapshot.raw_data) : null;
-      res.json({
-        snapshot_date: snapshot.snapshot_date,
-        period_start: snapshot.period_start,
-        period_end: snapshot.period_end,
-        current_total: Math.round(snapshotTotal * 100) / 100,
-        currency: snapshot.currency,
-        source: 'me_consumption',
-        details
-      });
+      res.json(currentConsumption(consumptionOfAccounts(req.account), new Date()));
     } catch (err) {
       res.status(500).json({ error: err.message });
     }
   });
 
-  app.get('/api/consumption/forecast', (req, res) => {
+  // The current month's month-end forecast of the account the request asks for, or, without
+  // one, the sum of the accounts' (#116), in the current month, as the consumption above
+  app.get('/api/consumption/forecast', accountParameter, (req, res) => {
     try {
-      const snapshot = db.consumption.getLatestSnapshot();
-      const snapshotForecast = snapshot?.forecast_total || 0;
-      const snapshotCurrent = snapshot?.current_total || 0;
-
-      // If /me/consumption forecast is 0, compute forecast from cloud project consumption
-      if (snapshotForecast === 0 && snapshotCurrent === 0) {
-        const cloudSummary = db.cloudDetails.getConsumptionSummary();
-        if (cloudSummary && cloudSummary.total > 0) {
-          const periodStart = new Date(cloudSummary.period_start);
-          const periodEnd = new Date(cloudSummary.period_end);
-          const daysElapsed = Math.max(1, Math.ceil((periodEnd - periodStart) / (1000 * 60 * 60 * 24)));
-          // Forecast to end of month
-          const lastDayOfMonth = new Date(periodStart.getFullYear(), periodStart.getMonth() + 1, 0).getDate();
-          const dailyAvg = cloudSummary.total / daysElapsed;
-          const forecastTotal = Math.round(dailyAvg * lastDayOfMonth * 100) / 100;
-          const currentTotal = Math.round(cloudSummary.total * 100) / 100;
-          const progress = Math.round((currentTotal / forecastTotal) * 100);
-
-          return res.json({
-            snapshot_date: new Date().toISOString(),
-            period_start: cloudSummary.period_start,
-            period_end: cloudSummary.period_end,
-            forecast_total: forecastTotal,
-            current_total: currentTotal,
-            currency: 'EUR',
-            progress,
-            source: 'cloud_projects',
-            days_elapsed: daysElapsed,
-            days_in_month: lastDayOfMonth
-          });
-        }
-      }
-      if (!snapshot) {
-        return res.json({ forecast_total: 0, currency: 'EUR' });
-      }
-      res.json({
-        snapshot_date: snapshot.snapshot_date,
-        period_start: snapshot.period_start,
-        period_end: snapshot.period_end,
-        forecast_total: Math.round(snapshotForecast * 100) / 100,
-        current_total: Math.round(snapshotCurrent * 100) / 100,
-        currency: snapshot.currency,
-        progress: snapshotCurrent && snapshotForecast
-          ? Math.round((snapshotCurrent / snapshotForecast) * 100)
-          : 0
-      });
+      res.json(consumptionForecast(consumptionOfAccounts(req.account), new Date()));
     } catch (err) {
       res.status(500).json({ error: err.message });
     }
   });
 
-  app.get('/api/consumption/usage-history', (req, res) => {
+  // The consumption history of the account the request asks for, or, without one, that of
+  // every account, whose entries for a period add up (#116)
+  app.get('/api/consumption/usage-history', accountParameter, (req, res) => {
     try {
       const { from, to } = req.query;
-      const history = db.consumption.getHistory(from, to);
+      const history = db.consumption.getHistory(from, to, req.account);
       const result = history.map(h => ({
         period_start: h.period_start,
         period_end: h.period_end,
@@ -1109,9 +1052,14 @@ function registerRoutes() {
   // Account Endpoints (Phase 2)
   // ========================
 
-  app.get('/api/account/balance', (req, res) => {
+  // The latest balance of the account the request asks for, or, without one, the sum of every
+  // account's latest of the latest month that one was taken in (#116): one of an earlier
+  // month, such as a removed account's, adds nothing, nor, when the last imports of the
+  // accounts fall on either side of a month's end, one of the month before until its account
+  // is imported again. See balance.getBalance() in data/db.js.
+  app.get('/api/account/balance', accountParameter, (req, res) => {
     try {
-      const balance = db.balance.getLatestBalance();
+      const balance = db.balance.getBalance(req.account);
       if (!balance) {
         return res.json({ debt_balance: 0, credit_balance: 0, deposit_total: 0, currency: 'EUR' });
       }
@@ -1128,18 +1076,22 @@ function registerRoutes() {
     }
   });
 
-  app.get('/api/account/credits', (req, res) => {
+  // The credit movements of the account the request asks for, or of every account without one
+  // (#116)
+  app.get('/api/account/credits', accountParameter, (req, res) => {
     try {
-      const movements = db.balance.getCreditMovements();
+      const movements = db.balance.getCreditMovements(req.account);
       res.json(movements);
     } catch (err) {
       res.status(500).json({ error: err.message });
     }
   });
 
-  app.get('/api/account/debts', (req, res) => {
+  // The debt of the balance of the account the request asks for, or of every account without
+  // one, as the balance above (#116)
+  app.get('/api/account/debts', accountParameter, (req, res) => {
     try {
-      const balance = db.balance.getLatestBalance();
+      const balance = db.balance.getBalance(req.account);
       res.json({
         debt_balance: Math.round((balance?.debt_balance || 0) * 100) / 100,
         currency: balance?.currency || 'EUR'

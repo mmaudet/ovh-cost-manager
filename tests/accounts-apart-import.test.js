@@ -973,8 +973,8 @@ describe('the rows that no account claims, once a single account is left configu
 
       expect(idsWithoutAccount()).toEqual(Object.fromEntries(ROOT_TABLES.map(t => [t, []])));
       expect(accountsOf('bills')).toEqual([['FR-P0', PARIS]]);
-      expect(db.consumption.getHistory().map(entry => [entry.account, entry.period_start]))
-        .toEqual([[PARIS, '2026-08-01'], [PARIS, '2026-07-01'], [PARIS, '2026-06-01']]);
+      expect(storedHistory().map(([account, month]) => [account, month]))
+        .toEqual([[PARIS, '2026-06-01'], [PARIS, '2026-07-01'], [PARIS, '2026-08-01']]);
       expect(storedMovements()).toEqual([[PARIS, 'PREPAID_ACCOUNT_1', 50]]);
     });
 });
@@ -1006,9 +1006,6 @@ describe('the rows stored before the accounts, whose bills one account claims', 
     forgetAccounts();
   }
 
-  // The months of the consumption history stored, whatever their account
-  const historyMonths = () => db.consumption.getHistory().map(entry => entry.period_start);
-
   test.each([['Lyon, then Paris', [LYON, PARIS]], ['Paris, then Lyon', [PARIS, LYON]]])(
     'go to the account that claims them, configured %s, with no month or movement twice',
     async (_, order) => {
@@ -1025,7 +1022,10 @@ describe('the rows stored before the accounts, whose bills one account claims', 
       await importAsTheCron();
 
       expect(idsWithoutAccount()).toEqual(Object.fromEntries(ROOT_TABLES.map(t => [t, []])));
-      expect(historyMonths()).toEqual(['2026-08-01', '2026-07-01', '2026-06-01']);
+      // Each month once, as the table holds them: the history of all accounts would add up a
+      // month stored twice (#116)
+      expect(storedHistory().map(([, month]) => month))
+        .toEqual(['2026-06-01', '2026-07-01', '2026-08-01']);
       expect(storedMovements()).toEqual([[PARIS, 'PREPAID_ACCOUNT_1', 50]]);
       expect(accountsOf('projects')).toEqual([['proj-P-idle', PARIS], ['proj-P-used', PARIS]]);
     });

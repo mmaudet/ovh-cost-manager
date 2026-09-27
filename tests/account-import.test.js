@@ -435,18 +435,19 @@ describe('the first import after the upgrade', () => {
     expect(accountsOfChildTables()).toEqual(onlyTheAccount(Object.keys(CHILD_TABLES)));
   });
 
-  // Until the account-wide figures follow the account (#116), their readers read every row:
-  // with a single account, they give what they gave, but for the account of the rows
+  // With a single account, the readers of the account-wide figures give what they gave, but
+  // for the account of the rows: the figures of all accounts are then that account's (#116)
   test('leaves what the readers of the account-wide figures give', async () => {
     await storeRowsOfBefore();
     routes.set('/cloud/project', ok([]));
     routes.set('/me/bill', ok([]));
     const withoutAccount = ({ account, ...row }) => row;
     const read = () => ({
-      balance: withoutAccount(db.balance.getLatestBalance()),
+      balance: db.balance.getBalance(),
       credits: db.balance.getCreditMovements().map(withoutAccount),
-      snapshot: withoutAccount(db.consumption.getLatestSnapshot()),
-      history: db.consumption.getHistory().map(withoutAccount),
+      current: db.consumption.getCurrentByAccount()
+        .map(({ snapshot, cloud }) => ({ snapshot: withoutAccount(snapshot), cloud })),
+      history: db.consumption.getHistory(),
       consumptionMonth: db.cloudDetails.getCurrentConsumptionMonth(),
     });
     const before = read();
@@ -454,6 +455,7 @@ describe('the first import after the upgrade', () => {
     await runImport({ diff: true });
 
     expect(read()).toEqual(before);
+    expect(before.current).toHaveLength(1);
     expect(before.consumptionMonth).toBe('2026-09-01');
   });
 });

@@ -761,9 +761,43 @@ const consumptionOps = {
     return stmt.run(requireAccount('consumption_snapshots', snapshot));
   },
 
-  getLatestSnapshot: () => {
+  /**
+   * What tells the current month's consumption of each account (#116): its latest
+   * consumption snapshot, and what its Public Cloud projects consumed in the month of its
+   * current consumption. Of the account given (see accountCondition()), or of every account
+   * that has either, the Unknown account's included, by default: each account's import
+   * records its own (#114).
+   * @param {?string} [account]
+   * @returns {{ account: ?string, snapshot: (object|undefined), cloud: object }[]} For each
+   *   account, by NIC handle, the Unknown account's last: its NIC handle, null for the
+   *   Unknown account; its latest snapshot, if any; and what its projects consumed (see
+   *   cloudDetails.getConsumptionSummary())
+   */
+  getCurrentByAccount: (account = null) => {
     const db = getDb();
-    return db.prepare('SELECT * FROM consumption_snapshots ORDER BY id DESC LIMIT 1').get();
+    const ofSnapshots = accountCondition(account, 'account');
+    const ofProjects = accountCondition(account, 'p.account');
+    const snapshots = db.prepare(`
+      SELECT * FROM consumption_snapshots
+      WHERE id IN (
+        SELECT MAX(id) FROM consumption_snapshots WHERE ${ofSnapshots.sql} GROUP BY account
+      )
+    `).all(...ofSnapshots.params);
+    // The accounts with a snapshot, or whose projects consumed in any month
+    const accounts = db.prepare(`
+      SELECT account FROM (
+        SELECT account FROM consumption_snapshots WHERE ${ofSnapshots.sql}
+        UNION
+        SELECT p.account FROM project_consumption c LEFT JOIN projects p ON p.id = c.project_id
+        WHERE ${ofProjects.sql}
+      )
+      ORDER BY account IS NULL, account
+    `).pluck().all(...ofSnapshots.params, ...ofProjects.params);
+    return accounts.map((nic) => ({
+      account: nic,
+      snapshot: snapshots.find((snapshot) => snapshot.account === nic),
+      cloud: cloudDetailOps.getConsumptionSummary(nic ?? UNKNOWN_ACCOUNT),
+    }));
   },
 
   insertHistory: (entry) => {
@@ -775,16 +809,41 @@ const consumptionOps = {
     return stmt.run(requireAccount('consumption_history', entry));
   },
 
-  getHistory: (fromDate, toDate) => {
-    const db = getDb();
-    let query = 'SELECT * FROM consumption_history';
-    const params = [];
+  /**
+   * The consumption history of the account (see accountCondition()), or of every account by
+   * default, the Unknown account's included, the latest period first (#116). The entries of
+   * the accounts for a period add up, as the accounts bill in one currency, like with like:
+   * the first of a service type of each account with the first of that type of the others',
+   * the second with the second. OVH may give an account several entries for a period, of
+   * several types or of one: they thus stay apart, as they were before the accounts. Those of
+   * a period come the latest stored first.
+   * @param {string} [fromDate] - With toDate, the first day of the earliest period to give
+   * @param {string} [toDate] - With fromDate, the last day of the latest period to give
+   * @param {?string} [account]
+   * @returns {object[]} Each entry's period_start and period_end, its service_type, its total
+   *   and its currency
+   */
+  getHistory: (fromDate, toDate, account = null) => {
+    const ofAccount = accountCondition(account, 'account');
+    const conditions = [ofAccount.sql];
+    const params = [...ofAccount.params];
     if (fromDate && toDate) {
-      query += ' WHERE period_start >= ? AND period_end <= ?';
+      conditions.push('period_start >= ? AND period_end <= ?');
       params.push(fromDate, toDate);
     }
-    query += ' ORDER BY period_start DESC';
-    return db.prepare(query).all(...params);
+    return getDb().prepare(`
+      SELECT period_start, period_end, service_type, SUM(total) as total,
+        MIN(currency) as currency
+      FROM (
+        SELECT *, ROW_NUMBER() OVER (
+          PARTITION BY account, period_start, period_end, service_type ORDER BY id
+        ) as nth
+        FROM consumption_history
+        WHERE ${conditions.join(' AND ')}
+      )
+      GROUP BY period_start, period_end, service_type, nth
+      ORDER BY period_start DESC, period_end DESC, MAX(id) DESC
+    `).all(...params);
   },
 
   /**
@@ -809,9 +868,39 @@ const balanceOps = {
     return stmt.run(requireAccount('account_balance', balance));
   },
 
-  getLatestBalance: () => {
-    const db = getDb();
-    return db.prepare('SELECT * FROM account_balance ORDER BY id DESC LIMIT 1').get();
+  /**
+   * The balance of the account (see accountCondition()): its latest balance snapshot, whenever
+   * it was taken. Or, for every account, by default, the sum of each account's latest, the
+   * Unknown account's included, of the latest month that one of them was taken in: each
+   * account's import records its own (#114), and the accounts bill in one currency, so their
+   * balances add up (#116). An account's latest of an earlier month adds nothing, such as that
+   * of an account no longer configured, nor, until the account is imported again, that of the
+   * month before when another account's is of a new one.
+   * @param {?string} [account]
+   * @returns {object|undefined} The balance: the snapshot_date of the latest snapshot that it
+   *   adds up, its debt_balance, credit_balance and deposit_total, and the currency of the
+   *   snapshot stored last; undefined when there is none
+   */
+  getBalance: (account = null) => {
+    const ofAccount = accountCondition(account, 'account');
+    const { snapshots, ...balance } = getDb().prepare(`
+      WITH latest AS (
+        SELECT * FROM account_balance
+        WHERE id IN (SELECT MAX(id) FROM account_balance WHERE ${ofAccount.sql} GROUP BY account)
+      ), ofLatestMonth AS (
+        SELECT * FROM latest
+        WHERE substr(snapshot_date, 1, 7) = (SELECT substr(MAX(snapshot_date), 1, 7) FROM latest)
+      )
+      SELECT
+        COUNT(*) as snapshots,
+        MAX(snapshot_date) as snapshot_date,
+        SUM(debt_balance) as debt_balance,
+        SUM(credit_balance) as credit_balance,
+        SUM(deposit_total) as deposit_total,
+        (SELECT currency FROM ofLatestMonth ORDER BY id DESC LIMIT 1) as currency
+      FROM ofLatestMonth
+    `).get(...ofAccount.params);
+    return snapshots === 0 ? undefined : balance;
   },
 
   insertCreditMovement: (movement) => {
@@ -823,9 +912,16 @@ const balanceOps = {
     return stmt.run(requireAccount('credit_movements', movement));
   },
 
-  getCreditMovements: () => {
-    const db = getDb();
-    return db.prepare('SELECT * FROM credit_movements ORDER BY date DESC').all();
+  /**
+   * @param {?string} [account] - The account whose credit movements to list (see
+   *   accountCondition()): every account's by default (#116)
+   * @returns {object[]} The movements, as their table holds them, the most recent first
+   */
+  getCreditMovements: (account = null) => {
+    const ofAccount = accountCondition(account, 'account');
+    return getDb().prepare(`
+      SELECT * FROM credit_movements WHERE ${ofAccount.sql} ORDER BY date DESC
+    `).all(...ofAccount.params);
   },
 
   updateBillPayment: (billId, paymentInfo) => {
@@ -1497,18 +1593,34 @@ const cloudDetailOps = {
   /**
    * The month of the current consumption, which the readers show when no month is asked for:
    * the month that the last import of the consumption covered, even with no usage yet. The
-   * consumption of every month is kept (#54). Each account records its own (#114): the
-   * latest of them, until the readers follow the account (#116).
-   * @returns {?string} Its first day, YYYY-MM-01; before any import records its month, the
-   *   latest month stored; null when there is none
+   * consumption of every month is kept (#54). Each account records its own (#114): an
+   * account's is its own, which its current consumption reads (#116), or, when its imports
+   * recorded none, such as those before #114, which recorded it without the account, the
+   * latest recorded. That of every account is the latest of theirs, which the readers of the
+   * consumption of projects read.
+   * @param {?string} [account] - The account (see accountCondition()): every account by
+   *   default
+   * @returns {?string} Its first day, YYYY-MM-01; before any import records a month, the
+   *   latest month stored of the account's projects; null when there is none
    */
-  getCurrentConsumptionMonth: () => {
+  getCurrentConsumptionMonth: (account = null) => {
     const db = getDb();
-    const recorded = db.prepare(
-      "SELECT MAX(value) AS month FROM import_state WHERE key = 'consumption_month'"
-    ).get().month;
+    // The latest month recorded for an account (see accountCondition())
+    const recordedFor = (whose) => {
+      const { sql, params } = accountCondition(whose, 'account');
+      return db.prepare(`
+        SELECT MAX(value) AS month FROM import_state WHERE key = 'consumption_month' AND ${sql}
+      `).get(...params).month;
+    };
+    // An account whose imports recorded none reads the latest of every account's
+    const recorded = recordedFor(account) || (account === null ? null : recordedFor(null));
     if (recorded) return recorded;
-    return db.prepare('SELECT MAX(period_start) as month FROM project_consumption').get().month;
+    const ofProjects = accountCondition(account, 'p.account');
+    return db.prepare(`
+      SELECT MAX(c.period_start) as month
+      FROM project_consumption c LEFT JOIN projects p ON p.id = c.project_id
+      WHERE ${ofProjects.sql}
+    `).get(...ofProjects.params).month;
   },
 
   /**
@@ -1959,18 +2071,26 @@ const cloudDetailOps = {
       .run(projectId, periodStart);
   },
 
-  // Aggregate total cloud consumption across all projects for the current period
-  getConsumptionSummary: () => {
-    const db = getDb();
-    return db.prepare(`
+  /**
+   * What the Public Cloud projects of an account consumed in the month of its current
+   * consumption (#116; see getCurrentConsumptionMonth())
+   * @param {string} account - The account (see accountCondition()): a NIC handle, or
+   *   UNKNOWN_ACCOUNT
+   * @returns {{ period_start: ?string, period_end: ?string, total: ?number,
+   *   project_count: number }} The period from the earliest start to the latest end of their
+   *   consumption, its total, and the number of projects that it covers
+   */
+  getConsumptionSummary: (account) => {
+    const ofAccount = accountCondition(account, 'p.account');
+    return getDb().prepare(`
       SELECT
-        MIN(period_start) as period_start,
-        MAX(period_end) as period_end,
-        SUM(total_price) as total,
-        COUNT(DISTINCT project_id) as project_count
-      FROM project_consumption
-      WHERE period_start = ?
-    `).get(cloudDetailOps.getCurrentConsumptionMonth());
+        MIN(c.period_start) as period_start,
+        MAX(c.period_end) as period_end,
+        SUM(c.total_price) as total,
+        COUNT(DISTINCT c.project_id) as project_count
+      FROM project_consumption c LEFT JOIN projects p ON p.id = c.project_id
+      WHERE c.period_start = ? AND ${ofAccount.sql}
+    `).get(cloudDetailOps.getCurrentConsumptionMonth(account), ...ofAccount.params);
   },
 
   // GPU cost summary from bill_details (covers full history) + project_consumption (current

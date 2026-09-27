@@ -134,8 +134,11 @@ const answers = {
   triggerImport: () => ({ started: true }),
   fetchConfig: entry('config', emptyAnswers.config),
   fetchUser: entry('user', emptyAnswers.user),
-  fetchConsumptionCurrent: entry('consumptionCurrent', emptyAnswers.consumptionCurrent),
-  fetchConsumptionForecast: entry('consumptionForecast', emptyAnswers.consumptionForecast),
+  // The current month's consumption and forecast of the account the page selects (#116)
+  fetchConsumptionCurrent: (data, account) =>
+    entry('consumptionCurrent', emptyAnswers.consumptionCurrent)(ofAccount(data, account)),
+  fetchConsumptionForecast: (data, account) =>
+    entry('consumptionForecast', emptyAnswers.consumptionForecast)(ofAccount(data, account)),
   fetchInventoryServers: entry('inventoryServers', emptyAnswers.list),
   fetchInventoryVps: entry('inventoryVps', emptyAnswers.list),
   fetchInventoryStorage: entry('inventoryStorage', emptyAnswers.list),
