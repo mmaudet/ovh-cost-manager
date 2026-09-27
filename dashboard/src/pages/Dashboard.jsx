@@ -13,7 +13,9 @@ import Logo from '../components/Logo';
 import { AccountSelector } from '../components/AccountSelector.jsx';
 import { HeaderSelect } from '../components/HeaderSelect.jsx';
 import { ResyncButton } from '../components/ResyncButton.jsx';
-import { accountColumnOf, accountQuery, accountsOf } from '../utils/accounts.js';
+import {
+  accountColumnOf, accountQuery, accountsOf, showsAccountColumn,
+} from '../utils/accounts.js';
 import { formatCurrency, formatMonthLabel, yearMonthOf } from '../utils/format.js';
 import { parseSqliteDate } from '../utils/sqliteDate.js';
 import { generateMarkdownReport } from '../utils/markdownReport.js';
@@ -108,6 +110,10 @@ export default function Dashboard() {
   // The Account column of the lists, which name the account of each row with all accounts
   // shown, when the page offers several (#121): null when they name none
   const accountColumn = accountColumnOf(accounts, selectedAccount, t);
+
+  // Whether the lists name the account of each row, in an Account column: with all accounts
+  // shown, when the page offers several (#118)
+  const showAccountColumn = showsAccountColumn(accounts, selectedAccount);
 
   // The months billed to the account shown
   const { data: months = [], isSuccess: monthsLoaded } = useQuery(accountQuery(selectedAccount, {
@@ -600,6 +606,7 @@ export default function Dashboard() {
         {activeTab === 'overview' && (
           <OverviewTab
             {...overviewTab} language={language} t={t} fmt={fmt}
+            accounts={accounts} showAccountColumn={showAccountColumn}
             summary={summary} total={total} byService={byService} byProject={byProject}
             byResourceType={byResourceType} gpuSummary={gpuSummary}
             expiringServices={expiringServices} budget={budget} setBudget={setBudget}

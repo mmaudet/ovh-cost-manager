@@ -3,19 +3,24 @@ import {
   PieChart, Pie, Cell,
 } from 'recharts';
 import { SortIcon } from '../components/SortIcon.jsx';
+import { accountNameOf } from '../utils/accounts.js';
 import { formatPercent, takesSingular } from '../utils/format.js';
 import { sortProjects } from '../utils/projectSort.js';
 
 // The Overview tab, which the shell renders while it is active: what useOverviewTab()
 // returns, with the shell's language, translations (t) and amount format (fmt), and what
-// the shell holds for the whole page: the month's figures and the services about to expire,
-// which load at page start for the KPI cards, the header, the Markdown report or other tabs
-// too, and the budget with its setter, which the month-end forecast card reads as well. Its
-// links navigate with the shell's setters: what each one keeps open is in
+// the shell holds for the whole page: the month's figures, of the account selected in the
+// header (#118), and the services about to expire, which load at page start for the KPI
+// cards, the header, the Markdown report or other tabs too, and the budget with its setter,
+// which the month-end forecast card reads as well. Its lists, the breakdown by project and
+// the GPU projects, name the account of each project when the shell shows the Account column
+// (showAccountColumn), from the accounts of the instance. Its links navigate with the
+// shell's setters: what each one keeps open is in
 // docs/adr/0001-tab-state-lives-in-the-dashboard-shell.md (#56).
 const OverviewTab = ({
   projectSort, handleProjectSort,
-  language, t, fmt, summary, total, byService, byProject, byResourceType, gpuSummary,
+  language, t, fmt, accounts, showAccountColumn,
+  summary, total, byService, byProject, byResourceType, gpuSummary,
   expiringServices, budget, setBudget,
   setActiveTab, setSelectedProject, setSelectedResourceType,
 }) => {
@@ -205,6 +210,9 @@ const OverviewTab = ({
                   <thead>
                     <tr className="border-b bg-gray-50">
                       <th className="p-2 text-left font-medium">{t('project')}</th>
+                      {showAccountColumn && (
+                        <th className="p-2 text-left font-medium">{t('account')}</th>
+                      )}
                       <th className="p-2 text-left font-medium">{t('gpuFlavors')}</th>
                       <th className="p-2 text-right font-medium">{t('amount')}</th>
                     </tr>
@@ -212,8 +220,9 @@ const OverviewTab = ({
                   <tbody>
                     {gpuSummary.byProject.map(p => {
                       const share = gpuSummary.total ? p.total / gpuSummary.total : 0;
+                      // A project billed to several accounts has a row for each (#118)
                       return (
-                        <tr key={p.project_id} className="border-b hover:bg-gray-50">
+                        <tr key={`${p.project_id} ${p.account}`} className="border-b hover:bg-gray-50">
                           <td className="p-2">
                             <button
                               className="text-blue-600 hover:text-blue-800 hover:underline text-left text-xs"
@@ -225,6 +234,11 @@ const OverviewTab = ({
                               {p.project_name}
                             </button>
                           </td>
+                          {showAccountColumn && (
+                            <td className="p-2 text-xs text-gray-600">
+                              {accountNameOf(p.account, accounts, t)}
+                            </td>
+                          )}
                           <td className="p-2">
                             <div className="flex flex-wrap gap-1">
                               {(p.gpu_flavors || '').split(',').map(f => (
@@ -246,7 +260,7 @@ const OverviewTab = ({
                   </tbody>
                   <tfoot>
                     <tr className="bg-gray-50 font-semibold">
-                      <td className="p-2" colSpan="2">{t('gpuTotal')}</td>
+                      <td className="p-2" colSpan={showAccountColumn ? 3 : 2}>{t('gpuTotal')}</td>
                       <td className="p-2 text-right">{fmt(gpuSummary.total)}€</td>
                     </tr>
                   </tfoot>
@@ -271,6 +285,7 @@ const OverviewTab = ({
                 >
                   {t('project')}<SortIcon column="name" current={projectSort} />
                 </th>
+                {showAccountColumn && <th className="p-3 text-left font-medium">{t('account')}</th>}
                 <th
                   className="p-3 text-right font-medium cursor-pointer hover:bg-gray-100 select-none"
                   onClick={() => handleProjectSort('total')}
@@ -284,8 +299,9 @@ const OverviewTab = ({
               {sortProjects(byProject, projectSort).map((p, i) => {
                 // With one decimal, 0,0 % of a Cloud total of 0 € included (#87)
                 const share = summary?.cloudTotal ? p.total / summary.cloudTotal : 0;
+                // A project billed to several accounts has a row for each (#118)
                 return (
-                  <tr key={p.projectId || i} className="border-b hover:bg-gray-50">
+                  <tr key={`${p.projectId || i} ${p.account}`} className="border-b hover:bg-gray-50">
                     <td className="p-3">
                       <button
                         className="text-blue-600 hover:text-blue-800 hover:underline text-left"
@@ -297,6 +313,9 @@ const OverviewTab = ({
                         {p.projectName}
                       </button>
                     </td>
+                    {showAccountColumn && (
+                      <td className="p-3 text-gray-600">{accountNameOf(p.account, accounts, t)}</td>
+                    )}
                     <td className="p-3 text-right font-medium">{fmt(p.total)}€</td>
                     <td className="p-3 text-right text-gray-500">
                       {formatPercent(share, language)}
@@ -307,7 +326,7 @@ const OverviewTab = ({
             </tbody>
             <tfoot>
               <tr className="bg-gray-50 font-semibold">
-                <td className="p-3">{t('cloudTotal')}</td>
+                <td className="p-3" colSpan={showAccountColumn ? 2 : undefined}>{t('cloudTotal')}</td>
                 <td className="p-3 text-right">{fmt(summary?.cloudTotal || 0)}€</td>
                 <td className="p-3 text-right">{formatPercent(1, language, { decimals: 0 })}</td>
               </tr>

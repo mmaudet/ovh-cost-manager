@@ -1,7 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import { screen, within } from '@testing-library/react';
 import { account, threeBilledProjects } from './fixtures/account.js';
-import { lyonAccount, removedAccount, severalAccounts } from './fixtures/accounts.js';
+import {
+  lyonAccount, removedAccount, severalAccounts, unknownAccount, unnamedAccount,
+} from './fixtures/accounts.js';
 import { api } from './support/api.js';
 import {
   cardOf,
@@ -451,10 +453,11 @@ describe('Overview tab', () => {
   });
 
   // An instance of several accounts (#118): the tab shows the figures of the account selected
-  // in the header, or those of all accounts. The budget and the services about to expire
-  // follow it in their own tickets (#117, #123).
+  // in the header, or those of all accounts, where its lists name the account of each project.
+  // The budget and the services about to expire follow it in their own tickets (#117, #123).
   describe('with several accounts', () => {
-    // The breakdown by project and the GPU costs of September, of all accounts
+    // The breakdown by project and the GPU costs of September, with a single account, or with
+    // all accounts but without the Account column
     const projectsOfOneAccount = [
       ['Projet○', 'Montant▼', '%'],
       ['Production', '610,40€', '73,5 %'],
@@ -491,60 +494,74 @@ describe('Overview tab', () => {
         }
       });
 
-    it('shows the figures of all accounts by default', async () => {
-      await renderDashboard(severalAccounts);
+    it('shows the figures of all accounts by default, with the account of each project',
+      async () => {
+        await renderDashboard(severalAccounts);
 
-      expect(texts(serviceTypes())).toEqual([
-        'Répartition par service',
-        'Compute', '800,40€',
-        'Storage', '250,00€',
-        'Other', '200,00€',
-      ]);
-      expect(texts(resourceTypes()).slice(0, 11)).toEqual([
-        'Répartition par type de ressource',
-        'Public Cloud', '830,40€',
-        'Dedicated Servers', '270,00€',
-        'Backup', '90,00€',
-        'Domains', '35,00€',
-        'Licenses', '25,00€',
-      ]);
-      expect(texts(gpuCosts())).toEqual(gpuCostsOfOneAccount);
-      expect(projectRows()).toEqual(projectsOfOneAccount);
-    });
+        expect(texts(serviceTypes())).toEqual([
+          'Répartition par service',
+          'Compute', '800,40€',
+          'Storage', '250,00€',
+          'Other', '200,00€',
+        ]);
+        expect(texts(resourceTypes()).slice(0, 11)).toEqual([
+          'Répartition par type de ressource',
+          'Public Cloud', '830,40€',
+          'Dedicated Servers', '270,00€',
+          'Backup', '90,00€',
+          'Domains', '35,00€',
+          'Licenses', '25,00€',
+        ]);
+        // Each account by its name, or else its NIC handle, as the accounts route lists it
+        expect(texts(gpuCosts())).toEqual([
+          'Coûts GPU', '420,50€', '(50,6 % du cloud)',
+          'Par modèle GPU', 'NVIDIA L4', '420,50€',
+          'Par projet', 'Projet', 'Compte', 'Types GPU', 'Montant',
+          'Production', 'Lyon subsidiary', 'l4-90', '420,50€', '100,0 %',
+          'Total GPU', '420,50€',
+        ]);
+        expect(projectRows()).toEqual([
+          ['Projet○', 'Compte', 'Montant▼', '%'],
+          ['Production', 'Lyon subsidiary', '610,40€', '73,5 %'],
+          ['Staging', 'yy2222-ovh', '220,00€', '26,5 %'],
+          ['Total Cloud', '830,40€', '100 %'],
+        ]);
+      });
 
     // Every figure is the account's: the Overview listed every account's projects, and read
     // the share of each in the Cloud total of the account selected, 100,0 % for Production
-    it('shows the figures of the account selected alone', async () => {
-      const { user } = await renderDashboard(severalAccounts);
+    it('shows the figures of the account selected alone, without the Account column',
+      async () => {
+        const { user } = await renderDashboard(severalAccounts);
 
-      await selectAccount(user, 'Lyon subsidiary');
+        await selectAccount(user, 'Lyon subsidiary');
 
-      expect(texts(serviceTypes())).toEqual([
-        'Répartition par service',
-        'Compute', '580,40€',
-        'Other', '160,00€',
-        'Storage', '150,00€',
-      ]);
-      expect(texts(resourceTypes()).slice(0, 7)).toEqual([
-        'Répartition par type de ressource',
-        'Public Cloud', '610,40€',
-        'Dedicated Servers', '270,00€',
-        'Domains', '10,00€',
-      ]);
-      // 420.50 / 610.40, the account's Cloud total
-      expect(texts(gpuCosts())).toEqual([
-        'Coûts GPU', '420,50€', '(68,9 % du cloud)',
-        'Par modèle GPU', 'NVIDIA L4', '420,50€',
-        'Par projet', 'Projet', 'Types GPU', 'Montant',
-        'Production', 'l4-90', '420,50€', '100,0 %',
-        'Total GPU', '420,50€',
-      ]);
-      expect(projectRows()).toEqual([
-        ['Projet○', 'Montant▼', '%'],
-        ['Production', '610,40€', '100,0 %'],
-        ['Total Cloud', '610,40€', '100 %'],
-      ]);
-    });
+        expect(texts(serviceTypes())).toEqual([
+          'Répartition par service',
+          'Compute', '580,40€',
+          'Other', '160,00€',
+          'Storage', '150,00€',
+        ]);
+        expect(texts(resourceTypes()).slice(0, 7)).toEqual([
+          'Répartition par type de ressource',
+          'Public Cloud', '610,40€',
+          'Dedicated Servers', '270,00€',
+          'Domains', '10,00€',
+        ]);
+        // 420.50 / 610.40, the account's Cloud total
+        expect(texts(gpuCosts())).toEqual([
+          'Coûts GPU', '420,50€', '(68,9 % du cloud)',
+          'Par modèle GPU', 'NVIDIA L4', '420,50€',
+          'Par projet', 'Projet', 'Types GPU', 'Montant',
+          'Production', 'l4-90', '420,50€', '100,0 %',
+          'Total GPU', '420,50€',
+        ]);
+        expect(projectRows()).toEqual([
+          ['Projet○', 'Montant▼', '%'],
+          ['Production', '610,40€', '100,0 %'],
+          ['Total Cloud', '610,40€', '100 %'],
+        ]);
+      });
 
     it('leaves out the GPU costs of an account that has none', async () => {
       const { user } = await renderDashboard(severalAccounts);
@@ -558,5 +575,84 @@ describe('Overview tab', () => {
         ['Total Cloud', '220,00€', '100 %'],
       ]);
     });
+
+    // As the server lists it: each account's share of the project apart
+    it('lists a project billed to two accounts once for each', async () => {
+      // Staging, moved from Lyon to yy2222-ovh during September
+      const [production] = severalAccounts.byProject['2026-09'];
+      const staging = (total, detailsCount, { nic }) => ({
+        projectId: 'project-staging', projectName: 'Staging', total, detailsCount, account: nic,
+      });
+      await renderDashboard({
+        ...severalAccounts,
+        byProject: {
+          ...severalAccounts.byProject,
+          '2026-09': [production, staging(170, 8, unnamedAccount), staging(50, 3, lyonAccount)],
+        },
+      });
+
+      expect(projectRows()).toEqual([
+        ['Projet○', 'Compte', 'Montant▼', '%'],
+        ['Production', 'Lyon subsidiary', '610,40€', '73,5 %'],
+        ['Staging', 'yy2222-ovh', '170,00€', '20,5 %'],
+        ['Staging', 'Lyon subsidiary', '50,00€', '6,0 %'],
+        ['Total Cloud', '830,40€', '100 %'],
+      ]);
+    });
+
+    it('shows the Account column again once all accounts are selected', async () => {
+      const { user } = await renderDashboard(severalAccounts);
+      await selectAccount(user, 'Lyon subsidiary');
+
+      await selectAccount(user, 'Tous les comptes');
+
+      expect(headerOf(projectTable())).toEqual(['Projet○', 'Compte', 'Montant▼', '%']);
+      expect(texts(gpuCosts())).toContain('Lyon subsidiary');
+    });
+
+    // The page of a single-account installation stays as it was, whatever the rows say of
+    // their account
+    it.each([
+      ['a single account', [lyonAccount]],
+      ['no account, as before the first import since the upgrade', []],
+    ])('shows no Account column with %s', async (_, accounts) => {
+      await renderDashboard({ ...severalAccounts, accounts });
+
+      expect(projectRows()).toEqual(projectsOfOneAccount);
+      expect(texts(gpuCosts())).toEqual(gpuCostsOfOneAccount);
+    });
+
+    it('names the Unknown account in the Account column, in the language of the page',
+      async () => {
+        // An account, and the Unknown account, whose bills paid for a project that no account
+        // claimed since
+        const [production] = severalAccounts.byProject['2026-09'];
+        const legacy = {
+          projectId: 'project-legacy', projectName: 'Legacy', total: 220, detailsCount: 11,
+          account: null,
+        };
+        const { user } = await renderDashboard({
+          ...severalAccounts,
+          accounts: [lyonAccount, unknownAccount],
+          byProject: { ...severalAccounts.byProject, '2026-09': [production, legacy] },
+        });
+
+        expect(projectRows()).toEqual([
+          ['Projet○', 'Compte', 'Montant▼', '%'],
+          ['Production', 'Lyon subsidiary', '610,40€', '73,5 %'],
+          ['Legacy', 'Compte inconnu', '220,00€', '26,5 %'],
+          ['Total Cloud', '830,40€', '100 %'],
+        ]);
+
+        await selectLanguage(user, 'en');
+
+        expect(rowsOf(within(projectBreakdown('Breakdown by project')).getByRole('table')))
+          .toEqual([
+            ['Project○', 'Account', 'Amount▼', '%'],
+            ['Production', 'Lyon subsidiary', '610.40€', '73.5%'],
+            ['Legacy', 'Unknown account', '220.00€', '26.5%'],
+            ['Cloud Total', '830.40€', '100%'],
+          ]);
+      });
   });
 });
