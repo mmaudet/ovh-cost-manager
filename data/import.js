@@ -225,8 +225,9 @@ async function readAccount(ovh) {
 
 /**
  * Attempts the account of each entry of the configuration: reads, one after the other, the
- * account that GET /me names, each through a client of its own credentials. Nothing is
- * written yet: two entries of one account must fail the run before it imports anything.
+ * account that GET /me names, each through a client of its own credentials, or else, when
+ * GET /me fails, the account that the entry's name was recorded with. Nothing is written
+ * yet: two entries of one account must fail the run before it imports anything.
  * @param {object[]} entries - The accounts of the configuration, in its order
  * @param {boolean} several - Whether the configuration has several accounts, which the log
  *   names each of
@@ -242,9 +243,14 @@ async function readEveryAccount(entries, several) {
       attempts.push({ entry, nic, currency, client });
       console.log(several ? `Account ${entry.label}: ${nic}` : `Account: ${nic}`);
     } catch (err) {
-      attempts.push({ entry, error: err });
+      // A call that rejects with nothing fails the attempt all the same
+      const error = err || new Error(describeError(err));
+      // The account that an import last recorded with the entry's name, if it has one, is
+      // the one that the entry last led to
+      const lastNic = entry.name === null ? undefined : db.accounts.getByName(entry.name)?.nic;
+      attempts.push({ entry, error, lastNic });
       // A single account's error ends the run's output
-      if (several) console.error(`Account ${entry.label}: ${reasonOf(err)}`);
+      if (several) console.error(`Account ${entry.label}: ${reasonOf(error)}`);
     }
   }
   return attempts;
@@ -1442,17 +1448,14 @@ async function runImport(params) {
     // failure of one that bills in another currency
     const [only] = accounts;
     const attributed = db.transaction(() => {
-      for (const { entry, nic, currency, error } of accounts) {
+      for (const { entry, nic, lastNic, currency, error } of accounts) {
         if (nic) {
           db.accounts.upsert({ nic, currency, name: entry.name, budget: entry.budget });
           if (error) db.accounts.recordImport(nic, { status: 'failed', error: reasonOf(error) });
-        } else if (entry.name !== null) {
-          // GET /me failed, but the entry's name is the one that an import recorded its
-          // account with: the account would otherwise keep the status of its last import
-          const recorded = db.accounts.getByName(entry.name);
-          if (recorded) {
-            db.accounts.recordImport(recorded.nic, { status: 'failed', error: reasonOf(error) });
-          }
+        } else if (lastNic) {
+          // GET /me failed, but the entry's name is the one that an import last recorded an
+          // account with: that account would otherwise keep the status of its last import
+          db.accounts.recordImport(lastNic, { status: 'failed', error: reasonOf(error) });
         }
         // An entry without a name, or one never imported, leads to no account that the data
         // can tell: only the run's log names it, by its place

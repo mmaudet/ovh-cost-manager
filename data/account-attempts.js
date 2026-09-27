@@ -15,6 +15,8 @@ const { describeError } = require('./ovh-errors');
  * @property {object} entry - Its entry of the configuration, as data/accounts-config.js reads
  *   it: its label, name, budget and credentials
  * @property {string} [nic] - The NIC handle of its account, once GET /me has named it
+ * @property {string} [lastNic] - When its GET /me failed, the NIC handle of the account that
+ *   an import last recorded with its entry's name: the account that the entry last led to
  * @property {?string} [currency] - The code of the currency its account bills in
  * @property {object} [client] - The OVH API client of its credentials
  * @property {*} [error] - What fails it, if anything: the error of its GET /me or of its
@@ -85,12 +87,15 @@ function markOtherCurrencies(attempts) {
  * @param {AccountAttempt[]} attempts - Every attempt of the run
  * @param {string} nic - The NIC handle that --account gives
  * @param {string} source - The configuration file, which the error names
- * @returns {AccountAttempt} The attempt of that NIC handle, which the run is limited to
+ * @returns {AccountAttempt} The attempt of that NIC handle, which the run is limited to: the
+ *   one whose GET /me names it, or else one whose GET /me failed, and whose entry's name an
+ *   import last recorded that account with
  * @throws {Error} When none has it, naming the entries whose GET /me failed, with their
  *   errors: the account may be one of theirs
  */
 function findAccount(attempts, nic, source) {
-  const attempt = attempts.find(candidate => candidate.nic === nic);
+  const attempt = attempts.find(candidate => candidate.nic === nic)
+    || attempts.find(candidate => !candidate.nic && candidate.lastNic === nic);
   if (attempt) return attempt;
   const unread = attempts.filter(candidate => !candidate.nic)
     .map(candidate => `${candidate.entry.label}: ${reasonOf(candidate.error)}`);

@@ -489,6 +489,26 @@ describe('an import limited to one account (--account)', () => {
     expect(storedBills()).toEqual([]);
   });
 
+  // GET /me cannot name it, but its entry's name is the one that an import recorded it with
+  test('records its failure when the key of its named entry fails', async () => {
+    const lyon = serveAccount(LYON);
+    const paris = serveAccount(PARIS);
+    serveBills(lyon.routes, []);
+    serveBills(paris.routes, []);
+    useAccounts({ served: lyon, name: 'Lyon' }, { served: paris });
+    await importSeptember();
+    // Its key revoked since
+    useAccounts({ served: REVOKED, name: 'Lyon' }, { served: paris });
+
+    await runImport({ diff: true, account: LYON.nic });
+
+    expect(lastImports()).toEqual([
+      [LYON.nic, 'failed', 'This credential is not valid'], [PARIS.nic, 'success', null],
+    ]);
+    expect(runs()[0])
+      .toEqual(['failed', '1 of 1 account failed: "Lyon": This credential is not valid']);
+  });
+
   // Either it is not configured, or it is the account that could not be read
   test('fails when no account read has that NIC handle, naming those it could not read',
     async () => {
