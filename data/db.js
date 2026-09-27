@@ -59,29 +59,42 @@ function requireAccount(table, row) {
 }
 
 /**
- * How a query of the costs of projects, those of the breakdown by project and of the GPU
- * costs, groups the bill lines of its bills `b` and orders the rows, whose `total` it sums
- * (#118). By project, as before the accounts; or, for the Overview's lists that name the
- * account of each project, by project and account: a project billed to several accounts, such
- * as one moved from an account to another, then has a row for each, with the NIC handle of
- * its account, null for the Unknown account, as a bill line belongs to the account of its bill
- * (ADR 0002).
+ * The ORDER BY terms that order rows by their account, after what orders them first: by NIC
+ * handle, the Unknown account's last. The lists that name the account of each row order so
+ * the rows that their other terms tie, such as a project or a service billed to several
+ * accounts, or two servers of one name (#118, #122, #123).
+ * @param {string} column - The column of the query that holds the NIC handle of its rows'
+ *   account, null for the Unknown account
+ * @returns {string}
+ */
+function accountOrder(column) {
+  return `${column} IS NULL, ${column}`;
+}
+
+/**
+ * How a query of costs groups the bill lines of its bills `b` by project or service, and
+ * orders the rows, whose `total` it sums: those of the breakdown by project and of the GPU
+ * costs (#118), and the bill lines of a resource type (#123). By project or service, as before
+ * the accounts; or, for the lists that name the account of each row, by project or service and
+ * account: one billed to several accounts, such as one moved from an account to another, then
+ * has a row for each, with the NIC handle of its account, null for the Unknown account, as a
+ * bill line belongs to the account of its bill (ADR 0002).
  *
- * Most expensive first; projects that cost the same by id, the last first, as SQLite gave
- * them before the queries told accounts apart; and the rows of a project by account, by NIC
- * handle, the Unknown account's last, as the Web Cloud services (#122).
- * @param {string} projectColumn - The column of the query that holds the id of the project
- * @param {boolean} byAccount - Whether to give a row to each project and account
+ * Most expensive first; those that cost the same by id, the last first, as SQLite gave them
+ * before the queries told accounts apart; and the rows of one by account (accountOrder()).
+ * @param {string} column - The column of the query that holds the id of the project or of the
+ *   service
+ * @param {boolean} byAccount - Whether to give a row to each project or service and account
  * @returns {{ select: string, groupBy: string, orderBy: string }} What the query selects
  *   besides, to follow its other columns, and what GROUP BY and ORDER BY take
  */
-function projectGrouping(projectColumn, byAccount) {
-  const byCost = `total DESC, ${projectColumn} DESC`;
-  if (!byAccount) return { select: '', groupBy: projectColumn, orderBy: byCost };
+function costGrouping(column, byAccount) {
+  const byCost = `total DESC, ${column} DESC`;
+  if (!byAccount) return { select: '', groupBy: column, orderBy: byCost };
   return {
     select: ', b.account as account',
-    groupBy: `${projectColumn}, b.account`,
-    orderBy: `${byCost}, b.account IS NULL, b.account`,
+    groupBy: `${column}, b.account`,
+    orderBy: `${byCost}, ${accountOrder('b.account')}`,
   };
 }
 
@@ -583,11 +596,11 @@ const analysisOps = {
   // the account (see accountCondition()), every account's by default. A project missing from
   // the projects table keeps the id of its bill lines, without a name: the dashboard tells
   // such projects apart by their id (#55). One row per project, or, with byAccount, per
-  // project and account, with its account (see projectGrouping(), #118).
+  // project and account, with its account (see costGrouping(), #118).
   byProject: (fromDate, toDate, account = null, { byAccount = false } = {}) => {
     const db = getDb();
     const ofAccount = accountCondition(account, 'b.account');
-    const grouping = projectGrouping('d.project_id', byAccount);
+    const grouping = costGrouping('d.project_id', byAccount);
     return db.prepare(`
       SELECT
         d.project_id as project_id,
@@ -958,26 +971,16 @@ function deleteNotIn(table, serviceType = null) {
   };
 }
 
-/**
- * The ORDER BY of the services of an inventory table, dedicated servers, VPS or storage
- * services, whose rows carry their `account` (#123): by a column, as before the accounts;
- * then those that it orders the same, such as two servers of one name, by the NIC handle of
- * their account, the Unknown account's last, as the Web Cloud services (#122). SQLite gives
- * the rows that its ORDER BY ties in the order it reads them, the table's: the services of one
- * account keep the order they had before.
- * @param {string} column - The column that orders them first, such as `display_name`
- * @returns {string}
- */
-function inventoryOrder(column) {
-  return `${column}, account IS NULL, account`;
-}
-
-// Every service of an inventory table, of the account (see accountCondition()), every
-// account's by default, by name (see inventoryOrder())
+// Every service of an inventory table, dedicated servers, VPS or storage services, of the
+// account (see accountCondition()), every account's by default: by name, as before the
+// accounts, then those of one name by account (accountOrder(), #123). SQLite gives the rows
+// that its ORDER BY ties in the order it reads them, the table's: the services of one account
+// keep the order they had before.
 function listInventory(table, account) {
   const ofAccount = accountCondition(account, 'account');
   return getDb().prepare(`
-    SELECT * FROM ${table} WHERE ${ofAccount.sql} ORDER BY ${inventoryOrder('display_name')}
+    SELECT * FROM ${table} WHERE ${ofAccount.sql}
+    ORDER BY display_name, ${accountOrder('account')}
   `).all(...ofAccount.params);
 }
 
@@ -1010,7 +1013,7 @@ const inventoryOps = {
    * @param {?string} [account] - The account whose servers to list (see accountCondition()):
    *   every account's by default
    * @returns {object[]} The servers, each with the NIC handle of its account, in the order of
-   *   inventoryOrder()
+   *   listInventory()
    */
   getAllServers: (account = null) => listInventory('dedicated_servers', account),
 
@@ -1097,7 +1100,7 @@ const inventoryOps = {
    * The servers, VPS and storage services that expire within daysAhead days, in one list,
    * soonest first: those already expired stay in it, first (#74). Services that expire on the
    * same day keep the order of the inventories: servers, VPS, then storage; and those of one
-   * inventory come by account (see inventoryOrder(), #123).
+   * inventory come by account (accountOrder(), #123), and keep the order of the table.
    *
    * For every account, the services of the accounts that the configuration lists, once an
    * import recorded them (see configuredAccountsCondition()): no import refreshes the services
@@ -1120,7 +1123,7 @@ const inventoryOps = {
     const expiringIn = (table, type) => db.prepare(`
       SELECT id, display_name, '${type}' as type, expiration_date, account FROM ${table}
       WHERE expiration_date IS NOT NULL AND expiration_date <= ? AND ${ofAccount.sql}
-      ORDER BY ${inventoryOrder('expiration_date')}
+      ORDER BY expiration_date, ${accountOrder('account')}
     `).all(cutoffStr, ...ofAccount.params);
 
     return [
@@ -1161,9 +1164,7 @@ const inventoryOps = {
    * server moved from an account to another, then has a row for each, with the wording of its
    * own lines, as a bill line belongs to the account of its bill (ADR 0002).
    *
-   * Most expensive first; services that cost the same by id, the last first, as SQLite gave
-   * them before the query told accounts apart; and the rows of a service by account, by NIC
-   * handle, the Unknown account's last, as the costs by project (#118).
+   * In the order of costGrouping(), as the costs by project (#118).
    * @param {string} resourceType
    * @param {string} fromDate
    * @param {string} toDate
@@ -1177,16 +1178,9 @@ const inventoryOps = {
     const db = getDb();
     const ofAccount = accountCondition(account, 'b.account');
     const ofLineAccount = accountCondition(account, 'b2.account');
-    const byCost = 'total DESC, d.domain DESC';
-    const grouping = byAccount
-      ? {
-        select: ', b.account as account',
-        groupBy: 'd.domain, b.account',
-        orderBy: `${byCost}, b.account IS NULL, b.account`,
-        // The wording of the row's account's own lines
-        sameAccount: 'AND b2.account IS b.account',
-      }
-      : { select: '', groupBy: 'd.domain', orderBy: byCost, sameAccount: '' };
+    const grouping = costGrouping('d.domain', byAccount);
+    // By account, the wording of the row's account's own lines
+    const sameAccount = byAccount ? 'AND b2.account IS b.account' : '';
     return db.prepare(`
       SELECT
         d.domain,
@@ -1194,7 +1188,7 @@ const inventoryOps = {
          JOIN bills b2 ON d2.bill_id = b2.id
          WHERE d2.domain = d.domain AND COALESCE(d2.resource_type, 'other') = ?
            AND b2.date >= ? AND b2.date <= ?
-           AND ${ofLineAccount.sql} ${grouping.sameAccount}
+           AND ${ofLineAccount.sql} ${sameAccount}
          ORDER BY d2.total_price DESC LIMIT 1
         ) as description,
         ROUND(SUM(d.total_price), 2) as total,
@@ -2252,8 +2246,8 @@ const cloudDetailOps = {
       ORDER BY total DESC
     `).all(...args);
 
-    // By project from bills, and by account when asked (see projectGrouping(), #118)
-    const grouping = projectGrouping('bd.domain', byAccount);
+    // By project from bills, and by account when asked (see costGrouping(), #118)
+    const grouping = costGrouping('bd.domain', byAccount);
     const byProject = db.prepare(`
       SELECT
         COALESCE(p.name, bd.domain) as project_name,
