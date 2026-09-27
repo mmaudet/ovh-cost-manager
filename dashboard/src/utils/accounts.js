@@ -123,22 +123,24 @@ export function scopeLabel(accounts, selectedAccount, t) {
 }
 
 /**
- * The budget that the page compares the figures it shows with (#117): the dashboard budget
- * for all accounts, or else the budget of the account shown, which config.json gives it, so
- * that an account is never compared with the budget of all of them. A single-account
- * installation shows all accounts, and keeps the dashboard budget.
+ * The budget that the page compares the figures it shows with (#117), and whether the user
+ * may change it: the dashboard budget for all accounts, which the user may change for the
+ * visit, or else the budget of the account shown, which config.json sets, so that an account
+ * is never compared with the budget of all of them. A single-account installation shows all
+ * accounts, and keeps the dashboard budget.
  * @param {?string|undefined} selectedAccount - The account shown (useSelectedAccount()): null
  *   for all accounts, or else the id of one
  * @param {number} dashboardBudget - The dashboard budget, as the page holds it: config.json's,
  *   or the one that the user typed for the visit
  * @param {Object<string, number>|undefined} accountBudgets - The budget of each account that
  *   has one, by its id, as the configuration route gives them: undefined while it loads
- * @returns {?number} Null for an account without a budget of its own, or while the
- *   configuration loads
+ * @returns {?{ amount: number, editable: boolean }} Null for an account without a budget of
+ *   its own, or while the configuration loads
  */
 export function budgetOf(selectedAccount, dashboardBudget, accountBudgets) {
-  if (selectedAccount === null) return dashboardBudget;
-  return accountBudgets?.[selectedAccount] ?? null;
+  if (selectedAccount === null) return { amount: dashboardBudget, editable: true };
+  const amount = accountBudgets?.[selectedAccount] ?? null;
+  return amount === null ? null : { amount, editable: false };
 }
 
 // Whether the key and the request of a query name the account shown: not for all accounts,

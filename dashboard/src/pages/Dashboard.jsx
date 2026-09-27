@@ -304,9 +304,8 @@ export default function Dashboard() {
   // Calculations
   const total = summary?.total || 0;
   // The budget that the Overview's budget card and the month-end forecast compare the figures
-  // shown with (#117): the dashboard budget for all accounts, or else the account's own, null
-  // when it has none. The user may change the dashboard budget only: config.json sets the
-  // accounts' own.
+  // shown with (#117), and whether the user may change it: the dashboard budget for all
+  // accounts, or else the account's own, which config.json sets, null when it has none
   const budget = budgetOf(selectedAccount, dashboardBudget, configData?.accountBudgets);
   // The "vs previous month" variation, from the month before (#50), as the page shows it: its
   // text and its tone, as in the Compare and Trends tabs (#87). Null when it cannot be
@@ -632,9 +631,8 @@ export default function Dashboard() {
                   </div>
                 )}
                 <div className="text-sm text-gray-500 mt-1">
-                  {/* None for an account without a budget: JavaScript compares a number with
-                      null as with 0 */}
-                  {budget !== null && consumptionForecast.forecast_total > budget
+                  {/* None for an account without a budget of its own */}
+                  {budget !== null && consumptionForecast.forecast_total > budget.amount
                     ? <span className="text-red-500 font-medium">{`> ${t('budget')}!`}</span>
                     : consumptionForecast.days_elapsed
                       ? `${consumptionForecast.days_elapsed}/${consumptionForecast.days_in_month}`
@@ -700,8 +698,7 @@ export default function Dashboard() {
             accountColumn={accountColumn}
             summary={summary} total={total} byService={byService} byProject={byProject}
             byResourceType={byResourceType} gpuSummary={gpuSummary}
-            expiringServices={expiringServices} budget={budget}
-            setBudget={selectedAccount === null ? setDashboardBudget : null}
+            expiringServices={expiringServices} budget={budget} setBudget={setDashboardBudget}
             setActiveTab={setActiveTab} setSelectedProject={setSelectedProject}
             setSelectedResourceType={setSelectedResourceType}
           />

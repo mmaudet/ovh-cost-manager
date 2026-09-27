@@ -13,13 +13,13 @@ import { sortProjects } from '../utils/projectSort.js';
 // header (#118), and the services about to expire, of that account too (#123), which load at
 // page start for the KPI cards, the header, the Markdown report or other tabs too, and the
 // budget with its setter, which the month-end forecast card reads as well. The budget is that
-// of what the page shows (#117): the dashboard budget, which setBudget changes, for all
-// accounts, or else the account's own, which config.json sets, with no setter, or null when
-// it has none. Its lists, the breakdown by project and the GPU projects, name the account of
-// each project in the Account column of the shell (accountColumn), when it shows one: they
-// then list the projects by account that the hook requests, a project billed to several
-// accounts once for each (#118). The services about to expire name their account there too
-// (#123).
+// of what the page shows (#117), with whether the user may change it: the dashboard budget,
+// which setBudget changes, for all accounts, or else the account's own, which config.json
+// sets, or null when it has none. Its lists, the breakdown by project and the GPU projects,
+// name the account of each project in the Account column of the shell (accountColumn), when
+// it shows one: they then list the projects by account that the hook requests, a project
+// billed to several accounts once for each (#118). The services about to expire name their
+// account there too (#123).
 // Its links navigate with the shell's setters: what each one keeps open is in
 // docs/adr/0001-tab-state-lives-in-the-dashboard-shell.md (#56).
 const OverviewTab = ({
@@ -31,7 +31,7 @@ const OverviewTab = ({
 }) => {
   // The share of the budget the month has used, and the same in whole percents, which the bar
   // and its colour follow
-  const budgetShare = budget ? total / budget : 0;
+  const budgetShare = budget?.amount ? total / budget.amount : 0;
   const budgetUsage = Math.round(budgetShare * 100);
 
   // The projects of the breakdown and of the GPU costs, by account for the Account column.
@@ -375,11 +375,11 @@ const OverviewTab = ({
             <span>{t('consumed')}: {fmt(total)}€</span>
             <div className="flex items-center gap-1">
               <span>{t('budget')}:</span>
-              {setBudget ? (
+              {budget.editable ? (
                 <>
                   <input
                     type="number"
-                    value={budget}
+                    value={budget.amount}
                     onChange={(e) => setBudget(Number(e.target.value) || 0)}
                     className="w-24 px-2 py-1 border border-gray-200 rounded text-right text-sm"
                   />
@@ -387,7 +387,7 @@ const OverviewTab = ({
                 </>
               ) : (
                 // An account's own budget, which config.json sets, and the page shows as is
-                <span>{fmt(budget)}€</span>
+                <span>{fmt(budget.amount)}€</span>
               )}
             </div>
           </div>
