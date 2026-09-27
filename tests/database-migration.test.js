@@ -111,6 +111,23 @@ CREATE INDEX IF NOT EXISTS idx_notes_added ON notes(added);
         .toEqual(['notes']);
     });
 
+  // As SQLite reads the schema, not a pattern over its text: here the statement spreads
+  // its spaces otherwise, and ends on the line of its last column
+  test('reads the table as the schema defines it, however the statement is written', () => {
+    const database = notesOfBefore();
+    const oneLine = '  CREATE TABLE  IF NOT EXISTS  notes (id TEXT, body TEXT, added TEXT, '
+      + 'owner TEXT, PRIMARY KEY (owner, id));\n'
+      + 'CREATE INDEX IF NOT EXISTS idx_notes_added ON notes(added);\n';
+
+    migrations.rekeyTable(database, oneLine, 'notes');
+
+    expect(database.pragma('table_info(notes)').map(({ name, pk }) => [name, pk])).toEqual([
+      ['id', 2], ['body', 0], ['added', 0], ['owner', 1],
+    ]);
+    expect(database.prepare('SELECT rowid, id FROM notes ORDER BY rowid').all())
+      .toEqual([{ rowid: 3, id: 'n1' }, { rowid: 7, id: 'n2' }]);
+  });
+
   test('fails on a table that the schema does not define', () => {
     expect(() => migrations.rekeyTable(notesOfBefore(), SCHEMA, 'bills'))
       .toThrow('schema.sql defines no table bills');

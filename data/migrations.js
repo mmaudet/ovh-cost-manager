@@ -5,6 +5,8 @@
  * schema.sql creates what is missing, and these bring the tables that exist to its form.
  */
 
+const Database = require('better-sqlite3');
+
 // The columns of a table, as PRAGMA table_info gives them: their name, and their place in
 // the key (pk), 0 when they are not part of it
 const tableInfo = (database, table) => database.pragma(`table_info(${table})`);
@@ -61,6 +63,29 @@ function migrateWhenNeeded(database, needed, migrate) {
 }
 
 /**
+ * The statement that creates a table as the schema defines it, as SQLite reads it: the schema
+ * runs in a database of its own, in memory, whose sqlite_master gives the table's statement,
+ * which SQLite writes `CREATE TABLE <table> (...`, however the schema writes it.
+ * @param {string} schema - The text of schema.sql
+ * @param {string} table - The table
+ * @returns {string} The statement
+ * @throws {Error} When the schema does not define the table
+ */
+function definitionOf(schema, table) {
+  const scratch = new Database(':memory:');
+  try {
+    scratch.exec(schema);
+    const definition = scratch.prepare(`
+      SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?
+    `).pluck().get(table);
+    if (definition === undefined) throw new Error(`schema.sql defines no table ${table}`);
+    return definition;
+  } finally {
+    scratch.close();
+  }
+}
+
+/**
  * Gives a table the key that the schema defines for it now, which SQLite cannot change in
  * place (#114). In the order that SQLite documents for such a change: it creates the table as
  * the schema defines it under a temporary name, copies the rows into it, with their rowids,
@@ -74,12 +99,11 @@ function migrateWhenNeeded(database, needed, migrate) {
  * @throws {Error} When the schema does not define the table
  */
 function rekeyTable(database, schema, table) {
-  const definition = schema.match(
-    new RegExp(`CREATE TABLE IF NOT EXISTS ${table} \\(([\\s\\S]*?)\\n\\);`),
-  );
-  if (!definition) throw new Error(`schema.sql defines no table ${table}`);
   const rekeyed = `${table}_rekeyed`;
-  database.exec(`CREATE TABLE ${rekeyed} (${definition[1]}\n)`);
+  // The table's name, on the first line of its statement, only
+  const [first, ...rest] = definitionOf(schema, table).split('\n');
+  database.exec([first.replace(`CREATE TABLE ${table}`, `CREATE TABLE ${rekeyed}`), ...rest]
+    .join('\n'));
   const inBoth = new Set(tableInfo(database, rekeyed).map(({ name }) => name));
   const columns = tableInfo(database, table).map(({ name }) => name)
     .filter(column => inBoth.has(column)).join(', ');
