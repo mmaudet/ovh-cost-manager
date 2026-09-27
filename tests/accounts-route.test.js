@@ -146,7 +146,7 @@ test('lists the configured accounts in their order, then the others, then the Un
       recordAccounts(db, { nic: NEW_ACCOUNT }, { nic: 'ab4444-ovh' }, { nic: PARIS },
         { nic: LYON });
       // The last import's configuration lists Paris, then Lyon
-      db.accounts.recordConfiguration([PARIS, null, LYON]);
+      db.accounts.recordConfiguration([PARIS, LYON]);
       bill(db, 'FR-1', '2026-06-01', LYON);
       storeBillWithoutAccount(db, 'FR-0');
     });

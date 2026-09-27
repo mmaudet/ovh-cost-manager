@@ -726,7 +726,10 @@ const accountsOps = {
   /**
    * Records which accounts the configuration of a run lists, among those recorded, and at
    * which place: the others are no longer configured, keep their data and are no longer
-   * imported (#114). Each run records it, whatever it imports of them.
+   * imported (#114). Each run records it, whatever it imports of them. When the run cannot
+   * tell the account of an entry, which may be any of those recorded, the accounts that it
+   * can tell take their places, and the others keep theirs: only a run that tells every
+   * entry's account knows which ones the configuration no longer lists.
    * @param {Array<?string>} nics - The NIC handle of the account of each entry of the
    *   configuration, in its order: the one that its GET /me named, or else the one that an
    *   import last recorded with its entry's name; null for an entry that leads to no account
@@ -736,7 +739,7 @@ const accountsOps = {
     const db = getDb();
     const place = db.prepare('UPDATE accounts SET position = ? WHERE nic = ?');
     db.transaction(() => {
-      db.exec('UPDATE accounts SET position = NULL');
+      if (nics.every(nic => nic)) db.exec('UPDATE accounts SET position = NULL');
       nics.forEach((nic, position) => {
         if (nic) place.run(position, nic);
       });

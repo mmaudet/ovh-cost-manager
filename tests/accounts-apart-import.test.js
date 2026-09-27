@@ -5,9 +5,9 @@
  */
 
 const {
-  ok, fail, calls, serveAccount, useConfig, useThrowawayImport,
+  routes, ok, fail, calls, serveAccount, useConfig, useThrowawayImport,
 } = require('./support/simulated-ovh');
-const { LYON, PARIS, bill, project } = require('./support/accounts');
+const { ACCOUNT, LYON, PARIS, bill, project } = require('./support/accounts');
 const { ROOT_TABLES, asBefore114 } = require('./support/database-before');
 
 jest.mock('ovh', () => require('./support/simulated-ovh').ovh);
@@ -451,6 +451,34 @@ describe('the accounts that the configuration lists', () => {
 
     expect(placesInConfiguration()).toEqual([[LYON, 0], [PARIS, 1]]);
   });
+
+  // The single credentials of the legacy forms, which have no name: a run that cannot read
+  // their GET /me cannot tell which account the configuration lists
+  test('keep their places when an entry without a name cannot be read', async () => {
+    routes.set('/cloud/project', ok([]));
+    routes.set('/me/bill', ok([]));
+    await importSeptember();
+    routes.set('/me', fail(500, 'Internal server error'));
+
+    await importSeptember();
+
+    expect(placesInConfiguration()).toEqual([[ACCOUNT.nic, 0]]);
+  });
+
+  // The accounts that the run reads take their places; the others keep theirs, as the entry
+  // that it cannot read may be one of them
+  test('keep the places of the others when an entry without a name cannot be read',
+    async () => {
+      const { lyon, paris } = serveLyonAndParis();
+      useAccounts({ served: lyon }, { served: paris });
+      await importSeptember();
+      // Reordered since, and Paris's key revoked
+      useAccounts({ served: REVOKED }, { served: lyon });
+
+      await importSeptember();
+
+      expect(placesInConfiguration()).toEqual([[LYON, 1], [PARIS, 1]]);
+    });
 
   // Every account was configured then: the next run records which ones still are
   test('include those recorded before the upgrade, in the order they were first recorded',
