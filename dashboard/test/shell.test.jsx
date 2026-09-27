@@ -21,6 +21,7 @@ import {
   renderDashboard,
   resync,
   rowsOf,
+  selectAccount,
   selectLanguage,
   selectMonth,
   settle,
@@ -861,6 +862,114 @@ describe('dashboard shell', () => {
       expect(report).toContain('| Total Cost | 1,250.40€ |');
       expect(report).toContain('## By Service Type');
       expect(report).toContain('## Top Projects');
+    });
+
+    // An instance of several accounts (#124): the report covers what the page shows, all
+    // accounts by default or the account selected in the header, and its title says which,
+    // after the month, as the account selector names it. See fixtures/accounts.js.
+    describe('with several accounts', () => {
+      // Exports the report as Markdown, in the language of the page: the file downloaded
+      const exportReport = async (user) => {
+        const downloadedFiles = captureFileDownloads();
+        await user.selectOptions(screen.getByDisplayValue(/^(Choisir|Choose)\.\.\.$/), 'Markdown');
+        const [file] = await downloadedFiles();
+        return file;
+      };
+      // The report of September for all accounts: the figures of the single-account report,
+      // which the accounts add up to
+      const allAccountsReport = {
+        name: 'ovh-report-2026-09.md',
+        type: 'text/markdown',
+        content: [
+          '# Rapport de coûts OVH - Septembre 2026 - Tous les comptes',
+          ...septemberReport.slice(1),
+        ].join('\n'),
+      };
+
+      it('covers all accounts by default, as its title says', async () => {
+        const { user } = await renderDashboard(severalAccounts);
+
+        expect(await exportReport(user)).toEqual(allAccountsReport);
+      });
+
+      // Its summary, its service types and its projects alike, as the Overview shows them
+      // (#118): no figure of another account
+      it('covers the account selected, which its title and the name of its file give',
+        async () => {
+          const { user } = await renderDashboard(severalAccounts);
+
+          await selectAccount(user, 'Lyon subsidiary');
+
+          expect(await exportReport(user)).toEqual({
+            // By its NIC handle, which any file system takes
+            name: 'ovh-report-2026-09-xx1111-ovh.md',
+            type: 'text/markdown',
+            content: [
+              '# Rapport de coûts OVH - Septembre 2026 - Lyon subsidiary',
+              '',
+              '**Période :** du 2026-09-01 au 2026-09-30',
+              '',
+              '## Résumé',
+              '',
+              '| Métrique | Valeur |',
+              '|--------|-------|',
+              '| Coût Total | 890,40€ |',
+              '| Total Cloud | 610,40€ |',
+              '| Total hors Cloud | 280,00€ |',
+              '| Moyenne Journalière | 29,68€ |',
+              '| Projets Actifs | 1 |',
+              '',
+              '## Par Type de Service',
+              '',
+              '| Service | Coût | % |',
+              '|---------|------|---|',
+              '| Compute | 580,40€ | 65,2 % |',
+              '| Other | 160,00€ | 18,0 % |',
+              '| Storage | 150,00€ | 16,8 % |',
+              '',
+              '## Top Projets',
+              '',
+              '| Projet | Coût |',
+              '|---------|------|',
+              '| Production | 610,40€ |',
+              '',
+              '---',
+              '*Généré le 15/09/2026 12:00:00*',
+              '',
+            ].join('\n'),
+          });
+
+          await selectAccount(user, 'Tous les comptes');
+
+          expect(await exportReport(user)).toEqual(allAccountsReport);
+        });
+
+      // On the latest month of an account not billed in September, which the page moves to
+      it.each([
+        ['fr', 'Compte inconnu', '# Rapport de coûts OVH - Juillet 2026 - Compte inconnu',
+          'ovh-report-2026-07-unknown.md'],
+        ['fr', 'zz3333-ovh (non configuré)',
+          '# Rapport de coûts OVH - Août 2026 - zz3333-ovh (non configuré)',
+          'ovh-report-2026-08-zz3333-ovh.md'],
+        ['en', 'All accounts', '# OVH Cost Report - September 2026 - All accounts',
+          'ovh-report-2026-09.md'],
+        ['en', 'Unknown account', '# OVH Cost Report - July 2026 - Unknown account',
+          'ovh-report-2026-07-unknown.md'],
+        ['en', 'zz3333-ovh (not configured)',
+          '# OVH Cost Report - August 2026 - zz3333-ovh (not configured)',
+          'ovh-report-2026-08-zz3333-ovh.md'],
+      ])('names the accounts as the account selector does (%s): %s',
+        async (language, label, title, name) => {
+          // The language the page remembers from an earlier visit
+          localStorage.setItem('ovh-dashboard-language', language);
+          const { user } = await renderDashboard(severalAccounts);
+
+          await selectAccount(user, label);
+
+          const report = await exportReport(user);
+          expect(report.content.split('\n')[0]).toBe(title);
+          expect(report.name).toBe(name);
+        });
     });
 
     describe('as PDF', () => {

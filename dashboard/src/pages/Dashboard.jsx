@@ -13,7 +13,7 @@ import Logo from '../components/Logo';
 import { AccountSelector } from '../components/AccountSelector.jsx';
 import { HeaderSelect } from '../components/HeaderSelect.jsx';
 import { ResyncButton } from '../components/ResyncButton.jsx';
-import { accountColumnOf, accountQuery, accountsOf } from '../utils/accounts.js';
+import { accountColumnOf, accountQuery, accountsOf, scopeLabel } from '../utils/accounts.js';
 import { formatCurrency, formatMonthLabel, yearMonthOf } from '../utils/format.js';
 import { parseSqliteDate } from '../utils/sqliteDate.js';
 import { generateMarkdownReport } from '../utils/markdownReport.js';
@@ -108,6 +108,9 @@ export default function Dashboard() {
   // The Account column of the lists, which name the account of each row with all accounts
   // shown, when the page offers several (#121): null when they name none
   const accountColumn = accountColumnOf(accounts, selectedAccount, t);
+  // What the page shows, all accounts or the account selected, as the report's title names
+  // it when the page offers several (#124): null when it names none
+  const scope = scopeLabel(accounts, selectedAccount, t);
 
   // The months billed to the account shown
   const { data: months = [], isSuccess: monthsLoaded } = useQuery(accountQuery(selectedAccount, {
@@ -415,12 +418,18 @@ export default function Dashboard() {
                     onChange={(e) => {
                       const format = e.target.value;
                       if (format === 'md') {
-                        const md = generateMarkdownReport(summary, byService, byProject, selectedMonth, language);
+                        // The figures of the account shown, which the shell holds (#115, #118)
+                        const md = generateMarkdownReport(
+                          summary, byService, byProject, selectedMonth, language, scope,
+                        );
                         const blob = new Blob([md], { type: 'text/markdown' });
                         const url = URL.createObjectURL(blob);
                         const a = document.createElement('a');
                         a.href = url;
-                        a.download = `ovh-report-${selectedMonth.value}.md`;
+                        // The file of an account selected names it too (#124), by its NIC
+                        // handle, which any file system takes, unlike the names of config.json
+                        const ofAccount = selectedAccount ? `-${selectedAccount}` : '';
+                        a.download = `ovh-report-${selectedMonth.value}${ofAccount}.md`;
                         a.click();
                         URL.revokeObjectURL(url);
                       } else if (format === 'pdf') {

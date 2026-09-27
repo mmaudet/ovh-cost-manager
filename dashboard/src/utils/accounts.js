@@ -55,6 +55,28 @@ export function accountColumnOf(accounts, selectedAccount, t) {
   return { label: t('account'), nameOf };
 }
 
+/**
+ * What the page shows, as the account selector names it: all accounts, or the account
+ * selected (accountLabel()). The report names it in its title (#124). A single-account
+ * installation's page offers no account to select, and its report names none.
+ * @param {object[]|undefined} accounts - The accounts of the instance (accountsOf()),
+ *   undefined while their list loads
+ * @param {?string|undefined} selectedAccount - The account shown (useSelectedAccount())
+ * @param {function(string): string} t
+ * @returns {?string} Null when the page offers no account to select, or does not know yet
+ *   the account it shows
+ */
+export function scopeLabel(accounts, selectedAccount, t) {
+  if (accounts === undefined || !offersAccounts(accounts) || selectedAccount === undefined) {
+    return null;
+  }
+  if (selectedAccount === null) return t('allAccounts');
+  const account = accounts.find(({ id }) => id === selectedAccount);
+  // The page shows only an account that the route lists: its NIC handle otherwise, as the
+  // Account column names such an account, rather than fail
+  return account ? accountLabel(account, t) : selectedAccount;
+}
+
 // Whether the key and the request of a query name the account shown: not for all accounts,
 // null, which the page asks for as it did before several accounts. A query that a tab shares
 // with the shell thus keeps sharing its key for all accounts (ADR 0001).

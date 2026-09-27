@@ -1,7 +1,22 @@
 import { formatCurrency, formatMonthLabel, formatPercent, localeOf } from './format.js';
 
-// Generate markdown report
-const generateMarkdownReport = (summary, byService, byProject, selectedMonth, language = 'fr') => {
+/**
+ * The Markdown report of a month, in the language of the page: its summary, its costs by
+ * service type and its ten most expensive projects, as the page shows them.
+ * @param {object} summary - The month's summary (/api/summary)
+ * @param {object[]} byService - Its costs by service type (/api/analysis/by-service)
+ * @param {object[]} byProject - Its costs by project, each project once
+ *   (/api/analysis/by-project)
+ * @param {object|undefined} selectedMonth - The month, as /api/months lists it: N/A without one
+ * @param {string} [language] - 'fr' or 'en'
+ * @param {?string} [scope] - What the figures cover, as the page names it: all accounts, or
+ *   the account selected (scopeLabel()), which the title names after the month (#124). None
+ *   for a single-account installation, whose title names the month alone.
+ * @returns {string}
+ */
+const generateMarkdownReport = (
+  summary, byService, byProject, selectedMonth, language = 'fr', scope = null,
+) => {
   const locale = localeOf(language);
   const fmt = (v) => formatCurrency(v, language);
   // The month and its period, N/A without them: the page exports the report of a selected
@@ -11,7 +26,8 @@ const generateMarkdownReport = (summary, byService, byProject, selectedMonth, la
   let period = 'N/A';
   if (from && to) period = language === 'en' ? `${from} to ${to}` : `du ${from} au ${to}`;
 
-  let md = `# ${language === 'en' ? 'OVH Cost Report' : 'Rapport de coûts OVH'} - ${month}\n\n`;
+  const title = language === 'en' ? 'OVH Cost Report' : 'Rapport de coûts OVH';
+  let md = `# ${title} - ${month}${scope ? ` - ${scope}` : ''}\n\n`;
   md += `**${language === 'en' ? 'Period:' : 'Période :'}** ${period}\n\n`;
   md += `## ${language === 'en' ? 'Summary' : 'Résumé'}\n\n`;
   md += `| ${language === 'en' ? 'Metric' : 'Métrique'} | ${language === 'en' ? 'Value' : 'Valeur'} |\n|--------|-------|\n`;
