@@ -12,7 +12,8 @@
  */
 
 const {
-  LYON, PARIS, NEW_ACCOUNT, UNKNOWN_ACCOUNT, REFUSED, bill, project,
+  LYON, PARIS, NEW_ACCOUNT, UNKNOWN_ACCOUNT, REFUSED, SQLITE_TIME, bill, project, server, vps,
+  storage,
 } = require('./support/accounts');
 const { startOcm } = require('./support/ocm-server');
 
@@ -26,76 +27,56 @@ const daysFromNow = (days) => {
 // After the 30 days of the services about to expire
 const LATER = daysFromNow(90);
 
-// A service of each inventory, as an account's import stores it, with its expiration date
-const server = (db, id, displayName, account, expirationDate = LATER) =>
-  db.inventory.upsertServer({
-    id, display_name: displayName, reverse: id, datacenter: 'rbx8', os: 'debian12_64',
-    state: 'ok', cpu: 'Intel Xeon-E 2388G', ram_size: 65536, disk_info: '[]', bandwidth: 1000,
-    expiration_date: expirationDate, renewal_type: 'automatic', account,
-  });
-const vps = (db, id, displayName, account, expirationDate = LATER) => db.inventory.upsertVps({
-  id, display_name: displayName, model: 'vps-le-2-2-40', zone: 'Region OpenStack: os-gra7',
-  state: 'running', os: 'Debian 12', vcpus: 2, ram_mb: 2048, disk_gb: 40,
-  expiration_date: expirationDate, renewal_type: 'automatic', ip_addresses: '["192.0.2.10"]',
-  account,
-});
-const storage = (db, id, displayName, account, expirationDate = LATER) =>
-  db.inventory.upsertStorage({
-    id, service_type: 'netapp', display_name: displayName, region: 'eu-west-gra',
-    total_size_gb: 1024, used_size_gb: 0, share_count: 3, expiration_date: expirationDate,
-    account,
-  });
-// A service of an inventory imported before OCM told accounts apart, and claimed by no
-// account since: the writers refuse such rows now, so it is written as the database held it
-const unclaimed = (db, table, id, displayName, expirationDate = LATER) => db.getDb().prepare(
-  `INSERT INTO ${table} (id, display_name, expiration_date, account) VALUES (?, ?, ?, NULL)`,
-).run(id, displayName, expirationDate);
-
 // A bill line of a service outside Public Cloud, of a resource type
 const line = (id, billId, service, resourceType, description, price) => ({
   id, bill_id: billId, project_id: null, domain: service, description, quantity: 1,
   unit_price: price, total_price: price, service_type: 'Other', resource_type: resourceType,
 });
-// A bill imported before OCM told accounts apart, and claimed by no account since, written as
-// the database held it
-const unclaimedBill = (db, id, date) => db.getDb().prepare(
-  "INSERT INTO bills (id, date, currency, account) VALUES (?, ?, 'EUR', NULL)",
-).run(id, date);
 
 // Two accounts, one that an import recorded without any service, and the Unknown account,
-// whose services the imports before the accounts stored first. Every NIC handle, name and
-// identifier is made up.
+// null, whose services, bill and project the imports before the accounts stored first, and
+// that no account claimed since. Every NIC handle, name and identifier is made up.
 function seed(db) {
   db.accounts.upsert({ nic: LYON, currency: 'EUR', name: 'Lyon subsidiary' });
   db.accounts.upsert({ nic: PARIS, currency: 'EUR' });
   db.accounts.upsert({ nic: NEW_ACCOUNT, currency: 'EUR' });
-  unclaimed(db, 'dedicated_servers', 'ns3000004.ip-203-0-113.eu', 'legacy-server',
-    daysFromNow(10));
-  unclaimed(db, 'vps_instances', 'vps-2c3d4e5f.vps.ovh.net', 'legacy-vps', null);
-  unclaimed(db, 'storage_services', 'netapp-7a6b5c4d', 'old-nas', daysFromNow(-3));
-  server(db, 'ns3000005.ip-198-51-100.eu', 'app-server', PARIS, daysFromNow(10));
-  server(db, 'ns3000001.ip-203-0-113.eu', 'backup-server', LYON);
-  server(db, 'ns3000003.ip-203-0-113.eu', 'db-server', LYON, daysFromNow(10));
+  server(db, null, {
+    id: 'ns3000004.ip-203-0-113.eu', name: 'legacy-server', expires: daysFromNow(10),
+  });
+  vps(db, null, { id: 'vps-2c3d4e5f.vps.ovh.net', name: 'legacy-vps' });
+  storage(db, null, { id: 'netapp-7a6b5c4d', name: 'old-nas', expires: daysFromNow(-3) });
+  server(db, PARIS, {
+    id: 'ns3000005.ip-198-51-100.eu', name: 'app-server', expires: daysFromNow(10),
+  });
+  server(db, LYON, { id: 'ns3000001.ip-203-0-113.eu', name: 'backup-server' });
+  server(db, LYON, {
+    id: 'ns3000003.ip-203-0-113.eu', name: 'db-server', expires: daysFromNow(10),
+  });
   // Both accounts' APIs list it: stored once, as the service of Lyon, whose import stored it
   // first (ADR 0002)
-  server(db, 'ns3000002.ip-198-51-100.eu', 'shared-server', LYON, daysFromNow(5));
-  server(db, 'ns3000002.ip-198-51-100.eu', 'shared-server', PARIS, daysFromNow(5));
-  vps(db, 'vps-0a1b2c3d.vps.ovh.net', 'vps-0a1b2c3d.vps.ovh.net', LYON, daysFromNow(-3));
-  vps(db, 'vps-4e5f6a7b.vps.ovh.net', 'staging-vps', PARIS, daysFromNow(10));
-  storage(db, 'netapp-8c9d0e1f', 'archives-nas', LYON, daysFromNow(20));
-  storage(db, 'netapp-5f2c9a1e', 'shared-files', PARIS);
+  for (const account of [LYON, PARIS]) {
+    server(db, account, {
+      id: 'ns3000002.ip-198-51-100.eu', name: 'shared-server', expires: daysFromNow(5),
+    });
+  }
+  vps(db, LYON, {
+    id: 'vps-0a1b2c3d.vps.ovh.net', name: 'vps-0a1b2c3d.vps.ovh.net', expires: daysFromNow(-3),
+  });
+  vps(db, PARIS, {
+    id: 'vps-4e5f6a7b.vps.ovh.net', name: 'staging-vps', expires: daysFromNow(10),
+  });
+  storage(db, LYON, { id: 'netapp-8c9d0e1f', name: 'archives-nas', expires: daysFromNow(20) });
+  storage(db, PARIS, { id: 'netapp-5f2c9a1e', name: 'shared-files' });
   // A Public Cloud project of each, which the summary of the inventories counts
   project(db, 'project-production', 'Production', LYON);
   project(db, 'project-staging', 'Staging', PARIS);
-  db.getDb().prepare(
-    "INSERT INTO projects (id, name, account) VALUES ('project-legacy', 'Legacy', NULL)",
-  ).run();
+  project(db, 'project-legacy', 'Legacy', null);
 
   // What September billed of the servers and of a Private Cloud host. The shared server moved
   // from Lyon to Paris: Lyon paid its rental, Paris an option of it.
   bill(db, 'FR1001', '2026-09-05', LYON);
   bill(db, 'FR2001', '2026-09-10', PARIS);
-  unclaimedBill(db, 'FR0001', '2026-09-20');
+  bill(db, 'FR0001', '2026-09-20', null);
   db.details.insertMany([
     line('FR1001-1', 'FR1001', 'ns3000001.ip-203-0-113.eu', 'dedicated_server',
       'Location du serveur RISE-1 ns3000001.ip-203-0-113.eu - 1 mois', 200),
@@ -456,34 +437,13 @@ describe.each([
     single = await startOcm(() => ({}), {
       seed: (db) => {
         if (account !== null) db.accounts.upsert({ nic: account, currency: 'EUR' });
-        // Written as the database holds them, the account included
-        const insert = (table, row) => {
-          const columns = Object.keys(row);
-          db.getDb().prepare(`
-            INSERT INTO ${table} (${columns.join(', ')})
-            VALUES (${columns.map((column) => `@${column}`).join(', ')})
-          `).run(row);
-        };
-        insert('dedicated_servers', {
-          id: 'ns3000001.ip-203-0-113.eu', display_name: 'backup-server',
-          reverse: 'backup.example.com', datacenter: 'rbx8', os: 'debian12_64', state: 'ok',
-          cpu: 'Intel Xeon-E 2388G', ram_size: 65536,
-          disk_info: '[{"type":"NVMe","capacity":960,"count":2}]', bandwidth: 1000,
-          expiration_date: EXPIRED, renewal_type: 'automatic',
-          imported_at: '2026-09-14 04:01:10', account,
+        server(db, account, {
+          id: 'ns3000001.ip-203-0-113.eu', name: 'backup-server', expires: EXPIRED,
         });
-        insert('vps_instances', {
-          id: 'vps-0a1b2c3d.vps.ovh.net', display_name: 'vps-0a1b2c3d.vps.ovh.net',
-          model: 'vps-le-2-2-40', zone: 'Region OpenStack: os-gra7', state: 'running',
-          os: 'Debian 12', vcpus: 2, ram_mb: 2048, disk_gb: 40, expiration_date: SOON,
-          renewal_type: 'automatic', ip_addresses: '["192.0.2.10"]',
-          imported_at: '2026-09-14 04:01:15', account,
+        vps(db, account, {
+          id: 'vps-0a1b2c3d.vps.ovh.net', name: 'vps-0a1b2c3d.vps.ovh.net', expires: SOON,
         });
-        insert('storage_services', {
-          id: 'netapp-5f2c9a1e', service_type: 'netapp', display_name: 'shared-files',
-          region: 'eu-west-gra', total_size_gb: 1024, used_size_gb: 0, share_count: 3,
-          expiration_date: LATER, imported_at: '2026-09-14 04:01:20', account,
-        });
+        storage(db, account, { id: 'netapp-5f2c9a1e', name: 'shared-files', expires: LATER });
       },
     });
   }, 30000);
@@ -493,15 +453,17 @@ describe.each([
   });
 
   test('lists every service of the inventories without the parameter, as before', async () => {
+    // When the import stored it
+    const importedAt = expect.stringMatching(SQLITE_TIME);
+
     expect(await single.get('/api/inventory/servers')).toEqual({
       status: 200,
       body: [{
         id: 'ns3000001.ip-203-0-113.eu', display_name: 'backup-server',
-        reverse: 'backup.example.com', datacenter: 'rbx8', os: 'debian12_64', state: 'ok',
-        cpu: 'Intel Xeon-E 2388G', ram_size: 65536,
-        disk_info: [{ type: 'NVMe', capacity: 960, count: 2 }], bandwidth: 1000,
-        expiration_date: EXPIRED, renewal_type: 'automatic',
-        imported_at: '2026-09-14 04:01:10', account,
+        reverse: 'ns3000001.ip-203-0-113.eu', datacenter: 'rbx8', os: 'debian12_64',
+        state: 'ok', cpu: 'Intel Xeon-E 2388G', ram_size: 65536, disk_info: [],
+        bandwidth: 1000, expiration_date: EXPIRED, renewal_type: 'automatic',
+        imported_at: importedAt, account,
       }],
     });
     expect(await single.get('/api/inventory/vps')).toEqual({
@@ -510,8 +472,8 @@ describe.each([
         id: 'vps-0a1b2c3d.vps.ovh.net', display_name: 'vps-0a1b2c3d.vps.ovh.net',
         model: 'vps-le-2-2-40', zone: 'Region OpenStack: os-gra7', state: 'running',
         os: 'Debian 12', vcpus: 2, ram_mb: 2048, disk_gb: 40, expiration_date: SOON,
-        renewal_type: 'automatic', ip_addresses: ['192.0.2.10'],
-        imported_at: '2026-09-14 04:01:15', account,
+        renewal_type: 'automatic', ip_addresses: ['192.0.2.10'], imported_at: importedAt,
+        account,
       }],
     });
     expect(await single.get('/api/inventory/storage')).toEqual({
@@ -519,7 +481,7 @@ describe.each([
       body: [{
         id: 'netapp-5f2c9a1e', service_type: 'netapp', display_name: 'shared-files',
         region: 'eu-west-gra', total_size_gb: 1024, used_size_gb: 0, share_count: 3,
-        expiration_date: LATER, imported_at: '2026-09-14 04:01:20', account,
+        expiration_date: LATER, imported_at: importedAt, account,
       }],
     });
   });
@@ -553,14 +515,14 @@ describe('services of the same name', () => {
   beforeAll(async () => {
     named = await startOcm(() => ({}), {
       seed: (db) => {
-        unclaimed(db, 'dedicated_servers', 'ns3000009.ip-203-0-113.eu', 'web-server');
+        server(db, null, { id: 'ns3000009.ip-203-0-113.eu', name: 'web-server' });
         db.accounts.upsert({ nic: SECOND, currency: 'EUR' });
-        server(db, 'ns3000008.ip-203-0-113.eu', 'web-server', SECOND);
+        server(db, SECOND, { id: 'ns3000008.ip-203-0-113.eu', name: 'web-server' });
         db.accounts.upsert({ nic: FIRST, currency: 'EUR' });
-        server(db, 'ns3000007.ip-203-0-113.eu', 'web-server', FIRST);
-        server(db, 'ns3000006.ip-203-0-113.eu', 'mail-server', FIRST);
+        server(db, FIRST, { id: 'ns3000007.ip-203-0-113.eu', name: 'web-server' });
+        server(db, FIRST, { id: 'ns3000006.ip-203-0-113.eu', name: 'mail-server' });
         // After the other one of its name: stored last
-        server(db, 'ns3000001.ip-203-0-113.eu', 'web-server', FIRST);
+        server(db, FIRST, { id: 'ns3000001.ip-203-0-113.eu', name: 'web-server' });
       },
     });
   }, 30000);
@@ -609,7 +571,7 @@ describe('bill lines of services that cost the same', () => {
   beforeAll(async () => {
     tied = await startOcm(() => ({}), {
       seed: (db) => {
-        unclaimedBill(db, 'FR0001', '2026-09-20');
+        bill(db, 'FR0001', '2026-09-20', null);
         db.accounts.upsert({ nic: SECOND, currency: 'EUR' });
         bill(db, 'FR2001', '2026-09-10', SECOND);
         db.accounts.upsert({ nic: FIRST, currency: 'EUR' });
