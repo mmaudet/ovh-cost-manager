@@ -987,8 +987,12 @@ function registerRoutes() {
     }
   });
 
-  // Export costs by project as CSV
-  app.get('/api/export/by-project', (req, res) => {
+  // The costs of each project of a period as CSV: those of the account the request asks for,
+  // or of every account without one (#137). When the database holds several accounts, a
+  // project comes once for each account that billed it, with that account, as the dashboard's
+  // lists that name the account of each project give them (#118): its costs are not summed
+  // across accounts in a row that could name only one of them.
+  app.get('/api/export/by-project', accountParameter, (req, res) => {
     try {
       const { from, to } = req.query;
       const validation = validateDateRange(from, to);
@@ -996,14 +1000,15 @@ function registerRoutes() {
         return res.status(400).json({ error: validation.error });
       }
 
-      const data = db.analysis.byProject(from, to);
+      const severalAccounts = holdsSeveralAccounts();
+      const data = db.analysis.byProject(from, to, req.account, { byAccount: severalAccounts });
 
-      const columns = [
+      const columns = exportColumns([
         { key: 'project_name', label: 'Projet' },
         { key: 'project_id', label: 'ID Projet' },
         { key: 'total', label: 'Total HT' },
         { key: 'details_count', label: 'Nb Lignes' }
-      ];
+      ], severalAccounts);
 
       const csv = toCSV(data, columns);
       const filename = `couts_par_projet_${from}_${to}.csv`;

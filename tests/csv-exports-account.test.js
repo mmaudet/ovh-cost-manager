@@ -247,7 +247,10 @@ describe.each([
   // Its account, or the Unknown account for the rows without one, gives the same files as
   // every account, without the account column
   test('exports the same files for its account', async () => {
-    for (const route of [`/api/export/bills?${SEPTEMBER}`, `/api/export/details?${SEPTEMBER}`]) {
+    for (const route of [
+      `/api/export/bills?${SEPTEMBER}`, `/api/export/details?${SEPTEMBER}`,
+      `/api/export/by-project?${SEPTEMBER}`,
+    ]) {
       expect(await exported(single, forAccount(route, account ?? UNKNOWN_ACCOUNT)))
         .toEqual(await exported(single, route));
     }
@@ -338,6 +341,39 @@ describe('a database of several accounts', () => {
       });
   });
 
+  // One row for each project and account that billed it, as the Overview's breakdown by
+  // project gives them when it names the account of each project (#118)
+  describe('GET /api/export/by-project', () => {
+    const route = `/api/export/by-project?${SEPTEMBER}`;
+    const byProject = (...lines) => csvFile(
+      'couts_par_projet_2026-09-01_2026-09-30.csv', withAccount(BY_PROJECT), ...lines,
+    );
+    const production = `"Production";"project-production";600;1;"${LYON}"`;
+    const legacy = '"Legacy";"project-legacy";60;1;';
+    // Staging, moved from Lyon to Paris, as each account billed it
+    const lyonStaging = `"Staging";"project-staging";50;1;"${LYON}"`;
+    const parisStaging = `"Staging";"project-staging";230;1;"${PARIS}"`;
+
+    // The most expensive first
+    test('exports each project for each account that billed it without the parameter',
+      async () => {
+        expect(await exportOf(route))
+          .toEqual(byProject(production, parisStaging, legacy, lyonStaging));
+      });
+
+    test('exports the projects that the bills of the account whose NIC handle it gives billed',
+      async () => {
+        expect(await exportOf(route, LYON)).toEqual(byProject(production, lyonStaging));
+        expect(await exportOf(route, PARIS)).toEqual(byProject(parisStaging));
+      });
+
+    test('exports those of the Unknown account, and none of an account without a bill',
+      async () => {
+        expect(await exportOf(route, UNKNOWN_ACCOUNT)).toEqual(byProject(legacy));
+        expect(await exportOf(route, NEW_ACCOUNT)).toEqual(byProject());
+      });
+  });
+
   // Rather than export every account's rows, or none, for a request that names an account
   describe('an account the server does not know', () => {
     test.each([
@@ -347,6 +383,7 @@ describe('a database of several accounts', () => {
     ])('is refused by the exports, naming the parameter: %s', async (_, value) => {
       for (const route of [
         `/api/export/bills?${SEPTEMBER}`, `/api/export/details?${SEPTEMBER}`,
+        `/api/export/by-project?${SEPTEMBER}`,
       ]) {
         expect(await ocm.get(forAccount(route, value))).toEqual({ status: 400, body: REFUSED });
       }
