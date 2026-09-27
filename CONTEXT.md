@@ -5,6 +5,16 @@ resource, project and period, to see what the infrastructure costs.
 
 ## Language
 
+**Account**:
+An OVHcloud customer account, identified by its NIC handle. Every bill, project and
+resource that OCM imports belongs to one account.
+_Avoid_: NIC (the account's identifier), customer, tenant, organisation
+
+**Unknown account**:
+Where the data imported before OCM told accounts apart goes when none of the configured
+accounts claims it.
+_Avoid_: unassigned, orphan
+
 **Bill line**:
 One line of an OVH bill: a description, the identifier of the billed service and an
 amount.

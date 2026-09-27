@@ -56,7 +56,7 @@ OVH Cost Manager est un outil open-source de gestion et visualisation des coûts
 - Alertes de coûts OVH (nécessite permissions écriture) — reporté, posture lecture seule maintenue
 - Catalogue de prix / simulateur (complexité élevée, valeur incertaine) — reporté
 - Application mobile — web-first
-- Multi-tenant / multi-compte OVH — un compte par instance
+- Droits d'accès par compte OVH (multi-tenant) — tous les utilisateurs d'une instance voient tous ses comptes. Plusieurs comptes par instance sont en revanche prévus depuis le 2026-09-27 (#106, ADR 0002), là où ce cadrage en disait un seul
 - Optimisation automatique des ressources — hors périmètre v3
 
 ## Context
