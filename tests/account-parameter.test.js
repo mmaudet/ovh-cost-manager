@@ -20,25 +20,26 @@ const line = (id, billId, projectId, price) => ({
   service_type: 'Compute', resource_type: projectId ? 'cloud_project' : 'domain',
 });
 
+const project = (db, id, name, account) => db.projects.upsert({
+  id, name, description: name, status: 'ok', created_at: null, account,
+});
+const bill = (db, id, date, account) => db.bills.upsert({
+  id, date, price_without_tax: 0, price_with_tax: 0, tax: 0, currency: 'EUR',
+  pdf_url: null, html_url: null, account,
+});
+
 // Two accounts and the Unknown account, each billed in September and one other month.
 // Every NIC handle, name and amount is made up.
 function seed(db) {
   db.accounts.upsert({ nic: LYON, currency: 'EUR', name: 'Lyon subsidiary' });
   db.accounts.upsert({ nic: PARIS, currency: 'EUR' });
   db.accounts.upsert({ nic: NEW_ACCOUNT, currency: 'EUR' });
-  const project = (id, name, account) => db.projects.upsert({
-    id, name, description: name, status: 'ok', created_at: null, account,
-  });
-  const bill = (id, date, account) => db.bills.upsert({
-    id, date, price_without_tax: 0, price_with_tax: 0, tax: 0, currency: 'EUR',
-    pdf_url: null, html_url: null, account,
-  });
-  project('project-production', 'Production', LYON);
-  project('project-staging', 'Staging', PARIS);
-  bill('FR1001', '2026-09-05', LYON);
-  bill('FR1002', '2026-08-05', LYON);
-  bill('FR2001', '2026-09-10', PARIS);
-  bill('FR2002', '2026-06-10', PARIS);
+  project(db, 'project-production', 'Production', LYON);
+  project(db, 'project-staging', 'Staging', PARIS);
+  bill(db, 'FR1001', '2026-09-05', LYON);
+  bill(db, 'FR1002', '2026-08-05', LYON);
+  bill(db, 'FR2001', '2026-09-10', PARIS);
+  bill(db, 'FR2002', '2026-06-10', PARIS);
   // Imported before OCM told accounts apart, and claimed by no account since: the writers
   // refuse such rows now, so they are written as the database held them
   const sqlite = db.getDb();
@@ -63,6 +64,15 @@ function seed(db) {
   ]);
 }
 
+// A single account, which every bill belongs to: the Unknown account has none, as once
+// every bill imported before the upgrade is claimed
+function seedEveryBillClaimed(db) {
+  db.accounts.upsert({ nic: LYON, currency: 'EUR', name: 'Lyon subsidiary' });
+  project(db, 'project-production', 'Production', LYON);
+  bill(db, 'FR1001', '2026-09-05', LYON);
+  db.details.insertMany([line('FR1001-1', 'FR1001', 'project-production', 600)]);
+}
+
 // A month as /api/months lists it
 const month = (value, label, from, to) => ({ value, label, from, to });
 const SEPTEMBER = month('2026-09', 'Septembre 2026', '2026-09-01', '2026-09-30');
@@ -75,6 +85,21 @@ const REFUSED = {
   error: "Invalid 'account' parameter: expected the NIC handle of an account, or unknown",
 };
 
+// The summary of September, as /api/summary answers it with these figures, and with none
+const SEPTEMBER_DATES = 'from=2026-09-01&to=2026-09-30';
+const septemberSummary = (figures) => ({
+  period: { from: '2026-09-01', to: '2026-09-30' }, ...figures,
+});
+const NOTHING_IN_SEPTEMBER = septemberSummary({
+  total: 0,
+  cloudTotal: 0,
+  nonCloudTotal: 0,
+  dailyAverage: 0,
+  billsCount: 0,
+  projectsCount: 0,
+  topProjects: [],
+});
+
 let ocm;
 
 beforeAll(async () => {
@@ -85,9 +110,10 @@ afterAll(async () => {
   await ocm?.stop();
 });
 
-// The status and the JSON body of the answer to a path of the server
-async function get(path) {
-  const res = await fetch(`${ocm.url}${path}`);
+// The status and the JSON body of the answer to a path of the server, the one of the
+// seeded accounts unless told otherwise
+async function get(path, server = ocm) {
+  const res = await fetch(`${server.url}${path}`);
   return { status: res.status, body: await res.json() };
 }
 
@@ -120,10 +146,8 @@ describe('GET /api/months', () => {
 });
 
 describe('GET /api/summary', () => {
-  const september = 'from=2026-09-01&to=2026-09-30';
-  const summary = (figures) => ({
-    period: { from: '2026-09-01', to: '2026-09-30' }, ...figures,
-  });
+  const september = SEPTEMBER_DATES;
+  const summary = septemberSummary;
 
   test('adds up every account without the parameter, as before', async () => {
     expect(await get(`/api/summary?${september}`)).toEqual({
@@ -174,6 +198,32 @@ describe('GET /api/summary', () => {
         }),
       });
     });
+
+  test('gives no figure for an account recorded without a bill', async () => {
+    expect(await get(`/api/summary?${september}&account=${NEW_ACCOUNT}`)).toEqual({
+      status: 200, body: NOTHING_IN_SEPTEMBER,
+    });
+  });
+});
+
+// The reserved value selects the Unknown account whether or not it holds anything
+describe('the Unknown account of a database whose every bill has an account', () => {
+  let claimed;
+
+  beforeAll(async () => {
+    claimed = await startOcm(() => ({}), { seed: seedEveryBillClaimed });
+  }, 30000);
+
+  afterAll(async () => {
+    await claimed?.stop();
+  });
+
+  test('has no month and no figure', async () => {
+    expect(await get('/api/months?account=unknown', claimed)).toEqual({ status: 200, body: [] });
+    expect(await get(`/api/summary?${SEPTEMBER_DATES}&account=unknown`, claimed)).toEqual({
+      status: 200, body: NOTHING_IN_SEPTEMBER,
+    });
+  });
 });
 
 // Rather than answer for all accounts, or for none, to a request that names an account
