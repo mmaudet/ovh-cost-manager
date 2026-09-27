@@ -1436,9 +1436,20 @@ async function runImport(params) {
     // failure of one that bills in another currency
     const [only] = accounts;
     const attributed = db.transaction(() => {
-      for (const { entry, nic, currency, error } of accounts.filter(account => account.nic)) {
-        db.accounts.upsert({ nic, currency, name: entry.name, budget: entry.budget });
-        if (error) db.accounts.recordImport(nic, { status: 'failed', error: reasonOf(error) });
+      for (const { entry, nic, currency, error } of accounts) {
+        if (nic) {
+          db.accounts.upsert({ nic, currency, name: entry.name, budget: entry.budget });
+          if (error) db.accounts.recordImport(nic, { status: 'failed', error: reasonOf(error) });
+        } else if (entry.name !== null) {
+          // GET /me failed, but the entry's name is the one that an import recorded its
+          // account with: the account would otherwise keep the status of its last import
+          const recorded = db.accounts.getByName(entry.name);
+          if (recorded) {
+            db.accounts.recordImport(recorded.nic, { status: 'failed', error: reasonOf(error) });
+          }
+        }
+        // An entry without a name, or one never imported, leads to no account that the data
+        // can tell: only the run's log names it, by its place
       }
       // Rows stored before the upgrade carry no account. With a single account configured,
       // they can only be its own: they get it at the first import, and none is left after.

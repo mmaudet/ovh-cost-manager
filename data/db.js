@@ -398,6 +398,18 @@ const accountsOps = {
   },
 
   /**
+   * @param {string} name - The name of an entry of config.json
+   * @returns {object|undefined} The account that an import last recorded with that name, as
+   *   the accounts table holds it: the account that the entry last led to
+   */
+  getByName: (name) => {
+    const db = getDb();
+    return db.prepare(`
+      SELECT * FROM accounts WHERE name = ? ORDER BY last_import_at DESC LIMIT 1
+    `).get(name);
+  },
+
+  /**
    * @returns {object[]} Every account recorded, by NIC handle, as the accounts table holds it
    */
   getAll: () => {

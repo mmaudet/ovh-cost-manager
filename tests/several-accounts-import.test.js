@@ -303,6 +303,25 @@ describe('an account that fails', () => {
     ]);
   });
 
+  // Rather than leave the account with the success of its last import. GET /me cannot name
+  // it, but its entry's name is the one that an import recorded it with.
+  test('in its GET /me is recorded on the account of its name', async () => {
+    const lyon = serveAccount(LYON);
+    const paris = serveAccount(PARIS);
+    serveBills(lyon.routes, []);
+    serveBills(paris.routes, []);
+    useAccounts({ served: lyon, name: 'Lyon' }, { served: paris });
+    await importSeptember();
+    // Its key revoked since
+    useAccounts({ served: REVOKED, name: 'Lyon' }, { served: paris });
+
+    await importSeptember();
+
+    expect(lastImports()).toEqual([
+      [LYON.nic, 'failed', 'This credential is not valid'], [PARIS.nic, 'success', null],
+    ]);
+  });
+
   test('along with every other fails the run, which names each', async () => {
     const lyon = serveAccount(LYON);
     serveBills(lyon.routes, [['FR-L1', '2026-09-01']]);
