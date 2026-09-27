@@ -12,13 +12,11 @@
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
+const { ACCOUNT } = require('./accounts');
 
 // The routes served: route -> handler returning a promise. Unknown routes answer 404, like
 // the real API does.
 const routes = new Map();
-
-// The account that the API key reads, which GET /me names by its NIC handle
-const ACCOUNT = { nic: 'xx1111-ovh', currency: 'EUR' };
 
 // What require('ovh') returns: a function of the credentials, which returns the client
 const ovh = () => ({
@@ -54,9 +52,10 @@ function emptyDatabase(db) {
 
 /**
  * Loads data/db.js and data/import.js on a throwaway database for the tests of the calling
- * file. Each test starts with GET /me served for ACCOUNT, and no other route, an empty
- * database, a silent console, fake timers, on which the retry delays cost no real time,
- * and a process.exit that only records its code, as an import that fails exits.
+ * file. Each test starts with GET /me served for the account of the tests (ACCOUNT, in
+ * ./accounts.js), and no other route, an empty database, a silent console, fake timers, on
+ * which the retry delays cost no real time, and a process.exit that only records its code,
+ * as an import that fails exits.
  * @param {string} prefix - The prefix of the throwaway directory
  * @returns {{db: object, importer: object}} Both set before the first test runs
  */
@@ -99,4 +98,4 @@ function useThrowawayImport(prefix) {
   return loaded;
 }
 
-module.exports = { ovh, jsonfile, routes, ok, fail, me, ACCOUNT, useThrowawayImport };
+module.exports = { ovh, jsonfile, routes, ok, fail, me, useThrowawayImport };

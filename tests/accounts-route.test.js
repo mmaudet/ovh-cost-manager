@@ -5,10 +5,9 @@
  */
 
 const { startOcm } = require('./support/ocm-server');
+const { SQLITE_TIME } = require('./support/accounts');
 
 const NIC = 'xx1111-ovh';
-// A time as SQLite writes it: UTC, to the second
-const SQLITE_TIME = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/;
 
 // The accounts that the server lists, over a database that `seed` writes to, if given
 async function listAccounts(seed) {

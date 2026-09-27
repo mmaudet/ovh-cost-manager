@@ -4,9 +4,8 @@
  * writes carries it, or reaches it through its bill or its project.
  */
 
-const {
-  routes, ok, fail, me, useThrowawayImport, ACCOUNT,
-} = require('./support/simulated-ovh');
+const { routes, ok, fail, me, useThrowawayImport } = require('./support/simulated-ovh');
+const { ACCOUNT, SQLITE_TIME } = require('./support/accounts');
 
 jest.mock('ovh', () => require('./support/simulated-ovh').ovh);
 jest.mock('jsonfile', () => require('./support/simulated-ovh').jsonfile);
@@ -194,6 +193,14 @@ function accountsThroughParent(table) {
 // What `read` gives for each of these tables
 const byTable = (tables, read) => Object.fromEntries(tables.map(table => [table, read(table)]));
 
+// The accounts of the rows of each table: those they carry, and those the rows of the child
+// tables reach through their bill or their project
+const accountsOfRootTables = () => byTable(ROOT_TABLES, accountsIn);
+const accountsOfChildTables = () => byTable(Object.keys(CHILD_TABLES), accountsThroughParent);
+
+// What they give once every row carries, or reaches, the account of the tests alone
+const onlyTheAccount = (tables) => byTable(tables, () => [ACCOUNT.nic]);
+
 // Makes the database one that the version before the accounts wrote: its rows carry no
 // account, and it has no accounts table. The next getDb() migrates it, as the server or the
 // import that starts after the upgrade does.
@@ -227,7 +234,6 @@ function contentOfDatabase() {
 
 // The time now, as SQLite writes it: UTC, to the second
 const sqliteNow = () => db.getDb().prepare("SELECT datetime('now') AS now").get().now;
-const SQLITE_TIME = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/;
 
 describe('an import', () => {
   test('records the account that GET /me names on the rows of every table the API feeds',
@@ -236,18 +242,7 @@ describe('an import', () => {
 
       await runImport({ from: '2026-09-01', to: '2026-09-30', ...ALL_DATASETS });
 
-      const nic = ACCOUNT.nic;
-      expect(byTable(ROOT_TABLES, accountsIn)).toEqual({
-        bills: [nic],
-        projects: [nic],
-        dedicated_servers: [nic],
-        vps_instances: [nic],
-        storage_services: [nic],
-        account_balance: [nic],
-        consumption_snapshots: [nic],
-        consumption_history: [nic],
-        credit_movements: [nic],
-      });
+      expect(accountsOfRootTables()).toEqual(onlyTheAccount(ROOT_TABLES));
     });
 
   test('lets each bill line and each project resource reach it through its bill or project',
@@ -257,16 +252,7 @@ describe('an import', () => {
 
       await runImport({ from: '2026-09-01', to: '2026-09-30', includeCloudDetails: true });
 
-      const nic = ACCOUNT.nic;
-      expect(byTable(Object.keys(CHILD_TABLES), accountsThroughParent)).toEqual({
-        bill_details: [nic],
-        project_consumption: [nic],
-        cloud_instances: [nic],
-        project_quotas: [nic],
-        cloud_volumes: [nic],
-        cloud_snapshots: [nic],
-        object_storage_buckets: [nic],
-      });
+      expect(accountsOfChildTables()).toEqual(onlyTheAccount(Object.keys(CHILD_TABLES)));
     });
 
   test('records the account, its currency, and when and how its import ended', async () => {
@@ -368,26 +354,7 @@ describe('the first import after the upgrade', () => {
     // As the cron runs it
     await runImport({ diff: true });
 
-    const nic = ACCOUNT.nic;
-    expect(byTable(ROOT_TABLES, accountsIn)).toEqual({
-      bills: [nic],
-      projects: [nic],
-      dedicated_servers: [nic],
-      vps_instances: [nic],
-      storage_services: [nic],
-      account_balance: [nic],
-      consumption_snapshots: [nic],
-      consumption_history: [nic],
-      credit_movements: [nic],
-    });
-    expect(byTable(Object.keys(CHILD_TABLES), accountsThroughParent)).toEqual({
-      bill_details: [nic],
-      project_consumption: [nic],
-      cloud_instances: [nic],
-      project_quotas: [nic],
-      cloud_volumes: [nic],
-      cloud_snapshots: [nic],
-      object_storage_buckets: [nic],
-    });
+    expect(accountsOfRootTables()).toEqual(onlyTheAccount(ROOT_TABLES));
+    expect(accountsOfChildTables()).toEqual(onlyTheAccount(Object.keys(CHILD_TABLES)));
   });
 });
