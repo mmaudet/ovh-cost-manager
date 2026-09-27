@@ -21,9 +21,11 @@ const importStatusOf = (status) =>
  * @param {string} props.status - How the import ended, or 'running'
  * @param {?string} [props.error] - Why it failed or ended partial
  * @param {function(string): string} props.t
- * @returns {JSX.Element} The name of the status
+ * @param {React.ReactNode} [props.children] - What it says: the name of the status unless
+ *   given, such as when the footer says when an account's last import failed (#124)
+ * @returns {JSX.Element}
  */
-export function ImportStatus({ status, error, t }) {
+export function ImportStatus({ status, error, t, children }) {
   const { key, tone } = importStatusOf(status);
-  return <span className={tone} title={error || undefined}>{t(key)}</span>;
+  return <span className={tone} title={error || undefined}>{children ?? t(key)}</span>;
 }

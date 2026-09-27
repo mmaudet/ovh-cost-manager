@@ -74,6 +74,10 @@ export const translations = {
     syncedVia: 'Données synchronisées via l\'API OVHcloud',
     lastSync: 'Dernière sync',
     bills: 'factures',
+    // An account's last synchronisation, when none has succeeded, and its last import that
+    // failed since (#124)
+    lastSyncNever: 'jamais',
+    lastImportFailedOn: 'dernier import échoué le',
 
     // Loading
     loadingTitle: 'Chargement...',
@@ -264,6 +268,10 @@ export const translations = {
     syncedVia: 'Data synchronized via OVHcloud API',
     lastSync: 'Last sync',
     bills: 'bills',
+    // An account's last synchronisation, when none has succeeded, and its last import that
+    // failed since (#124)
+    lastSyncNever: 'never',
+    lastImportFailedOn: 'last import failed on',
 
     // Loading
     loadingTitle: 'Loading...',

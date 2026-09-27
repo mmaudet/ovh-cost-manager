@@ -334,13 +334,13 @@ export default function Dashboard() {
   const showSyncWarning = daysSinceLastImport !== null && daysSinceLastImport > 30 && !syncWarningDismissed;
 
   // The accounts whose last synchronisation the footer shows, one line each, when the page
-  // offers several (#124): those whose last import has ended, in the order of the accounts
-  // route. The Unknown account has none, as no import reads it. Null when the page offers
-  // none, or before any account's import has ended, as during the first run of several
-  // accounts, which records them all before it imports any.
-  const endedImports = (accounts ?? []).filter(({ lastImport }) => lastImport !== null);
-  const syncedAccounts = accounts && offersAccounts(accounts) && endedImports.length > 0
-    ? endedImports
+  // offers several (#124): every account but the Unknown account, which no import reads, in
+  // the order of the accounts route. Null when the page offers none, or before any account's
+  // import has ended, as during the first run of several accounts, which records them all
+  // before it imports any.
+  const syncedAccounts = accounts && offersAccounts(accounts)
+    && accounts.some(({ lastImport }) => lastImport !== null)
+    ? accounts.filter(({ unknown }) => !unknown)
     : null;
   // The footer shows the latest import's line alone without them, as before several
   // accounts. With them, it shows it while an import runs: the cue that the page asks every
@@ -710,18 +710,23 @@ export default function Dashboard() {
               ) : t('importStatusRunning')}
             </p>
           )}
-          {syncedAccounts?.map((account) => (
-            // Each account as the account selector names it. One whose last import failed
-            // says so, with why over it, as the import history does (#113).
+          {syncedAccounts?.map(({ lastImport, lastSuccessAt, ...account }) => (
+            // Each account as the account selector names it, and when its last import that
+            // succeeded ended: its data is as that import left it, whatever the imports that
+            // failed since. When its last import failed, when, with why over it, as the
+            // import history says it of a run (#113).
             <p key={account.id} className="mt-1">
               {accountLabel(account, t)} — {t('lastSync')}:{' '}
-              {parseSqliteDate(account.lastImport.at).toLocaleString(locale)}
-              {account.lastImport.status !== 'success' && (
+              {lastSuccessAt
+                ? parseSqliteDate(lastSuccessAt).toLocaleString(locale)
+                : t('lastSyncNever')}
+              {lastImport?.status === 'failed' && (
                 <>
                   {' ('}
-                  <ImportStatus
-                    status={account.lastImport.status} error={account.lastImport.error} t={t}
-                  />
+                  <ImportStatus status={lastImport.status} error={lastImport.error} t={t}>
+                    {t('lastImportFailedOn')}{' '}
+                    {parseSqliteDate(lastImport.at).toLocaleString(locale)}
+                  </ImportStatus>
                   {')'}
                 </>
               )}

@@ -5,13 +5,15 @@
  * The accounts that GET /api/accounts lists, in its order, as the page uses them. The route
  * gives each one's id, the value of the account parameter, whether config.json still lists
  * it, and which one is the Unknown account (#114); until it does, an account is known by its
- * NIC handle, and configured. It gives how each one's last import ended too, which the
- * footer shows (#124).
+ * NIC handle, and configured. It gives how each one's last import ended too, and when its
+ * last import that succeeded did, which the footer shows (#124).
  * @param {object[]} entries - The route's answer
  * @returns {{ id: string, name: string, configured: boolean, unknown: boolean,
- *   lastImport: ?{ at: string, status: string, error: ?string } }[]} lastImport: when the
- *   account's last import ended, a SQLite timestamp, 'success' or 'failed', and why it
- *   failed. Null until one has ended, as for the Unknown account, which no import reads.
+ *   lastImport: ?{ at: string, status: string, error: ?string },
+ *   lastSuccessAt: ?string }[]} lastImport: when the account's last import ended, a SQLite
+ *   timestamp, 'success' or 'failed', and why it failed; lastSuccessAt: when its last import
+ *   that succeeded ended. Each null until one has, as for the Unknown account, which no
+ *   import reads.
  */
 export function accountsOf(entries) {
   return entries.map((entry) => ({
@@ -21,6 +23,7 @@ export function accountsOf(entries) {
     configured: entry.configured ?? true,
     unknown: entry.unknown ?? false,
     lastImport: entry.lastImport ?? null,
+    lastSuccessAt: entry.lastSuccessAt ?? null,
   }));
 }
 
