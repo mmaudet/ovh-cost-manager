@@ -1561,12 +1561,15 @@ function registerRoutes() {
   // Enhanced CSV Export Endpoints (Phase 5)
   // ========================
 
-  // Export inventory as CSV
-  app.get('/api/export/inventory', (req, res) => {
+  // The dedicated servers, VPS and storage services of the inventory as CSV: those of the
+  // account the request asks for, or of every account without one, each with its account when
+  // the database holds several (#137). A service that two accounts' APIs list is stored, and
+  // exported, once (ADR 0002).
+  app.get('/api/export/inventory', accountParameter, (req, res) => {
     try {
-      const servers = db.inventory.getAllServers();
-      const vps = db.inventory.getAllVps();
-      const storage = db.inventory.getAllStorage();
+      const servers = db.inventory.getAllServers(req.account);
+      const vps = db.inventory.getAllVps(req.account);
+      const storage = db.inventory.getAllStorage(req.account);
 
       // Combine into a single export
       const data = [
@@ -1578,7 +1581,8 @@ function registerRoutes() {
           specs: `${s.cpu} / ${s.ram_size}MB RAM`,
           state: s.state,
           expiration: s.expiration_date || '',
-          renewal: s.renewal_type || ''
+          renewal: s.renewal_type || '',
+          account: s.account
         })),
         ...vps.map(v => ({
           type: 'VPS',
@@ -1588,7 +1592,8 @@ function registerRoutes() {
           specs: `${v.vcpus} vCPU / ${v.ram_mb}MB RAM / ${v.disk_gb}GB`,
           state: v.state,
           expiration: v.expiration_date || '',
-          renewal: v.renewal_type || ''
+          renewal: v.renewal_type || '',
+          account: v.account
         })),
         ...storage.map(s => ({
           type: 'Storage',
@@ -1598,11 +1603,12 @@ function registerRoutes() {
           specs: `${s.total_size_gb}GB`,
           state: '',
           expiration: s.expiration_date || '',
-          renewal: ''
+          renewal: '',
+          account: s.account
         }))
       ];
 
-      const columns = [
+      const columns = exportColumns([
         { key: 'type', label: 'Type' },
         { key: 'id', label: 'ID' },
         { key: 'name', label: 'Nom' },
@@ -1611,7 +1617,7 @@ function registerRoutes() {
         { key: 'state', label: 'Etat' },
         { key: 'expiration', label: 'Expiration' },
         { key: 'renewal', label: 'Renouvellement' }
-      ];
+      ], holdsSeveralAccounts());
 
       const csv = toCSV(data, columns);
       const filename = `inventaire_${new Date().toISOString().split('T')[0]}.csv`;

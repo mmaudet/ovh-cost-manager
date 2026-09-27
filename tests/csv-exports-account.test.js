@@ -249,7 +249,7 @@ describe.each([
   test('exports the same files for its account', async () => {
     for (const route of [
       `/api/export/bills?${SEPTEMBER}`, `/api/export/details?${SEPTEMBER}`,
-      `/api/export/by-project?${SEPTEMBER}`,
+      `/api/export/by-project?${SEPTEMBER}`, '/api/export/inventory',
     ]) {
       expect(await exported(single, forAccount(route, account ?? UNKNOWN_ACCOUNT)))
         .toEqual(await exported(single, route));
@@ -374,6 +374,48 @@ describe('a database of several accounts', () => {
       });
   });
 
+  // The services of one name by account, the Unknown account's last, as the inventory routes
+  // list them (#123)
+  describe('GET /api/export/inventory', () => {
+    const route = '/api/export/inventory';
+    const inventory = (...lines) => csvFile(
+      `inventaire_${today()}.csv`, withAccount(INVENTORY), ...lines,
+    );
+    // The line of a server, which the servers of the tests share their specifications in, up
+    // to the cell of its account
+    const serverLine = (id, name, expires) => `"Dedicated Server";"${id}";"${name}";"rbx8";`
+      + `"Intel Xeon-E 2388G / 65536MB RAM";"ok";"${expires}";"automatic";`;
+    const appServer = serverLine('ns3000005.ip-198-51-100.eu', 'app-server', '2026-11-30')
+      + `"${PARIS}"`;
+    const backupServer = serverLine('ns3000001.ip-203-0-113.eu', 'backup-server', '2027-01-31')
+      + `"${LYON}"`;
+    // Of the Unknown account, and without an expiration date
+    const legacyServer = serverLine('ns3000004.ip-203-0-113.eu', 'legacy-server', '');
+    const lyonVps = '"VPS";"vps-0a1b2c3d.vps.ovh.net";"vps-0a1b2c3d.vps.ovh.net";'
+      + '"Region OpenStack: os-gra7";"2 vCPU / 2048MB RAM / 40GB";"running";"2026-12-15";'
+      + `"automatic";"${LYON}"`;
+    const parisStorage = '"Storage";"netapp-5f2c9a1e";"shared-files";"eu-west-gra";"1024GB";'
+      + `"";"";"";"${PARIS}"`;
+
+    test('exports the services of every account without the parameter, each with its account',
+      async () => {
+        expect(await exportOf(route)).toEqual(
+          inventory(appServer, backupServer, legacyServer, lyonVps, parisStorage),
+        );
+      });
+
+    test('exports the services of the account whose NIC handle it gives', async () => {
+      expect(await exportOf(route, LYON)).toEqual(inventory(backupServer, lyonVps));
+      expect(await exportOf(route, PARIS)).toEqual(inventory(appServer, parisStorage));
+    });
+
+    test('exports those of the Unknown account, and none of an account without a service',
+      async () => {
+        expect(await exportOf(route, UNKNOWN_ACCOUNT)).toEqual(inventory(legacyServer));
+        expect(await exportOf(route, NEW_ACCOUNT)).toEqual(inventory());
+      });
+  });
+
   // Rather than export every account's rows, or none, for a request that names an account
   describe('an account the server does not know', () => {
     test.each([
@@ -383,7 +425,7 @@ describe('a database of several accounts', () => {
     ])('is refused by the exports, naming the parameter: %s', async (_, value) => {
       for (const route of [
         `/api/export/bills?${SEPTEMBER}`, `/api/export/details?${SEPTEMBER}`,
-        `/api/export/by-project?${SEPTEMBER}`,
+        `/api/export/by-project?${SEPTEMBER}`, '/api/export/inventory',
       ]) {
         expect(await ocm.get(forAccount(route, value))).toEqual({ status: 400, body: REFUSED });
       }
