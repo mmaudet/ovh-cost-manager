@@ -1,9 +1,10 @@
 /**
  * What the tests share about accounts (#112): the account of the tests, and the form of the
- * times that SQLite writes, such as when an account's last import ended. And, for the tests
- * of the account parameter of the server's routes (#115), the accounts of the database they
- * seed, the value that selects the Unknown account, the writers of their rows, and what the
- * server answers to an account it refuses.
+ * times that SQLite writes, such as when an account's last import ended. For the tests of the
+ * accounts that the server lists (#114) and of their budgets (#117), what records them as an
+ * import does. And, for the tests of the account parameter of the server's routes (#115), the
+ * accounts of the database they seed, the value that selects the Unknown account, the writers
+ * of their rows, and what the server answers to an account it refuses.
  */
 
 // The value that selects the Unknown account, from the data layer's module that has no side
@@ -22,6 +23,18 @@ const ACCOUNT = { nic: LYON, currency: 'EUR' };
 
 // A time as SQLite's CURRENT_TIMESTAMP writes it: UTC, to the second
 const SQLITE_TIME = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/;
+
+/**
+ * Records accounts as an import does, and the configuration of its run, which lists them in
+ * the order given.
+ * @param {object} db - The data layer (data/db.js)
+ * @param {...{ nic: string, name: (?string|undefined), budget: (?number|undefined) }} accounts
+ *   Each account's NIC handle, and the name and budget of its entry of config.json, if given
+ */
+function recordAccounts(db, ...accounts) {
+  for (const account of accounts) db.accounts.upsert({ currency: 'EUR', ...account });
+  db.accounts.recordConfiguration(accounts.map(({ nic }) => nic));
+}
 
 // The writers of the rows below write a row of an account through the data layer, and one of
 // the Unknown account, null, as the database held it before the accounts: the data layer
@@ -131,7 +144,7 @@ const REFUSED = {
 };
 
 module.exports = {
-  ACCOUNT, SQLITE_TIME, LYON, PARIS, NEW_ACCOUNT, UNKNOWN_ACCOUNT, project, bill, REFUSED,
-  consumption, consumptionMonth, snapshot, historyEntry, balance, movement, server, vps,
-  storage,
+  ACCOUNT, SQLITE_TIME, LYON, PARIS, NEW_ACCOUNT, UNKNOWN_ACCOUNT, recordAccounts, project, bill,
+  REFUSED, consumption, consumptionMonth, snapshot, historyEntry, balance, movement, server,
+  vps, storage,
 };

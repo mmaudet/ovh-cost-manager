@@ -837,13 +837,27 @@ function registerRoutes() {
   // ========================
 
   app.get('/api/config', (req, res) => {
-    res.json({
-      budget: config.dashboard?.budget || 50000,
-      currency: config.dashboard?.currency || 'EUR',
-      // Whether the server runs imports, on the resync route's rule: the dashboard reads it
-      // to offer the resync or not (#51)
-      importEnabled: importsEnabled(),
-    });
+    try {
+      // The budget of each account that has one, by its NIC handle, its id on the accounts
+      // route (#117): that of its entry of config.json as its last import recorded it, as its
+      // name, since only an import can tell which account an entry's credentials lead to. An
+      // account no longer configured keeps it, as its name. The Unknown account has none.
+      const accountBudgets = Object.fromEntries(db.accounts.getAll()
+        .filter(({ budget }) => budget !== null)
+        .map(({ nic, budget }) => [nic, budget]));
+      res.json({
+        // The dashboard budget, which the dashboard compares all accounts' figures with, as it
+        // compares each account's with its own
+        budget: config.dashboard?.budget || 50000,
+        accountBudgets,
+        currency: config.dashboard?.currency || 'EUR',
+        // Whether the server runs imports, on the resync route's rule: the dashboard reads it
+        // to offer the resync or not (#51)
+        importEnabled: importsEnabled(),
+      });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
   });
 
   // ========================

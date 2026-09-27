@@ -6,7 +6,7 @@
 
 const { startOcm } = require('./support/ocm-server');
 const {
-  SQLITE_TIME, LYON, PARIS, NEW_ACCOUNT, UNKNOWN_ACCOUNT, bill,
+  SQLITE_TIME, LYON, PARIS, NEW_ACCOUNT, UNKNOWN_ACCOUNT, recordAccounts, bill,
 } = require('./support/accounts');
 const { asBefore114, asBefore124 } = require('./support/database-before');
 
@@ -27,13 +27,6 @@ async function listAccounts(seed, config) {
   } finally {
     await ocm.stop();
   }
-}
-
-// Records these accounts as an import does, and the configuration of its run, which lists
-// them in this order
-function recordAccounts(db, ...accounts) {
-  for (const account of accounts) db.accounts.upsert({ currency: 'EUR', ...account });
-  db.accounts.recordConfiguration(accounts.map(({ nic }) => nic));
 }
 
 // A bill that an import stored before the accounts, which no account claimed since: the
