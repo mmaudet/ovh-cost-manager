@@ -907,15 +907,23 @@ function registerRoutes() {
   const ACCOUNT_COLUMN = Object.freeze({ key: 'account', label: 'account' });
 
   /**
-   * The columns of a CSV export: its own, and the account column after them when the database
-   * holds several accounts (#137)
+   * Answers a request with the CSV file of an export, as every export writes it: a byte order
+   * mark, for Excel to read the file as UTF-8, then its rows under their columns, and the
+   * account column after them when the database holds several accounts (#137)
+   * @param {object} res - The Express response
+   * @param {string} filename - The name of the file
+   * @param {object[]} rows - Its rows, each with `account`, the NIC handle of its account, null
+   *   for the Unknown account, which the account column shows
    * @param {Array<{key: string, label: string}>} columns - Its own columns
-   * @param {boolean} severalAccounts - Whether the database holds several accounts
-   *   (holdsSeveralAccounts()): its rows then carry the NIC handle of their account, `account`
-   * @returns {Array<{key: string, label: string}>}
+   * @param {boolean} [severalAccounts] - Whether the database holds several accounts, as the
+   *   export read it for its rows when they depend on it, so that a request reads it once:
+   *   holdsSeveralAccounts() by default
    */
-  function exportColumns(columns, severalAccounts) {
-    return severalAccounts ? [...columns, ACCOUNT_COLUMN] : columns;
+  function sendCsv(res, filename, rows, columns, severalAccounts = holdsSeveralAccounts()) {
+    const csv = toCSV(rows, severalAccounts ? [...columns, ACCOUNT_COLUMN] : columns);
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send('\ufeff' + csv); // BOM for Excel UTF-8 compatibility
   }
 
   // The bills of a period as CSV: those of the account the request asks for, or of every
@@ -930,21 +938,17 @@ function registerRoutes() {
 
       const bills = db.bills.getAll(from, to, req.account);
 
-      const columns = exportColumns([
+      const columns = [
         { key: 'id', label: 'Facture' },
         { key: 'date', label: 'Date' },
         { key: 'price_without_tax', label: 'Montant HT' },
         { key: 'price_with_tax', label: 'Montant TTC' },
         { key: 'tax', label: 'TVA' },
         { key: 'currency', label: 'Devise' }
-      ], holdsSeveralAccounts());
+      ];
 
-      const csv = toCSV(bills, columns);
       const filename = `factures_${from}_${to}.csv`;
-
-      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-      res.send('\ufeff' + csv); // BOM for Excel UTF-8 compatibility
+      sendCsv(res, filename, bills, columns);
     } catch (err) {
       res.status(500).json({ error: err.message });
     }
@@ -963,7 +967,7 @@ function registerRoutes() {
 
       const details = db.details.getByPeriod(from, to, req.account);
 
-      const columns = exportColumns([
+      const columns = [
         { key: 'bill_id', label: 'Facture' },
         { key: 'date', label: 'Date' },
         { key: 'project_name', label: 'Projet' },
@@ -974,14 +978,10 @@ function registerRoutes() {
         { key: 'unit_price', label: 'Prix Unitaire' },
         { key: 'total_price', label: 'Prix Total' },
         { key: 'payment_status', label: 'Statut Paiement' }
-      ], holdsSeveralAccounts());
+      ];
 
-      const csv = toCSV(details, columns);
       const filename = `details_${from}_${to}.csv`;
-
-      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-      res.send('\ufeff' + csv);
+      sendCsv(res, filename, details, columns);
     } catch (err) {
       res.status(500).json({ error: err.message });
     }
@@ -1003,19 +1003,15 @@ function registerRoutes() {
       const severalAccounts = holdsSeveralAccounts();
       const data = db.analysis.byProject(from, to, req.account, { byAccount: severalAccounts });
 
-      const columns = exportColumns([
+      const columns = [
         { key: 'project_name', label: 'Projet' },
         { key: 'project_id', label: 'ID Projet' },
         { key: 'total', label: 'Total HT' },
         { key: 'details_count', label: 'Nb Lignes' }
-      ], severalAccounts);
+      ];
 
-      const csv = toCSV(data, columns);
       const filename = `couts_par_projet_${from}_${to}.csv`;
-
-      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-      res.send('\ufeff' + csv);
+      sendCsv(res, filename, data, columns, severalAccounts);
     } catch (err) {
       res.status(500).json({ error: err.message });
     }
@@ -1608,7 +1604,7 @@ function registerRoutes() {
         }))
       ];
 
-      const columns = exportColumns([
+      const columns = [
         { key: 'type', label: 'Type' },
         { key: 'id', label: 'ID' },
         { key: 'name', label: 'Nom' },
@@ -1617,14 +1613,10 @@ function registerRoutes() {
         { key: 'state', label: 'Etat' },
         { key: 'expiration', label: 'Expiration' },
         { key: 'renewal', label: 'Renouvellement' }
-      ], holdsSeveralAccounts());
+      ];
 
-      const csv = toCSV(data, columns);
       const filename = `inventaire_${new Date().toISOString().split('T')[0]}.csv`;
-
-      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-      res.send('\ufeff' + csv);
+      sendCsv(res, filename, data, columns);
     } catch (err) {
       res.status(500).json({ error: err.message });
     }
