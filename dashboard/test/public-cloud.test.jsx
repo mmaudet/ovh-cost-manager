@@ -610,13 +610,11 @@ describe('Public Cloud tab', () => {
   // Several accounts in the instance, all of them shown by default, or the one the header
   // selects (#121): see fixtures/accounts.js
   describe('with several accounts', () => {
-    // The figures of the tab's own queries, one card each, as the user reads them. The Cloud
-    // projects and GPU instances cards read the costs by resource type and the GPU costs that
-    // the shell loads for the Overview too, which follow the account with it (#118).
-    const figuresOfTheTab = () => [...figures().children]
-      .map((card) => texts(card))
-      .filter(([label]) => !['Projets Cloud', 'Instances GPU'].includes(label))
-      .flat();
+    // The figures of the tab, card after card, as the user reads them: those of its own
+    // queries, and the Cloud projects and GPU instances cards, which read the costs by
+    // resource type and the GPU costs that the shell loads for the Overview (#118). The GPU
+    // instances are those of the inventory that /api/gpu/summary lists, whatever the month.
+    const figuresOfTheTab = () => [...figures().children].map((card) => texts(card)).flat();
     const projectRows = () => rowTextsOf(within(cloudProjects()).getByRole('table')).slice(1);
     const openOnAccount = async (label) => {
       const { user } = await renderDashboard(severalAccounts);
@@ -631,7 +629,9 @@ describe('Public Cloud tab', () => {
       await openTab(user, 'Public Cloud');
 
       expect(figuresOfTheTab()).toEqual([
+        'Projets Cloud', '2',
         'Instances', '5', '718,90€',
+        'Instances GPU', '1',
         'Kubernetes', '0',
         'Stockage Objet', '3', '25,00€',
         'Volumes', '3', '12,50€',
@@ -646,7 +646,9 @@ describe('Public Cloud tab', () => {
       const { user } = await openOnAccount('Lyon subsidiary');
 
       expect(figuresOfTheTab()).toEqual([
+        'Projets Cloud', '1',
         'Instances', '5', '538,90€',
+        'Instances GPU', '1',
         'Kubernetes', '0',
         'Stockage Objet', '3', '25,00€',
         'Volumes', '3', '12,50€',
@@ -661,7 +663,9 @@ describe('Public Cloud tab', () => {
       await selectAccount(user, 'yy2222-ovh');
 
       expect(figuresOfTheTab()).toEqual([
+        'Projets Cloud', '1',
         'Instances', '0', '180,00€',
+        'Instances GPU', '0',
         'Kubernetes', '0',
         'Stockage Objet', '0',
         'Volumes', '0',
@@ -678,8 +682,9 @@ describe('Public Cloud tab', () => {
       expect(projectRows()).toEqual([['Sandbox', 'ok', '0', '-', '▼']]);
       // Nothing billed in July, its only month
       expect(figuresOfTheTab()).toEqual([
-        'Instances', '0', 'Kubernetes', '0', 'Stockage Objet', '0', 'Volumes', '0',
-        'Snapshots', '0', 'Savings plans', '0', 'Registre', '0',
+        'Projets Cloud', '0', 'Instances', '0', 'Instances GPU', '0', 'Kubernetes', '0',
+        'Stockage Objet', '0', 'Volumes', '0', 'Snapshots', '0', 'Savings plans', '0',
+        'Registre', '0',
       ]);
     });
 

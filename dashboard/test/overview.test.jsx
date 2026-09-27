@@ -669,7 +669,8 @@ describe('Overview tab', () => {
     });
 
     // The costs by resource type and the GPU costs of the month that the shell loads for the
-    // tab feed other cards and tabs too, which follow the account with them
+    // tab feed other cards and tabs too, which follow the account with them: those of the
+    // Public Cloud tab's cards are its own tests' (public-cloud.test.jsx)
     describe('as other cards and tabs read them', () => {
       it('count the resources of the account selected in the card of every resource',
         async () => {
@@ -710,26 +711,6 @@ describe('Overview tab', () => {
             'Coûts par type de ressource', '(Septembre 2026)',
             'Backup', '90,00€', '▼', 'Licenses', '25,00€', '▼',
           ]);
-        });
-
-      // Among the cards of the Public Cloud tab's own queries, which follow the account in
-      // #121
-      it('count the Cloud projects and GPU instances of the account on the Public Cloud tab',
-        async () => {
-          const { user } = await renderDashboard(severalAccounts);
-          await openTab(user, 'Public Cloud');
-          const cardsFromTheShell = () => [...cardRowOf('Kubernetes').children]
-            .map((card) => texts(card))
-            .filter(([label]) => ['Projets Cloud', 'Instances GPU'].includes(label));
-          expect(cardsFromTheShell()).toEqual([['Projets Cloud', '2'], ['Instances GPU', '1']]);
-
-          await selectAccount(user, 'Lyon subsidiary');
-
-          expect(cardsFromTheShell()).toEqual([['Projets Cloud', '1'], ['Instances GPU', '1']]);
-
-          await selectAccount(user, 'yy2222-ovh');
-
-          expect(cardsFromTheShell()).toEqual([['Projets Cloud', '1'], ['Instances GPU', '0']]);
         });
     });
 
