@@ -294,8 +294,11 @@ describe('the consumption history', () => {
   });
 });
 
+// The date of a credit movement, as OVH gives it, by default
+const MOVED_ON = '2026-09-01T00:00:00+02:00';
+
 // Serves on these routes an account's balance: no debt, no deposit, and these credit
-// balances, by name, each with its movements as [number, amount]
+// balances, by name, each with its movements as [number, amount, date]
 function serveBalance(accountRoutes, balances) {
   const amount = (value) => ({ value, currencyCode: 'EUR' });
   accountRoutes.set('/me/debtAccount', ok({ todoAmount: amount(0) }));
@@ -305,14 +308,20 @@ function serveBalance(accountRoutes, balances) {
     const total = movements.reduce((sum, [, value]) => sum + value, 0);
     accountRoutes.set(`/me/credit/balance/${name}`, ok({ amount: amount(total) }));
     accountRoutes.set(`/me/credit/balance/${name}/movement`, ok(movements.map(([id]) => id)));
-    for (const [id, value] of movements) {
+    for (const [id, value, date = MOVED_ON] of movements) {
       accountRoutes.set(`/me/credit/balance/${name}/movement/${id}`, ok({
-        amount: amount(value), creationDate: '2026-09-01T00:00:00+02:00',
-        description: `Movement ${id}`, type: 'VOUCHER',
+        amount: amount(value), creationDate: date, description: `Movement ${id}`,
+        type: 'VOUCHER',
       }));
     }
   }
 }
+
+// A credit movement of the account, as an earlier import stored it from what OVH gave
+const storeMovement = (balance, number, amount, date, nic) => db.balance.insertCreditMovement({
+  id: `${balance}_${number}`, balance_name: balance, amount, date,
+  description: `Movement ${number}`, movement_type: 'VOUCHER', account: nic,
+});
 
 // The credit movements stored, as [NIC handle of their account, id, amount]
 const storedMovements = () => db.getDb().prepare(`
@@ -743,25 +752,52 @@ describe('the rows stored before the accounts, with several accounts configured'
     expect(accountsOf('dedicated_servers')).toEqual([['ns-P', null]]);
   });
 
-  // Those of a balance that its API lists, even those that OVH no longer gives
-  test('are claimed, for the credit movements, by the account that lists their balance',
+  // The same id, date and amount: the movement that it stores again. The second, of the same
+  // id but another date and amount, is another movement.
+  test('are claimed, for the credit movements, when the account\'s API gives that one',
     async () => {
       const { paris } = serveLyonAndParis();
-      for (const [id, balance] of [['PREPAID_ACCOUNT_1', 'PREPAID_ACCOUNT'], ['OLD_1', 'OLD']]) {
-        db.balance.insertCreditMovement({
-          id, balance_name: balance, amount: 50, date: '2026-08-01', description: 'Voucher',
-          movement_type: 'VOUCHER', account: PARIS,
-        });
-      }
+      storeMovement('PREPAID_ACCOUNT', 1, 50, MOVED_ON, PARIS);
+      storeMovement('PREPAID_ACCOUNT', 2, -5, '2026-08-15T00:00:00+02:00', PARIS);
+      storeMovement('OLD', 1, 50, MOVED_ON, PARIS);
       forgetAccounts();
-      serveBalance(paris.routes, { PREPAID_ACCOUNT: [[2, -5]] });
+      serveBalance(paris.routes, { PREPAID_ACCOUNT: [[1, 50], [2, -8]] });
 
       await runImport({ diff: true, includeAccount: true });
 
       expect(storedMovements()).toEqual([
         [null, 'OLD_1', 50],
+        [null, 'PREPAID_ACCOUNT_2', -5],
         [PARIS, 'PREPAID_ACCOUNT_1', 50],
-        [PARIS, 'PREPAID_ACCOUNT_2', -5],
+        [PARIS, 'PREPAID_ACCOUNT_2', -8],
+      ]);
+    });
+
+  // Two accounts' balances can share a name, and their movements the same ids: Lyon, imported
+  // first, must not take Paris's, which Paris would then store a second time
+  test('are never claimed, for the credit movements, by another account of the same ids',
+    async () => {
+      const { lyon, paris } = serveLyonAndParis();
+      const parisMovements = [1, 2, 3, 4, 5].map(number =>
+        [number, 10 * number, `2026-06-0${number}T00:00:00+02:00`]);
+      for (const [number, amount, date] of parisMovements) {
+        storeMovement('PREPAID_ACCOUNT', number, amount, date, PARIS);
+      }
+      // The base held the bills of both: neither account gets it whole
+      storeBill('FR-L0', '2026-08-01', LYON);
+      storeBill('FR-P0', '2026-08-01', PARIS);
+      forgetAccounts();
+      serveBills(lyon.routes, [['FR-L0', '2026-08-01']]);
+      serveBills(paris.routes, [['FR-P0', '2026-08-01']]);
+      serveBalance(lyon.routes, { PREPAID_ACCOUNT: [[1, 15], [2, 25]] });
+      serveBalance(paris.routes, { PREPAID_ACCOUNT: parisMovements });
+
+      await runImport({ diff: true, includeAccount: true });
+
+      expect(storedMovements()).toEqual([
+        [LYON, 'PREPAID_ACCOUNT_1', 15],
+        [LYON, 'PREPAID_ACCOUNT_2', 25],
+        ...parisMovements.map(([number, amount]) => [PARIS, `PREPAID_ACCOUNT_${number}`, amount]),
       ]);
     });
 

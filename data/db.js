@@ -621,20 +621,19 @@ const accountsOps = {
   },
 
   /**
-   * Gives the account the credit movements without an account of the balances that its API
-   * lists (#114), as claimBills() does for the bills: even a movement that OVH no longer
-   * gives. One whose key the account already has keeps none.
-   * @param {string} nic - The NIC handle of the account
-   * @param {Array<string>} balanceNames - The names of the credit balances that its API lists
-   * @returns {number} How many it claimed
+   * Gives the account the credit movement without an account that is this very movement of
+   * its API (#114): the same id, which joins the name of its balance and its number, the same
+   * date and the same amount. Two accounts' balances can share a name, and their movements
+   * the same ids: another account's movement, which has another date or amount, is never
+   * claimed. One whose key the account already has keeps none.
+   * @param {object} movement - The movement as the import stores it: its `id`, `date`,
+   *   `amount`, and `account`, the NIC handle of the account
+   * @returns {boolean} Whether it claimed one
    */
-  claimCreditMovements: (nic, balanceNames) => {
-    const db = getDb();
-    return db.prepare(`
-      UPDATE OR IGNORE credit_movements SET account = ?
-      WHERE account IS NULL AND balance_name IN (SELECT CAST(value AS TEXT) FROM json_each(?))
-    `).run(nic, JSON.stringify(balanceNames)).changes;
-  },
+  claimCreditMovement: ({ id, date, amount, account }) => getDb().prepare(`
+    UPDATE OR IGNORE credit_movements SET account = @account
+    WHERE account IS NULL AND id = @id AND date IS @date AND amount = @amount
+  `).run({ id, date, amount, account }).changes > 0,
 
   /**
    * Deletes the balance and consumption snapshots without an account (#114): with several

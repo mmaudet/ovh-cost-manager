@@ -481,12 +481,6 @@ async function importAccountData(ovh, nic) {
   // Fetch credit balances
   try {
     const balanceIds = await ovh.requestPromised('GET', '/me/credit/balance');
-    // The movements stored before the accounts are the account's that lists their balance,
-    // with several accounts configured (#114)
-    if (Array.isArray(balanceIds)) {
-      const claimed = db.accounts.claimCreditMovements(nic, balanceIds);
-      if (claimed > 0) console.log(`  Claimed ${claimed} credit movements stored before`);
-    }
     for (const balanceId of balanceIds) {
       try {
         const balance = await ovh.requestPromised('GET', `/me/credit/balance/${balanceId}`);
@@ -497,7 +491,7 @@ async function importAccountData(ovh, nic) {
         for (const movId of movementIds) {
           try {
             const mov = await ovh.requestPromised('GET', `/me/credit/balance/${balanceId}/movement/${movId}`);
-            db.balance.insertCreditMovement({
+            const movement = {
               id: `${balanceId}_${movId}`,
               balance_name: balanceId,
               amount: mov?.amount?.value || 0,
@@ -505,6 +499,14 @@ async function importAccountData(ovh, nic) {
               description: mov?.description || '',
               movement_type: mov?.type || '',
               account: nic
+            };
+            // The very movement, stored before the accounts, is the account's: it replaces it
+            // rather than adds a copy (#114)
+            db.transaction(() => {
+              if (db.accounts.claimCreditMovement(movement)) {
+                console.log(`    Claimed the movement ${movement.id} stored before`);
+              }
+              db.balance.insertCreditMovement(movement);
             });
           } catch (err) {
             console.error(`    Error fetching movement ${movId}: ${err.message}`);
