@@ -999,21 +999,31 @@ function registerRoutes() {
   // Consumption Endpoints (Phase 1)
   // ========================
 
+  // What tells the consumption of the account a request asks for, or of every account without
+  // one, and that of every account, whose latest month is the current one (#116)
+  const consumptionOfAccounts = (account) => {
+    const every = db.consumption.getCurrentByAccount();
+    return { every, asked: account === null ? every : db.consumption.getCurrentByAccount(account) };
+  };
+
   // The current month's consumption so far of the account the request asks for, or, without
-  // one, the sum of the accounts' (#116): see server/consumption.js
+  // one, the sum of the accounts' (#116), in the current month: the latest that an account's
+  // covers. An account whose latest is of an earlier month has none. When the last imports of
+  // the accounts fall on either side of a month's end, those of the month before add nothing
+  // until they are imported again. See server/consumption.js.
   app.get('/api/consumption/current', accountParameter, (req, res) => {
     try {
-      res.json(currentConsumption(db.consumption.getCurrentByAccount(req.account), new Date()));
+      res.json(currentConsumption(consumptionOfAccounts(req.account), new Date()));
     } catch (err) {
       res.status(500).json({ error: err.message });
     }
   });
 
   // The current month's month-end forecast of the account the request asks for, or, without
-  // one, the sum of the accounts' (#116): see server/consumption.js
+  // one, the sum of the accounts' (#116), in the current month, as the consumption above
   app.get('/api/consumption/forecast', accountParameter, (req, res) => {
     try {
-      res.json(consumptionForecast(db.consumption.getCurrentByAccount(req.account), new Date()));
+      res.json(consumptionForecast(consumptionOfAccounts(req.account), new Date()));
     } catch (err) {
       res.status(500).json({ error: err.message });
     }

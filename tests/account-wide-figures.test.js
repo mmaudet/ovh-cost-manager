@@ -22,6 +22,9 @@ const ISO_TIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
 // server's time zone
 const inUtc = () => ({ TZ: 'UTC' });
 
+// An account removed from the configuration after its last import, in July
+const REMOVED = 'ab4444-ovh';
+
 // The periods of the history: whole months
 const JUNE = ['2026-06-01', '2026-06-30'];
 const JULY = ['2026-07-01', '2026-07-31'];
@@ -40,12 +43,14 @@ const LYON_DETAILS = {
 // Unknown account's, which an import before the accounts stored. The latest balance of each
 // account is not the latest stored. OVH gives Lyon its consumption of September, and Paris
 // none: the consumption of Paris's project tells it. The Unknown account's is that of the
-// month of the last import before the accounts, August. Every NIC handle, name and amount is
-// made up.
+// month of the last import before the accounts, August, and the removed account's, which OVH
+// gave, July's. Every NIC handle, name and amount is made up.
 function seed(db) {
   db.accounts.upsert({ nic: LYON, currency: 'EUR', name: 'Lyon subsidiary' });
   db.accounts.upsert({ nic: PARIS, currency: 'EUR' });
   db.accounts.upsert({ nic: NEW_ACCOUNT, currency: 'EUR' });
+  db.accounts.upsert({ nic: REMOVED, currency: 'EUR' });
+  db.accounts.recordConfiguration([LYON, PARIS, NEW_ACCOUNT]);
 
   balance(db, null, { debt: 1, credit: 4.75, deposit: 0, takenAt: '2026-06-30 08:00:00' });
   balance(db, LYON, { debt: 5, credit: 20, deposit: 0, takenAt: '2026-09-13 04:02:00' });
@@ -83,6 +88,8 @@ function seed(db) {
   project(db, 'project-legacy', 'Legacy', null);
   consumptionMonth(db, null, '2026-08-01');
   consumption(db, 'project-legacy', AUGUST, 40);
+  snapshot(db, REMOVED, ['2026-07-01', '2026-07-20'],
+    { current: 33, forecast: 50, takenAt: '2026-07-20 04:00:00' });
 }
 
 let ocm;
@@ -230,16 +237,14 @@ describe('GET /api/consumption/current', () => {
     });
   });
 
-  // In the month that the last import before the accounts recorded
-  test('gives the consumption of the Unknown account in its own month', async () => {
-    expect(await current(of(UNKNOWN_ACCOUNT))).toEqual({
-      status: 200,
-      body: {
-        snapshot_date: expect.stringMatching(ISO_TIME), period_start: '2026-08-01',
-        period_end: '2026-08-31', current_total: 40, source: 'cloud_projects',
-        project_count: 1, currency: 'EUR',
-      },
-    });
+  // Its latest is of an earlier month than the current one, September: as for an account
+  // without any, rather than an old month's under the date of today
+  test.each([
+    ['the Unknown account, whose latest is of August', UNKNOWN_ACCOUNT],
+    ['an account no longer configured, whose latest is of July', REMOVED],
+  ])('gives no consumption for %s', async (_, account) => {
+    expect(await current(of(account)))
+      .toEqual({ status: 200, body: { current_total: 0, currency: 'EUR' } });
   });
 
   test('gives no consumption for an account whose import recorded none', async () => {
@@ -295,16 +300,12 @@ describe('GET /api/consumption/forecast', () => {
       });
     });
 
-  // 40 € over the 30 days that its import covered, for the 31 days of August
-  test('extrapolates the consumption of the Unknown account in its own month', async () => {
-    expect(await forecast(of(UNKNOWN_ACCOUNT))).toEqual({
-      status: 200,
-      body: {
-        snapshot_date: expect.stringMatching(ISO_TIME), period_start: '2026-08-01',
-        period_end: '2026-08-31', forecast_total: 41.33, current_total: 40, currency: 'EUR',
-        progress: 97, source: 'cloud_projects', days_elapsed: 30, days_in_month: 31,
-      },
-    });
+  test.each([
+    ['the Unknown account, whose latest is of August', UNKNOWN_ACCOUNT],
+    ['an account no longer configured, whose latest is of July', REMOVED],
+  ])('gives no forecast for %s', async (_, account) => {
+    expect(await forecast(of(account)))
+      .toEqual({ status: 200, body: { forecast_total: 0, currency: 'EUR' } });
   });
 
   test('gives no forecast for an account whose import recorded none', async () => {

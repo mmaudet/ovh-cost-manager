@@ -130,14 +130,8 @@ function forecastOfAccount({ snapshot, cloud }, now) {
   };
 }
 
-// The figures of the current month: the latest month that they cover. An account whose last
-// import covered an earlier month has none in it, such as an account no longer configured, or
-// the Unknown account, whose last import was before the accounts.
-function ofCurrentMonth(figures) {
-  const monthOf = ({ answer }) => answer.period_start?.slice(0, 7) ?? null;
-  const current = latestOf(figures.map(monthOf));
-  return figures.filter((figure) => monthOf(figure) === current);
-}
+// The month of a figure, YYYY-MM, that of the start of its period: null without one
+const monthOf = ({ answer }) => answer.period_start?.slice(0, 7) ?? null;
 
 // What the figures added up have in common, when they all have it: where they come from, OVH
 // or the projects, which the sum says, or else nothing
@@ -198,31 +192,42 @@ function sumOfForecasts(figures) {
   };
 }
 
-// Adds up the figures of the accounts in the current month, as a consumption route answers
-// them: `none` when no account has one, the only one as its account shows alone, or else
-// their `sum`
-function addUpCurrentMonth(figures, { none, sum }) {
-  const counted = ofCurrentMonth(figures.filter(Boolean));
+// Adds up the figures of the accounts asked for in the current month, the latest that the
+// figures of every account cover, as a consumption route answers them: `none` when none of
+// them has one in it, the only one as its account shows alone, or else their `sum`. An
+// account whose latest figure is of an earlier month has none in it, such as an account no
+// longer configured, or the Unknown account, whose last import was before the accounts. So do
+// the accounts whose last imports are of the month before, when another's is of a new one,
+// until they are imported again.
+function addUpCurrentMonth({ asked, every }, figureOf, { none, sum }) {
+  const current = latestOf(every.map(figureOf).filter(Boolean).map(monthOf));
+  const counted = asked.map(figureOf)
+    .filter((figure) => figure && monthOf(figure) === current);
   if (counted.length === 0) return none;
   if (counted.length === 1) return counted[0].answer;
   return sum(counted);
 }
 
 /**
- * The current month's consumption so far, of one account, or of all accounts added up
- * @param {{ snapshot: (object|undefined), cloud: object }[]} accounts - What tells each
- *   account's: its latest consumption snapshot, and what its projects consumed (see
- *   consumption.getCurrentByAccount() in data/db.js)
+ * The current month's consumption so far, of one account, or of all accounts added up, in the
+ * current month (see addUpCurrentMonth())
+ * @param {object} accounts
+ * @param {{ snapshot: (object|undefined), cloud: object }[]} accounts.asked - What tells the
+ *   consumption of each account asked for, one or all of them: its latest consumption
+ *   snapshot, and what its projects consumed (see consumption.getCurrentByAccount() in
+ *   data/db.js)
+ * @param {{ snapshot: (object|undefined), cloud: object }[]} accounts.every - The same for
+ *   every account, whose latest month is the current one
  * @param {Date} now - When the route answers, the time of a figure that it computes
  * @returns {object} What GET /api/consumption/current answers: `{ current_total: 0,
- *   currency: 'EUR' }` when no account has any. One account's: `snapshot_date`,
- *   `period_start`, `period_end`, `current_total`, `currency` and `source`, with
- *   `details`, what OVH tells, for 'me_consumption', or `project_count` for
- *   'cloud_projects'. Several accounts': the same but `details`, which stay one account's,
- *   and with `source` only when they share one.
+ *   currency: 'EUR' }` when no account asked for has one in the current month. One
+ *   account's: `snapshot_date`, `period_start`, `period_end`, `current_total`, `currency`
+ *   and `source`, with `details`, what OVH tells, for 'me_consumption', or `project_count`
+ *   for 'cloud_projects'. Several accounts': the same but `details`, which stay one
+ *   account's, and with `source` only when they share one.
  */
 function currentConsumption(accounts, now) {
-  return addUpCurrentMonth(accounts.map((account) => currentOfAccount(account, now)),
+  return addUpCurrentMonth(accounts, (account) => currentOfAccount(account, now),
     { none: { current_total: 0, currency: 'EUR' }, sum: sumOfCurrent });
 }
 
@@ -230,17 +235,17 @@ function currentConsumption(accounts, now) {
  * The current month's month-end forecast, of one account, or of all accounts added up: the sum
  * of each account's forecast, rather than the forecast of their summed consumption, which would
  * extrapolate an account that its projects tell over the days of another
- * @param {{ snapshot: (object|undefined), cloud: object }[]} accounts - As for
+ * @param {object} accounts - The accounts asked for, and every account, as for
  *   currentConsumption()
  * @param {Date} now - When the route answers, the time of a forecast that it computes
  * @returns {object} What GET /api/consumption/forecast answers: `{ forecast_total: 0,
- *   currency: 'EUR' }` when no account has any; else `snapshot_date`, `period_start`,
- *   `period_end`, `forecast_total`, `current_total`, `currency` and `progress`, with
- *   `source`, 'cloud_projects', `days_elapsed` and `days_in_month` when every account's is
- *   extrapolated from its projects
+ *   currency: 'EUR' }` when no account asked for has one in the current month; else
+ *   `snapshot_date`, `period_start`, `period_end`, `forecast_total`, `current_total`,
+ *   `currency` and `progress`, with `source`, 'cloud_projects', `days_elapsed` and
+ *   `days_in_month` when every account's is extrapolated from its projects
  */
 function consumptionForecast(accounts, now) {
-  return addUpCurrentMonth(accounts.map((account) => forecastOfAccount(account, now)),
+  return addUpCurrentMonth(accounts, (account) => forecastOfAccount(account, now),
     { none: { forecast_total: 0, currency: 'EUR' }, sum: sumOfForecasts });
 }
 
