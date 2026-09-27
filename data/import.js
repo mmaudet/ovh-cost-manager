@@ -1513,12 +1513,14 @@ async function runImport(params) {
       // Which accounts the configuration lists, whatever the run imports of them: one that it
       // no longer lists keeps its data, and is no longer imported (#114)
       db.accounts.recordConfiguration(attempts.map(({ nic, lastNic }) => nic ?? lastNic ?? null));
-      // Rows stored before the upgrade carry no account. With a single account configured,
-      // they can only be its own: they get it at the first import, and none is left after.
-      if (!several) {
-        return { attributed: only.nic ? db.accounts.attributeRowsWithoutAccount(only.nic) : 0 };
+      // Rows stored before the upgrade carry no account. With a single account configured, in
+      // a database that has never known another, they can only be its own: they get it at
+      // the first import, and none is left after. Once the database has known another
+      // account, those left are the Unknown account's, which a removed account may have left.
+      if (!several && only.nic && db.accounts.isOnlyAccount(only.nic)) {
+        return { attributed: db.accounts.attributeRowsWithoutAccount(only.nic) };
       }
-      // With several, each account claims those that its API lists as it is imported (#114),
+      // Otherwise, each account claims those that its API lists as it is imported (#114),
       // and those that none claims are the Unknown account's. The balance and consumption
       // snapshots cannot be claimed: they go, once an account is to record its own.
       const importing = accounts.some(({ nic, error }) => nic && !error);

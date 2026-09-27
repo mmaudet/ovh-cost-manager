@@ -554,6 +554,16 @@ const accountsOps = {
   },
 
   /**
+   * @param {string} nic - The NIC handle of an account
+   * @returns {boolean} Whether the database has never known another account: the accounts
+   *   table records no other NIC handle. Its rows without an account can then only be that
+   *   account's, stored before the accounts (#114).
+   */
+  isOnlyAccount: (nic) => getDb()
+    .prepare('SELECT NOT EXISTS (SELECT 1 FROM accounts WHERE nic <> ?) AS only')
+    .get(nic).only === 1,
+
+  /**
    * @param {string} [table] - One of ACCOUNT_TABLES, or all of them when none is given
    * @returns {boolean} Whether it holds rows without an account: rows stored before the
    *   accounts that no account has claimed, which are the Unknown account's (see CONTEXT.md)

@@ -124,6 +124,12 @@ async function runImport(params) {
 const importSeptember = (options = {}) =>
   runImport({ from: '2026-09-01', to: '2026-09-30', ...options });
 
+// A differential import, as the cron runs it, once a day, with every dataset
+const importAsTheCron = () => runImport({
+  diff: true, includeConsumption: true, includeAccount: true, includeInventory: true,
+  includeCloudDetails: true,
+});
+
 // The rows of a table as [id, NIC handle of their account], by id
 const accountsOf = (table) => db.getDb()
   .prepare(`SELECT id, account FROM ${table} ORDER BY id`)
@@ -249,6 +255,12 @@ function serveConsumption(accountRoutes, month, total) {
     elements: [{ planFamily: 'consumption' }],
   }]));
 }
+
+// A month of the account's consumption history, as an earlier import stored it
+const storeHistory = (month, nic) => db.consumption.insertHistory({
+  period_start: `${month}-01`, period_end: `${month}-28`, service_type: 'consumption',
+  total: 90, currency: 'EUR', raw_data: '{}', account: nic,
+});
 
 // The consumption history stored, as [NIC handle of its account, month, total]
 const storedHistory = () => db.getDb().prepare(`
@@ -678,12 +690,6 @@ describe('the rows stored before the accounts, with several accounts configured'
     return { lyon, paris };
   }
 
-  // A differential import, as the cron runs it, once a day, with every dataset
-  const importAsTheCron = () => runImport({
-    diff: true, includeConsumption: true, includeAccount: true, includeInventory: true,
-    includeCloudDetails: true,
-  });
-
   // Each account's differential import starts from its own latest bill, and skips those
   // stored: the bills of before are claimed from the account's whole list, without dates
   test('are claimed by each account whose full bill list names them', async () => {
@@ -820,5 +826,42 @@ describe('the rows stored before the accounts, with several accounts configured'
       consumption_history: history,
       credit_movements: ['PREPAID_ACCOUNT_1'],
     });
+  });
+});
+
+describe('the rows that no account claims, once a single account is left configured', () => {
+  // A migration of two accounts leaves rows to the Unknown account, here those of a base that
+  // held the bills of both, then Paris is removed from the configuration: the rows it left
+  // could be its own, and Lyon's imports would remove them as its own
+  test('stay the Unknown account\'s, through its imports and its full import', async () => {
+    const lyon = serveInEuros(LYON);
+    const paris = serveInEuros(PARIS);
+    for (const served of [lyon, paris]) {
+      serveProjects(served.routes);
+      serveInventories(served.routes);
+      serveConsumption(served.routes, '2026-08', 100);
+      serveBalance(served.routes, {});
+    }
+    storeBill('FR-L0', '2026-08-01', LYON);
+    storeBill('FR-P0', '2026-08-01', PARIS);
+    // Paris's server, cancelled since, and its history of May to July
+    storeServer('ns-P-cancelled', PARIS);
+    for (const month of ['2026-05', '2026-06', '2026-07']) storeHistory(month, PARIS);
+    forgetAccounts();
+    const history = allIdsIn('consumption_history');
+    serveBills(lyon.routes, [['FR-L0', '2026-08-01'], ['FR-L1', '2026-09-01']]);
+    serveBills(paris.routes, [['FR-P0', '2026-08-01']]);
+    useAccounts({ served: lyon }, { served: paris });
+    await importAsTheCron();
+    const leftUnknown = idsWithoutAccount();
+    useAccounts({ served: lyon });
+
+    await importAsTheCron();
+    await runImport({ full: true, account: LYON });
+
+    expect(leftUnknown).toMatchObject({
+      bills: [], dedicated_servers: ['ns-P-cancelled'], consumption_history: history,
+    });
+    expect(idsWithoutAccount()).toEqual(leftUnknown);
   });
 });
