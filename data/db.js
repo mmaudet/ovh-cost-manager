@@ -277,24 +277,29 @@ const billOps = {
     return stmt.run(requireAccount('bills', bill));
   },
 
-  getAll: (fromDate, toDate) => {
-    const db = getDb();
-    let query = 'SELECT * FROM bills';
-    const params = [];
-
-    if (fromDate && toDate) {
-      query += ' WHERE date >= ? AND date <= ?';
-      params.push(fromDate, toDate);
-    } else if (fromDate) {
-      query += ' WHERE date >= ?';
+  /**
+   * The bills between two dates, each optional, the latest first
+   * @param {?string} [fromDate] - The first day, none by default
+   * @param {?string} [toDate] - The last day, none by default
+   * @param {?string} [account] - The account whose bills to list (see accountCondition()):
+   *   every account's by default (#137)
+   * @returns {object[]} The bills, each with the NIC handle of its account
+   */
+  getAll: (fromDate, toDate, account = null) => {
+    const ofAccount = accountCondition(account, 'account');
+    const conditions = [ofAccount.sql];
+    const params = [...ofAccount.params];
+    if (fromDate) {
+      conditions.push('date >= ?');
       params.push(fromDate);
-    } else if (toDate) {
-      query += ' WHERE date <= ?';
+    }
+    if (toDate) {
+      conditions.push('date <= ?');
       params.push(toDate);
     }
-
-    query += ' ORDER BY date DESC';
-    return db.prepare(query).all(...params);
+    return getDb().prepare(`
+      SELECT * FROM bills WHERE ${conditions.join(' AND ')} ORDER BY date DESC
+    `).all(...params);
   },
 
   getById: (id) => {

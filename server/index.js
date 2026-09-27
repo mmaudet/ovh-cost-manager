@@ -785,25 +785,36 @@ function registerRoutes() {
   // those it no longer lists, which keep their data but are no longer imported, and the
   // Unknown account, while it holds rows (#114). An account's id, its NIC handle, is the value
   // that the account parameter of the other routes takes.
+  const listAccounts = () => {
+    const accounts = db.accounts.getAll().map(account => ({
+      id: account.nic,
+      nic: account.nic,
+      name: account.name ?? account.nic,
+      budget: account.budget,
+      currency: account.currency,
+      configured: account.configured,
+      unknown: false,
+      lastImport: account.last_import_at === null ? null : {
+        at: account.last_import_at,
+        status: account.last_import_status,
+        error: account.last_import_error
+      },
+      lastSuccessAt: account.last_success_at
+    }));
+    if (db.accounts.hasRowsWithoutAccount()) accounts.push(UNKNOWN_ACCOUNT_ENTRY);
+    return accounts;
+  };
+
+  // Whether the database holds several accounts: two at least of those that the accounts
+  // route lists, the Unknown account and the accounts no longer configured included, as the
+  // dashboard offers the account selector then (offersAccounts(), in
+  // dashboard/src/utils/accounts.js). The CSV exports then name the account of each row
+  // (#137), and a single-account installation keeps its files as they were.
+  const holdsSeveralAccounts = () => listAccounts().length >= 2;
+
   app.get('/api/accounts', (req, res) => {
     try {
-      const accounts = db.accounts.getAll().map(account => ({
-        id: account.nic,
-        nic: account.nic,
-        name: account.name ?? account.nic,
-        budget: account.budget,
-        currency: account.currency,
-        configured: account.configured,
-        unknown: false,
-        lastImport: account.last_import_at === null ? null : {
-          at: account.last_import_at,
-          status: account.last_import_status,
-          error: account.last_import_error
-        },
-        lastSuccessAt: account.last_success_at
-      }));
-      if (db.accounts.hasRowsWithoutAccount()) accounts.push(UNKNOWN_ACCOUNT_ENTRY);
-      res.json(accounts);
+      res.json(listAccounts());
     } catch (err) {
       res.status(500).json({ error: err.message });
     }
@@ -889,8 +900,27 @@ function registerRoutes() {
     return [header, ...rows].join('\n');
   }
 
-  // Export bills as CSV
-  app.get('/api/export/bills', (req, res) => {
+  // The column of the CSV exports that names the account of each row, for a spreadsheet to
+  // pivot the rows by account (#137): the NIC handle, which toCSV() leaves empty for the Unknown
+  // account, null. Named as the account parameter, and last, so that the other columns keep
+  // the places that a single-account installation's files give them.
+  const ACCOUNT_COLUMN = Object.freeze({ key: 'account', label: 'account' });
+
+  /**
+   * The columns of a CSV export: its own, and the account column after them when the database
+   * holds several accounts (#137)
+   * @param {Array<{key: string, label: string}>} columns - Its own columns
+   * @param {boolean} severalAccounts - Whether the database holds several accounts
+   *   (holdsSeveralAccounts()): its rows then carry the NIC handle of their account, `account`
+   * @returns {Array<{key: string, label: string}>}
+   */
+  function exportColumns(columns, severalAccounts) {
+    return severalAccounts ? [...columns, ACCOUNT_COLUMN] : columns;
+  }
+
+  // The bills of a period as CSV: those of the account the request asks for, or of every
+  // account without one, each with its account when the database holds several (#137)
+  app.get('/api/export/bills', accountParameter, (req, res) => {
     try {
       const { from, to } = req.query;
       const validation = validateDateRange(from, to);
@@ -898,16 +928,16 @@ function registerRoutes() {
         return res.status(400).json({ error: validation.error });
       }
 
-      const bills = db.bills.getAll(from, to);
+      const bills = db.bills.getAll(from, to, req.account);
 
-      const columns = [
+      const columns = exportColumns([
         { key: 'id', label: 'Facture' },
         { key: 'date', label: 'Date' },
         { key: 'price_without_tax', label: 'Montant HT' },
         { key: 'price_with_tax', label: 'Montant TTC' },
         { key: 'tax', label: 'TVA' },
         { key: 'currency', label: 'Devise' }
-      ];
+      ], holdsSeveralAccounts());
 
       const csv = toCSV(bills, columns);
       const filename = `factures_${from}_${to}.csv`;
