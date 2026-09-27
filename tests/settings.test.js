@@ -2,10 +2,16 @@
  * Tests for the one way the server reads its settings: a value other than the
  * setting takes stops the server, naming the setting, rather than turn a
  * protection off. The true/false settings are tested with the auth and rate
- * limiting settings; here, the numbers and the sections of config.json.
+ * limiting settings; here, the numbers, the number of proxies of TRUST_PROXY
+ * and the sections of config.json.
  */
 
-const { parsePositiveInteger, parseList, readSection } = require('../server/settings');
+const {
+  parsePositiveInteger,
+  parseProxyCount,
+  parseList,
+  readSection,
+} = require('../server/settings');
 
 const SOURCE = '/etc/ocm/config.json';
 
@@ -58,6 +64,74 @@ describe('parsePositiveInteger, from config.json', () => {
   ])('refuses %s', (shown, value) => {
     expect(() => read(value))
       .toThrow(`${name} must be a positive integer (a JSON number), not ${shown}`);
+  });
+});
+
+// TRUST_PROXY, the number of proxies the server trusts: true stands for one,
+// as before a number could be given, and false for none
+describe('parseProxyCount, from the environment', () => {
+  const read = (value) => parseProxyCount(value, { name: 'TRUST_PROXY' });
+
+  test.each([
+    ['true', 1],
+    ['TRUE', 1],
+    ['false', 0],
+    ['False', 0],
+    ['1', 1],
+    ['2', 2],
+    ['10', 10],
+  ])('reads %s as %d', (value, expected) => {
+    expect(read(value)).toBe(expected);
+  });
+
+  test.each([undefined, ''])('gives undefined for %p, as unset', (value) => {
+    expect(read(value)).toBeUndefined();
+  });
+
+  // 0 too, as false says it, and a count above 10, far above any real chain
+  // of proxies, which would let a client choose the address rate limiting sees
+  test.each([
+    '0', '11', '9007199254740991', '-1', '1.5', 'yes', '2abc', ' 2', '0x2', '1e1',
+    '99999999999999999999',
+  ])('refuses %s', (value) => {
+    expect(() => read(value))
+      .toThrow(`TRUST_PROXY must be true, false or an integer from 1 to 10, not "${value}"`);
+  });
+});
+
+describe('parseProxyCount, from config.json', () => {
+  const name = `rateLimit.trustProxy in ${SOURCE}`;
+  const read = (value) => parseProxyCount(value, { name, fromFile: true });
+
+  test.each([
+    [true, 1],
+    [false, 0],
+    [1, 1],
+    [2, 2],
+    [10, 10],
+  ])('reads %p as %d', (value, expected) => {
+    expect(read(value)).toBe(expected);
+  });
+
+  test('gives undefined when the key is absent', () => {
+    expect(read(undefined)).toBeUndefined();
+  });
+
+  test.each([
+    ['0', 0],
+    ['11', 11],
+    ['9007199254740991', Number.MAX_SAFE_INTEGER],
+    ['-1', -1],
+    ['1.5', 1.5],
+    ['"2"', '2'],
+    ['"true"', 'true'],
+    ['""', ''],
+    ['null', null],
+  ])('refuses %s', (shown, value) => {
+    expect(() => read(value)).toThrow(
+      `${name} must be true or false (JSON booleans), or an integer from 1 to 10 `
+        + `(a JSON number), not ${shown}`
+    );
   });
 });
 

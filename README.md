@@ -237,7 +237,7 @@ Add a `rateLimit` section to your `config.json`, as in [config.example.json](con
 
 **Parameters**:
 - `enabled`: Enable/disable globally (default: `true`)
-- `trustProxy`: Trust `X-Forwarded-For` headers, `X-Forwarded-Host` for the CORS check and `ALLOWED_HOSTS`, and `X-Forwarded-Proto` for the CORS check (default: `false`)
+- `trustProxy`: The number of proxies in front of OCM whose `X-Forwarded-For` it trusts, from 1 to 10, `true` for one, `false` for none; with one or more, it also trusts `X-Forwarded-Host` for the CORS check and `ALLOWED_HOSTS`, and `X-Forwarded-Proto` for the CORS check (default: `false`)
 - `api.windowMs`: Window duration in milliseconds (default: `900000` = 15 min)
 - `api.max`: Maximum API requests per IP per window (default: `100`)
 - `auth.windowMs`: Window duration for authentication endpoints (default: `900000`)
@@ -251,8 +251,8 @@ Environment variables take **priority** over `config.json`:
 # Enable/disable
 RATE_LIMIT_ENABLED=true|false
 
-# Trust proxy (CRITICAL for Kubernetes/reverse proxy)
-TRUST_PROXY=true|false
+# Trust proxy (CRITICAL for Kubernetes/reverse proxy): true trusts one
+TRUST_PROXY=true|false|<number of proxies, 1 to 10>
 
 # API limits
 RATE_LIMIT_API_WINDOW_MS=900000    # 15 minutes
@@ -312,7 +312,7 @@ TRUST_PROXY=true
 }
 ```
 
-Once enabled, each user is identified by their real IP address and gets their own individual limit.
+Once enabled, each user is identified by their real IP address and gets their own individual limit. Behind several proxies, set their number instead, counted as the [deployment guide](docs/deployment.md#rate-limiting-for-kubernetesreverse-proxy) says.
 
 **Alternative**: If your application is 100% internal and protected by SSO, you can completely disable rate limiting (`RATE_LIMIT_ENABLED=false`).
 

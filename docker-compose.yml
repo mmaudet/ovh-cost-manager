@@ -12,8 +12,8 @@
 # For SSO deployment, use docker-compose.sso.yml on its own (see its header):
 #   docker compose -f docker-compose.sso.yml up -d
 # Do not stack both files: OCM would also be published on port 3001, around
-# the SSO relay, and the TRUST_PROXY=true of the SSO file would then let any
-# client choose the address that rate limiting sees.
+# the SSO relay, and the TRUST_PROXY of the SSO file would then let any client
+# choose the address that rate limiting sees.
 
 services:
   ocm:
@@ -28,8 +28,29 @@ services:
     environment:
       - NODE_ENV=production
       - AUTH_REQUIRED=${AUTH_REQUIRED:-false}
+      # OIDC sign-in, off by default; empty: the auth section of config.json.
+      # OIDC_SCOPES is not passed, as empty it would be read as one blank
+      # scope: the scopes come from config.json in this stack
+      - OIDC_ENABLED=${OIDC_ENABLED:-}
+      - OIDC_ISSUER=${OIDC_ISSUER:-}
+      - OIDC_CLIENT_ID=${OIDC_CLIENT_ID:-}
+      - OIDC_CLIENT_SECRET=${OIDC_CLIENT_SECRET:-}
+      - OIDC_BASE_URL=${OIDC_BASE_URL:-}
+      - SESSION_SECRET=${SESSION_SECRET:-}
+      - COOKIE_SECURE=${COOKIE_SECURE:-}
       # Hosts the server answers, against DNS rebinding; empty: any host
       - ALLOWED_HOSTS=${ALLOWED_HOSTS:-}
+      # Other sites that may call the API (CORS); empty: allowedOrigins of
+      # config.json, or none
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-}
+      # The proxies OCM trusts, and rate limiting; empty: the rateLimit
+      # section of config.json, or the server's defaults
+      - TRUST_PROXY=${TRUST_PROXY:-}
+      - RATE_LIMIT_ENABLED=${RATE_LIMIT_ENABLED:-}
+      - RATE_LIMIT_API_MAX=${RATE_LIMIT_API_MAX:-}
+      - RATE_LIMIT_API_WINDOW_MS=${RATE_LIMIT_API_WINDOW_MS:-}
+      - RATE_LIMIT_AUTH_MAX=${RATE_LIMIT_AUTH_MAX:-}
+      - RATE_LIMIT_AUTH_WINDOW_MS=${RATE_LIMIT_AUTH_WINDOW_MS:-}
       - PORT=3001
       # Database lives in a dedicated dir mounted as a volume, kept separate
       # from the application code under /app/data (which ships in the image).

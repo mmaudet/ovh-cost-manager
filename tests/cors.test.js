@@ -15,12 +15,13 @@ const {
 } = require('../server/cors');
 const { serve } = require('./support/http');
 
-// Built as the server builds it at startup: in production, with no listed
-// origins, and without a trusted proxy unless the check's name says otherwise
-const settings = { allowedOrigins: [], isDev: false, trustProxy: false };
+// Built as the server builds it at startup, with trustProxy the number of
+// proxies it trusts: in production, with no listed origins, and trusting none
+// unless the check's name says otherwise
+const settings = { allowedOrigins: [], isDev: false, trustProxy: 0 };
 const production = createOriginCheck(settings);
 const development = createOriginCheck({ ...settings, isDev: true });
-const behindTrustedProxy = createOriginCheck({ ...settings, trustProxy: true });
+const behindTrustedProxy = createOriginCheck({ ...settings, trustProxy: 1 });
 
 describe('createOriginCheck', () => {
   test('allows a request without an Origin header', () => {
@@ -216,6 +217,20 @@ describe('createOriginCheck', () => {
       expect(behindTrustedProxy('https://ocm.example.com', { host: 'ocm.example.com:443' }))
         .toBe(true);
     });
+  });
+
+  // TRUST_PROXY=2, behind a TLS terminator and the relay: the server trusts
+  // two proxies, and the check reads the headers as behind one
+  test.each([
+    ['1', behindTrustedProxy],
+    ['2', createOriginCheck({ ...settings, trustProxy: 2 })],
+  ])('reads X-Forwarded-Host and X-Forwarded-Proto with trustProxy: %s', (_, check) => {
+    expect(check('https://ocm.example.com', {
+      host: 'ovh-cost-manager:3001',
+      forwardedHost: 'ocm.internal, ocm.example.com',
+    })).toBe(true);
+    expect(check('http://ocm.example.com', { host: 'ocm.example.com', forwardedProto: 'https' }))
+      .toBe(false);
   });
 
   // A string compared as a list compares by substring

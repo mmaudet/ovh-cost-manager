@@ -70,7 +70,9 @@ function readAllowedHosts(setting) {
  * @param {string|string[]} [settings.allowedHosts] - ALLOWED_HOSTS, or
  *   allowedHosts in config.json: host names, each with an optional port, in a
  *   comma-separated string or an array
- * @param {boolean} settings.trustProxy - whether the server trusts its proxy (TRUST_PROXY)
+ * @param {number} settings.trustProxy - how many proxies the server trusts
+ *   (TRUST_PROXY), 0 for none: from one on, the check reads X-Forwarded-Host,
+ *   the same way whatever the number
  * @returns {function(object): {allowed: boolean, header: string, host: string}} the
  *   check of a request's headers, as Node names them: whether it passes, and
  *   when it does not, the header and the host it refused

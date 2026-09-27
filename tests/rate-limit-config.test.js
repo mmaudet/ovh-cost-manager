@@ -1,8 +1,9 @@
 /**
  * Tests for the rate limiting settings and TRUST_PROXY, which the CORS and Host
- * checks read too: config.json, which the environment overrides. Their
- * booleans take true or false only, as the auth settings: TRUST_PROXY=TRUE
- * was read as false.
+ * checks read too: config.json, which the environment overrides.
+ * RATE_LIMIT_ENABLED takes true or false only, as the auth settings, and
+ * TRUST_PROXY these or a number of proxies from 1 to 10: TRUST_PROXY=TRUE was
+ * read as false.
  */
 
 const { buildRateLimitConfig } = require('../server/rate-limit-config');
@@ -13,19 +14,28 @@ describe('buildRateLimitConfig', () => {
   test('gives the defaults without settings', () => {
     expect(buildRateLimitConfig({}, {})).toEqual({
       enabled: true,
-      trustProxy: false,
+      trustProxy: 0,
       api: { windowMs: 900000, max: 100 },
       auth: { windowMs: 900000, max: 20 },
     });
   });
 
+  // trustProxy is the number of proxies the server trusts: true stands for
+  // one, as before a number could be given
   test.each([
-    ['true', true],
-    ['TRUE', true],
-    ['True', true],
-    ['false', false],
-    ['FALSE', false],
+    ['true', 1],
+    ['TRUE', 1],
+    ['True', 1],
+    ['false', 0],
+    ['FALSE', 0],
   ])('reads TRUST_PROXY=%s in any case', (value, expected) => {
+    expect(buildRateLimitConfig({}, { TRUST_PROXY: value }).trustProxy).toBe(expected);
+  });
+
+  test.each([
+    ['1', 1],
+    ['2', 2],
+  ])('reads TRUST_PROXY=%s as the number of proxies to trust', (value, expected) => {
     expect(buildRateLimitConfig({}, { TRUST_PROXY: value }).trustProxy).toBe(expected);
   });
 
@@ -36,38 +46,62 @@ describe('buildRateLimitConfig', () => {
     expect(buildRateLimitConfig({}, { RATE_LIMIT_ENABLED: value }).enabled).toBe(expected);
   });
 
-  test.each([
-    ['TRUST_PROXY', 'yes'],
-    ['TRUST_PROXY', '1'],
-    ['RATE_LIMIT_ENABLED', 'no'],
-    ['RATE_LIMIT_ENABLED', '0'],
-  ])('refuses %s=%s, rather than read it as false', (name, value) => {
-    expect(() => buildRateLimitConfig({}, { [name]: value }))
-      .toThrow(`${name} must be true or false, not "${value}"`);
+  test.each(['yes', '0', '11', '-1', '1.5'])(
+    'refuses TRUST_PROXY=%s, rather than read it as false',
+    (value) => {
+      expect(() => buildRateLimitConfig({}, { TRUST_PROXY: value }))
+        .toThrow(`TRUST_PROXY must be true, false or an integer from 1 to 10, not "${value}"`);
+    }
+  );
+
+  test.each(['no', '0'])('refuses RATE_LIMIT_ENABLED=%s, rather than read it as false', (value) => {
+    expect(() => buildRateLimitConfig({}, { RATE_LIMIT_ENABLED: value }))
+      .toThrow(`RATE_LIMIT_ENABLED must be true or false, not "${value}"`);
   });
 
   test('ignores an empty variable, as an unset one', () => {
     const file = { rateLimit: { trustProxy: true } };
-    expect(buildRateLimitConfig(file, { TRUST_PROXY: '' }).trustProxy).toBe(true);
+    expect(buildRateLimitConfig(file, { TRUST_PROXY: '' }).trustProxy).toBe(1);
   });
 
   test('reads the JSON booleans of config.json', () => {
     const file = { rateLimit: { enabled: false, trustProxy: true } };
-    expect(buildRateLimitConfig(file, {})).toMatchObject({ enabled: false, trustProxy: true });
+    expect(buildRateLimitConfig(file, {})).toMatchObject({ enabled: false, trustProxy: 1 });
+  });
+
+  test('reads a number of proxies in config.json, as a JSON number', () => {
+    expect(buildRateLimitConfig({ rateLimit: { trustProxy: 2 } }, {}).trustProxy).toBe(2);
+  });
+
+  test('refuses rateLimit.enabled: 1, naming the file and the key', () => {
+    expect(() => buildRateLimitConfig({ rateLimit: { enabled: 1 } }, {}, SOURCE))
+      .toThrow(`rateLimit.enabled in ${SOURCE} must be true or false (JSON booleans), not 1`);
   });
 
   test.each([
-    ['rateLimit.trustProxy', { trustProxy: 'true' }, '"true"'],
-    ['rateLimit.enabled', { enabled: 1 }, '1'],
-  ])('refuses %s: %j, naming the file and the key', (key, rateLimit, shown) => {
-    expect(() => buildRateLimitConfig({ rateLimit }, {}, SOURCE))
-      .toThrow(`${key} in ${SOURCE} must be true or false (JSON booleans), not ${shown}`);
+    ['"true"', 'true'],
+    ['"2"', '2'],
+    ['0', 0],
+    ['11', 11],
+    ['1.5', 1.5],
+  ])('refuses rateLimit.trustProxy: %s, naming the file and the key', (shown, trustProxy) => {
+    expect(() => buildRateLimitConfig({ rateLimit: { trustProxy } }, {}, SOURCE)).toThrow(
+      `rateLimit.trustProxy in ${SOURCE} must be true or false (JSON booleans), `
+        + `or an integer from 1 to 10 (a JSON number), not ${shown}`
+    );
   });
 
   test('lets the environment override config.json', () => {
     const file = { rateLimit: { enabled: false, trustProxy: true } };
     expect(buildRateLimitConfig(file, { RATE_LIMIT_ENABLED: 'true', TRUST_PROXY: 'false' }))
-      .toMatchObject({ enabled: true, trustProxy: false });
+      .toMatchObject({ enabled: true, trustProxy: 0 });
+  });
+
+  test('lets TRUST_PROXY override config.json, with a number on either side', () => {
+    const twoInFile = { rateLimit: { trustProxy: 2 } };
+    const oneInFile = { rateLimit: { trustProxy: true } };
+    expect(buildRateLimitConfig(twoInFile, { TRUST_PROXY: 'true' }).trustProxy).toBe(1);
+    expect(buildRateLimitConfig(oneInFile, { TRUST_PROXY: '3' }).trustProxy).toBe(3);
   });
 
   test('refuses a wrong value of config.json that the environment overrides', () => {

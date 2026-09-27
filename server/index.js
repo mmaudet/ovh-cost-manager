@@ -156,9 +156,11 @@ const RESOURCE_TYPE_LABELS = {
   'other': 'Other'
 };
 
-// Trust proxy headers (for reverse proxy/load balancer)
+// Trust proxy headers (for reverse proxy/load balancer): the X-Forwarded-For
+// of as many proxies as TRUST_PROXY says, so that req.ip is the address the
+// outermost of them got the request from
 if (rateLimitConfig.trustProxy) {
-  app.set('trust proxy', 1);
+  app.set('trust proxy', rateLimitConfig.trustProxy);
 }
 
 // Middleware. The Host check comes first, so that a host that is not allowed
@@ -272,10 +274,13 @@ async function initializeServer() {
       console.log(`   Rate limiting: enabled`);
       console.log(`     API: ${rateLimitConfig.api.max} req/${rateLimitConfig.api.windowMs / 60000} min per IP`);
       console.log(`     Auth: ${rateLimitConfig.auth.max} req/${rateLimitConfig.auth.windowMs / 60000} min per IP`);
-      console.log(`     Trust proxy: ${rateLimitConfig.trustProxy ? 'enabled' : 'disabled'}`);
     } else {
       console.log(`   Rate limiting: disabled`);
     }
+    // TRUST_PROXY, which the CORS and Host checks and the session cookie read too
+    const proxies = rateLimitConfig.trustProxy;
+    const trusted = proxies === 1 ? '1 proxy' : `${proxies} proxies`;
+    console.log(`   Trust proxy: ${proxies > 0 ? trusted : 'disabled'}`);
 
     if (authConfig.auth?.enabled) {
       console.log(`   OIDC authentication enabled`);

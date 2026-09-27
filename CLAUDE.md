@@ -59,12 +59,13 @@ and `server/index.js` (each loads config on its own, there is no shared config m
 - **`dataDir`** (where `ovh-bills.db` lives): `DATA_DIR` env var > `config.json` `dataDir` > the `data/` directory.
 - **rate limiting / auth / etc.**: environment variables override `config.json` values.
   These settings go through one strict parser (`server/settings.js`). The booleans of
-  authentication, rate limiting, `TRUST_PROXY` and `IMPORT_ENABLED` take `true` or
-  `false`, in any case in the environment, JSON booleans in `config.json`, and `auto` for
-  the cookie's `Secure` flag; the rate limits and `auth.session.maxAge`, positive
-  integers; the `auth` and `rateLimit` sections, and those under them, objects; the
-  lists, such as `allowedOrigins`, arrays of strings or comma-separated strings. Anything
-  else stops the server, naming the setting. The rate limiting settings are resolved in
+  authentication, rate limiting and `IMPORT_ENABLED` take `true` or `false`, in any case
+  in the environment, JSON booleans in `config.json`, and `auto` for the cookie's `Secure`
+  flag; `TRUST_PROXY`, these or the number of proxies to trust, from 1 to 10, `true` for
+  one; the rate limits and `auth.session.maxAge`, positive integers; the `auth` and
+  `rateLimit` sections, and those under them, objects; the lists, such as
+  `allowedOrigins`, arrays of strings or comma-separated strings. Anything else stops the
+  server, naming the setting. The rate limiting settings are resolved in
   `server/rate-limit-config.js`.
 
 When adding a configurable option, follow this same env-over-file pattern and apply it in
@@ -105,12 +106,13 @@ Two suites:
 
 - **Node tests**: Jest, limited to `tests/` (`jest.roots` in the root `package.json`).
   They exercise the pure logic layer (classification, validation, CSV export, inventory,
-  consumption, the auth rules), not `server/index.js` itself. The auth middlewares are
-  tested on small Express apps (`tests/support/http.js`). Jest cannot load `openid-client`
-  and `jose`, ES modules: `tests/auth-oidc-flow.test.js` starts the real server in a child
-  process (`tests/support/ocm-server.js`, with a throwaway HOME and DATA_DIR, and the
-  repository's `config.json` hidden) against a fake OpenID provider served in the test's
-  process (`tests/support/fake-provider.js`), and signs in and out through it.
+  consumption, the auth rules), and the auth middlewares on small Express apps
+  (`tests/support/http.js`). Jest cannot load `openid-client` and `jose`, ES modules, so
+  the tests of `server/index.js` itself start the real server in a child process
+  (`tests/support/ocm-server.js`, with a throwaway HOME and DATA_DIR, and the
+  repository's `config.json` hidden): its startup settings, rate limiting, the CORS
+  check, and the OIDC sign-in, which `tests/auth-oidc-flow.test.js` goes through against
+  a fake OpenID provider served in the test's process (`tests/support/fake-provider.js`).
 - **Dashboard tests**: Vitest and Testing Library in jsdom, in `dashboard/test/`. The page
   tests render the whole dashboard with the API service module replaced by synthetic
   fixtures, act like a user and check what is visible. They pin the dashboard's behaviour:
@@ -165,11 +167,13 @@ differential import rather than a full one, which would clear the data first.
   `yadd/lemonldap-ng-portal` image has no Manager: OCM's relying party comes from
   `demo/sso/`, mounted at `/over` as config overrides (`demo/README.md`).
 
-**`TRUST_PROXY=true` is required behind any reverse proxy / Kubernetes ingress**, otherwise
-rate limiting buckets all users under the proxy's single IP and everyone shares one limit.
-With it, the server also trusts `X-Forwarded-Host` and `X-Forwarded-Proto` for the CORS
-check (`server/cors.js`), and the last `X-Forwarded-Host` for the `ALLOWED_HOSTS` check
-(`server/hosts.js`); the CORS check always accepts the dashboard's own origin.
+**`TRUST_PROXY` is required behind any reverse proxy / Kubernetes ingress**: `true` for
+one proxy, or their number, up to 10, such as `2` for a TLS terminator in front of the
+SSO relay. Otherwise rate limiting buckets all users under a proxy's single IP and
+everyone shares one limit. With one or more, the server also trusts `X-Forwarded-Host`
+and `X-Forwarded-Proto` for the CORS check (`server/cors.js`), and the last
+`X-Forwarded-Host` for the `ALLOWED_HOSTS` check (`server/hosts.js`); the CORS check
+always accepts the dashboard's own origin.
 
 See `docs/deployment.md` for full SSO/OIDC setup.
 

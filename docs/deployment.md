@@ -34,7 +34,7 @@ This guide covers Docker deployment options for OVH Cost Manager (OCM), includin
 - **Everyone signs in again once**: the session cookie is now signed with `SESSION_SECRET`, and named `__Host-ocm.sid` when it is `Secure`, over HTTPS: the sessions of 2.4.0 are refused. From then on, changing `SESSION_SECRET` signs everyone out, and a secret shorter than 32 characters logs a warning at startup.
 - **Sign-in needs cookies**: `/auth/login` sets an `ocm.login.<state>` cookie (`__Host-ocm.login.<state>` over HTTPS) that the callback needs. A sign-in must start on the host of `OIDC_BASE_URL`, where the provider sends the browser back, and finish within 10 minutes.
 - **An https issuer needs all its endpoints on https**: plain HTTP to the provider is allowed only when `OIDC_ISSUER` is an `http://` URL, as in the demo stack, and then logs a warning in production.
-- **The settings accept only `true` or `false`**: in any case in the environment, as JSON booleans, without quotes, in `config.json`. `COOKIE_SECURE` and `auth.session.secure` also accept `auto`, their default. This holds for `OIDC_ENABLED`, `AUTH_REQUIRED`, `COOKIE_SECURE`, `auth.enabled`, `auth.session.secure` and `auth.backChannelLogout`, for `TRUST_PROXY` and `RATE_LIMIT_ENABLED`, or `rateLimit.trustProxy` and `rateLimit.enabled` in `config.json`, which drive the CORS, `ALLOWED_HOSTS` and rate limiting checks, and for `IMPORT_ENABLED`: any other value stops the server at startup, naming the setting, and the file for `config.json`. `TRUST_PROXY=TRUE`, read as `false` before, now trusts the proxy, and `IMPORT_ENABLED=FALSE`, read as `true`, now turns the imports off.
+- **The settings accept only `true` or `false`**: in any case in the environment, as JSON booleans, without quotes, in `config.json`. `COOKIE_SECURE` and `auth.session.secure` also accept `auto`, their default. This holds for `OIDC_ENABLED`, `AUTH_REQUIRED`, `COOKIE_SECURE`, `auth.enabled`, `auth.session.secure` and `auth.backChannelLogout`, for `TRUST_PROXY` and `RATE_LIMIT_ENABLED`, or `rateLimit.trustProxy` and `rateLimit.enabled` in `config.json`, which drive the CORS, `ALLOWED_HOSTS` and rate limiting checks, and for `IMPORT_ENABLED`: any other value stops the server at startup, naming the setting, and the file for `config.json`. `TRUST_PROXY=TRUE`, read as `false` before, now trusts the proxy, and `IMPORT_ENABLED=FALSE`, read as `true`, now turns the imports off. Since then, `TRUST_PROXY` and `rateLimit.trustProxy` also take a number of proxies, from 1 to 10 (see [Environment Variables](#environment-variables)).
 - **The numbers and the sections of the settings are checked too**: the rate limits, `RATE_LIMIT_API_MAX`, `RATE_LIMIT_API_WINDOW_MS`, `RATE_LIMIT_AUTH_MAX` and `RATE_LIMIT_AUTH_WINDOW_MS` or `max` and `windowMs` under `rateLimit.api` and `rateLimit.auth` in `config.json`, and `auth.session.maxAge` take positive integers, digits in the environment and JSON numbers, without quotes, in `config.json`. `auth`, `auth.provider`, `auth.session`, `rateLimit`, `rateLimit.api` and `rateLimit.auth` must be objects, and `allowedOrigins` an array of strings or a comma-separated string, as `ALLOWED_ORIGINS`. Anything else stops the server at startup, naming the setting: a limit of `"abc"` limited nothing, `"auth": true` left authentication off, and an `allowedOrigins` string was compared by substring, so that `"https://ocm.example.com"` let `https://ocm.example` through.
 - **`OIDC_ENABLED=false` now overrides `auth.enabled: true`**: a leftover `OIDC_ENABLED=false` in the environment turns OIDC off, and header mode then serves the API to anyone, unless `AUTH_REQUIRED=true`.
 - **A missing OIDC setting, or a `config.json` that cannot be read as JSON, stops the server at startup**, with an error naming the setting or the file, rather than let it start without authentication.
@@ -96,7 +96,7 @@ Open http://localhost:3001
 | `COOKIE_SECURE`             | With OIDC, the `Secure` flag of the session cookie: `true`, `false` or `auto` (see [OIDC settings](#oidc-settings)) | `auto` |
 | `NODE_ENV`                  | Node environment                     | `production`      |
 | `DATA_DIR`                  | Directory of the SQLite database, where the compose files mount the `ocm-data` volume | `/data` |
-| `TRUST_PROXY`               | Trust X-Forwarded-For headers (required for K8s/reverse proxy), X-Forwarded-Host for the CORS check and `ALLOWED_HOSTS`, and X-Forwarded-Proto for the CORS check | `false` |
+| `TRUST_PROXY`               | The number of proxies in front of OCM whose X-Forwarded-For it trusts, from 1 to 10, `true` for one, `false` for none (required for K8s/reverse proxy, see [Rate Limiting](#rate-limiting-for-kubernetesreverse-proxy)). With one or more, it also trusts X-Forwarded-Host for the CORS check and `ALLOWED_HOSTS`, and X-Forwarded-Proto for the CORS check. Leave it unset while port 3001 is published directly: the `TRUST_PROXY=2` that the [HTTPS](#https) steps put in `.env` is the SSO stack's, and `docker-compose.yml` reads that `.env` too | `false` |
 | `RATE_LIMIT_ENABLED`        | Enable rate limiting                 | `true`            |
 | `RATE_LIMIT_API_MAX`        | Max API requests per IP per window   | `100`             |
 | `RATE_LIMIT_API_WINDOW_MS`  | API rate limit window in ms          | `900000` (15 min) |
@@ -108,12 +108,12 @@ Open http://localhost:3001
 | `ALLOWED_ORIGINS`           | Comma-separated CORS allowed origins, only for other sites (see below) | (empty) |
 | `ALLOWED_HOSTS`             | Comma-separated host names, each with an optional port, that the server answers, against DNS rebinding (see below) | (empty: any host) |
 
-**The dashboard's own origin** is always accepted, so `ALLOWED_ORIGINS` only lists the other sites that call the API. The server answers a request from an origin that is neither the dashboard's own nor listed, nor, in development, on `localhost`, `127.0.0.1` or `[::1]`, with a 403 Forbidden, a preflight included, and logs it on one line, such as `CORS: Blocked request from origin: "https://evil.example"`. In `config.json`, `allowedOrigins` takes an array, or a comma-separated string as `ALLOWED_ORIGINS` does; each origin is compared whole, and any other value stops the server at startup. The server compares the origin's host with the request's `Host`, and with `TRUST_PROXY=true` with the last `X-Forwarded-Host` too, the one the nearest proxy set or appended, as `ALLOWED_HOSTS` reads it. Hosts compare without case, and without the default port of the origin's scheme. An `https://` origin on its default port also matches its host on port 80, which a proxy behind a TLS terminator can pass, such as the relay of the SSO stack below: an `https://` page needs a certificate for its host. An `http://` origin does not match its host on port 443, where the request says it came in on the https port: an `http://` page can be a network attacker's. Limits:
+**The dashboard's own origin** is always accepted, so `ALLOWED_ORIGINS` only lists the other sites that call the API. The server answers a request from an origin that is neither the dashboard's own nor listed, nor, in development, on `localhost`, `127.0.0.1` or `[::1]`, with a 403 Forbidden, a preflight included, and logs it on one line, such as `CORS: Blocked request from origin: "https://evil.example"`. In `config.json`, `allowedOrigins` takes an array, or a comma-separated string as `ALLOWED_ORIGINS` does; each origin is compared whole, and any other value stops the server at startup. The server compares the origin's host with the request's `Host`, and, with `TRUST_PROXY` on, with the last `X-Forwarded-Host` too, the one the nearest proxy set or appended, as `ALLOWED_HOSTS` reads it. Hosts compare without case, and without the default port of the origin's scheme. An `https://` origin on its default port also matches its host on port 80, which a proxy behind a TLS terminator can pass, such as the relay of the SSO stack below: an `https://` page needs a certificate for its host. An `http://` origin does not match its host on port 443, where the request says it came in on the https port: an `http://` page can be a network attacker's. Limits:
 
 - A proxy that rewrites `Host` without sending `X-Forwarded-Host` (nginx sends none by default), or that sends it without the public port, still needs the dashboard's URL in `ALLOWED_ORIGINS`, or `proxy_set_header X-Forwarded-Host $http_host;` with `TRUST_PROXY=true`. So does a chain of proxies that each append the `Host` they received to `X-Forwarded-Host`.
-- The scheme is only compared when `TRUST_PROXY=true` makes it known, through `X-Forwarded-Proto`. Otherwise an `http://` page passes for an `https://` dashboard on the same host, so that the dashboard does not go blank behind a TLS-terminating proxy.
+- The scheme is only compared when `TRUST_PROXY` makes it known, through `X-Forwarded-Proto`. Otherwise an `http://` page passes for an `https://` dashboard on the same host, so that the dashboard does not go blank behind a TLS-terminating proxy.
 
-The SSO stack of `docker-compose.sso.yml` needs no `ALLOWED_ORIGINS`. Its LemonLDAP-NG relay sets `Host` to the host and the port it listens on, `ocm.example.com:80`, sets `X-Real-IP` and `X-Forwarded-For`, and passes on the other headers it receives. As the stack sets `TRUST_PROXY=true`, OCM reads the `X-Forwarded-Host` and `X-Forwarded-Proto` among them:
+The SSO stack of `docker-compose.sso.yml` needs no `ALLOWED_ORIGINS`. Its LemonLDAP-NG relay sets `Host` to the host and the port it listens on, `ocm.example.com:80`, sets `X-Real-IP` and `X-Forwarded-For`, and passes on the other headers it receives. As the stack trusts the relay, with `TRUST_PROXY=true` by default, OCM reads the `X-Forwarded-Host` and `X-Forwarded-Proto` among them:
 
 - Over plain HTTP, the relay's `Host` matches the dashboard's `http://` origin.
 - Behind a TLS terminator on port 443 (see [HTTPS](#https)), the dashboard's `https://` origin matches the relay's `Host` too, or the terminator's `X-Forwarded-Host` when it sends one. As the relay always sends port 80, an `http://` page passes for the `https://` dashboard there, unless the terminator sends `X-Forwarded-Proto: https`, which OCM then compares.
@@ -128,7 +128,7 @@ ALLOWED_HOSTS=ocm.example.com,ocm.lan:3001
 - `Host` is always checked. `localhost`, `127.0.0.1` and `[::1]` pass on any port, but on direct requests only, which carry none of the headers a proxy adds (`X-Forwarded-For`, `X-Forwarded-Host`, `Forwarded`, `X-Real-IP`, `X-Forwarded-Proto`, `X-Forwarded-Port`, `Via`), as the Docker healthcheck and the import cron make them.
 - Behind a proxy that rewrites `Host` to its upstream, such as the container's name, list that upstream too. It then passes for every request, so the protection rests on `X-Forwarded-Host` (next point); better, have the proxy keep `Host`, as `proxy_set_header Host $host;` does with nginx.
 - nginx's default configuration on the same machine, a bare `proxy_pass http://127.0.0.1:3001;`, sends `Host: 127.0.0.1:3001` and none of the headers above: its requests look direct, and they all pass. Behind a local nginx, have it keep `Host`, or have it set `X-Forwarded-Host`, with `TRUST_PROXY=true`, and list the upstream host name, `127.0.0.1:3001`.
-- With `TRUST_PROXY=true`, the last `X-Forwarded-Host`, the one the nearest proxy set or appended, must be listed too, and the loopback names never pass there. The proxy must set or overwrite that header, as nginx does with `proxy_set_header X-Forwarded-Host $http_host;`: one that passes the client's on lets a page choose it. And if the server can be reached without the proxy, `TRUST_PROXY` lets any client forge it.
+- With `TRUST_PROXY` on, the last `X-Forwarded-Host`, the one the nearest proxy set or appended, must be listed too, and the loopback names never pass there. The proxy must set or overwrite that header, as nginx does with `proxy_set_header X-Forwarded-Host $http_host;`: one that passes the client's on lets a page choose it. And if the server can be reached without the proxy, `TRUST_PROXY` lets any client forge it.
 - Other callers need an allowed host too. Kubernetes probes send the pod's IP address: give them a `Host: localhost` header in `httpHeaders`. A back-channel logout from the identity provider to `http://ocm:3001` needs `ocm:3001` listed.
 - The log names each blocked host once an hour, for up to 100 hosts an hour, then says how many blocked requests it left out.
 
@@ -144,8 +144,8 @@ The settings, with the values of the [SSO stack](#sso-deployment-with-lemonldap-
 | `OIDC_ISSUER`        | `auth.provider.issuer`       | `http://auth.<SSO_DOMAIN>`                | Issuer URL of the provider, which the server discovers. Required                                                                    |
 | `OIDC_CLIENT_ID`     | `auth.provider.clientId`     | `ocm-dashboard`                           | Client ID. Required                                                                                                                 |
 | `OIDC_CLIENT_SECRET` | `auth.provider.clientSecret` | From `.env`, or `change-me`               | Client secret. Required                                                                                                             |
-| `OIDC_BASE_URL`      | `auth.baseUrl`               | `http://ocm.<SSO_DOMAIN>`                 | Public URL of the dashboard: the redirect URI is `<base URL>/auth/callback`, and the post-logout redirect URI the base URL. Required |
-| `OIDC_SCOPES`        | `auth.provider.scopes`       | `openid,profile,email`                    | Comma-separated in the variable, an array in the file. Default: `openid`, `profile`, `email`                                        |
+| `OIDC_BASE_URL`      | `auth.baseUrl`               | From `.env`, or `http://ocm.<SSO_DOMAIN>` | Public URL of the dashboard: the redirect URI is `<base URL>/auth/callback`, and the post-logout redirect URI the base URL. Required |
+| `OIDC_SCOPES`        | `auth.provider.scopes`       | `openid,profile,email`                    | Comma-separated in the variable, an array in the file. Default: `openid`, `profile`, `email`. `docker-compose.yml` does not pass the variable: its stack takes the scopes from `config.json` |
 | `SESSION_SECRET`     | `auth.session.secret`        | From `.env`, or `change-me-in-production` | Signs the session and sign-in cookies. Required                                                                                     |
 | `COOKIE_SECURE`      | `auth.session.secure`        | Unset                                     | `true`, `false` or `auto`. Default: `auto`                                                                                          |
 |                      | `auth.session.maxAge`        | Unset                                     | Session length in ms. Default: `86400000` (24 h)                                                                                    |
@@ -154,7 +154,7 @@ The settings, with the values of the [SSO stack](#sso-deployment-with-lemonldap-
 
 - **`OIDC_ENABLED`**: `false` turns OIDC off even when `auth.enabled` is `true` in `config.json`; unset or empty, `config.json` decides. With OIDC on, the server never falls back to header mode. A missing setting, or a malformed boolean, number or section, stops it at startup. An issuer it cannot discover, unreachable or malformed, such as `auth.localhost` without a scheme, leaves `/api` and `/auth` answering 503, except `/api/health`, while the server retries the discovery with backoff and logs each failure. `OIDC_BASE_URL` is only checked for presence: a wrong one fails at sign-in.
 - **`SESSION_SECRET`** signs the session and sign-in cookies, so changing it signs every user out. The server warns at startup when it is shorter than 32 characters.
-- **`COOKIE_SECURE`**: with `auto`, the default, the session cookie is `Secure` when the request comes over HTTPS, as the connection or, with `TRUST_PROXY=true`, the proxy's `X-Forwarded-Proto` says, or when `OIDC_BASE_URL` is `https`. On an HTTP stack it is not, as browsers would not store it. `COOKIE_SECURE=true` or `false`, or `"secure": true` or `false` under `auth.session` in `config.json`, forces it. A `Secure` session cookie is named `__Host-ocm.sid`, on `/`, which browsers accept from this host only: another host of the domain cannot plant a session cookie of its own. Otherwise it is `ocm.sid`, or the name `auth.session.name` sets, which the prefix then goes before.
+- **`COOKIE_SECURE`**: with `auto`, the default, the session cookie is `Secure` when the request comes over HTTPS, as the connection or, with `TRUST_PROXY` on, the proxy's `X-Forwarded-Proto` says, or when `OIDC_BASE_URL` is `https`. On an HTTP stack it is not, as browsers would not store it. `COOKIE_SECURE=true` or `false`, or `"secure": true` or `false` under `auth.session` in `config.json`, forces it. A `Secure` session cookie is named `__Host-ocm.sid`, on `/`, which browsers accept from this host only: another host of the domain cannot plant a session cookie of its own. Otherwise it is `ocm.sid`, or the name `auth.session.name` sets, which the prefix then goes before.
 - **Sign-in**: `/auth/login` sets a cookie for each sign-in, named after its state, `ocm.login.<state>` on `/auth`, or `__Host-ocm.login.<state>` on `/` when it is `Secure`, which browsers then accept from this host only. The callback accepts a sign-in only with its cookie, within 10 minutes: start signing in on the host of `OIDC_BASE_URL`. A browser keeps the three newest sign-ins in progress, a new one clears the older ones, and the path to go back to after sign-in, `returnTo`, is dropped for `/` beyond 1 KB, so that these cookies stay small. The dashboard sends PKCE (S256) to the provider, and reaches it over plain HTTP only when `OIDC_ISSUER` is an `http://` URL.
 - **Back-channel logout**: the provider can end the dashboard's sessions when a user signs out, by posting a logout token to `/logout/backchannel`. The server checks the token's signature against the provider's `jwks_uri`, its issuer, its audience (the client id), that it was issued less than 5 minutes ago, that it holds `exp`, the back-channel logout event and a `sid` or a `sub`, and no `nonce`. It refuses a replay within that time, told by the token's issuer and `jti`, or, as the `jti` the specification requires may be missing, by the SHA-256 of its signed part, which a re-encoded signature leaves unchanged. A token with a `sid` ends the sessions of that `sid` only; one without ends every session of its `sub`. With rate limiting on, the endpoint answers 300 requests a minute per address. `"backChannelLogout": false` under `auth` in `config.json` leaves the endpoint out; the front-channel logout, `/auth/logout`, stays.
 
@@ -199,7 +199,7 @@ Below, `<domain>` stands for `SSO_DOMAIN`, `localhost` by default.
 
 ### 1. Configuration
 
-Create `config.json` with your OVH credentials, as for the [simple deployment](#1-configuration): OCM reads it here too, but the OIDC variables of the compose file take precedence over its `auth` section. Then create a `.env` file next to the compose file:
+Create `config.json` with your OVH credentials, as for the [simple deployment](#1-configuration): OCM reads it here too, but the compose file's variables take precedence: the OIDC ones over its `auth` section, and `TRUST_PROXY`, from `.env` and `true` by default, over `rateLimit.trustProxy`. Then create a `.env` file next to the compose file:
 
 ```bash
 cat > .env <<EOF
@@ -231,7 +231,7 @@ docker-compose -f docker-compose.sso.yml logs ocm | grep OIDC
 
 The output should include `OIDC: provider discovered, sign-in is available`; until then, OCM answers 503 (see [OIDC settings](#oidc-settings)). With the demo's defaults, it also warns that `SESSION_SECRET` is short and that the issuer is plain HTTP.
 
-Do not add `docker-compose.yml` (`-f docker-compose.yml -f docker-compose.sso.yml`): OCM would also be published on port 3001, a way in around the relay, and the `TRUST_PROXY=true` of the SSO file would then let any client choose the address that rate limiting sees.
+Do not add `docker-compose.yml` (`-f docker-compose.yml -f docker-compose.sso.yml`): OCM would also be published on port 3001, a way in around the relay, and the `TRUST_PROXY` of the SSO file would then let any client choose the address that rate limiting sees.
 
 ### 4. Import billing data
 
@@ -503,7 +503,7 @@ Discovery URL: https://idp.example.com/.well-known/openid-configuration
 - [ ] Change default LemonLDAP demo users
 - [ ] Configure strong session parameters
 - [ ] Use secrets management for credentials
-- [ ] **Configure `TRUST_PROXY=true` for reverse proxy/Kubernetes deployments**
+- [ ] **Set `TRUST_PROXY` for reverse proxy/Kubernetes deployments: `true` for one proxy, or their number**
 - [ ] Adjust rate limiting based on your usage patterns (or disable for internal apps behind SSO)
 - [ ] Enable rate limiting on your reverse proxy
 - [ ] Configure firewall rules
@@ -512,7 +512,7 @@ Discovery URL: https://idp.example.com/.well-known/openid-configuration
 
 **Critical**: When deploying behind a load balancer, Ingress, or reverse proxy, the application sees all requests coming from the proxy's IP address. Without proper configuration, **all users will share the same rate limit**.
 
-**Required configuration**:
+**Required configuration**: set `TRUST_PROXY` to the number of proxies in front of OCM, counted as below: `true` for one, or up to 10. Rate limiting then counts each user at the address that the outermost of them received the request from:
 
 ```bash
 # In docker-compose.yml or Kubernetes deployment
@@ -520,7 +520,7 @@ environment:
   - TRUST_PROXY=true
 ```
 
-Or in `config.json`, as in [config.example.json](../config.example.json):
+Or `rateLimit.trustProxy` in `config.json`, as in [config.example.json](../config.example.json): `true`, `false`, or the number as a JSON number, such as `2`:
 
 ```json
 {
@@ -529,6 +529,8 @@ Or in `config.json`, as in [config.example.json](../config.example.json):
   }
 }
 ```
+
+Count the proxies from OCM outwards, those that add to `X-Forwarded-For` the address they received the request from. A proxy that sets the header anew, as ingress-nginx does by default, counts and ends the count. One that adds nothing, such as a TLS-only or TCP terminator, does not count, nor does one that a client can bypass. Too low a count, and rate limiting sees a proxy's address for every user; too high, and it reads an address that the client wrote, which lets the client choose the address that rate limiting sees.
 
 **For internal applications**: If your application is only accessible internally and protected by SSO (LemonLDAP, Keycloak, etc.), you may disable rate limiting entirely:
 
@@ -551,10 +553,9 @@ environment:
 `docker-compose.sso.yml` serves plain HTTP on port 80 and has no HTTPS setup: sign-in codes, tokens and cookies travel unencrypted, and OCM warns at startup that its issuer is plain HTTP. On OCM's side, its settings support these steps:
 
 1. Terminate TLS in front of the `lemonldap` container's port 80, for `ocm.<domain>`.
-2. Set `OIDC_BASE_URL` to `https://ocm.<domain>`, and the redirect and post-logout redirect URIs of the relying party to match (see [demo/README.md](../demo/README.md#using-another-domain)). With `COOKIE_SECURE=auto`, the session and sign-in cookies then become `Secure`, with the `__Host-` prefix, because `OIDC_BASE_URL` is `https` (see [OIDC settings](#oidc-settings)).
+2. Set `OIDC_BASE_URL=https://ocm.<domain>` in `.env`, and the redirect and post-logout redirect URIs of the relying party to match (see [demo/README.md](../demo/README.md#using-another-domain)). With `COOKIE_SECURE=auto`, the session and sign-in cookies then become `Secure`, with the `__Host-` prefix, because `OIDC_BASE_URL` is `https` (see [OIDC settings](#oidc-settings)).
 3. Have the terminator send `X-Forwarded-Proto: https`. The relay passes it on, and the CORS check then refuses `http://` pages, which otherwise pass for the dashboard (see [Environment Variables](#environment-variables)).
-
-Rate limiting then counts every user at the terminator's address: OCM trusts one proxy, the relay, whose client is the terminator. Raise `RATE_LIMIT_API_MAX` to what all users need together, or set `RATE_LIMIT_ENABLED=false` (see [Rate Limiting for Kubernetes/Reverse Proxy](#rate-limiting-for-kubernetesreverse-proxy)).
+4. Have the terminator add the address it received the request from to `X-Forwarded-For`, and set `TRUST_PROXY=2` in `.env`, so that OCM trusts the terminator as well as the relay: rate limiting then counts each user at that address, instead of every user at the terminator's. Only do so when the relay can be reached through the terminator alone (see [Rate Limiting for Kubernetes/Reverse Proxy](#rate-limiting-for-kubernetesreverse-proxy)). The compose file publishes the relay's port 80 on every address of the host, where the portal, `auth.<domain>`, is served too: let only the terminator reach it, with a firewall (for a port Docker publishes, in its `DOCKER-USER` chain), or by publishing it as `127.0.0.1:80:80` with the terminator on the same host, and have the terminator forward `auth.<domain>` too. This `TRUST_PROXY=2` is the SSO stack's: the simple stack reads the same `.env`, and must leave `TRUST_PROXY` unset while its port 3001 is published directly.
 
 The provider's side is not covered. LemonLDAP-NG's portal stays at `http://auth.<domain>`, where the compose file sets it (`PORTAL`), and OCM reaches `OIDC_ISSUER` inside the Docker network, where `auth.<domain>` is an alias of the `lemonldap` container: an `https://` issuer needs the provider reachable over TLS there too, which the compose file does not set up.
 
