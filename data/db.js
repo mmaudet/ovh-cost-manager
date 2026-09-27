@@ -4,6 +4,10 @@ const { monthsOfWindow } = require('./months');
 const ownership = require('./ownership');
 // The conditions of the queries that keep one account's rows (#115), or a list of ids
 const { UNKNOWN_ACCOUNT, accountCondition, idInList } = require('./sql-conditions');
+// What brings a database that an earlier version created to schema.sql's form
+const {
+  addColumnIfNotExists, hasColumn, keyLacks, migrateWhenNeeded, rekeyTable,
+} = require('./migrations');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
@@ -85,39 +89,6 @@ let db = null;
 const onDb = (operation) => (...args) => operation(getDb(), ...args);
 
 /**
- * Safely add a column to a table if it doesn't exist
- * @returns {boolean} Whether it added the column
- */
-function addColumnIfNotExists(database, table, column, type) {
-  const columns = database.pragma(`table_info(${table})`);
-  if (!columns.find(c => c.name === column)) {
-    database.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${type}`);
-    return true;
-  }
-  return false;
-}
-
-/**
- * Runs a migration that writes, when it is needed: it reads first, whether it is, and only
- * then takes the write lock, under which it checks again, as the server and the import may
- * open an old database together. A database already migrated opens without the write lock,
- * which the import may hold while it writes (#114).
- * @param {object} database - The database, as getDb() opens it
- * @param {function(): boolean} needed - Whether the migration is needed
- * @param {function()} migrate - The migration
- */
-function migrateWhenNeeded(database, needed, migrate) {
-  if (!needed()) return;
-  database.transaction(() => {
-    if (needed()) migrate();
-  }).immediate();
-}
-
-// Whether a table has a column
-const hasColumn = (database, table, column) => database.pragma(`table_info(${table})`)
-  .some(({ name }) => name === column);
-
-/**
  * Initialize and return database connection
  */
 function getDb() {
@@ -168,8 +139,8 @@ function getDb() {
     // of their balance and their number, can be those of another account's. And the import
     // state kept by account, where what an import recorded before carries none.
     for (const table of ['credit_movements', 'import_state']) {
-      migrateWhenNeeded(db, () => ownership.keyLacks(db, table, 'account'),
-        () => ownership.rekeyTable(db, schema, table));
+      migrateWhenNeeded(db, () => keyLacks(db, table, 'account'),
+        () => rekeyTable(db, schema, table));
     }
   }
   return db;

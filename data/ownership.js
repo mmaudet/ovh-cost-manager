@@ -1,9 +1,9 @@
 /**
- * Which account each row of the database belongs to (#112, #114, ADR 0002), and the rows that
- * an import gives to an account, takes over for one, or clears. Each row fed by the OVH API
- * carries the NIC handle of its account, directly or through its bill or its project. The
- * rows stored before the accounts carry none: they are the Unknown account's (see CONTEXT.md)
- * until an account claims them.
+ * Which account each row of the database belongs to (#112, #114, ADR 0002): the rules by which
+ * an import gives rows to an account, takes them over for one, or clears them. Each row fed by
+ * the OVH API carries the NIC handle of its account, directly or through its bill or its
+ * project. The rows stored before the accounts carry none: they are the Unknown account's (see
+ * CONTEXT.md) until an account claims them.
  *
  * Each function takes the database first, as data/db.js's getDb() opens it: data/db.js hands
  * it to them, and exposes them on its accounts operations.
@@ -50,53 +50,6 @@ const SNAPSHOT_TABLES = ['account_balance', 'consumption_snapshots'];
 // the account, but the bills, which go with their lines, and the projects, which the
 // consumption of their past months keeps
 const REFETCHED_TABLES = ACCOUNT_TABLES.filter(table => !['bills', 'projects'].includes(table));
-
-// The columns of a table, as PRAGMA table_info gives them
-const columnsOf = (database, table) => database.pragma(`table_info(${table})`)
-  .map(({ name }) => name);
-
-/**
- * @param {object} database - The database
- * @param {string} table - A table
- * @param {string} column - A column
- * @returns {boolean} Whether the column is not part of the table's key, or does not exist:
- *   whether the table still has the key it had before its key held the account (#114)
- */
-function keyLacks(database, table, column) {
-  return !database.pragma(`table_info(${table})`)
-    .some(({ name, pk }) => name === column && pk > 0);
-}
-
-/**
- * Gives a table the key that the schema defines for it now, which SQLite cannot change in
- * place (#114). In the order that SQLite documents for such a change: it creates the table as
- * the schema defines it under a temporary name, copies the rows into it, with their rowids,
- * drops the table, and renames the new one; the schema then creates its indexes again. The
- * columns copied are those that both forms have, as PRAGMA table_info gives them. No foreign
- * key references the tables rekeyed. To run in a transaction, which data/db.js takes only
- * when the table still has its former key.
- * @param {object} database - The database
- * @param {string} schema - The text of schema.sql, which creates each table if it does not
- *   exist
- * @param {string} table - The table
- * @throws {Error} When the schema does not define the table
- */
-function rekeyTable(database, schema, table) {
-  const definition = schema.match(
-    new RegExp(`CREATE TABLE IF NOT EXISTS ${table} \\(([\\s\\S]*?)\\n\\);`),
-  );
-  if (!definition) throw new Error(`schema.sql defines no table ${table}`);
-  const rekeyed = `${table}_rekeyed`;
-  database.exec(`CREATE TABLE ${rekeyed} (${definition[1]}\n)`);
-  const inBoth = new Set(columnsOf(database, rekeyed));
-  const columns = columnsOf(database, table).filter(column => inBoth.has(column)).join(', ');
-  database.exec(`
-    INSERT INTO ${rekeyed} (rowid, ${columns}) SELECT rowid, ${columns} FROM ${table}
-  `);
-  database.exec(`DROP TABLE ${table}`);
-  database.exec(`ALTER TABLE ${rekeyed} RENAME TO ${table}`);
-  database.exec(schema);
-}
 
 /**
  * Gives the account every row of ACCOUNT_TABLES that has none, and the import state recorded
@@ -285,8 +238,6 @@ function clearAccount(database, nic) {
 
 module.exports = {
   ACCOUNT_TABLES,
-  keyLacks,
-  rekeyTable,
   attributeRowsWithoutAccount,
   isOnlyAccount,
   hasRowsWithoutAccount,

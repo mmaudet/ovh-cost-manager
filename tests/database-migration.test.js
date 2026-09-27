@@ -8,7 +8,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const Database = require('better-sqlite3');
-const ownership = require('../data/ownership');
+const migrations = require('../data/migrations');
 const { LYON } = require('./support/accounts');
 
 const DATA_LAYER = path.resolve(__dirname, '..', 'data', 'db.js');
@@ -96,7 +96,7 @@ CREATE INDEX IF NOT EXISTS idx_notes_added ON notes(added);
     () => {
       const database = notesOfBefore();
 
-      ownership.rekeyTable(database, SCHEMA, 'notes');
+      migrations.rekeyTable(database, SCHEMA, 'notes');
 
       expect(database.pragma('table_info(notes)').map(({ name, pk }) => [name, pk])).toEqual([
         ['id', 2], ['body', 0], ['added', 0], ['owner', 1],
@@ -112,7 +112,7 @@ CREATE INDEX IF NOT EXISTS idx_notes_added ON notes(added);
     });
 
   test('fails on a table that the schema does not define', () => {
-    expect(() => ownership.rekeyTable(notesOfBefore(), SCHEMA, 'bills'))
+    expect(() => migrations.rekeyTable(notesOfBefore(), SCHEMA, 'bills'))
       .toThrow('schema.sql defines no table bills');
   });
 });
