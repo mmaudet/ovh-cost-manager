@@ -51,13 +51,26 @@ const hasColumn = (database, table, column) =>
   database.pragma(`table_info(${table})`).some(({ name }) => name === column);
 
 /**
- * Makes the database one that the version before #114 left: the credit movements keyed by
- * their id alone, the import state by its key alone, which drops the account of its rows, and
- * the accounts without their place in the configuration. The rows must not repeat a key of
- * those versions: one credit movement for each id, and one import state for each key.
+ * Makes the database one that the version before #124 left: the accounts without when their
+ * last import that succeeded ended.
+ * @param {object} database - A better-sqlite3 database
+ */
+function asBefore124(database) {
+  if (hasColumn(database, 'accounts', 'last_success_at')) {
+    database.exec('ALTER TABLE accounts DROP COLUMN last_success_at');
+  }
+}
+
+/**
+ * Makes the database one that the version before #114 left: as before #124, and besides, the
+ * credit movements keyed by their id alone, the import state by its key alone, which drops
+ * the account of its rows, and the accounts without their place in the configuration. The
+ * rows must not repeat a key of those versions: one credit movement for each id, and one
+ * import state for each key.
  * @param {object} database - A better-sqlite3 database
  */
 function asBefore114(database) {
+  asBefore124(database);
   redefine(database, 'credit_movements', CREDIT_MOVEMENTS_BEFORE_114, [
     'id', 'balance_name', 'amount', 'date', 'description', 'movement_type', 'imported_at',
     'account',
@@ -81,4 +94,4 @@ function asBeforeAccounts(database) {
   database.exec('DROP TABLE accounts');
 }
 
-module.exports = { ROOT_TABLES, asBefore114, asBeforeAccounts };
+module.exports = { ROOT_TABLES, asBefore114, asBefore124, asBeforeAccounts };

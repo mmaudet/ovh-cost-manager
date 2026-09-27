@@ -316,6 +316,22 @@ export function disclosure(summary) {
   return screen.getByText(summary).closest('details');
 }
 
+// The footer: where the data comes from, when it was last synchronised, and the import
+// history
+export function footer() {
+  return screen.getByText(
+    /^(Données synchronisées via l'API OVHcloud|Data synchronized via OVHcloud API)$/,
+  ).parentElement;
+}
+
+// The lines of the footer that say when the data was last synchronised, each as the user
+// reads it: the latest import's, or each account's when the page offers several (#124).
+// They follow the line that says where the data comes from, before the import history.
+export function lastSyncLines() {
+  const [, ...lines] = [...footer().children].filter((child) => child.tagName === 'P');
+  return lines.map((line) => normalize(line.textContent));
+}
+
 // The dimmed backdrop around a dialog, which closes it on a click
 export function backdropOf(dialog) {
   return dialog.parentElement;
@@ -326,15 +342,19 @@ export function swatchOf(legendItem) {
   return legendItem.querySelector('span');
 }
 
-// The status of each import of the import history's table, with its tone, as the colour of
-// its text shows it: green for a success, amber for a warning, red for an error, and blue
-// while it runs
-export function importStatusesOf(table) {
+// The tone of the status of an import, as the colour of its text shows it: green for a
+// success, amber for a warning, red for an error, and blue while it runs
+export function importToneOf(status) {
   const tones = { green: 'success', amber: 'warning', red: 'error', blue: 'running' };
+  const colour = status.className.match(/\btext-(green|amber|red|blue)-\d+\b/)?.[1];
+  return tones[colour];
+}
+
+// The status of each import of the import history's table, with its tone
+export function importStatusesOf(table) {
   return [...table.querySelectorAll('tbody tr')].map((row) => {
     const status = row.cells[2].querySelector('span');
-    const colour = status.className.match(/\btext-(green|amber|red|blue)-\d+\b/)?.[1];
-    return [normalize(status.textContent), tones[colour]];
+    return [normalize(status.textContent), importToneOf(status)];
   });
 }
 

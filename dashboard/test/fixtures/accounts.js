@@ -10,10 +10,10 @@ import { webCloudOfSeveralAccounts } from './web-cloud.js';
 //
 // The accounts route lists them as it does since #114: with their id, the value of the
 // account parameter, whether config.json still lists them, and which one is the Unknown
-// account. What the page asks for with an account, such as its months list, its summaries,
-// its Public Cloud (#121) and its Web Cloud services (#122), is under `ofAccount`, by the id
-// of the account (see support/api.js). web-cloud.js gives the Web Cloud services for all
-// accounts too.
+// account, and, since #124, when the last import of each that succeeded ended. What the page
+// asks for with an account, such as its months list, its summaries, its Public Cloud (#121)
+// and its Web Cloud services (#122), is under `ofAccount`, by the id of the account (see
+// support/api.js). web-cloud.js gives the Web Cloud services for all accounts too.
 
 const [september, august, july] = months;
 // The Public Cloud projects of account.js
@@ -26,6 +26,7 @@ export const lyonAccount = {
   name: 'Lyon subsidiary',
   currency: 'EUR',
   lastImport: { at: '2026-09-14 04:02:30', status: 'success', error: null },
+  lastSuccessAt: '2026-09-14 04:02:30',
   configured: true,
   unknown: false,
 };
@@ -38,6 +39,7 @@ export const unnamedAccount = {
   name: 'yy2222-ovh',
   currency: 'EUR',
   lastImport: { at: '2026-09-14 04:02:10', status: 'success', error: null },
+  lastSuccessAt: '2026-09-14 04:02:10',
   configured: true,
   unknown: false,
 };
@@ -49,6 +51,7 @@ export const removedAccount = {
   name: 'zz3333-ovh',
   currency: 'EUR',
   lastImport: { at: '2026-08-31 04:01:00', status: 'success', error: null },
+  lastSuccessAt: '2026-08-31 04:01:00',
   configured: false,
   unknown: false,
 };
@@ -61,6 +64,7 @@ export const unknownAccount = {
   name: null,
   currency: null,
   lastImport: null,
+  lastSuccessAt: null,
   configured: false,
   unknown: true,
 };

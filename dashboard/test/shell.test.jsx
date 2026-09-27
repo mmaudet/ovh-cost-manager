@@ -1,6 +1,9 @@
-import { describe, it, expect, vi } from 'vitest';
+import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
 import { screen, within } from '@testing-library/react';
 import { account } from './fixtures/account.js';
+import {
+  lyonAccount, removedAccount, severalAccounts, unknownAccount, unnamedAccount,
+} from './fixtures/accounts.js';
 import { api, holdBack, serve } from './support/api.js';
 import { captureFileDownloads } from './support/downloads.js';
 import {
@@ -10,8 +13,11 @@ import {
   dropdown,
   emptyState,
   fakeTimers,
+  footer,
   headerBadge,
   importStatusesOf,
+  importToneOf,
+  lastSyncLines,
   loadingScreen,
   openTab,
   optionsOf,
@@ -19,6 +25,7 @@ import {
   renderDashboard,
   resync,
   rowsOf,
+  selectAccount,
   selectLanguage,
   selectMonth,
   settle,
@@ -418,6 +425,98 @@ describe('dashboard shell', () => {
 
       expect(screen.queryByText(/^Dernière synchronisation il y a/)).not.toBeInTheDocument();
     });
+
+    // A single-account installation, whose accounts route lists its account: the banner reads
+    // the latest run, as ever, rather than when the account's last import succeeded (#124)
+    it.each([
+      ['warns of a run 31 days old', '2026-08-15 08:00:00', '2026-09-14 04:02:30',
+        'Dernière synchronisation il y a 31 jours.'
+          + ' Exécutez npm run import:diff pour mettre à jour.'],
+      ['does not warn of a recent run', '2026-09-14 04:02:30', '2026-07-01 04:00:00', null],
+    ])('reads the latest run with a single account: %s', async (_, run, lastSuccessAt, shown) => {
+      await renderDashboard({
+        ...lastImportedAt(run), accounts: [{ ...lyonAccount, lastSuccessAt }],
+      });
+
+      const warning = screen.queryByText(/^Dernière synchronisation il y a/);
+      if (shown === null) expect(warning).not.toBeInTheDocument();
+      else expect(warning).toHaveTextContent(shown);
+    });
+
+    // An instance of several accounts (#124): the banner names each configured account whose
+    // last import that succeeded ended more than 30 days ago, or which none has, whatever the
+    // latest run, which a run that some accounts failed keeps recent. An account removed from
+    // config.json is no longer imported, and no import reads the Unknown account.
+    describe('with several accounts', () => {
+      // The banner, whatever it says: of accounts, or of the latest run
+      const warning = () => screen.queryByText(new RegExp('^(Sans synchronisation réussie'
+        + '|No successful synchronization|Dernière synchronisation il y a|Last synchronization)'));
+      // Yesterday's run, which yy2222-ovh failed, as every run since 1 August, and Nantes, as
+      // every run since it was configured
+      const failedAt = (at) => ({ at, status: 'failed', error: 'Invalid key' });
+      const partialRun = {
+        ...account.importStatus.latest, status: 'partial', error_message: '2 of 3 accounts failed',
+      };
+      const staleAccounts = {
+        ...severalAccounts,
+        importStatus: { latest: partialRun, running: false, history: [partialRun] },
+        accounts: [
+          lyonAccount,
+          {
+            ...unnamedAccount,
+            lastImport: failedAt('2026-09-14 04:02:10'), lastSuccessAt: '2026-08-01 04:00:00',
+          },
+          {
+            ...lyonAccount, id: 'vv5555-ovh', nic: 'vv5555-ovh', name: 'Nantes',
+            lastImport: failedAt('2026-09-14 04:02:20'), lastSuccessAt: null,
+          },
+          { ...removedAccount, lastSuccessAt: '2026-06-30 04:00:00' },
+          unknownAccount,
+        ],
+      };
+
+      it('names each configured account not synchronised for 30 days, until dismissed',
+        async () => {
+          const { user } = await renderDashboard(staleAccounts);
+
+          expect(warning()).toHaveTextContent(
+            'Sans synchronisation réussie depuis plus de 30 jours : yy2222-ovh (45 jours),'
+              + ' Nantes (jamais). Exécutez npm run import:diff pour mettre à jour.',
+          );
+
+          await user.click(screen.getByRole('button', { name: 'Fermer' }));
+
+          expect(warning()).not.toBeInTheDocument();
+        });
+
+      // More than 30 days, as with a single account, whatever the latest run
+      it.each([
+        ['30 days ago', '2026-08-16 08:00:00', null],
+        ['31 days ago', '2026-08-15 08:00:00', 'Lyon subsidiary (31 jours)'],
+      ])('warns of an account synchronised %s only if it is older', async (_, at, named) => {
+        const run = { ...account.importStatus.latest, completed_at: '2026-08-01 04:00:00' };
+        await renderDashboard({
+          ...severalAccounts,
+          importStatus: { latest: run, running: false, history: [run] },
+          accounts: [{ ...lyonAccount, lastSuccessAt: at }, unnamedAccount, removedAccount],
+        });
+
+        if (named === null) expect(warning()).not.toBeInTheDocument();
+        else expect(warning()).toHaveTextContent(`30 jours : ${named}.`);
+      });
+
+      it('says so in the language of the page', async () => {
+        // The language the page remembers from an earlier visit
+        localStorage.setItem('ovh-dashboard-language', 'en');
+
+        await renderDashboard(staleAccounts);
+
+        expect(warning()).toHaveTextContent(
+          'No successful synchronization for more than 30 days: yy2222-ovh (45 days),'
+            + ' Nantes (never). Run npm run import:diff to update.',
+        );
+      });
+    });
   });
 
   describe('footer', () => {
@@ -542,6 +641,151 @@ describe('dashboard shell', () => {
       await user.click(screen.getByText('Historique des imports'));
 
       expect(screen.getByText('Aucun import enregistré')).toBeVisible();
+    });
+
+    // A single-account installation, whose accounts route lists its account, or none until
+    // the first import since the upgrade: the page offers no account to select, and the
+    // footer says when the latest import ended, as ever (#124)
+    it.each([
+      ['a single account', [lyonAccount]],
+      ['no account, as before the first import since the upgrade', []],
+    ])('shows the latest import alone with %s', async (_, accounts) => {
+      await renderDashboard({ ...severalAccounts, accounts });
+
+      expect(lastSyncLines()).toEqual(['Dernière sync: 14/09/2026 06:02:30 (3 factures)']);
+    });
+
+    // An instance of several accounts (#124): the footer says when each account was last
+    // synchronised, as the accounts route gives it, so that the user can tell whose data is
+    // stale: when its last import that succeeded ended. See fixtures/accounts.js.
+    describe('with several accounts', () => {
+      // An account as the route lists it, with how its last import ended, and when its last
+      // import that succeeded did
+      const accountOf = (nic, name, lastImport, lastSuccessAt) => ({
+        ...lyonAccount, id: nic, nic, name, lastImport, lastSuccessAt,
+      });
+      // An account whose last import failed, since one that succeeded on the 10th, and one
+      // whose imports all failed. The route lists the accounts by NIC handle.
+      const reason = 'This credential is not valid';
+      const failedAccount = accountOf('ww4444-ovh', 'Marseille',
+        { at: '2026-09-14 04:02:40', status: 'failed', error: reason }, '2026-09-10 04:01:00');
+      const neverSynced = accountOf('vv5555-ovh', 'Nantes',
+        { at: '2026-09-14 04:02:50', status: 'failed', error: 'Invalid key' }, null);
+      const withFailedAccounts = {
+        ...severalAccounts,
+        accounts: [neverSynced, failedAccount, ...severalAccounts.accounts],
+      };
+      // A run of the import in progress, which started this morning
+      const running = {
+        ...account.importStatus.latest,
+        id: 4,
+        started_at: '2026-09-15 04:00:00',
+        completed_at: null,
+        bills_imported: 0,
+        status: 'running',
+      };
+      const whileRunning = (data) => ({
+        ...data,
+        importStatus: { latest: running, running: true, history: [running] },
+      });
+
+      // Each account as the account selector names it, in the order of the route, and when
+      // its last import that succeeded ended, in local time. The Unknown account has none: no
+      // import reads it. The account selected makes no difference.
+      it('says when each account was last synchronised, whatever the account shown',
+        async () => {
+          const { user } = await renderDashboard(severalAccounts);
+          const lines = [
+            'Lyon subsidiary — Dernière sync: 14/09/2026 06:02:30',
+            'yy2222-ovh — Dernière sync: 14/09/2026 06:02:10',
+            'zz3333-ovh (non configuré) — Dernière sync: 31/08/2026 06:01:00',
+          ];
+          expect(lastSyncLines()).toEqual(lines);
+
+          await selectAccount(user, 'Lyon subsidiary');
+
+          expect(lastSyncLines()).toEqual(lines);
+        });
+
+      // Its data is as its last import that succeeded left it, never for one whose imports
+      // all failed. When its last import failed, in red, with why over it, as the import
+      // history says it of a run (#113).
+      it("says when an account's last import failed, since the last that succeeded, and why",
+        async () => {
+          await renderDashboard(withFailedAccounts);
+
+          expect(lastSyncLines()).toEqual([
+            'Nantes — Dernière sync: jamais (dernier import échoué le 14/09/2026 06:02:50)',
+            'Marseille — Dernière sync: 10/09/2026 06:01:00'
+              + ' (dernier import échoué le 14/09/2026 06:02:40)',
+            'Lyon subsidiary — Dernière sync: 14/09/2026 06:02:30',
+            'yy2222-ovh — Dernière sync: 14/09/2026 06:02:10',
+            'zz3333-ovh (non configuré) — Dernière sync: 31/08/2026 06:01:00',
+          ]);
+          const failed = within(footer()).getByTitle(reason);
+          expect(failed).toHaveTextContent('dernier import échoué le 14/09/2026 06:02:40');
+          expect(importToneOf(failed)).toBe('error');
+        });
+
+      // An account added to config.json, which the run records before it imports any account
+      it('says never for an account whose first import has not ended yet', async () => {
+        const [lyon, unnamed, removed, unknown] = severalAccounts.accounts;
+        const added = accountOf('uu6666-ovh', 'Bordeaux', null, null);
+
+        await renderDashboard(whileRunning({
+          ...severalAccounts, accounts: [lyon, unnamed, added, removed, unknown],
+        }));
+
+        expect(lastSyncLines()).toEqual([
+          'Dernière sync: en cours',
+          'Lyon subsidiary — Dernière sync: 14/09/2026 06:02:30',
+          'yy2222-ovh — Dernière sync: 14/09/2026 06:02:10',
+          'Bordeaux — Dernière sync: jamais',
+          'zz3333-ovh (non configuré) — Dernière sync: 31/08/2026 06:01:00',
+        ]);
+      });
+
+      // As with a single account: the cue that the page asks every 30 s whether it is over
+      // (#51)
+      it('says that an import runs, besides when each account was last synchronised',
+        async () => {
+          await renderDashboard(whileRunning(severalAccounts));
+
+          expect(lastSyncLines()).toEqual([
+            'Dernière sync: en cours',
+            'Lyon subsidiary — Dernière sync: 14/09/2026 06:02:30',
+            'yy2222-ovh — Dernière sync: 14/09/2026 06:02:10',
+            'zz3333-ovh (non configuré) — Dernière sync: 31/08/2026 06:01:00',
+          ]);
+        });
+
+      // As during the first run of several accounts, which records them all before it imports
+      // any: the footer shows the latest import's line alone, as with a single account
+      it("shows the latest import alone until an account's import has ended", async () => {
+        const recorded = severalAccounts.accounts.map((recordedAccount) => ({
+          ...recordedAccount, lastImport: null, lastSuccessAt: null,
+        }));
+
+        await renderDashboard(whileRunning({ ...severalAccounts, accounts: recorded }));
+
+        expect(lastSyncLines()).toEqual(['Dernière sync: en cours']);
+      });
+
+      it('says so in the language of the page', async () => {
+        // The language the page remembers from an earlier visit
+        localStorage.setItem('ovh-dashboard-language', 'en');
+
+        await renderDashboard(withFailedAccounts);
+
+        expect(lastSyncLines()).toEqual([
+          'Nantes — Last sync: never (last import failed on 9/14/2026, 6:02:50 AM)',
+          'Marseille — Last sync: 9/10/2026, 6:01:00 AM'
+            + ' (last import failed on 9/14/2026, 6:02:40 AM)',
+          'Lyon subsidiary — Last sync: 9/14/2026, 6:02:30 AM',
+          'yy2222-ovh — Last sync: 9/14/2026, 6:02:10 AM',
+          'zz3333-ovh (not configured) — Last sync: 8/31/2026, 6:01:00 AM',
+        ]);
+      });
     });
   });
 
@@ -739,6 +983,51 @@ describe('dashboard shell', () => {
         expect(lastSync('15/09/2026 12:00:31 (4 factures)')).toBeInTheDocument();
       });
 
+    // With several accounts (#124), the accounts route says when each account's import ended
+    // once the run is over. While it runs, the footer says so, and when each account's last
+    // import ended.
+    it("shows each account's last synchronisation once an import is over", async () => {
+      fakeTimers();
+      await renderDashboard({ ...severalAccounts, importStatus: importStatus(running) });
+
+      expect(lastSyncLines()).toEqual([
+        'Dernière sync: en cours',
+        'Lyon subsidiary — Dernière sync: 14/09/2026 06:02:30',
+        'yy2222-ovh — Dernière sync: 14/09/2026 06:02:10',
+        'zz3333-ovh (non configuré) — Dernière sync: 31/08/2026 06:01:00',
+      ]);
+
+      // Lyon imported, and the other account configured failed: the run ended partial. The
+      // account removed from config.json was not imported.
+      serve({
+        ...severalAccounts,
+        importStatus: importStatus({
+          ...finished, status: 'partial', error_message: '1 of 2 accounts failed',
+        }),
+        accounts: [
+          {
+            ...lyonAccount,
+            lastImport: { at: '2026-09-15 10:00:20', status: 'success', error: null },
+            lastSuccessAt: '2026-09-15 10:00:20',
+          },
+          {
+            ...unnamedAccount,
+            lastImport: { at: '2026-09-15 10:00:31', status: 'failed', error: 'Invalid key' },
+          },
+          removedAccount,
+          unknownAccount,
+        ],
+      });
+      await passTime(30000);
+
+      expect(lastSyncLines()).toEqual([
+        'Lyon subsidiary — Dernière sync: 15/09/2026 12:00:20',
+        'yy2222-ovh — Dernière sync: 14/09/2026 06:02:10'
+          + ' (dernier import échoué le 15/09/2026 12:00:31)',
+        'zz3333-ovh (non configuré) — Dernière sync: 31/08/2026 06:01:00',
+      ]);
+    });
+
     it('shows the dashboard once the first import ever is over, even before the refresh (#51)',
       async () => {
         fakeTimers();
@@ -762,6 +1051,45 @@ describe('dashboard shell', () => {
   });
 
   describe('report export', () => {
+    // The report of September, as the page downloads it. All in French: the title, the
+    // period, the totals and the percentages (#60), with a space before the colon.
+    const septemberReport = [
+      '# Rapport de coûts OVH - Septembre 2026',
+      '',
+      '**Période :** du 2026-09-01 au 2026-09-30',
+      '',
+      '## Résumé',
+      '',
+      '| Métrique | Valeur |',
+      '|--------|-------|',
+      // French amounts separate thousands with a narrow no-break space
+      '| Coût Total | 1\u202f250,40€ |',
+      '| Total Cloud | 830,40€ |',
+      '| Total hors Cloud | 420,00€ |',
+      '| Moyenne Journalière | 41,68€ |',
+      '| Projets Actifs | 2 |',
+      '',
+      '## Par Type de Service',
+      '',
+      '| Service | Coût | % |',
+      '|---------|------|---|',
+      // and French percentages their sign with a no-break space
+      '| Compute | 800,40€ | 64,0\u00a0% |',
+      '| Storage | 250,00€ | 20,0\u00a0% |',
+      '| Other | 200,00€ | 16,0\u00a0% |',
+      '',
+      '## Top Projets',
+      '',
+      '| Projet | Coût |',
+      '|---------|------|',
+      '| Production | 610,40€ |',
+      '| Staging | 220,00€ |',
+      '',
+      '---',
+      '*Généré le 15/09/2026 12:00:00*',
+      '',
+    ];
+
     it('downloads the report of the month as Markdown', async () => {
       const { user } = await renderDashboard();
       const downloadedFiles = captureFileDownloads();
@@ -772,46 +1100,26 @@ describe('dashboard shell', () => {
       expect(files).toHaveLength(1);
       expect(files[0].name).toBe('ovh-report-2026-09.md');
       expect(files[0].type).toBe('text/markdown');
-      // All in French: the title, the period, the totals and the percentages (#60), with a
-      // space before the colon
-      expect(files[0].content).toBe([
-        '# Rapport de coûts OVH - Septembre 2026',
-        '',
-        '**Période :** du 2026-09-01 au 2026-09-30',
-        '',
-        '## Résumé',
-        '',
-        '| Métrique | Valeur |',
-        '|--------|-------|',
-        // French amounts separate thousands with a narrow no-break space
-        '| Coût Total | 1\u202f250,40€ |',
-        '| Total Cloud | 830,40€ |',
-        '| Total hors Cloud | 420,00€ |',
-        '| Moyenne Journalière | 41,68€ |',
-        '| Projets Actifs | 2 |',
-        '',
-        '## Par Type de Service',
-        '',
-        '| Service | Coût | % |',
-        '|---------|------|---|',
-        // and French percentages their sign with a no-break space
-        '| Compute | 800,40€ | 64,0\u00a0% |',
-        '| Storage | 250,00€ | 20,0\u00a0% |',
-        '| Other | 200,00€ | 16,0\u00a0% |',
-        '',
-        '## Top Projets',
-        '',
-        '| Projet | Coût |',
-        '|---------|------|',
-        '| Production | 610,40€ |',
-        '| Staging | 220,00€ |',
-        '',
-        '---',
-        '*Généré le 15/09/2026 12:00:00*',
-        '',
-      ].join('\n'));
+      expect(files[0].content).toBe(septemberReport.join('\n'));
       // Ready for another export
       expect(screen.getByDisplayValue('Choisir...')).toBeInTheDocument();
+    });
+
+    // A single-account installation, whose accounts route lists its account, or none until
+    // the first import since the upgrade: the page offers no account to select, and the
+    // report names none, in its title nor in its file's name (#124)
+    it.each([
+      ['a single account', [lyonAccount]],
+      ['no account, as before the first import since the upgrade', []],
+    ])('names no account with %s', async (_, accounts) => {
+      const { user } = await renderDashboard({ ...severalAccounts, accounts });
+      const downloadedFiles = captureFileDownloads();
+
+      await user.selectOptions(screen.getByDisplayValue('Choisir...'), 'Markdown');
+
+      expect(await downloadedFiles()).toEqual([{
+        name: 'ovh-report-2026-09.md', type: 'text/markdown', content: septemberReport.join('\n'),
+      }]);
     });
 
     it('writes the report in the language of the page', async () => {
@@ -830,13 +1138,215 @@ describe('dashboard shell', () => {
       expect(report).toContain('## Top Projects');
     });
 
-    it('prints the page for the PDF export', async () => {
-      const { user } = await renderDashboard();
-      const print = vi.spyOn(window, 'print');
+    // An instance of several accounts (#124): the report covers what the page shows, all
+    // accounts by default or the account selected in the header, and its title says which,
+    // after the month, as the account selector names it. See fixtures/accounts.js.
+    describe('with several accounts', () => {
+      // Exports the report as Markdown, in the language of the page: the file downloaded
+      const exportReport = async (user) => {
+        const downloadedFiles = captureFileDownloads();
+        await user.selectOptions(screen.getByDisplayValue(/^(Choisir|Choose)\.\.\.$/), 'Markdown');
+        const [file] = await downloadedFiles();
+        return file;
+      };
+      // The report of September for all accounts: the figures of the single-account report,
+      // which the accounts add up to
+      const allAccountsReport = {
+        name: 'ovh-report-2026-09.md',
+        type: 'text/markdown',
+        content: [
+          '# Rapport de coûts OVH - Septembre 2026 - Tous les comptes',
+          ...septemberReport.slice(1),
+        ].join('\n'),
+      };
 
-      await user.selectOptions(screen.getByDisplayValue('Choisir...'), 'PDF');
+      it('covers all accounts by default, as its title says', async () => {
+        const { user } = await renderDashboard(severalAccounts);
 
-      expect(print).toHaveBeenCalledOnce();
+        expect(await exportReport(user)).toEqual(allAccountsReport);
+      });
+
+      // Its summary, its service types and its projects alike, as the Overview shows them
+      // (#118): no figure of another account
+      it('covers the account selected, which its title and the name of its file give',
+        async () => {
+          const { user } = await renderDashboard(severalAccounts);
+
+          await selectAccount(user, 'Lyon subsidiary');
+
+          expect(await exportReport(user)).toEqual({
+            // By its NIC handle, which any file system takes
+            name: 'ovh-report-2026-09-xx1111-ovh.md',
+            type: 'text/markdown',
+            content: [
+              '# Rapport de coûts OVH - Septembre 2026 - Lyon subsidiary',
+              '',
+              '**Période :** du 2026-09-01 au 2026-09-30',
+              '',
+              '## Résumé',
+              '',
+              '| Métrique | Valeur |',
+              '|--------|-------|',
+              '| Coût Total | 890,40€ |',
+              '| Total Cloud | 610,40€ |',
+              '| Total hors Cloud | 280,00€ |',
+              '| Moyenne Journalière | 29,68€ |',
+              '| Projets Actifs | 1 |',
+              '',
+              '## Par Type de Service',
+              '',
+              '| Service | Coût | % |',
+              '|---------|------|---|',
+              '| Compute | 580,40€ | 65,2 % |',
+              '| Other | 160,00€ | 18,0 % |',
+              '| Storage | 150,00€ | 16,8 % |',
+              '',
+              '## Top Projets',
+              '',
+              '| Projet | Coût |',
+              '|---------|------|',
+              '| Production | 610,40€ |',
+              '',
+              '---',
+              '*Généré le 15/09/2026 12:00:00*',
+              '',
+            ].join('\n'),
+          });
+
+          await selectAccount(user, 'Tous les comptes');
+
+          expect(await exportReport(user)).toEqual(allAccountsReport);
+        });
+
+      // On the latest month of an account not billed in September, which the page moves to
+      it.each([
+        ['fr', 'Compte inconnu', '# Rapport de coûts OVH - Juillet 2026 - Compte inconnu',
+          'ovh-report-2026-07-unknown.md'],
+        ['fr', 'zz3333-ovh (non configuré)',
+          '# Rapport de coûts OVH - Août 2026 - zz3333-ovh (non configuré)',
+          'ovh-report-2026-08-zz3333-ovh.md'],
+        ['en', 'All accounts', '# OVH Cost Report - September 2026 - All accounts',
+          'ovh-report-2026-09.md'],
+        ['en', 'Unknown account', '# OVH Cost Report - July 2026 - Unknown account',
+          'ovh-report-2026-07-unknown.md'],
+        ['en', 'zz3333-ovh (not configured)',
+          '# OVH Cost Report - August 2026 - zz3333-ovh (not configured)',
+          'ovh-report-2026-08-zz3333-ovh.md'],
+      ])('names the accounts as the account selector does (%s): %s',
+        async (language, label, title, name) => {
+          // The language the page remembers from an earlier visit
+          localStorage.setItem('ovh-dashboard-language', language);
+          const { user } = await renderDashboard(severalAccounts);
+
+          await selectAccount(user, label);
+
+          const report = await exportReport(user);
+          expect(report.content.split('\n')[0]).toBe(title);
+          expect(report.name).toBe(name);
+        });
+    });
+
+    describe('as PDF', () => {
+      // The title of the page, which the browser gives the PDF: index.html's, which jsdom's
+      // document lacks
+      const PAGE_TITLE = 'OVH Cost Manager';
+      beforeEach(() => {
+        document.title = PAGE_TITLE;
+      });
+      afterEach(() => {
+        document.title = '';
+      });
+      // The browser prints as it does from window.print() or from its own print command: it
+      // tells the page before and after, and prints the page, whose title it gives the PDF
+      const printPage = (titles) => {
+        window.dispatchEvent(new Event('beforeprint'));
+        titles.push(document.title);
+        window.dispatchEvent(new Event('afterprint'));
+      };
+      // The title of the page each time the export printed it
+      const printedTitles = () => {
+        const titles = [];
+        vi.spyOn(window, 'print').mockImplementation(() => printPage(titles));
+        return titles;
+      };
+
+      it('prints the page for the PDF export', async () => {
+        const { user } = await renderDashboard();
+        const print = vi.spyOn(window, 'print');
+
+        await user.selectOptions(screen.getByDisplayValue('Choisir...'), 'PDF');
+
+        expect(print).toHaveBeenCalledOnce();
+      });
+
+      // Nor does the PDF of a single-account installation name any account (#124)
+      it.each([
+        ['a single account', [lyonAccount]],
+        ['no account, as before the first import since the upgrade', []],
+      ])('prints the page under its own title with %s', async (_, accounts) => {
+        const { user } = await renderDashboard({ ...severalAccounts, accounts });
+        const titles = printedTitles();
+
+        await user.selectOptions(screen.getByDisplayValue('Choisir...'), 'PDF');
+
+        expect(titles).toEqual([PAGE_TITLE]);
+        expect(document.title).toBe(PAGE_TITLE);
+      });
+
+      // With several accounts, the page's title names what it shows while it prints, after
+      // its own, as the Markdown report's title does (#124), and is its own again once printed
+      it('prints the page under a title that names the accounts it shows', async () => {
+        const { user } = await renderDashboard(severalAccounts);
+        const titles = printedTitles();
+        const exportPdf = () =>
+          user.selectOptions(screen.getByDisplayValue(/^(Choisir|Choose)\.\.\.$/), 'PDF');
+
+        await exportPdf();
+        await selectAccount(user, 'Lyon subsidiary');
+        await exportPdf();
+        await selectLanguage(user, 'en');
+        await selectAccount(user, 'Unknown account');
+        await exportPdf();
+
+        expect(titles).toEqual([
+          'OVH Cost Manager - Tous les comptes',
+          'OVH Cost Manager - Lyon subsidiary',
+          'OVH Cost Manager - Unknown account',
+        ]);
+        expect(document.title).toBe(PAGE_TITLE);
+      });
+
+      // As the user may print the page with the browser's own command, rather than with the
+      // export: the title names the accounts shown while the browser prints, once, and is the
+      // page's own again once it has printed
+      it("names the accounts shown while the browser's own print command prints the page",
+        async () => {
+          const { user } = await renderDashboard(severalAccounts);
+          await selectAccount(user, 'Lyon subsidiary');
+          const titles = [];
+
+          printPage(titles);
+          window.dispatchEvent(new Event('beforeprint'));
+          window.dispatchEvent(new Event('beforeprint'));
+          titles.push(document.title);
+          window.dispatchEvent(new Event('afterprint'));
+
+          expect(titles).toEqual([
+            'OVH Cost Manager - Lyon subsidiary', 'OVH Cost Manager - Lyon subsidiary',
+          ]);
+          expect(document.title).toBe(PAGE_TITLE);
+        });
+
+      // Nor does the page of a single-account installation name any account then
+      it('prints under its own title with a single account, from any print command',
+        async () => {
+          await renderDashboard({ ...severalAccounts, accounts: [lyonAccount] });
+          const titles = [];
+
+          printPage(titles);
+
+          expect(titles).toEqual([PAGE_TITLE]);
+        });
     });
   });
 

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { generateMarkdownReport } from '../../src/utils/markdownReport.js';
+import { generateMarkdownReport, reportFileName } from '../../src/utils/markdownReport.js';
 import { NBSP, NNBSP } from '../support/amounts.js';
 
 // A month as /api/months lists it, with a label always in French: the report names the
@@ -128,6 +128,33 @@ describe('Markdown report', () => {
     ]);
   });
 
+  // An instance of several accounts names what the report covers after the month: all
+  // accounts, or the account selected, as the page names them (#124). The rest of the report
+  // is the same.
+  it('names what it covers in its title, after the month', () => {
+    const unnamed = generateMarkdownReport(summary, byService, byProject, january, 'fr');
+
+    const report = generateMarkdownReport(
+      summary, byService, byProject, january, 'fr', { scope: 'Lyon subsidiary' },
+    );
+
+    expect(report.split('\n')[0]).toBe('# Rapport de coûts OVH - Janvier 2026 - Lyon subsidiary');
+    expect(report.split('\n').slice(1)).toEqual(unnamed.split('\n').slice(1));
+    const english = generateMarkdownReport(
+      summary, byService, byProject, january, 'en', { scope: 'All accounts' },
+    );
+    expect(english.split('\n')[0]).toBe('# OVH Cost Report - January 2026 - All accounts');
+  });
+
+  // As the report of a single-account installation, which names none
+  it('names nothing after the month without anything to name', () => {
+    const report = generateMarkdownReport(
+      summary, byService, byProject, january, 'fr', { scope: null },
+    );
+
+    expect(report.split('\n')[0]).toBe('# Rapport de coûts OVH - Janvier 2026');
+  });
+
   // Credit notes can bring the service types of a month to 0 € in total: each of them then
   // weighs 0 %, written as the other percentages are, with one decimal (#60)
   it('writes a share of 0 % for each service type when they sum to 0 €', () => {
@@ -223,5 +250,18 @@ describe('Markdown report', () => {
       '*Generated on 9/15/2026, 12:00:00 PM*',
       '',
     ].join('\n'));
+  });
+});
+
+// The name of the file that the page downloads the report in
+describe('reportFileName', () => {
+  it('names the month of the report of all accounts, as of a single-account page', () => {
+    expect(reportFileName('2026-09', null)).toBe('ovh-report-2026-09.md');
+  });
+
+  // By its id: a NIC handle, or the value of the Unknown account (#124)
+  it('names the account selected after the month', () => {
+    expect(reportFileName('2026-09', 'xx1111-ovh')).toBe('ovh-report-2026-09-xx1111-ovh.md');
+    expect(reportFileName('2026-07', 'unknown')).toBe('ovh-report-2026-07-unknown.md');
   });
 });

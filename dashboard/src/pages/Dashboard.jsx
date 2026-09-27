@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { Fragment, useState, useEffect, useRef } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   fetchAccounts, fetchMonths, fetchSummary, fetchByProject, fetchByService,
@@ -12,11 +12,14 @@ import { useSelectedAccount } from '../hooks/useSelectedAccount.js';
 import Logo from '../components/Logo';
 import { AccountSelector } from '../components/AccountSelector.jsx';
 import { HeaderSelect } from '../components/HeaderSelect.jsx';
+import { ImportStatus } from '../components/ImportStatus.jsx';
 import { ResyncButton } from '../components/ResyncButton.jsx';
-import { accountColumnOf, accountQuery, accountsOf } from '../utils/accounts.js';
+import {
+  accountColumnOf, accountLabel, accountQuery, accountsOf, offersAccounts, scopeLabel,
+} from '../utils/accounts.js';
 import { formatCurrency, formatMonthLabel, yearMonthOf } from '../utils/format.js';
 import { parseSqliteDate } from '../utils/sqliteDate.js';
-import { generateMarkdownReport } from '../utils/markdownReport.js';
+import { generateMarkdownReport, reportFileName } from '../utils/markdownReport.js';
 import { shiftMonths } from '../utils/monthWindow.js';
 import { variationDisplay, variationPercent } from '../utils/variation.js';
 import { useWebCloudTab } from '../tabs/useWebCloudTab.js';
@@ -40,18 +43,10 @@ const IMPORT_TYPE_KEYS = {
   period: 'importTypePeriod',
   differential: 'importTypeDifferential'
 };
-// How the import history shows each import_log status: its translation key, and its colour.
-// A partial import, one that some accounts failed and the others imported (#113), is a
-// warning.
-const IMPORT_STATUSES = {
-  running: { key: 'importStatusRunning', tone: 'text-blue-600' },
-  success: { key: 'importStatusSuccess', tone: 'text-green-600' },
-  partial: { key: 'importStatusPartial', tone: 'text-amber-600' },
-  failed: { key: 'importStatusFailed', tone: 'text-red-600' }
-};
-// A status that the page does not know shows as it is, as an error
-const importStatusOf = (status) =>
-  IMPORT_STATUSES[status] || { key: status, tone: IMPORT_STATUSES.failed.tone };
+
+// The age, in days, beyond which the banner warns of a synchronisation
+const SYNC_WARNING_DAYS = 30;
+const DAY_MS = 1000 * 60 * 60 * 24;
 
 // The colours of each tone of the "vs previous month" variation: red when the cost grows,
 // green when it shrinks, grey when the variation rounds to 0 (#87)
@@ -108,6 +103,9 @@ export default function Dashboard() {
   // The Account column of the lists, which name the account of each row with all accounts
   // shown, when the page offers several (#121): null when they name none
   const accountColumn = accountColumnOf(accounts, selectedAccount, t);
+  // What the page shows, all accounts or the account selected, as the report's title names
+  // it when the page offers several (#124): null when it names none
+  const scope = scopeLabel(accounts, selectedAccount, t);
 
   // The months billed to the account shown
   const { data: months = [], isSuccess: monthsLoaded } = useQuery(accountQuery(selectedAccount, {
@@ -241,6 +239,33 @@ export default function Dashboard() {
     }
   }, [months, holdsSelectedMonth]);
 
+  // The browser gives a printed page's PDF the page's title, which names what the page shows
+  // after its own while the browser prints it, from the PDF export or from its own print
+  // command, as the Markdown report's title does (#124). The browser tells the page before
+  // and after it prints, whatever becomes of the print. A single-account page, which names
+  // no account, keeps its title.
+  useEffect(() => {
+    if (!scope) return undefined;
+    // The page's own title while the browser prints, null otherwise
+    let pageTitle = null;
+    const nameScope = () => {
+      if (pageTitle === null) pageTitle = document.title;
+      document.title = `${pageTitle} - ${scope}`;
+    };
+    const restoreTitle = () => {
+      if (pageTitle === null) return;
+      document.title = pageTitle;
+      pageTitle = null;
+    };
+    window.addEventListener('beforeprint', nameScope);
+    window.addEventListener('afterprint', restoreTitle);
+    return () => {
+      restoreTitle();
+      window.removeEventListener('beforeprint', nameScope);
+      window.removeEventListener('afterprint', restoreTitle);
+    };
+  }, [scope]);
+
   const queryClient = useQueryClient();
 
   // Once the latest import has finished, refresh every query built from
@@ -306,11 +331,42 @@ export default function Dashboard() {
     );
   }
 
+  // The accounts whose last synchronisation the footer shows, one line each, when the page
+  // offers several (#124): every account but the Unknown account, which no import reads, in
+  // the order of the accounts route. Null when the page offers none, or before any account's
+  // import has ended, as during the first run of several accounts, which records them all
+  // before it imports any.
+  const syncedAccounts = accounts && offersAccounts(accounts)
+    && accounts.some(({ lastImport }) => lastImport !== null)
+    ? accounts.filter(({ unknown }) => !unknown)
+    : null;
+
   // Calculate days since last import
   const daysSinceLastImport = importStatus?.latest?.completed_at
-    ? Math.floor((new Date() - new Date(importStatus.latest.completed_at)) / (1000 * 60 * 60 * 24))
+    ? Math.floor((new Date() - new Date(importStatus.latest.completed_at)) / DAY_MS)
     : null;
-  const showSyncWarning = daysSinceLastImport !== null && daysSinceLastImport > 30 && !syncWarningDismissed;
+  // With the accounts' lines, the banner warns of each configured account whose last import
+  // that succeeded ended too long ago, or which none has, with its age in days, null for
+  // never: not of the latest run, which a run that some accounts failed keeps recent (#124).
+  // An account no longer configured is no longer imported. Null without the accounts' lines:
+  // the banner then warns of the latest run, as before several accounts.
+  const staleAccounts = syncedAccounts && syncedAccounts
+    .filter(({ configured }) => configured)
+    .map((account) => ({
+      ...account,
+      days: account.lastSuccessAt === null
+        ? null
+        : Math.floor((new Date() - parseSqliteDate(account.lastSuccessAt)) / DAY_MS),
+    }))
+    .filter(({ days }) => days === null || days > SYNC_WARNING_DAYS);
+  const showSyncWarning = !syncWarningDismissed && (staleAccounts
+    ? staleAccounts.length > 0
+    : daysSinceLastImport !== null && daysSinceLastImport > SYNC_WARNING_DAYS);
+  // The footer shows the latest import's line alone without them, as before several
+  // accounts. With them, it shows it while an import runs: the cue that the page asks every
+  // 30 s whether it is over (#51).
+  const showsLatestImport = Boolean(importStatus?.latest)
+    && (syncedAccounts === null || !importStatus.latest.completed_at);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 p-4 md:p-6">
@@ -322,7 +378,25 @@ export default function Dashboard() {
             <div className="flex items-center gap-3">
               <span className="text-amber-600 text-xl">⚠️</span>
               <p className="text-amber-800 text-sm">
-                {t('syncWarning')} <strong>{daysSinceLastImport}</strong> {t('syncWarningDays')}.{' '}
+                {staleAccounts ? (
+                  // Each account as the account selector names it, and its age
+                  <>
+                    {t('staleAccountsWarning')} {SYNC_WARNING_DAYS}{' '}
+                    {t('staleAccountsWarningDays')}{' '}
+                    {staleAccounts.map(({ days, ...account }, index) => (
+                      <Fragment key={account.id}>
+                        {index > 0 && ', '}
+                        <strong>{accountLabel(account, t)}</strong>
+                        {' ('}{days === null ? t('lastSyncNever') : `${days} ${t('days')}`}{')'}
+                      </Fragment>
+                    ))}.{' '}
+                  </>
+                ) : (
+                  <>
+                    {t('syncWarning')} <strong>{daysSinceLastImport}</strong>{' '}
+                    {t('syncWarningDays')}.{' '}
+                  </>
+                )}
                 {t('syncWarningAction')} <code className="bg-amber-100 px-1 rounded">npm run import:diff</code> {t('syncWarningToUpdate')}
               </p>
             </div>
@@ -415,15 +489,19 @@ export default function Dashboard() {
                     onChange={(e) => {
                       const format = e.target.value;
                       if (format === 'md') {
-                        const md = generateMarkdownReport(summary, byService, byProject, selectedMonth, language);
+                        // The figures of the account shown, which the shell holds (#115, #118)
+                        const md = generateMarkdownReport(
+                          summary, byService, byProject, selectedMonth, language, { scope },
+                        );
                         const blob = new Blob([md], { type: 'text/markdown' });
                         const url = URL.createObjectURL(blob);
                         const a = document.createElement('a');
                         a.href = url;
-                        a.download = `ovh-report-${selectedMonth.value}.md`;
+                        a.download = reportFileName(selectedMonth.value, selectedAccount);
                         a.click();
                         URL.revokeObjectURL(url);
                       } else if (format === 'pdf') {
+                        // Under a title that names what the page shows (see above, #124)
                         window.print();
                       }
                       e.target.value = '';
@@ -660,7 +738,7 @@ export default function Dashboard() {
         {/* Footer */}
         <div className="text-center text-sm text-gray-400 pt-4 pb-2">
           <p>{t('syncedVia')}</p>
-          {importStatus?.latest && (
+          {showsLatestImport && (
             <p className="mt-1">
               {t('lastSync')}: {importStatus.latest.completed_at ? (
                 <>
@@ -670,6 +748,28 @@ export default function Dashboard() {
               ) : t('importStatusRunning')}
             </p>
           )}
+          {syncedAccounts?.map(({ lastImport, lastSuccessAt, ...account }) => (
+            // Each account as the account selector names it, and when its last import that
+            // succeeded ended: its data is as that import left it, whatever the imports that
+            // failed since. When its last import failed, when, with why over it, as the
+            // import history says it of a run (#113).
+            <p key={account.id} className="mt-1">
+              {accountLabel(account, t)} — {t('lastSync')}:{' '}
+              {lastSuccessAt
+                ? parseSqliteDate(lastSuccessAt).toLocaleString(locale)
+                : t('lastSyncNever')}
+              {lastImport?.status === 'failed' && (
+                <>
+                  {' ('}
+                  <ImportStatus status={lastImport.status} error={lastImport.error} t={t}>
+                    {t('lastImportFailedOn')}{' '}
+                    {parseSqliteDate(lastImport.at).toLocaleString(locale)}
+                  </ImportStatus>
+                  {')'}
+                </>
+              )}
+            </p>
+          ))}
 
           {/* Import history */}
           <details className="mt-3 max-w-2xl mx-auto text-left">
@@ -696,12 +796,7 @@ export default function Dashboard() {
                       <td className="py-1 px-2">
                         {/* Why it failed or ended partial, which names the accounts that
                             failed (#113) */}
-                        <span
-                          className={importStatusOf(h.status).tone}
-                          title={h.error_message || undefined}
-                        >
-                          {t(importStatusOf(h.status).key)}
-                        </span>
+                        <ImportStatus status={h.status} error={h.error_message} t={t} />
                       </td>
                       <td className="py-1 px-2 text-right text-gray-600">{h.bills_imported ?? '-'}</td>
                     </tr>

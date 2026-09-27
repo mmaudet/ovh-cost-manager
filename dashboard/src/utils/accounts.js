@@ -5,9 +5,15 @@
  * The accounts that GET /api/accounts lists, in its order, as the page uses them. The route
  * gives each one's id, the value of the account parameter, whether config.json still lists
  * it, and which one is the Unknown account (#114); until it does, an account is known by its
- * NIC handle, and configured.
+ * NIC handle, and configured. It gives how each one's last import ended too, and when its
+ * last import that succeeded did, which the footer shows (#124).
  * @param {object[]} entries - The route's answer
- * @returns {{ id: string, name: string, configured: boolean, unknown: boolean }[]}
+ * @returns {{ id: string, name: string, configured: boolean, unknown: boolean,
+ *   lastImport: ?{ at: string, status: string, error: ?string },
+ *   lastSuccessAt: ?string }[]} lastImport: when the account's last import ended, a SQLite
+ *   timestamp, 'success' or 'failed', and why it failed; lastSuccessAt: when its last import
+ *   that succeeded ended. Each null until one has, as for the Unknown account, which no
+ *   import reads.
  */
 export function accountsOf(entries) {
   return entries.map((entry) => ({
@@ -16,6 +22,8 @@ export function accountsOf(entries) {
     name: entry.name ?? entry.nic,
     configured: entry.configured ?? true,
     unknown: entry.unknown ?? false,
+    lastImport: entry.lastImport ?? null,
+    lastSuccessAt: entry.lastSuccessAt ?? null,
   }));
 }
 
@@ -53,6 +61,23 @@ export function accountColumnOf(accounts, selectedAccount, t) {
     return accounts.find(({ id }) => id === nic)?.name ?? nic;
   };
   return { label: t('account'), nameOf };
+}
+
+/**
+ * What the page shows, as the account selector names it: all accounts, or the account
+ * selected (accountLabel()). The report names it in its title (#124). A single-account
+ * installation's page offers no account to select, and its report names none.
+ * @param {object[]|undefined} accounts - The accounts of the instance (accountsOf()),
+ *   undefined while their list loads
+ * @param {?string|undefined} selectedAccount - The account shown (useSelectedAccount()):
+ *   null for all accounts, or else, once the accounts load, the id of one that they list
+ * @param {function(string): string} t
+ * @returns {?string} Null when the page offers no account to select
+ */
+export function scopeLabel(accounts, selectedAccount, t) {
+  if (accounts === undefined || !offersAccounts(accounts)) return null;
+  if (selectedAccount === null) return t('allAccounts');
+  return accountLabel(accounts.find(({ id }) => id === selectedAccount), t);
 }
 
 // Whether the key and the request of a query name the account shown: not for all accounts,

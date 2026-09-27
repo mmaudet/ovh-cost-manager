@@ -8,12 +8,12 @@ const { startOcm } = require('./support/ocm-server');
 const {
   SQLITE_TIME, LYON, PARIS, NEW_ACCOUNT, UNKNOWN_ACCOUNT, bill,
 } = require('./support/accounts');
-const { asBefore114 } = require('./support/database-before');
+const { asBefore114, asBefore124 } = require('./support/database-before');
 
 // The entry of the Unknown account (see CONTEXT.md): the rows that no account claims (#114)
 const UNKNOWN = {
   id: UNKNOWN_ACCOUNT, nic: null, name: null, currency: null, configured: false, unknown: true,
-  lastImport: null,
+  lastImport: null, lastSuccessAt: null,
 };
 
 // The accounts that the server lists, over a database that `seed` writes to, if given, with
@@ -61,7 +61,11 @@ test('lists the account that an import recorded, named by its NIC handle', async
     configured: true,
     unknown: false,
     lastImport: { at: expect.stringMatching(SQLITE_TIME), status: 'success', error: null },
+    lastSuccessAt: expect.stringMatching(SQLITE_TIME),
   }]);
+  // Its last import succeeded: the last that did (#124)
+  const [{ lastImport, lastSuccessAt }] = accounts;
+  expect(lastSuccessAt).toBe(lastImport.at);
 }, 30000);
 
 // The import records the account as soon as GET /me names it
@@ -72,7 +76,7 @@ test('gives no last import while the first import of the account runs', async ()
 
   expect(accounts).toEqual([{
     id: LYON, nic: LYON, name: LYON, currency: 'EUR', configured: true, unknown: false,
-    lastImport: null,
+    lastImport: null, lastSuccessAt: null,
   }]);
 }, 30000);
 
@@ -85,7 +89,50 @@ test('gives why the last import of the account failed', async () => {
   expect(accounts.map(account => account.lastImport)).toEqual([{
     at: expect.stringMatching(SQLITE_TIME), status: 'failed', error: 'Internal server error',
   }]);
+  // None of its imports succeeded (#124)
+  expect(accounts.map(account => account.lastSuccessAt)).toEqual([null]);
 }, 30000);
+
+// An import that fails does not make the data fresher than the last that succeeded (#124)
+test('keeps when the last import of the account that succeeded ended, once one fails',
+  async () => {
+    const august = '2026-08-01 04:00:00';
+    const accounts = await listAccounts((db) => {
+      recordAccounts(db, { nic: LYON });
+      db.accounts.recordImport(LYON, { status: 'success' });
+      // That import ended on 1 August
+      db.getDb().prepare('UPDATE accounts SET last_import_at = ?, last_success_at = ?')
+        .run(august, august);
+      db.accounts.recordImport(LYON, { status: 'failed', error: 'Internal server error' });
+    });
+
+    expect(accounts.map(({ lastImport, lastSuccessAt }) => ({ lastImport, lastSuccessAt })))
+      .toEqual([{
+        lastImport: {
+          at: expect.stringMatching(SQLITE_TIME), status: 'failed',
+          error: 'Internal server error',
+        },
+        lastSuccessAt: august,
+      }]);
+    expect(accounts[0].lastImport.at > august).toBe(true);
+  }, 30000);
+
+// The version before #124 recorded only how the last import of each account ended: that of
+// an account whose last import succeeded is its last that did, and an account whose last
+// import failed has none that it can tell
+test('gives the accounts of a database from before #124 their last import that succeeded',
+  async () => {
+    const accounts = await listAccounts((db) => {
+      recordAccounts(db, { nic: LYON }, { nic: PARIS });
+      db.accounts.recordImport(LYON, { status: 'success' });
+      db.accounts.recordImport(PARIS, { status: 'failed', error: 'Internal server error' });
+      asBefore124(db.getDb());
+    });
+
+    const [lyon, paris] = accounts;
+    expect(lyon.lastSuccessAt).toBe(lyon.lastImport.at);
+    expect(paris.lastSuccessAt).toBeNull();
+  }, 30000);
 
 // Each account named as the entry of config.json that its last import read names it (#113)
 test('lists every account recorded, by its name, or else its NIC handle', async () => {
@@ -104,6 +151,7 @@ test('lists every account recorded, by its name, or else its NIC handle', async 
       configured: true,
       unknown: false,
       lastImport: { at: expect.stringMatching(SQLITE_TIME), status: 'success', error: null },
+      lastSuccessAt: expect.stringMatching(SQLITE_TIME),
     },
     {
       id: PARIS,
@@ -115,6 +163,7 @@ test('lists every account recorded, by its name, or else its NIC handle', async 
       lastImport: {
         at: expect.stringMatching(SQLITE_TIME), status: 'failed', error: 'Internal server error',
       },
+      lastSuccessAt: null,
     },
   ]);
 }, 30000);
