@@ -1,25 +1,27 @@
-// The accounts of the instance (#110), as the page offers them to select, and the queries
-// that follow the account shown (#115)
+// The accounts of the instance (#110), as the page offers them to select, the queries that
+// follow the account shown (#115), and the budget that its figures are compared with (#117)
 
 /**
  * The accounts that GET /api/accounts lists, in its order, as the page uses them. The route
  * gives each one's id, the value of the account parameter, whether config.json still lists
  * it, and which one is the Unknown account (#114); until it does, an account is known by its
  * NIC handle, and configured. It gives how each one's last import ended too, and when its
- * last import that succeeded did, which the footer shows (#124).
+ * last import that succeeded did, which the footer shows (#124), and the budget of its own
+ * that its last import recorded, which the page compares it with (#117).
  * @param {object[]} entries - The route's answer
- * @returns {{ id: string, name: string, configured: boolean, unknown: boolean,
- *   lastImport: ?{ at: string, status: string, error: ?string },
- *   lastSuccessAt: ?string }[]} lastImport: when the account's last import ended, a SQLite
- *   timestamp, 'success' or 'failed', and why it failed; lastSuccessAt: when its last import
- *   that succeeded ended. Each null until one has, as for the Unknown account, which no
- *   import reads.
+ * @returns {{ id: string, name: string, budget: ?number, configured: boolean,
+ *   unknown: boolean, lastImport: ?{ at: string, status: string, error: ?string },
+ *   lastSuccessAt: ?string }[]} budget: null for an account without one, as for the Unknown
+ *   account; lastImport: when the account's last import ended, a SQLite timestamp, 'success'
+ *   or 'failed', and why it failed; lastSuccessAt: when its last import that succeeded ended.
+ *   Each null until one has, as for the Unknown account, which no import reads.
  */
 export function accountsOf(entries) {
   return entries.map((entry) => ({
     id: entry.id ?? entry.nic,
     // The route names an account by its NIC handle when config.json gives it no name
     name: entry.name ?? entry.nic,
+    budget: entry.budget ?? null,
     configured: entry.configured ?? true,
     unknown: entry.unknown ?? false,
     lastImport: entry.lastImport ?? null,
@@ -120,6 +122,27 @@ export function scopeLabel(accounts, selectedAccount, t) {
   if (accounts === undefined || !offersAccounts(accounts)) return null;
   if (selectedAccount === null) return t('allAccounts');
   return accountLabel(accounts.find(({ id }) => id === selectedAccount), t);
+}
+
+/**
+ * The budget that the page compares the figures it shows with (#117), and whether the user
+ * may change it: the dashboard budget for all accounts, which the user may change for the
+ * visit, or else the budget of the account shown, which config.json sets, so that an account
+ * is never compared with the budget of all of them. A single-account installation shows all
+ * accounts, and keeps the dashboard budget.
+ * @param {object[]|undefined} accounts - The accounts of the instance (accountsOf()), with the
+ *   budget of each, undefined while their list loads
+ * @param {?string|undefined} selectedAccount - The account shown (useSelectedAccount()): null
+ *   for all accounts, or else the id of one that the accounts list
+ * @param {number} dashboardBudget - The dashboard budget, as the page holds it: config.json's,
+ *   or the one that the user typed for the visit
+ * @returns {?{ amount: number, editable: boolean }} Null for an account without a budget of
+ *   its own
+ */
+export function budgetOf(accounts, selectedAccount, dashboardBudget) {
+  if (selectedAccount === null) return { amount: dashboardBudget, editable: true };
+  const amount = accounts?.find(({ id }) => id === selectedAccount)?.budget ?? null;
+  return amount === null ? null : { amount, editable: false };
 }
 
 // Whether the key and the request of a query name the account shown: not for all accounts,

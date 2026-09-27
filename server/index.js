@@ -762,6 +762,7 @@ function registerRoutes() {
     id: db.UNKNOWN_ACCOUNT,
     nic: null,
     name: null,
+    budget: null,
     currency: null,
     configured: false,
     unknown: true,
@@ -773,19 +774,24 @@ function registerRoutes() {
   // tell whether their data is fresh (#112). Empty until the first import after the upgrade.
   // The name is the one that the account's entry of config.json had at its last import, as
   // only an import can tell which account an entry's credentials lead to, or else its NIC
-  // handle (#113): an entry never imported is not listed. lastImport is null until an import
-  // of the account has ended, and lastSuccessAt, when the last that succeeded ended, until one
-  // has, whatever the imports that failed since (#124). The accounts that the configuration of
-  // the last import lists come first, in its order, then those it no longer lists, which keep
-  // their data but are no longer imported, and the Unknown account, while it holds rows
-  // (#114). An account's id, its NIC handle, is the value that the account parameter of the
-  // other routes takes.
+  // handle (#113): an entry never imported is not listed. So is the budget, null when the
+  // entry gives none, which the dashboard compares the account's figures with (#117): imported
+  // data, which the dashboard reloads with the accounts once an import is over, where the
+  // configuration route gives the dashboard budget of config.json, as before the accounts. An
+  // account no longer configured keeps both, and the Unknown account has neither. lastImport
+  // is null until an import of the account has ended, and lastSuccessAt, when the last that
+  // succeeded ended, until one has, whatever the imports that failed since (#124). The
+  // accounts that the configuration of the last import lists come first, in its order, then
+  // those it no longer lists, which keep their data but are no longer imported, and the
+  // Unknown account, while it holds rows (#114). An account's id, its NIC handle, is the value
+  // that the account parameter of the other routes takes.
   app.get('/api/accounts', (req, res) => {
     try {
       const accounts = db.accounts.getAll().map(account => ({
         id: account.nic,
         nic: account.nic,
         name: account.name ?? account.nic,
+        budget: account.budget,
         currency: account.currency,
         configured: account.configured,
         unknown: false,

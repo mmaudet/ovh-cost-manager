@@ -12,11 +12,14 @@ import { sortProjects } from '../utils/projectSort.js';
 // the shell holds for the whole page: the month's figures, of the account selected in the
 // header (#118), and the services about to expire, of that account too (#123), which load at
 // page start for the KPI cards, the header, the Markdown report or other tabs too, and the
-// budget with its setter, which the month-end forecast card reads as well. Its lists, the
-// breakdown by project and the GPU projects, name the account of each project in the Account
-// column of the shell (accountColumn), when it shows one: they then list the projects by
-// account that the hook requests, a project billed to several accounts once for each (#118).
-// The services about to expire name their account there too (#123).
+// budget with its setter, which the month-end forecast card reads as well. The budget is that
+// of what the page shows (#117), with whether the user may change it: the dashboard budget,
+// which setBudget changes, for all accounts, or else the account's own, which config.json
+// sets, or null when it has none. Its lists, the breakdown by project and the GPU projects,
+// name the account of each project in the Account column of the shell (accountColumn), when
+// it shows one: they then list the projects by account that the hook requests, a project
+// billed to several accounts once for each (#118). The services about to expire name their
+// account there too (#123).
 // Its links navigate with the shell's setters: what each one keeps open is in
 // docs/adr/0001-tab-state-lives-in-the-dashboard-shell.md (#56).
 const OverviewTab = ({
@@ -28,7 +31,7 @@ const OverviewTab = ({
 }) => {
   // The share of the budget the month has used, and the same in whole percents, which the bar
   // and its colour follow
-  const budgetShare = budget ? total / budget : 0;
+  const budgetShare = budget?.amount ? total / budget.amount : 0;
   const budgetUsage = Math.round(budgetShare * 100);
 
   // The projects of the breakdown and of the GPU costs, by account for the Account column.
@@ -348,34 +351,48 @@ const OverviewTab = ({
         </div>
       </div>
 
-      {/* Budget Progress */}
-      <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100 lg:col-span-2">
-        <div className="flex justify-between items-center mb-3">
-          <span className="font-semibold text-gray-900">{t('budgetConsumption')}</span>
-          <span className={`px-3 py-1 rounded-full text-sm font-medium ${budgetUsage > 80 ? 'bg-orange-100 text-orange-700' : 'bg-green-100 text-green-700'}`}>
-            {formatPercent(budgetShare, language, { decimals: 0 })} {t('used')}
-          </span>
-        </div>
-        <div className="w-full bg-gray-200 rounded-full h-3 overflow-hidden">
-          <div
-            className={`h-3 rounded-full transition-all duration-500 ${budgetUsage > 80 ? 'bg-orange-500' : 'bg-blue-600'}`}
-            style={{ width: `${Math.min(budgetUsage, 100)}%` }}
-          />
-        </div>
-        <div className="flex justify-between items-center mt-2 text-sm text-gray-500">
-          <span>{t('consumed')}: {fmt(total)}€</span>
-          <div className="flex items-center gap-1">
-            <span>{t('budget')}:</span>
-            <input
-              type="number"
-              value={budget}
-              onChange={(e) => setBudget(Number(e.target.value) || 0)}
-              className="w-24 px-2 py-1 border border-gray-200 rounded text-right text-sm"
+      {/* Budget Progress: none for an account without a budget of its own, rather than
+          compare it with the budget of all accounts (#117) */}
+      {budget !== null && (
+        <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100 lg:col-span-2">
+          <div className="flex justify-between items-center mb-3">
+            <span className="font-semibold text-gray-900">{t('budgetConsumption')}</span>
+            <span className={`px-3 py-1 rounded-full text-sm font-medium ${
+              budgetUsage > 80 ? 'bg-orange-100 text-orange-700' : 'bg-green-100 text-green-700'
+            }`}>
+              {formatPercent(budgetShare, language, { decimals: 0 })} {t('used')}
+            </span>
+          </div>
+          <div className="w-full bg-gray-200 rounded-full h-3 overflow-hidden">
+            <div
+              className={`h-3 rounded-full transition-all duration-500 ${
+                budgetUsage > 80 ? 'bg-orange-500' : 'bg-blue-600'
+              }`}
+              style={{ width: `${Math.min(budgetUsage, 100)}%` }}
             />
-            <span>€</span>
+          </div>
+          <div className="flex justify-between items-center mt-2 text-sm text-gray-500">
+            <span>{t('consumed')}: {fmt(total)}€</span>
+            <div className="flex items-center gap-1">
+              <span>{t('budget')}:</span>
+              {budget.editable ? (
+                <>
+                  <input
+                    type="number"
+                    value={budget.amount}
+                    onChange={(e) => setBudget(Number(e.target.value) || 0)}
+                    className="w-24 px-2 py-1 border border-gray-200 rounded text-right text-sm"
+                  />
+                  <span>€</span>
+                </>
+              ) : (
+                // An account's own budget, which config.json sets, and the page shows as is
+                <span>{fmt(budget.amount)}€</span>
+              )}
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       {/* Expiration Alerts */}
       {expiringServices.length > 0 && (

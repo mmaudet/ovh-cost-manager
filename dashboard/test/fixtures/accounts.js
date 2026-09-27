@@ -11,22 +11,24 @@ import { webCloudOfSeveralAccounts } from './web-cloud.js';
 //
 // The accounts route lists them as it does since #114: with their id, the value of the
 // account parameter, whether config.json still lists them, and which one is the Unknown
-// account, and, since #124, when the last import of each that succeeded ended. What the page
-// asks for with an account, such as its months list, its summaries, its current consumption
-// (#116), the figures of the months that the Compare tab compares (#119), its Public Cloud
-// (#121), its Web Cloud services (#122) and its inventory (#123), is under `ofAccount`, by
-// the id of the account (see support/api.js). web-cloud.js and infrastructure.js give the Web
-// Cloud services and the inventory for all accounts too.
+// account, since #124, when the last import of each that succeeded ended, and since #117, the
+// budget of its own that its last import recorded, null for none. What the page asks for with
+// an account, such as its months list, its summaries, its current consumption (#116), the
+// figures of the months that the Compare tab compares (#119), its Public Cloud (#121), its
+// Web Cloud services (#122) and its inventory (#123), is under `ofAccount`, by the id of the
+// account (see support/api.js). web-cloud.js and infrastructure.js give the Web Cloud
+// services and the inventory for all accounts too.
 
 const [september, august, july] = months;
 // The Public Cloud projects of account.js
 const [production, staging, sandbox] = account.projectsEnriched;
 
-// A configured account, named in config.json
+// A configured account, named in config.json, the only one with a budget of its own
 export const lyonAccount = {
   id: 'xx1111-ovh',
   nic: 'xx1111-ovh',
   name: 'Lyon subsidiary',
+  budget: 1000,
   currency: 'EUR',
   lastImport: { at: '2026-09-14 04:02:30', status: 'success', error: null },
   lastSuccessAt: '2026-09-14 04:02:30',
@@ -40,6 +42,7 @@ export const unnamedAccount = {
   id: 'yy2222-ovh',
   nic: 'yy2222-ovh',
   name: 'yy2222-ovh',
+  budget: null,
   currency: 'EUR',
   lastImport: { at: '2026-09-14 04:02:10', status: 'success', error: null },
   lastSuccessAt: '2026-09-14 04:02:10',
@@ -52,6 +55,7 @@ export const removedAccount = {
   id: 'zz3333-ovh',
   nic: 'zz3333-ovh',
   name: 'zz3333-ovh',
+  budget: null,
   currency: 'EUR',
   lastImport: { at: '2026-08-31 04:01:00', status: 'success', error: null },
   lastSuccessAt: '2026-08-31 04:01:00',
@@ -65,6 +69,7 @@ export const unknownAccount = {
   id: 'unknown',
   nic: null,
   name: null,
+  budget: null,
   currency: null,
   lastImport: null,
   lastSuccessAt: null,

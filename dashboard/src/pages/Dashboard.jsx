@@ -15,7 +15,7 @@ import { HeaderSelect } from '../components/HeaderSelect.jsx';
 import { ImportStatus } from '../components/ImportStatus.jsx';
 import { ResyncButton } from '../components/ResyncButton.jsx';
 import {
-  accountColumnOf, accountLabel, accountQuery, accountsOf, offersAccounts, scopeLabel,
+  accountColumnOf, accountLabel, accountQuery, accountsOf, budgetOf, offersAccounts, scopeLabel,
 } from '../utils/accounts.js';
 import { formatCurrency, formatMonthLabel, yearMonthOf } from '../utils/format.js';
 import { parseSqliteDate } from '../utils/sqliteDate.js';
@@ -61,7 +61,9 @@ export default function Dashboard() {
   const { language, setLanguage, t } = useLanguage();
   const [selectedMonth, setSelectedMonth] = useState(null);
   const [activeTab, setActiveTab] = useState('overview');
-  const [budget, setBudget] = useState(50000); // Default budget
+  // The dashboard budget, which the page compares the figures of all accounts with: that of
+  // config.json once the configuration loads, which the user may change for the visit
+  const [dashboardBudget, setDashboardBudget] = useState(50000); // Default budget
   const [syncWarningDismissed, setSyncWarningDismissed] = useState(false);
   const [selectedProject, setSelectedProject] = useState(null);
   const [selectedResourceType, setSelectedResourceType] = useState(null);
@@ -98,10 +100,9 @@ export default function Dashboard() {
 
   // The account the page shows, page-wide: null for all accounts, undefined until the page
   // knows it. The months list, the KPI cards of the month's figures and of the current month's
-  // consumption (#116), the Overview's figures (#118), the Compare tab and the Veeam backups
-  // (#119), the Web Cloud (#122) and Infrastructure (#123) tabs, and the services about to
-  // expire (#123) follow it; the other cards and tabs follow it in the next tickets (#117 to
-  // #123).
+  // consumption (#116), the Overview's figures (#118), the budget that they are compared with
+  // (#117), the Compare tab and the Veeam backups (#119), the Web Cloud (#122) and
+  // Infrastructure (#123) tabs, and the services about to expire (#123) follow it.
   const { selectedAccount, selectAccount } = useSelectedAccount(accounts);
   // The Account column of the lists, which name the account of each row with all accounts
   // shown, when the page offers several (#121): null when they name none
@@ -235,7 +236,7 @@ export default function Dashboard() {
   // Update budget when config loads
   useEffect(() => {
     if (configData?.budget) {
-      setBudget(configData.budget);
+      setDashboardBudget(configData.budget);
     }
   }, [configData]);
 
@@ -280,7 +281,8 @@ export default function Dashboard() {
   const queryClient = useQueryClient();
 
   // Once the latest import has finished, refresh every query built from
-  // imported data (all of them but config, user and the import status).
+  // imported data (all of them but config, user and the import status): the
+  // accounts among them, with the budget that each one's import records (#117).
   // The latest import: undefined until the import status loads, null when there was none
   const latestImport = importStatus ? (importStatus.latest ?? null) : undefined;
   const previousImport = useRef(latestImport);
@@ -302,6 +304,12 @@ export default function Dashboard() {
 
   // Calculations
   const total = summary?.total || 0;
+  // The budget that the Overview's budget card and the month-end forecast compare the figures
+  // shown with (#117), and whether the user may change it: the dashboard budget for all
+  // accounts, or else the account's own, which config.json sets, null when it has none. The
+  // accounts route gives it, as the account's last import recorded it: the page reloads it
+  // with the accounts once an import is over.
+  const budget = budgetOf(accounts, selectedAccount, dashboardBudget);
   // The "vs previous month" variation, from the month before (#50), as the page shows it: its
   // text and its tone, as in the Compare and Trends tabs (#87). Null when it cannot be
   // computed, as there (#65): from a month before at 0 € or less, or without a bill, so at
@@ -626,7 +634,8 @@ export default function Dashboard() {
                   </div>
                 )}
                 <div className="text-sm text-gray-500 mt-1">
-                  {consumptionForecast.forecast_total > budget
+                  {/* None for an account without a budget of its own */}
+                  {budget !== null && consumptionForecast.forecast_total > budget.amount
                     ? <span className="text-red-500 font-medium">{`> ${t('budget')}!`}</span>
                     : consumptionForecast.days_elapsed
                       ? `${consumptionForecast.days_elapsed}/${consumptionForecast.days_in_month}`
@@ -692,7 +701,7 @@ export default function Dashboard() {
             accountColumn={accountColumn}
             summary={summary} total={total} byService={byService} byProject={byProject}
             byResourceType={byResourceType} gpuSummary={gpuSummary}
-            expiringServices={expiringServices} budget={budget} setBudget={setBudget}
+            expiringServices={expiringServices} budget={budget} setBudget={setDashboardBudget}
             setActiveTab={setActiveTab} setSelectedProject={setSelectedProject}
             setSelectedResourceType={setSelectedResourceType}
           />

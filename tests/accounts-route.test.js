@@ -6,14 +6,15 @@
 
 const { startOcm } = require('./support/ocm-server');
 const {
-  SQLITE_TIME, LYON, PARIS, NEW_ACCOUNT, UNKNOWN_ACCOUNT, bill,
+  SQLITE_TIME, LYON, PARIS, NEW_ACCOUNT, UNKNOWN_ACCOUNT, recordAccounts, credentials, bill,
 } = require('./support/accounts');
 const { asBefore114, asBefore124 } = require('./support/database-before');
 
-// The entry of the Unknown account (see CONTEXT.md): the rows that no account claims (#114)
+// The entry of the Unknown account (see CONTEXT.md): the rows that no account claims (#114),
+// which no entry of config.json gives a budget (#117)
 const UNKNOWN = {
-  id: UNKNOWN_ACCOUNT, nic: null, name: null, currency: null, configured: false, unknown: true,
-  lastImport: null, lastSuccessAt: null,
+  id: UNKNOWN_ACCOUNT, nic: null, name: null, budget: null, currency: null, configured: false,
+  unknown: true, lastImport: null, lastSuccessAt: null,
 };
 
 // The accounts that the server lists, over a database that `seed` writes to, if given, with
@@ -27,13 +28,6 @@ async function listAccounts(seed, config) {
   } finally {
     await ocm.stop();
   }
-}
-
-// Records these accounts as an import does, and the configuration of its run, which lists
-// them in this order
-function recordAccounts(db, ...accounts) {
-  for (const account of accounts) db.accounts.upsert({ currency: 'EUR', ...account });
-  db.accounts.recordConfiguration(accounts.map(({ nic }) => nic));
 }
 
 // A bill that an import stored before the accounts, which no account claimed since: the
@@ -57,6 +51,8 @@ test('lists the account that an import recorded, named by its NIC handle', async
     id: LYON,
     nic: LYON,
     name: LYON,
+    // Nor a budget of its own (#117)
+    budget: null,
     currency: 'EUR',
     configured: true,
     unknown: false,
@@ -75,8 +71,8 @@ test('gives no last import while the first import of the account runs', async ()
   });
 
   expect(accounts).toEqual([{
-    id: LYON, nic: LYON, name: LYON, currency: 'EUR', configured: true, unknown: false,
-    lastImport: null, lastSuccessAt: null,
+    id: LYON, nic: LYON, name: LYON, budget: null, currency: 'EUR', configured: true,
+    unknown: false, lastImport: null, lastSuccessAt: null,
   }]);
 }, 30000);
 
@@ -134,7 +130,8 @@ test('gives the accounts of a database from before #124 their last import that s
     expect(paris.lastSuccessAt).toBeNull();
   }, 30000);
 
-// Each account named as the entry of config.json that its last import read names it (#113)
+// Each account named as the entry of config.json that its last import read names it (#113),
+// with the budget of that entry, if it gives one (#117)
 test('lists every account recorded, by its name, or else its NIC handle', async () => {
   const accounts = await listAccounts((db) => {
     recordAccounts(db, { nic: LYON, name: 'Lyon subsidiary', budget: 20000 }, { nic: PARIS });
@@ -147,6 +144,7 @@ test('lists every account recorded, by its name, or else its NIC handle', async 
       id: LYON,
       nic: LYON,
       name: 'Lyon subsidiary',
+      budget: 20000,
       currency: 'EUR',
       configured: true,
       unknown: false,
@@ -157,6 +155,7 @@ test('lists every account recorded, by its name, or else its NIC handle', async 
       id: PARIS,
       nic: PARIS,
       name: PARIS,
+      budget: null,
       currency: 'EUR',
       configured: true,
       unknown: false,
@@ -172,10 +171,6 @@ test('lists every account recorded, by its name, or else its NIC handle', async 
 // the account is imported again, and an entry never imported is not listed
 test('names the accounts as their last import recorded them, not as config.json does now',
   async () => {
-    const credentials = (key) => ({
-      appKey: `app-${key}`, appSecret: `secret-${key}`, consumerKey: `consumer-${key}`,
-      endpoint: 'ovh-eu',
-    });
     const accounts = await listAccounts((db) => {
       recordAccounts(db, { nic: LYON, name: 'Lyon' });
       db.accounts.recordImport(LYON, { status: 'success' });

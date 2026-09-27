@@ -456,8 +456,8 @@ describe('Overview tab', () => {
 
   // An instance of several accounts (#118): the tab shows the figures of the account selected
   // in the header, or those of all accounts, where its lists name the account of each project,
-  // and the services about to expire of each (#123). The budget follows it in its own ticket
-  // (#117).
+  // and the services about to expire of each (#123), and compares its figures with the budget
+  // of what it shows (#117).
   describe('with several accounts', () => {
     // The breakdown by project and the GPU costs of September, with a single account, or with
     // all accounts but without the Account column
@@ -658,6 +658,87 @@ describe('Overview tab', () => {
       expect(texts(gpuCosts())).toEqual(gpuCostsOfOneAccount);
       expect(api.fetchProjectsByAccount).not.toHaveBeenCalled();
       expect(api.fetchGpuProjectsByAccount).not.toHaveBeenCalled();
+    });
+
+    // The budget card compares the figures of the tab with a budget (#117): those of all
+    // accounts with the dashboard budget, config.json's, which the user may change on the
+    // page, whatever the budgets of the accounts, and those of the account selected with its
+    // own, which config.json sets too, or with none
+    describe('budget', () => {
+      // 1 250.40 / 50 000
+      const dashboardBudgetCard = [
+        'Consommation du budget', '3 % utilisé', 'Consommé: 1 250,40€', 'Budget:', '€',
+      ];
+      // 890.40 / 1 000, the figures and the budget of the Lyon subsidiary
+      const lyonBudgetCard = [
+        'Consommation du budget', '89 % utilisé', 'Consommé: 890,40€',
+        'Budget:', '1 000,00€',
+      ];
+
+      it('compares the figures of all accounts with the dashboard budget', async () => {
+        await renderDashboard(severalAccounts);
+
+        expect(texts(budget())).toEqual(dashboardBudgetCard);
+        expect(budgetInput()).toHaveValue(50000);
+      });
+
+      // Its page shows all accounts, and stays as it was: even when config.json gives its
+      // account a budget, here one that the account's figures and forecast go over
+      it('compares the figures of a single-account installation with the dashboard budget',
+        async () => {
+          await renderDashboard({
+            ...severalAccounts,
+            accounts: [{ ...lyonAccount, budget: 100 }],
+          });
+
+          expect(texts(budget())).toEqual(dashboardBudgetCard);
+          expect(budgetInput()).toHaveValue(50000);
+          expect(texts(forecastCard()))
+            .toEqual(['Prévision fin de mois', 'Septembre 2026', '862,18€', '14/30 jours']);
+        });
+
+      // Which the page does not let the user change: config.json sets it
+      it('compares the figures of the account selected with its own budget, read-only',
+        async () => {
+          const { user } = await renderDashboard(severalAccounts);
+
+          await selectAccount(user, 'Lyon subsidiary');
+
+          expect(texts(budget())).toEqual(lyonBudgetCard);
+          expect(within(budget()).queryByRole('spinbutton')).not.toBeInTheDocument();
+        });
+
+      it.each([
+        ['an account', 'yy2222-ovh'],
+        ['an account no longer configured', 'zz3333-ovh (non configuré)'],
+        ['the Unknown account', 'Compte inconnu'],
+      ])('shows no budget card for %s without a budget of its own', async (_, label) => {
+        const { user } = await renderDashboard(severalAccounts);
+
+        await selectAccount(user, label);
+
+        expect(screen.queryByText('Consommation du budget')).not.toBeInTheDocument();
+        // On the tab, which shows the account's figures
+        expect(serviceTypes()).toBeInTheDocument();
+      });
+
+      it('keeps the dashboard budget that the user typed while an account is selected',
+        async () => {
+          const { user } = await renderDashboard(severalAccounts);
+          await typeBudget(user, '800');
+
+          await selectAccount(user, 'Lyon subsidiary');
+
+          expect(texts(budget())).toEqual(lyonBudgetCard);
+
+          await selectAccount(user, 'Tous les comptes');
+
+          // 1 250.40 / 800
+          expect(texts(budget())).toEqual([
+            'Consommation du budget', '156 % utilisé', 'Consommé: 1 250,40€', 'Budget:', '€',
+          ]);
+          expect(budgetInput()).toHaveValue(800);
+        });
     });
 
     // The costs by resource type and the GPU costs of the month that the shell loads for the
