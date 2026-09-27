@@ -336,10 +336,17 @@ export default function Dashboard() {
   // The accounts whose last synchronisation the footer shows, one line each, when the page
   // offers several (#124): those whose last import has ended, in the order of the accounts
   // route. The Unknown account has none, as no import reads it. Null when the page offers
-  // none: the footer then shows the latest import's line alone, as before.
-  const syncedAccounts = accounts && offersAccounts(accounts)
-    ? accounts.filter(({ lastImport }) => lastImport !== null)
+  // none, or before any account's import has ended, as during the first run of several
+  // accounts, which records them all before it imports any.
+  const endedImports = (accounts ?? []).filter(({ lastImport }) => lastImport !== null);
+  const syncedAccounts = accounts && offersAccounts(accounts) && endedImports.length > 0
+    ? endedImports
     : null;
+  // The footer shows the latest import's line alone without them, as before several
+  // accounts. With them, it shows it while an import runs: the cue that the page asks every
+  // 30 s whether it is over (#51).
+  const showsLatestImport = Boolean(importStatus?.latest)
+    && (syncedAccounts === null || !importStatus.latest.completed_at);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 p-4 md:p-6">
@@ -693,7 +700,17 @@ export default function Dashboard() {
         {/* Footer */}
         <div className="text-center text-sm text-gray-400 pt-4 pb-2">
           <p>{t('syncedVia')}</p>
-          {syncedAccounts ? syncedAccounts.map((account) => (
+          {showsLatestImport && (
+            <p className="mt-1">
+              {t('lastSync')}: {importStatus.latest.completed_at ? (
+                <>
+                  {parseSqliteDate(importStatus.latest.completed_at).toLocaleString(locale)}
+                  {' '}({importStatus.latest.bills_imported} {t('bills')})
+                </>
+              ) : t('importStatusRunning')}
+            </p>
+          )}
+          {syncedAccounts?.map((account) => (
             // Each account as the account selector names it. One whose last import failed
             // says so, with why over it, as the import history does (#113).
             <p key={account.id} className="mt-1">
@@ -709,16 +726,7 @@ export default function Dashboard() {
                 </>
               )}
             </p>
-          )) : importStatus?.latest && (
-            <p className="mt-1">
-              {t('lastSync')}: {importStatus.latest.completed_at ? (
-                <>
-                  {parseSqliteDate(importStatus.latest.completed_at).toLocaleString(locale)}
-                  {' '}({importStatus.latest.bills_imported} {t('bills')})
-                </>
-              ) : t('importStatusRunning')}
-            </p>
-          )}
+          ))}
 
           {/* Import history */}
           <details className="mt-3 max-w-2xl mx-auto text-left">

@@ -579,6 +579,19 @@ describe('dashboard shell', () => {
       const withFailedAccount = {
         ...severalAccounts, accounts: [failedAccount, ...severalAccounts.accounts],
       };
+      // A run of the import in progress, which started this morning
+      const running = {
+        ...account.importStatus.latest,
+        id: 4,
+        started_at: '2026-09-15 04:00:00',
+        completed_at: null,
+        bills_imported: 0,
+        status: 'running',
+      };
+      const whileRunning = (data) => ({
+        ...data,
+        importStatus: { latest: running, running: true, history: [running] },
+      });
 
       // Each account as the account selector names it, in the order of the route, and when
       // its last import ended, in local time. The Unknown account has none: no import reads
@@ -611,6 +624,31 @@ describe('dashboard shell', () => {
         const failed = within(footer()).getByTitle(reason);
         expect(failed).toHaveTextContent('échoué');
         expect(importToneOf(failed)).toBe('error');
+      });
+
+      // As with a single account: the cue that the page asks every 30 s whether it is over
+      // (#51)
+      it('says that an import runs, besides when each account was last synchronised',
+        async () => {
+          await renderDashboard(whileRunning(severalAccounts));
+
+          expect(lastSyncLines()).toEqual([
+            'Dernière sync: en cours',
+            'Lyon subsidiary — Dernière sync: 14/09/2026 06:02:30',
+            'yy2222-ovh — Dernière sync: 14/09/2026 06:02:10',
+            'zz3333-ovh (non configuré) — Dernière sync: 31/08/2026 06:01:00',
+          ]);
+        });
+
+      // As during the first run of several accounts, which records them all before it imports
+      // any: the footer shows the latest import's line alone, as with a single account
+      it("shows the latest import alone until an account's import has ended", async () => {
+        const recorded = severalAccounts.accounts
+          .map((recordedAccount) => ({ ...recordedAccount, lastImport: null }));
+
+        await renderDashboard(whileRunning({ ...severalAccounts, accounts: recorded }));
+
+        expect(lastSyncLines()).toEqual(['Dernière sync: en cours']);
       });
 
       it('says so in the language of the page', async () => {
@@ -824,13 +862,14 @@ describe('dashboard shell', () => {
       });
 
     // With several accounts (#124), the accounts route says when each account's import ended
-    // once the run is over. While it runs, the footer says when each account's last import
-    // ended, as the import history shows the run.
+    // once the run is over. While it runs, the footer says so, and when each account's last
+    // import ended.
     it("shows each account's last synchronisation once an import is over", async () => {
       fakeTimers();
       await renderDashboard({ ...severalAccounts, importStatus: importStatus(running) });
 
       expect(lastSyncLines()).toEqual([
+        'Dernière sync: en cours',
         'Lyon subsidiary — Dernière sync: 14/09/2026 06:02:30',
         'yy2222-ovh — Dernière sync: 14/09/2026 06:02:10',
         'zz3333-ovh (non configuré) — Dernière sync: 31/08/2026 06:01:00',
