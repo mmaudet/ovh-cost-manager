@@ -527,19 +527,6 @@ const analysisOps = {
     return totals;
   },
 
-  nonCloudTotal: (fromDate, toDate) => {
-    const db = getDb();
-    return db.prepare(`
-      SELECT
-        SUM(d.total_price) as total,
-        COUNT(d.id) as items_count
-      FROM bill_details d
-      JOIN bills b ON d.bill_id = b.id
-      WHERE b.date >= ? AND b.date <= ?
-        AND d.project_id IS NULL
-    `).get(fromDate, toDate);
-  },
-
   billsByProject: (projectNameOrId, fromDate, toDate) => {
     const db = getDb();
     let query = `

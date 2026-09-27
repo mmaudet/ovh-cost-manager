@@ -656,7 +656,6 @@ function registerRoutes() {
       }
 
       const summary = db.analysis.summary(from, to);
-      const nonCloud = db.analysis.nonCloudTotal(from, to);
       const byProject = db.analysis.byProject(from, to);
 
       // Calculate daily average
