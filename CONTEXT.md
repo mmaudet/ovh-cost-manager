@@ -11,8 +11,8 @@ resource that OCM imports belongs to one account.
 _Avoid_: NIC (the account's identifier), customer, tenant, organisation
 
 **Unknown account**:
-Where the data imported before OCM told accounts apart goes when none of the configured
-accounts claims it.
+Where the data imported before OCM told accounts apart goes when no account claims it,
+and nothing tells that the database was one account's (ADR 0002).
 _Avoid_: unassigned, orphan
 
 **Bill line**:

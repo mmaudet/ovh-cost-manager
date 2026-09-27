@@ -1428,6 +1428,9 @@ function printSummary(title, stats) {
  * Imports every account of the configuration, one after the other, under the lock of one
  * import log entry, or the account that --account names. An account that fails does not stop
  * the others: the run then ends partial, naming those that failed, or failed when all did.
+ * A full import clears the accounts that it can import, and those only (#114). Each run
+ * records which accounts the configuration lists, and gives the rows stored before the
+ * accounts to their account, when the database tells it (see data/ownership.js).
  * @param {object} params - The options, as parseArgs() reads them
  */
 async function runImport(params) {

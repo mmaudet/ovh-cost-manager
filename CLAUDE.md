@@ -26,9 +26,14 @@ OVH API ──> data/import.js ──> SQLite (ovh-bills.db) ──> server/inde
   - `db.js` — connection singleton (`getDb()`). Opens SQLite in WAL mode, runs
     `schema.sql`, then applies idempotent runtime migrations via `addColumnIfNotExists`.
     There is no migration framework; schema changes are made by editing `schema.sql` AND
-    adding an `addColumnIfNotExists` call for existing databases. A table whose key
-    changes goes through `rekeyTable()`, which moves its rows to the table as `schema.sql`
-    creates it now, as SQLite cannot change a key in place.
+    adding an `addColumnIfNotExists` call for existing databases. A migration that writes
+    goes through `migrateWhenNeeded()`, which takes the write lock only when the database
+    needs it: the import may hold that lock while the server opens the database.
+  - `ownership.js` — which account each row belongs to (ADR 0002): the claims of the rows
+    stored before the accounts, their attribution, the take-over of a service that two
+    accounts list, the clearing of one account, and `rekeyTable()`, for a table whose key
+    changes, as SQLite cannot change a key in place. Its functions take the database;
+    `db.js` exposes them on `db.accounts`, `db.clearAccount()` and `db.clearAll()`.
   - `classify.js` — pure functions (`classifyService`, etc.) mapping a bill line's
     description to a service type. **Classification runs at import time** and the result is
     stored in `bill_details.service_type`; the server reads the stored value, it does not
@@ -122,9 +127,15 @@ lists, the replacement of the consumption history, and the clearing of `--full`,
 clears every account it can read, or the one of `--account`. A service that two accounts
 list is stored once: it belongs to the account that bills it, or else to the first
 configured account that lists it. An account removed from the configuration keeps its
-data, and is no longer imported. At the first import after #114, the rows stored before the accounts go to the
-single configured account, or to each of several that lists them; the rest stay without
-an account, as the Unknown account's (`CONTEXT.md`).
+data, and is no longer imported.
+
+The rows stored before #114 carry no account. A single configured account, in a database
+that has never known another, gets them all at its first import. Otherwise each account
+claims those that its API lists: its bills, from its whole bill list, its projects and
+services, and its credit movements, the very ones its API gives. Once no bill is left
+without an account, and all those claimed went to one account, the database was that
+account's, which gets the rest (ADR 0002). The rest stay without an account, as the
+Unknown account's (`CONTEXT.md`), and the balance and consumption snapshots go.
 
 ### Tests
 
