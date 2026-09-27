@@ -7,7 +7,7 @@
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const { ACCOUNT } = require('./support/accounts');
+const { ACCOUNT, PARIS } = require('./support/accounts');
 
 describe('costs by project', () => {
   let db;
@@ -127,7 +127,7 @@ describe('costs by project', () => {
       // account, written first, and of the account
       db.bills.upsert({
         id: 'FR0013', date: '2026-12-05', price_without_tax: 0, price_with_tax: 0, tax: 0,
-        currency: 'EUR', pdf_url: null, html_url: null, account: 'yy2222-ovh',
+        currency: 'EUR', pdf_url: null, html_url: null, account: PARIS,
       });
       db.getDb().prepare(
         "INSERT INTO bills (id, date, currency, account) VALUES (?, ?, 'EUR', NULL)",
@@ -158,7 +158,7 @@ describe('costs by project', () => {
     // As the Web Cloud services billed to several accounts (#122)
     test('come for each account that billed them by NIC handle, the Unknown account last', () => {
       const ofEachAccount = [
-        ['project-kilo', ACCOUNT.nic], ['project-kilo', 'yy2222-ovh'], ['project-kilo', null],
+        ['project-kilo', ACCOUNT.nic], ['project-kilo', PARIS], ['project-kilo', null],
       ];
       const byAccount = { byAccount: true };
 

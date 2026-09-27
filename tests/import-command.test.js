@@ -30,19 +30,6 @@ function runImportCommand(...args) {
   });
 }
 
-// Clearing a single account's data comes with #114
-test.each([
-  [['--full', '--account', 'xx1111-ovh']],
-  [['--account', 'xx1111-ovh', '--full']],
-])('refuses --full with --account, saying why: %j', (args) => {
-  const result = runImportCommand(...args);
-
-  expect(result.status).toBe(1);
-  expect(result.stderr).toBe('Error: --full clears every account, so it cannot be limited to '
-    + 'one with --account yet: run --full alone, or --account with --diff or --from\n');
-  expect(result.stdout).toBe('');
-});
-
 test('refuses --account without a NIC handle', () => {
   const result = runImportCommand('--diff', '--account', '--all');
 

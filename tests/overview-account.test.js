@@ -14,7 +14,9 @@
  * Overview's lists that name the account of each project ask so.
  */
 
-const { LYON, PARIS, NEW_ACCOUNT, REFUSED, bill, project } = require('./support/accounts');
+const {
+  LYON, PARIS, NEW_ACCOUNT, UNKNOWN_ACCOUNT, REFUSED, bill, project,
+} = require('./support/accounts');
 const { startOcm } = require('./support/ocm-server');
 
 // A bill line of the instances of a flavour in a Public Cloud project, described as OVH
@@ -107,7 +109,7 @@ describe('GET /api/analysis/by-service', () => {
   });
 
   test('gives those of the Unknown account: the bills without an account', async () => {
-    expect(await septemberOf(route, 'unknown')).toEqual({
+    expect(await septemberOf(route, UNKNOWN_ACCOUNT)).toEqual({
       status: 200, body: [aiMl(60, 1), other(30, 1)],
     });
   });
@@ -159,7 +161,7 @@ describe('GET /api/analysis/by-project', () => {
   });
 
   test('lists those of the Unknown account: the bills without an account', async () => {
-    expect(await septemberOf(route, 'unknown')).toEqual({ status: 200, body: [legacy] });
+    expect(await septemberOf(route, UNKNOWN_ACCOUNT)).toEqual({ status: 200, body: [legacy] });
   });
 
   test('lists none for an account recorded without a bill', async () => {
@@ -217,7 +219,7 @@ describe('GET /api/analysis/by-resource-type', () => {
   });
 
   test('gives those of the Unknown account: the bills without an account', async () => {
-    expect(await septemberOf(route, 'unknown')).toEqual({
+    expect(await septemberOf(route, UNKNOWN_ACCOUNT)).toEqual({
       status: 200, body: [publicCloud(60, 1, 1), domains(30, 1)],
     });
   });
@@ -255,7 +257,7 @@ describe('the projects of GET /api/gpu/summary', () => {
     async () => {
       expect(await gpuProjectsOf(`&account=${LYON}`)).toEqual([production, staging(50)]);
       expect(await gpuProjectsOf(`&account=${PARIS}`)).toEqual([staging(80)]);
-      expect(await gpuProjectsOf('&account=unknown')).toEqual([legacy]);
+      expect(await gpuProjectsOf(`&account=${UNKNOWN_ACCOUNT}`)).toEqual([legacy]);
     });
 });
 

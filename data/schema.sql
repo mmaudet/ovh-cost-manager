@@ -11,7 +11,11 @@ CREATE TABLE IF NOT EXISTS accounts (
   last_import_status TEXT,       -- 'success', 'failed'
   last_import_error TEXT,        -- Why its last import failed
   name TEXT,                     -- The name of its entry in config.json at its last import
-  budget INTEGER                 -- The budget of that entry
+  budget INTEGER,                -- The budget of that entry
+  position INTEGER,              -- Its place in the configuration of the last run, from 0,
+                                 -- NULL when that one does not list it any more (#114)
+  claimed_bills INTEGER NOT NULL DEFAULT 0 -- How many bills stored before the accounts it
+                                 -- claimed, over every run (#114)
 );
 
 -- Cloud Projects
@@ -131,16 +135,18 @@ CREATE TABLE IF NOT EXISTS account_balance (
   account TEXT                   -- NIC handle of its account
 );
 
--- Credit movements
+-- Credit movements, keyed by their account and their id: two accounts can have the same ids
+-- (#114)
 CREATE TABLE IF NOT EXISTS credit_movements (
-  id TEXT PRIMARY KEY,
+  id TEXT,                       -- balanceName_movementId
   balance_name TEXT NOT NULL,
   amount REAL,
   date DATETIME,
   description TEXT,
   movement_type TEXT,
   imported_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-  account TEXT                   -- NIC handle of its account
+  account TEXT,                  -- NIC handle of its account
+  PRIMARY KEY (account, id)
 );
 
 CREATE INDEX IF NOT EXISTS idx_credit_movements_date ON credit_movements(date);
@@ -216,12 +222,15 @@ CREATE TABLE IF NOT EXISTS project_consumption (
 CREATE INDEX IF NOT EXISTS idx_project_consumption_project ON project_consumption(project_id);
 CREATE INDEX IF NOT EXISTS idx_project_consumption_period ON project_consumption(period_start, period_end);
 
--- What the imports record for the readers, by key. 'consumption_month': the first day of
--- the month that the last import of the project consumption covered
+-- What the imports record for the readers, by key and by account (#114).
+-- 'consumption_month': the first day of the month that the last import of the account's
+-- project consumption covered. A row without an account is one recorded before the accounts.
 CREATE TABLE IF NOT EXISTS import_state (
-  key TEXT PRIMARY KEY,
+  key TEXT NOT NULL,
   value TEXT,
-  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  account TEXT,                  -- NIC handle of its account
+  PRIMARY KEY (key, account)
 );
 
 -- Cloud instances per project

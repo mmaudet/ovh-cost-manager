@@ -7,7 +7,9 @@
  * account), and no parameter every account, as before. Any other value is refused.
  */
 
-const { LYON, PARIS, NEW_ACCOUNT, REFUSED, bill, project } = require('./support/accounts');
+const {
+  LYON, PARIS, NEW_ACCOUNT, UNKNOWN_ACCOUNT, REFUSED, bill, project,
+} = require('./support/accounts');
 const { startOcm } = require('./support/ocm-server');
 
 // A bill line of a Public Cloud project, for its instances of a flavour: those of a GPU
@@ -120,7 +122,7 @@ describe('GET /api/analysis/monthly-trend', () => {
   });
 
   test('adds up the bills of the Unknown account: those without an account', async () => {
-    expect(await trend(`${THREE_MONTHS}&account=unknown`)).toEqual({
+    expect(await trend(`${THREE_MONTHS}&account=${UNKNOWN_ACCOUNT}`)).toEqual({
       status: 200,
       body: [month('2026-07', 0), month('2026-08', 0), month('2026-09', 75)],
     });
@@ -156,7 +158,7 @@ describe('GET /api/analysis/monthly-trend', () => {
     test('gives trends of the accounts that add up to that of every account', async () => {
       const costsOf = async (parameters) =>
         (await trend(parameters)).body.map(({ cost }) => cost);
-      const ofEachAccount = await Promise.all([LYON, PARIS, 'unknown']
+      const ofEachAccount = await Promise.all([LYON, PARIS, UNKNOWN_ACCOUNT]
         .map((account) => costsOf(`months=3&account=${account}`)));
 
       expect(ofEachAccount[0].map((_, index) =>
@@ -199,7 +201,7 @@ describe('GET /api/analysis/monthly-trend-by-category', () => {
 
   test('has the resource types of the Unknown account: those of the bills without an account',
     async () => {
-      expect(await trend(`${THREE_MONTHS}&account=unknown`)).toEqual({
+      expect(await trend(`${THREE_MONTHS}&account=${UNKNOWN_ACCOUNT}`)).toEqual({
         status: 200,
         body: {
           categories: [PUBLIC_CLOUD, DOMAINS],
@@ -298,7 +300,7 @@ describe('GET /api/gpu/summary', () => {
 
   test('gives those of the Unknown account: the bills and the projects without an account',
     async () => {
-      expect(await gpuCosts(`${threeMonths}&account=unknown`)).toEqual({
+      expect(await gpuCosts(`${threeMonths}&account=${UNKNOWN_ACCOUNT}`)).toEqual({
         status: 200,
         body: {
           total: 45,

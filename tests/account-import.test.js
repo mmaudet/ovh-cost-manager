@@ -5,7 +5,8 @@
  */
 
 const { routes, ok, fail, me, useThrowawayImport } = require('./support/simulated-ovh');
-const { ACCOUNT, SQLITE_TIME } = require('./support/accounts');
+const { ACCOUNT, PARIS, SQLITE_TIME } = require('./support/accounts');
+const { ROOT_TABLES, asBeforeAccounts } = require('./support/database-before');
 
 jest.mock('ovh', () => require('./support/simulated-ovh').ovh);
 jest.mock('jsonfile', () => require('./support/simulated-ovh').jsonfile);
@@ -154,12 +155,6 @@ const ALL_DATASETS = {
 // A period import of September, with none of the datasets that the bills do not give
 const importSeptember = () => runImport({ from: '2026-09-01', to: '2026-09-30' });
 
-// The tables that the OVH API feeds whose rows carry the NIC handle of their account
-const ROOT_TABLES = [
-  'bills', 'projects', 'dedicated_servers', 'vps_instances', 'storage_services',
-  'account_balance', 'consumption_snapshots', 'consumption_history', 'credit_movements',
-];
-
 // The accounts that the rows of a table carry, NULL for a row without any
 const accountsIn = (table) => db.getDb()
   .prepare(`SELECT DISTINCT account FROM ${table} ORDER BY account`)
@@ -205,11 +200,7 @@ const onlyTheAccount = (tables) => byTable(tables, () => [ACCOUNT.nic]);
 // account, and it has no accounts table. The next getDb() migrates it, as the server or the
 // import that starts after the upgrade does.
 function downgradeDatabase() {
-  const database = db.getDb();
-  for (const table of ROOT_TABLES) {
-    database.exec(`ALTER TABLE ${table} DROP COLUMN account`);
-  }
-  database.exec('DROP TABLE accounts');
+  asBeforeAccounts(db.getDb());
   db.closeDb();
 }
 
@@ -256,22 +247,24 @@ describe('an import', () => {
     });
 
   test('records the account, its currency, and when and how its import ended', async () => {
-    routes.set('/me', me({ nic: 'yy2222-ovh', currency: 'CAD' }));
+    routes.set('/me', me({ nic: PARIS, currency: 'CAD' }));
     serveBills();
     const started = sqliteNow();
 
     await importSeptember();
 
     const accounts = db.accounts.getAll();
-    // The legacy credentials give it no name and no budget (#113)
+    // The legacy credentials give it no name and no budget (#113), and it is configured
+    // (#114)
     expect(accounts).toEqual([{
-      nic: 'yy2222-ovh',
+      nic: PARIS,
       currency: 'CAD',
       last_import_at: expect.stringMatching(SQLITE_TIME),
       last_import_status: 'success',
       last_import_error: null,
       name: null,
       budget: null,
+      configured: true,
     }]);
     // It ended during the import
     const ended = accounts[0].last_import_at;
@@ -293,6 +286,7 @@ describe('an import', () => {
       last_import_error: 'Internal server error',
       name: null,
       budget: null,
+      configured: true,
     }]);
   });
 });
@@ -413,5 +407,27 @@ describe('the first import after the upgrade', () => {
 
     expect(accountsOfRootTables()).toEqual(onlyTheAccount(ROOT_TABLES));
     expect(accountsOfChildTables()).toEqual(onlyTheAccount(Object.keys(CHILD_TABLES)));
+  });
+
+  // Until the account-wide figures follow the account (#116), their readers read every row:
+  // with a single account, they give what they gave, but for the account of the rows
+  test('leaves what the readers of the account-wide figures give', async () => {
+    await storeRowsOfBefore();
+    routes.set('/cloud/project', ok([]));
+    routes.set('/me/bill', ok([]));
+    const withoutAccount = ({ account, ...row }) => row;
+    const read = () => ({
+      balance: withoutAccount(db.balance.getLatestBalance()),
+      credits: db.balance.getCreditMovements().map(withoutAccount),
+      snapshot: withoutAccount(db.consumption.getLatestSnapshot()),
+      history: db.consumption.getHistory().map(withoutAccount),
+      consumptionMonth: db.cloudDetails.getCurrentConsumptionMonth(),
+    });
+    const before = read();
+
+    await runImport({ diff: true });
+
+    expect(read()).toEqual(before);
+    expect(before.consumptionMonth).toBe('2026-09-01');
   });
 });

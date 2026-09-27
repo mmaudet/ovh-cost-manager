@@ -6,7 +6,9 @@
  * behind the dashboard's header take it: the months list, and a month's summary.
  */
 
-const { LYON, PARIS, NEW_ACCOUNT, REFUSED, bill, project } = require('./support/accounts');
+const {
+  LYON, PARIS, NEW_ACCOUNT, UNKNOWN_ACCOUNT, REFUSED, bill, project,
+} = require('./support/accounts');
 const { startOcm } = require('./support/ocm-server');
 
 // A bill line of a Public Cloud project, or of no project for any other service
@@ -111,7 +113,7 @@ describe('GET /api/months', () => {
 
   test('lists the months of the Unknown account: those of the bills without an account',
     async () => {
-      expect(await ocm.get('/api/months?account=unknown')).toEqual({
+      expect(await ocm.get(`/api/months?account=${UNKNOWN_ACCOUNT}`)).toEqual({
         status: 200, body: [SEPTEMBER, MAY],
       });
     });
@@ -161,7 +163,7 @@ describe('GET /api/summary', () => {
 
   test('gives the figures of the Unknown account: those of the bills without an account',
     async () => {
-      expect(await ocm.get(`/api/summary?${september}&account=unknown`)).toEqual({
+      expect(await ocm.get(`/api/summary?${september}&account=${UNKNOWN_ACCOUNT}`)).toEqual({
         status: 200,
         body: summary({
           total: 80,
@@ -195,10 +197,10 @@ describe('the Unknown account of a database whose every bill has an account', ()
   });
 
   test('has no month and no figure', async () => {
-    expect(await claimed.get('/api/months?account=unknown')).toEqual({ status: 200, body: [] });
-    expect(await claimed.get(`/api/summary?${SEPTEMBER_DATES}&account=unknown`)).toEqual({
-      status: 200, body: NOTHING_IN_SEPTEMBER,
-    });
+    expect(await claimed.get(`/api/months?account=${UNKNOWN_ACCOUNT}`))
+      .toEqual({ status: 200, body: [] });
+    expect(await claimed.get(`/api/summary?${SEPTEMBER_DATES}&account=${UNKNOWN_ACCOUNT}`))
+      .toEqual({ status: 200, body: NOTHING_IN_SEPTEMBER });
   });
 });
 

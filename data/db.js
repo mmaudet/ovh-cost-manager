@@ -1,6 +1,13 @@
 const Database = require('better-sqlite3');
 const { classifyWebCloud, WEB_CLOUD_FAMILIES } = require('./classify');
 const { monthsOfWindow } = require('./months');
+const ownership = require('./ownership');
+// The conditions of the queries that keep one account's rows (#115), or a list of ids
+const { UNKNOWN_ACCOUNT, accountCondition, idInList } = require('./sql-conditions');
+// What brings a database that an earlier version created to schema.sql's form
+const {
+  addColumnIfNotExists, hasColumn, keyLacks, migrateWhenNeeded, rekeyTable,
+} = require('./migrations');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
@@ -29,15 +36,9 @@ const DATA_DIR = process.env.DATA_DIR || loadDataDirFromConfig() || __dirname;
 const DB_PATH = path.resolve(DATA_DIR, 'ovh-bills.db');
 const SCHEMA_PATH = path.resolve(__dirname, 'schema.sql');
 
-// The tables fed by the OVH API whose rows belong to no bill or project: each row holds the
-// NIC handle of its account in an `account` column, which tells the accounts of one
-// database apart (#112, ADR 0002). The other rows find their account through their bill
-// (the bill lines) or their project (the instances, volumes, snapshots, buckets,
-// consumption and quotas of a Public Cloud project).
-const ACCOUNT_TABLES = [
-  'bills', 'projects', 'dedicated_servers', 'vps_instances', 'storage_services',
-  'account_balance', 'consumption_snapshots', 'consumption_history', 'credit_movements',
-];
+// The tables whose rows carry the NIC handle of their account (#112, ADR 0002): see
+// data/ownership.js, which tells which account each row belongs to
+const { ACCOUNT_TABLES } = ownership;
 
 /**
  * Checks that a row that a writer of ACCOUNT_TABLES stores carries the NIC handle of its
@@ -53,27 +54,6 @@ function requireAccount(table, row) {
     throw new Error(`Cannot write a row of ${table} without the NIC handle of its account`);
   }
   return row;
-}
-
-// The value that selects the Unknown account (see CONTEXT.md), the rows without an account,
-// in the queries that can keep one account's rows and in the account parameter of the
-// server's routes (#115). No NIC handle reads so.
-const UNKNOWN_ACCOUNT = 'unknown';
-
-/**
- * The condition that keeps the rows of an account in a query that can keep one account's
- * rows (#115, ADR 0002), to join with AND to its WHERE clause, and its parameters. Such a
- * query takes the account as the server's routes read it from their account parameter.
- * @param {?string} account - null for every account, UNKNOWN_ACCOUNT for the Unknown
- *   account, or else the NIC handle of an account
- * @param {string} column - The column of the query that holds the NIC handle of its rows'
- *   account: `b.account` for its bills, `p.account` for its projects
- * @returns {{ sql: string, params: string[] }} Always true for every account
- */
-function accountCondition(account, column) {
-  if (account === null) return { sql: '1 = 1', params: [] };
-  if (account === UNKNOWN_ACCOUNT) return { sql: `${column} IS NULL`, params: [] };
-  return { sql: `${column} = ?`, params: [account] };
 }
 
 /**
@@ -105,15 +85,8 @@ function projectGrouping(projectColumn, byAccount) {
 
 let db = null;
 
-/**
- * Safely add a column to a table if it doesn't exist
- */
-function addColumnIfNotExists(database, table, column, type) {
-  const columns = database.pragma(`table_info(${table})`);
-  if (!columns.find(c => c.name === column)) {
-    database.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${type}`);
-  }
-}
+// An operation of data/ownership.js, on the database that getDb() opens
+const onDb = (operation) => (...args) => operation(getDb(), ...args);
 
 /**
  * Initialize and return database connection
@@ -147,8 +120,28 @@ function getDb() {
     // import of the account records
     addColumnIfNotExists(db, 'accounts', 'name', 'TEXT');
     addColumnIfNotExists(db, 'accounts', 'budget', 'INTEGER');
+    // The place of each account in the configuration, which each run records (#114). An
+    // account recorded before was configured at its last import: each takes its place in the
+    // order the accounts were first recorded, until the next run records the configuration.
+    migrateWhenNeeded(db, () => !hasColumn(db, 'accounts', 'position'), () => {
+      addColumnIfNotExists(db, 'accounts', 'position', 'INTEGER');
+      db.exec(`
+        UPDATE accounts SET position =
+          (SELECT COUNT(*) FROM accounts AS earlier WHERE earlier.rowid < accounts.rowid)
+      `);
+    });
+    // How many bills stored before the accounts each account claimed, which tells whether
+    // the database was one account's (#114)
+    addColumnIfNotExists(db, 'accounts', 'claimed_bills', 'INTEGER NOT NULL DEFAULT 0');
     // What keeps the lock of a long import (#113)
     addColumnIfNotExists(db, 'import_log', 'heartbeat_at', 'DATETIME');
+    // The credit movements keyed by their account too (#114): their ids, which join the name
+    // of their balance and their number, can be those of another account's. And the import
+    // state kept by account, where what an import recorded before carries none.
+    for (const table of ['credit_movements', 'import_state']) {
+      migrateWhenNeeded(db, () => keyLacks(db, table, 'account'),
+        () => rekeyTable(db, schema, table));
+    }
   }
   return db;
 }
@@ -165,6 +158,14 @@ function closeDb() {
 
 // Project operations
 const projectOps = {
+  /**
+   * Records a Public Cloud project that an account's API lists, or updates one stored: one
+   * that another account holds stays that account's, and one stored without an account goes
+   * to this one (see LISTED_SERVICE_TABLES in data/ownership.js)
+   * @param {object} project - As the import stores it, with `account`, the NIC handle of the
+   *   account whose API lists it
+   * @throws {Error} When the project has no account (see requireAccount())
+   */
   upsert: (project) => {
     const db = getDb();
     const stmt = db.prepare(`
@@ -175,7 +176,7 @@ const projectOps = {
         description = @description,
         status = @status,
         updated_at = CURRENT_TIMESTAMP,
-        account = @account
+        account = COALESCE(account, @account)
     `);
     return stmt.run(requireAccount('projects', project));
   },
@@ -410,6 +411,16 @@ const importLogOps = {
     return db.prepare('SELECT * FROM import_log ORDER BY id DESC').all();
   },
 
+  /**
+   * Clears the log of every import but the one given: a full import of every account starts
+   * the log again (#114), but for its own entry, which tells the other imports that it runs
+   * @param {number} id - The entry to keep
+   */
+  clearAllBut: (id) => {
+    const db = getDb();
+    return db.prepare('DELETE FROM import_log WHERE id IS NOT ?').run(id);
+  },
+
   // Records that the running import is alive, which keeps its lock: a run over several
   // accounts, or over an account's whole history, can take longer than 30 minutes (#113)
   heartbeat: (id) => {
@@ -454,25 +465,28 @@ const accountsOps = {
     `).run({ nic, currency, name, budget });
   },
 
-  /**
-   * Gives the account every row of ACCOUNT_TABLES that has none. The writers refuse a row
-   * without an account, so these are the rows stored before the upgrade: with a single
-   * account configured, they can only be its own.
-   * @param {string} nic - The NIC handle of the account
-   * @returns {number} How many rows it gave the account
-   */
-  attributeRowsWithoutAccount: (nic) => {
-    const db = getDb();
-    const attribute = db.transaction(() => {
-      let attributed = 0;
-      for (const table of ACCOUNT_TABLES) {
-        attributed += db.prepare(`UPDATE ${table} SET account = ? WHERE account IS NULL`)
-          .run(nic).changes;
-      }
-      return attributed;
-    });
-    return attribute();
-  },
+  // Which account the rows belong to, and the rows that an import gives to an account,
+  // takes over for one, or leaves the Unknown account's (#114): the operations of
+  // data/ownership.js, on the database that getDb() opens, without their first parameter
+
+  /** @see ownership.attributeRowsWithoutAccount */
+  attributeRowsWithoutAccount: onDb(ownership.attributeRowsWithoutAccount),
+  /** @see ownership.markSeveralAccounts */
+  markSeveralAccounts: onDb(ownership.markSeveralAccounts),
+  /** @see ownership.isOnlyAccount */
+  isOnlyAccount: onDb(ownership.isOnlyAccount),
+  /** @see ownership.hasRowsWithoutAccount */
+  hasRowsWithoutAccount: onDb(ownership.hasRowsWithoutAccount),
+  /** @see ownership.claimBills */
+  claimBills: onDb(ownership.claimBills),
+  /** @see ownership.attributeToSoleClaimer */
+  attributeToSoleClaimer: onDb(ownership.attributeToSoleClaimer),
+  /** @see ownership.claimCreditMovement */
+  claimCreditMovement: onDb(ownership.claimCreditMovement),
+  /** @see ownership.deleteSnapshotsWithoutAccount */
+  deleteSnapshotsWithoutAccount: onDb(ownership.deleteSnapshotsWithoutAccount),
+  /** @see ownership.takeOverBilledRows */
+  takeOverBilledRows: onDb(ownership.takeOverBilledRows),
 
   /**
    * Records how the last import of the account ended, and that it ended now, for the
@@ -511,12 +525,40 @@ const accountsOps = {
     getDb().prepare('SELECT 1 FROM accounts WHERE nic = ?').get(nic) !== undefined,
 
   /**
-   * @returns {object[]} Every account recorded, by NIC handle, as the accounts table holds it
+   * Records which accounts the configuration of a run lists, among those recorded, and at
+   * which place: the others are no longer configured, keep their data and are no longer
+   * imported (#114). Each run records it, whatever it imports of them. When the run cannot
+   * tell the account of an entry, which may be any of those recorded, the accounts that it
+   * can tell take their places, and the others keep theirs: only a run that tells every
+   * entry's account knows which ones the configuration no longer lists.
+   * @param {Array<?string>} nics - The NIC handle of the account of each entry of the
+   *   configuration, in its order: the one that its GET /me named, or else the one that an
+   *   import last recorded with its entry's name; null for an entry that leads to no account
+   *   that the run can tell
    */
-  getAll: () => {
+  recordConfiguration: (nics) => {
     const db = getDb();
-    return db.prepare('SELECT * FROM accounts ORDER BY nic').all();
-  }
+    const place = db.prepare('UPDATE accounts SET position = ? WHERE nic = ?');
+    db.transaction(() => {
+      if (nics.every(nic => nic)) db.exec('UPDATE accounts SET position = NULL');
+      nics.forEach((nic, position) => {
+        if (nic) place.run(position, nic);
+      });
+    })();
+  },
+
+  /**
+   * @returns {object[]} Every account recorded: those that the configuration of the last run
+   *   lists, in its order, then the others by NIC handle. Each gives the accounts table's
+   *   nic, currency, last_import_at, last_import_status, last_import_error, name and budget,
+   *   and `configured`, whether that configuration lists it.
+   */
+  getAll: () => getDb().prepare(`
+    SELECT nic, currency, last_import_at, last_import_status, last_import_error, name, budget,
+      position IS NOT NULL AS configured
+    FROM accounts
+    ORDER BY position IS NULL, position, nic
+  `).all().map(account => ({ ...account, configured: account.configured === 1 }))
 };
 
 // Analysis queries
@@ -731,9 +773,14 @@ const consumptionOps = {
     return db.prepare(query).all(...params);
   },
 
-  clearHistory: () => {
+  /**
+   * Clears the consumption history of an account, which its import then replaces: the other
+   * accounts' history, and that of the Unknown account, stay (#114)
+   * @param {string} account - The NIC handle of the account
+   */
+  clearHistory: (account) => {
     const db = getDb();
-    db.exec('DELETE FROM consumption_history');
+    db.prepare('DELETE FROM consumption_history WHERE account = ?').run(account);
   }
 };
 
@@ -776,27 +823,39 @@ const balanceOps = {
   }
 };
 
-// Makes the function that deletes the services of an inventory table whose id is not in
-// `ids`, the list the OVH API gave of all those that exist now: the services cancelled since
-// an import stored them (#74). `serviceType`, for a table whose list covers one type of its
-// services only, leaves the others alone. The ids compare as text, as the table stores them:
-// json_each() gives a number as an integer, which no text equals. The function returns how
-// many it deleted.
+/**
+ * Makes the function that deletes the services of an inventory table whose id is not in
+ * `ids`, the list that the OVH API of an account gave of all those that exist now: the
+ * services cancelled since an import stored them (#74). It deletes only the services of that
+ * account, `account`, its NIC handle: another account's services, and those that no account
+ * holds, are not in its list (#114). The ids compare as text (see idInList()).
+ * @param {string} table - The inventory table
+ * @param {?string} [serviceType] - For a table whose list covers one type of its services
+ *   only, that type: the others stay
+ * @returns {function(Array<string|number>, string): number} The function, of the list and
+ *   the account, which returns how many it deleted
+ */
 function deleteNotIn(table, serviceType = null) {
   const ofType = serviceType === null ? '' : 'service_type = ? AND ';
   const typeParams = serviceType === null ? [] : [serviceType];
-  return (ids) => {
-    const db = getDb();
-    return db.prepare(`
-      DELETE FROM ${table}
-      WHERE ${ofType}id NOT IN (SELECT CAST(value AS TEXT) FROM json_each(?))
-    `).run(...typeParams, JSON.stringify(ids)).changes;
+  return (ids, account) => {
+    const listed = idInList('id', ids);
+    return getDb().prepare(`
+      DELETE FROM ${table} WHERE account = ? AND ${ofType}NOT ${listed.sql}
+    `).run(account, ...typeParams, ...listed.params).changes;
   };
 }
 
 // Inventory operations (Phase 3)
 const inventoryOps = {
-  // Dedicated servers
+  /**
+   * Records a dedicated server that an account's API lists, or updates one stored: one that
+   * another account holds stays that account's, and one stored without an account goes to
+   * this one (see LISTED_SERVICE_TABLES in data/ownership.js)
+   * @param {object} server - As the import stores it, with `account`, the NIC handle of the
+   *   account whose API lists it
+   * @throws {Error} When the server has no account (see requireAccount())
+   */
   upsertServer: (server) => {
     const db = getDb();
     const stmt = db.prepare(`
@@ -806,7 +865,7 @@ const inventoryOps = {
         display_name = @display_name, reverse = @reverse, datacenter = @datacenter, os = @os, state = @state,
         cpu = @cpu, ram_size = @ram_size, disk_info = @disk_info, bandwidth = @bandwidth,
         expiration_date = @expiration_date, renewal_type = @renewal_type, imported_at = CURRENT_TIMESTAMP,
-        account = @account
+        account = COALESCE(account, @account)
     `);
     return stmt.run(requireAccount('dedicated_servers', server));
   },
@@ -816,7 +875,11 @@ const inventoryOps = {
     return db.prepare('SELECT * FROM dedicated_servers ORDER BY display_name').all();
   },
 
-  // VPS
+  /**
+   * Records a VPS that an account's API lists, as upsertServer() records a server
+   * @param {object} vps - As the import stores it, with `account`
+   * @throws {Error} When the VPS has no account (see requireAccount())
+   */
   upsertVps: (vps) => {
     const db = getDb();
     const stmt = db.prepare(`
@@ -826,7 +889,7 @@ const inventoryOps = {
         display_name = @display_name, model = @model, zone = @zone, state = @state, os = @os,
         vcpus = @vcpus, ram_mb = @ram_mb, disk_gb = @disk_gb,
         expiration_date = @expiration_date, renewal_type = @renewal_type, ip_addresses = @ip_addresses, imported_at = CURRENT_TIMESTAMP,
-        account = @account
+        account = COALESCE(account, @account)
     `);
     return stmt.run(requireAccount('vps_instances', vps));
   },
@@ -836,7 +899,11 @@ const inventoryOps = {
     return db.prepare('SELECT * FROM vps_instances ORDER BY display_name').all();
   },
 
-  // Storage
+  /**
+   * Records a storage service that an account's API lists, as upsertServer() records a server
+   * @param {object} storage - As the import stores it, with `account`
+   * @throws {Error} When the service has no account (see requireAccount())
+   */
   upsertStorage: (storage) => {
     const db = getDb();
     const stmt = db.prepare(`
@@ -846,7 +913,7 @@ const inventoryOps = {
         service_type = @service_type, display_name = @display_name, region = @region,
         total_size_gb = @total_size_gb, used_size_gb = @used_size_gb, share_count = @share_count,
         expiration_date = @expiration_date, imported_at = CURRENT_TIMESTAMP,
-        account = @account
+        account = COALESCE(account, @account)
     `);
     return stmt.run(requireAccount('storage_services', storage));
   },
@@ -856,7 +923,8 @@ const inventoryOps = {
     return db.prepare('SELECT * FROM storage_services ORDER BY display_name').all();
   },
 
-  // The services cancelled since an import stored them go, see deleteNotIn() (#74)
+  // The services of an account cancelled since an import stored them go, see deleteNotIn()
+  // (#74, #114)
   deleteServersNotIn: deleteNotIn('dedicated_servers'),
   deleteVpsNotIn: deleteNotIn('vps_instances'),
   // Their list, /storage/netapp, names the NetApp services only
@@ -1408,26 +1476,36 @@ function allocateSwiftArchive(db, rows, projectId, fromDate, toDate) {
 
 // Cloud detail operations (Phase 4)
 const cloudDetailOps = {
-  // The first day of the month of the current consumption, which the readers show when no
-  // month is asked for: the month that the last import of the consumption covered, even
-  // with no usage yet. The consumption of every month is kept (#54). Before any import
-  // records its month, the latest month stored; null when there is none.
+  /**
+   * The month of the current consumption, which the readers show when no month is asked for:
+   * the month that the last import of the consumption covered, even with no usage yet. The
+   * consumption of every month is kept (#54). Each account records its own (#114): the
+   * latest of them, until the readers follow the account (#116).
+   * @returns {?string} Its first day, YYYY-MM-01; before any import records its month, the
+   *   latest month stored; null when there is none
+   */
   getCurrentConsumptionMonth: () => {
     const db = getDb();
     const recorded = db.prepare(
-      "SELECT value FROM import_state WHERE key = 'consumption_month'"
-    ).get();
-    if (recorded) return recorded.value;
+      "SELECT MAX(value) AS month FROM import_state WHERE key = 'consumption_month'"
+    ).get().month;
+    if (recorded) return recorded;
     return db.prepare('SELECT MAX(period_start) as month FROM project_consumption').get().month;
   },
 
-  setCurrentConsumptionMonth: (periodStart) => {
+  /**
+   * Records the month that an import of an account's project consumption covered.
+   * @param {string} periodStart - Its first day, YYYY-MM-01
+   * @param {string} account - The NIC handle of the account
+   */
+  setCurrentConsumptionMonth: (periodStart, account) => {
     const db = getDb();
     db.prepare(`
-      INSERT INTO import_state (key, value, updated_at)
-      VALUES ('consumption_month', ?, CURRENT_TIMESTAMP)
-      ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = CURRENT_TIMESTAMP
-    `).run(periodStart);
+      INSERT INTO import_state (key, value, updated_at, account)
+      VALUES ('consumption_month', @periodStart, CURRENT_TIMESTAMP, @account)
+      ON CONFLICT(key, account) DO UPDATE SET
+        value = excluded.value, updated_at = CURRENT_TIMESTAMP
+    `).run(requireAccount('import_state', { periodStart, account }));
   },
 
   insertConsumption: (entry) => {
@@ -2020,37 +2098,6 @@ const cloudDetailOps = {
 };
 
 /**
- * Clears the imported data, for a full import. What the import cannot fetch again is kept:
- * the consumption of each project, of which OVH gives the current month only (#54), with
- * the month of its last import (import_state) and the projects it belongs to. The account
- * and consumption snapshots are cleared: only their latest is read, which the import
- * fetches again.
- * @param {?number} [importId] - The import log entry of the full import, which is kept, as
- *   it tells the other imports that this one runs. The rest of the log is cleared.
- */
-function clearAll(importId = null) {
-  const db = getDb();
-  // Supprimer d'abord toutes les tables qui référencent projects ou bills
-  db.exec('DELETE FROM bill_details');
-  db.exec('DELETE FROM cloud_instances');
-  db.exec('DELETE FROM project_quotas');
-  db.exec('DELETE FROM object_storage_buckets');
-  db.exec('DELETE FROM cloud_volumes');
-  db.exec('DELETE FROM cloud_snapshots');
-  db.exec('DELETE FROM bills');
-  db.exec('DELETE FROM projects WHERE id NOT IN (SELECT project_id FROM project_consumption)');
-  // Optionnel : vider aussi les autres tables annexes si besoin
-  db.prepare('DELETE FROM import_log WHERE id IS NOT ?').run(importId);
-  db.exec('DELETE FROM consumption_snapshots');
-  db.exec('DELETE FROM consumption_history');
-  db.exec('DELETE FROM account_balance');
-  db.exec('DELETE FROM credit_movements');
-  db.exec('DELETE FROM dedicated_servers');
-  db.exec('DELETE FROM vps_instances');
-  db.exec('DELETE FROM storage_services');
-}
-
-/**
  * Execute a function within a database transaction
  * @param {Function} fn - Function to execute (receives db as parameter)
  * @returns {*} Result of the function
@@ -2174,7 +2221,10 @@ const webCloudOps = {
 module.exports = {
   getDb,
   closeDb,
-  clearAll,
+  // What a full import of an account clears (#114), on the database that getDb() opens
+
+  /** @see ownership.clearAccount */
+  clearAccount: onDb(ownership.clearAccount),
   transaction,
   allocateProRata,
   UNKNOWN_ACCOUNT,
