@@ -97,8 +97,8 @@ export default function Dashboard() {
 
   // The account the page shows, page-wide: null for all accounts, undefined until the page
   // knows it. The months list, the KPI cards of the month's figures, the Overview's figures
-  // (#118) and the Web Cloud tab follow it; the other cards and tabs follow it in the next
-  // tickets (#116 to #123).
+  // (#118), the Compare tab and the Veeam backups (#119) and the Web Cloud tab follow it; the
+  // other cards and tabs follow it in the next tickets (#116 to #123).
   const { selectedAccount, selectAccount } = useSelectedAccount(accounts);
   // The Account column of the lists, which name the account of each row with all accounts
   // shown, when the page offers several (#121): null when they name none
@@ -200,7 +200,7 @@ export default function Dashboard() {
 
   const overviewTab = useOverviewTab({ selectedMonth, holdsSelectedMonth, accountColumn });
 
-  const compareTab = useCompareTab({ months, activeTab });
+  const compareTab = useCompareTab({ months, activeTab, selectedAccount });
 
   const trendsTab = useTrendsTab({
     months, selectedMonth, holdsSelectedMonth, selectedAccount, activeTab,
@@ -221,7 +221,9 @@ export default function Dashboard() {
   // loads them on either tab (#35)
   const { inventoryServers } = infrastructureTab;
 
-  const backupTab = useBackupTab({ selectedMonth, activeTab });
+  const backupTab = useBackupTab({
+    selectedMonth, holdsSelectedMonth, activeTab, selectedAccount,
+  });
 
   // Update budget when config loads
   useEffect(() => {

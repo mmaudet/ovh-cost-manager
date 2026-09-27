@@ -2,18 +2,22 @@ import { describe, it, expect } from 'vitest';
 import { act } from '@testing-library/react';
 import { useCompareTab } from '../../src/tabs/useCompareTab.js';
 import { months } from '../fixtures/calendar.js';
+import {
+  lyonAccount, removedAccount, severalAccounts, unknownAccount,
+} from '../fixtures/accounts.js';
 import { api } from '../support/api.js';
 import { renderTabHook, TAB_IDS, WAITING } from '../support/hooks.jsx';
 import { settle } from '../support/query-client.js';
 
 // The state and data queries of the Compare tab, as the dashboard shell sees them: what the
-// hook requests and returns for the months list and the active tab. The months list is that
-// of the account shown in the header (#115), which the shell passes on.
+// hook requests and returns for the months list, the active tab and the account shown. The
+// shell holds the account, which the header selects (#115): null for all accounts, undefined
+// while the page does not know it yet. The months list is that account's.
 
 const [september, august, july] = months;
-// What the shell passes on the render where the months list arrives: it selects its own
-// month in that commit, as months A and B get their defaults
-const monthsArrive = { months };
+// What the shell passes on the render where the months list arrives, all accounts shown: it
+// selects its own month in that commit, as months A and B get their defaults
+const monthsArrive = { months, selectedAccount: null };
 const onCompare = { ...monthsArrive, activeTab: 'compare' };
 
 // Months A and B, as [A, B]
@@ -36,7 +40,7 @@ describe('useCompareTab', () => {
     it('are the month before the latest one and the latest one once the list loads',
       async () => {
         const { result, rerender } = await renderTabHook(useCompareTab,
-          { months: [], activeTab: 'overview' });
+          { ...monthsArrive, months: [], activeTab: 'overview' });
         // No month yet: nothing to compare
         expect(result.current.compareMonthA).toBeNull();
         expect(result.current.compareMonthB).toBeNull();
@@ -48,7 +52,7 @@ describe('useCompareTab', () => {
 
     it('are both the only month when a single month was billed', async () => {
       const { result } = await renderTabHook(useCompareTab,
-        { months: [september], activeTab: 'overview' });
+        { ...monthsArrive, months: [september], activeTab: 'overview' });
 
       expect(compared(result.current)).toEqual(['2026-09', '2026-09']);
     });
@@ -137,7 +141,7 @@ describe('useCompareTab', () => {
 
   it('requests nothing before the months list loads', async () => {
     const { queryClient } = await renderTabHook(useCompareTab,
-      { months: [], activeTab: 'compare' });
+      { ...onCompare, months: [] });
 
     // Nor the costs by resource type and the Veeam backups (#32)
     for (const name of FIGURES) {
@@ -157,10 +161,10 @@ describe('useCompareTab', () => {
 
     await rerender(onCompare);
 
-    // Their costs by resource type and their Veeam backups too (#32)
+    // Their costs by resource type and their Veeam backups too (#32), for all accounts
     for (const name of FIGURES) {
-      expect(api[name], name).toHaveBeenCalledWith('2026-08-01', '2026-08-31');
-      expect(api[name], name).toHaveBeenCalledWith('2026-09-01', '2026-09-30');
+      expect(api[name], name).toHaveBeenCalledWith('2026-08-01', '2026-08-31', null);
+      expect(api[name], name).toHaveBeenCalledWith('2026-09-01', '2026-09-30', null);
     }
   });
 
@@ -216,7 +220,7 @@ describe('useCompareTab', () => {
     // The key the queries waited under before months A and B, then those of August and
     // September: the keys of the summary, service types, projects and costs by resource
     // type the page loads for its selected month, and of the Veeam backups the Backup tab
-    // loads for it (#32)
+    // loads for it (#32). For all accounts, their keys name none (ADR 0001).
     const names = ['summary', 'byService', 'byProject', 'byResourceType', 'backupStats'];
     for (const name of names) {
       expect(keysOf(name)).toEqual([
@@ -235,7 +239,7 @@ describe('useCompareTab', () => {
 
     // Their costs by resource type and their Veeam backups too (#32)
     for (const name of FIGURES) {
-      expect(api[name], name).toHaveBeenCalledWith('2026-07-01', '2026-07-31');
+      expect(api[name], name).toHaveBeenCalledWith('2026-07-01', '2026-07-31', null);
     }
     expect(compared(result.current)).toEqual(['2026-07', '2026-09']);
     expect(result.current.compareDataA.total).toBe(980);
@@ -289,12 +293,112 @@ describe('useCompareTab', () => {
     act(() => result.current.handleCompareSort('diff'));
     await settle(queryClient);
 
-    await rerender({ months, activeTab: 'overview' });
+    await rerender({ ...monthsArrive, activeTab: 'overview' });
 
     expect(compared(result.current)).toEqual(['2026-07', '2026-08']);
     expect(result.current.compareSort).toEqual({ column: 'diff', direction: 'desc' });
     // The answers stay
     expect(result.current.compareDataA.total).toBe(980);
     expect(result.current.compareDataB.total).toBe(1042);
+  });
+
+  // Several accounts in the instance (#119): see fixtures/accounts.js
+  describe('figures of the account shown', () => {
+    const lyon = lyonAccount.id;
+    const NAMES = ['summary', 'byService', 'byProject', 'byResourceType', 'backupStats'];
+
+    it('are requested for months A and B of that account, cached under keys that name it',
+      async () => {
+        const { result, keysOf } = await renderTabHook(useCompareTab,
+          { ...onCompare, selectedAccount: lyon }, severalAccounts);
+
+        for (const name of FIGURES) {
+          expect(api[name], name).toHaveBeenCalledWith('2026-08-01', '2026-08-31', lyon);
+          expect(api[name], name).toHaveBeenCalledWith('2026-09-01', '2026-09-30', lyon);
+        }
+        expect(result.current.compareDataA.total).toBe(612);
+        expect(result.current.compareDataB.total).toBe(890.4);
+        expect(services(result.current.byServiceA))
+          .toEqual([['Compute', 450], ['Storage', 102], ['Other', 60]]);
+        expect(projects(result.current.byProjectA)).toEqual([['Production', 512]]);
+        expect(resourceTypes(result.current.byResourceTypeB)).toEqual([
+          ['cloud_project', 610.4], ['dedicated_server', 270], ['domain', 10],
+        ]);
+        // No Veeam backup: what the server answers then
+        expect(result.current.backupStatsB)
+          .toEqual({ vms: { count: 0, total: 0 }, enterprise: { count: 0, total: 0 } });
+        // The account after the other parts of the keys, which stay those of all accounts, so
+        // that months A and B share the keys of the shell and the Backup tab (ADR 0001)
+        for (const name of NAMES) {
+          expect(keysOf(name)).toEqual([
+            [name, undefined, undefined, lyon],
+            [name, '2026-08-01', '2026-08-31', lyon],
+            [name, '2026-09-01', '2026-09-30', lyon],
+          ]);
+        }
+      });
+
+    it('follow the account shown, the Unknown account too, and all accounts again', async () => {
+      const { result, rerender } = await renderTabHook(useCompareTab, onCompare, severalAccounts);
+
+      await rerender({ ...onCompare, selectedAccount: lyon });
+
+      expect(result.current.compareDataA.total).toBe(612);
+
+      // Billed in July only: that month, compared with itself
+      await rerender({ ...onCompare, months: [july], selectedAccount: unknownAccount.id });
+
+      expect(api.fetchSummary).toHaveBeenCalledWith('2026-07-01', '2026-07-31', 'unknown');
+      expect(result.current.compareDataA.total).toBe(120);
+      expect(resourceTypes(result.current.byResourceTypeB))
+        .toEqual([['dedicated_server', 90], ['domain', 30]]);
+
+      await rerender(onCompare);
+
+      expect(result.current.compareDataA.total).toBe(980);
+      expect(result.current.compareDataB.total).toBe(980);
+    });
+
+    // An account selected on an earlier visit, until the accounts list tells whether the page
+    // still offers it (useSelectedAccount())
+    it('wait while the page does not know the account shown', async () => {
+      const { queryClient } = await renderTabHook(useCompareTab,
+        { ...onCompare, selectedAccount: undefined }, severalAccounts);
+
+      for (const name of FIGURES) {
+        expect(api[name], name).not.toHaveBeenCalled();
+      }
+      for (const name of NAMES) {
+        expect(queryClient.getQueryState([name, '2026-08-01', '2026-08-31', undefined]), name)
+          .toMatchObject(WAITING);
+      }
+    });
+
+    // The months list of an account just selected, which lacks September, month B: the shell
+    // passes it on once it has loaded, as the tab moves to the months it opens on for that
+    // account (see above)
+    it('are never requested for a month that the account shown lacks', async () => {
+      const { result, rerender } = await renderTabHook(useCompareTab, onCompare, severalAccounts);
+      const removed = removedAccount.id;
+
+      // While its months load
+      await rerender({ ...onCompare, months: [], selectedAccount: removed });
+
+      for (const name of FIGURES) {
+        expect(api[name], name).not.toHaveBeenCalledWith(expect.anything(), expect.anything(),
+          removed);
+      }
+
+      await rerender({ ...onCompare, months: [august, july], selectedAccount: removed });
+
+      for (const name of FIGURES) {
+        expect(api[name], name).not.toHaveBeenCalledWith('2026-09-01', '2026-09-30', removed);
+        expect(api[name], name).toHaveBeenCalledWith('2026-07-01', '2026-07-31', removed);
+        expect(api[name], name).toHaveBeenCalledWith('2026-08-01', '2026-08-31', removed);
+      }
+      expect(compared(result.current)).toEqual(['2026-07', '2026-08']);
+      expect(result.current.compareDataA.total).toBe(180);
+      expect(result.current.compareDataB.total).toBe(200);
+    });
   });
 });

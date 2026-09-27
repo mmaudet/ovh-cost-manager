@@ -233,8 +233,10 @@ export const fetchPublicCloudStats = async (from, to, account = null) => {
   return data;
 };
 
-// Backup stats (Veeam)
-export const fetchBackupStats = async (from, to) => {
-  const { data } = await api.get('/analysis/backup-stats', { params: { from, to } });
+// Backup stats (Veeam) of the account (#119)
+export const fetchBackupStats = async (from, to, account = null) => {
+  const { data } = await api.get('/analysis/backup-stats', {
+    params: { from, to, ...accountParams(account) },
+  });
   return data;
 };
