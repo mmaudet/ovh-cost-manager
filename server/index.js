@@ -1053,7 +1053,10 @@ function registerRoutes() {
   // ========================
 
   // The latest balance of the account the request asks for, or, without one, the sum of every
-  // account's latest (#116)
+  // account's latest of the latest month that one was taken in (#116): one of an earlier
+  // month, such as a removed account's, adds nothing, nor, when the last imports of the
+  // accounts fall on either side of a month's end, one of the month before until its account
+  // is imported again. See balance.getBalance() in data/db.js.
   app.get('/api/account/balance', accountParameter, (req, res) => {
     try {
       const balance = db.balance.getBalance(req.account);
@@ -1085,7 +1088,7 @@ function registerRoutes() {
   });
 
   // The debt of the balance of the account the request asks for, or of every account without
-  // one (#116)
+  // one, as the balance above (#116)
   app.get('/api/account/debts', accountParameter, (req, res) => {
     try {
       const balance = db.balance.getBalance(req.account);

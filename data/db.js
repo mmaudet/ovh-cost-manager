@@ -873,10 +873,13 @@ const balanceOps = {
   },
 
   /**
-   * The balance of the account (see accountCondition()): its latest balance snapshot, or, for
-   * every account, by default, the sum of each account's latest, the Unknown account's
-   * included. Each account's import records its own (#114), and the accounts bill in one
-   * currency, so their balances add up (#116).
+   * The balance of the account (see accountCondition()): its latest balance snapshot, whenever
+   * it was taken. Or, for every account, by default, the sum of each account's latest, the
+   * Unknown account's included, of the latest month that one of them was taken in: each
+   * account's import records its own (#114), and the accounts bill in one currency, so their
+   * balances add up (#116). An account's latest of an earlier month adds nothing, such as that
+   * of an account no longer configured, nor, until the account is imported again, that of the
+   * month before when another account's is of a new one.
    * @param {?string} [account]
    * @returns {object|undefined} The balance: the snapshot_date of the latest snapshot that it
    *   adds up, its debt_balance, credit_balance and deposit_total, and the currency of the
@@ -888,6 +891,9 @@ const balanceOps = {
       WITH latest AS (
         SELECT * FROM account_balance
         WHERE id IN (SELECT MAX(id) FROM account_balance WHERE ${ofAccount.sql} GROUP BY account)
+      ), ofLatestMonth AS (
+        SELECT * FROM latest
+        WHERE substr(snapshot_date, 1, 7) = (SELECT substr(MAX(snapshot_date), 1, 7) FROM latest)
       )
       SELECT
         COUNT(*) as snapshots,
@@ -895,8 +901,8 @@ const balanceOps = {
         SUM(debt_balance) as debt_balance,
         SUM(credit_balance) as credit_balance,
         SUM(deposit_total) as deposit_total,
-        (SELECT currency FROM latest ORDER BY id DESC LIMIT 1) as currency
-      FROM latest
+        (SELECT currency FROM ofLatestMonth ORDER BY id DESC LIMIT 1) as currency
+      FROM ofLatestMonth
     `).get(...ofAccount.params);
     return snapshots === 0 ? undefined : balance;
   },

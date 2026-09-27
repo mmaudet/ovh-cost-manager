@@ -40,8 +40,9 @@ const LYON_DETAILS = {
 };
 
 // Two accounts, with their balances, credits, consumption and consumption history, and the
-// Unknown account's, which an import before the accounts stored. The latest balance of each
-// account is not the latest stored. OVH gives Lyon its consumption of September, and Paris
+// Unknown account's, which an import before the accounts stored, but for its balance, which
+// the import drops. The latest balance of each account is not the latest stored, and that of
+// the removed account is of March. OVH gives Lyon its consumption of September, and Paris
 // none: the consumption of Paris's project tells it. The Unknown account's is that of the
 // month of the last import before the accounts, August, and the removed account's, which OVH
 // gave, July's. Every NIC handle, name and amount is made up.
@@ -52,7 +53,7 @@ function seed(db) {
   db.accounts.upsert({ nic: REMOVED, currency: 'EUR' });
   db.accounts.recordConfiguration([LYON, PARIS, NEW_ACCOUNT]);
 
-  balance(db, null, { debt: 1, credit: 4.75, deposit: 0, takenAt: '2026-06-30 08:00:00' });
+  balance(db, REMOVED, { debt: 100, credit: 0, deposit: 0, takenAt: '2026-03-31 04:00:00' });
   balance(db, LYON, { debt: 5, credit: 20, deposit: 0, takenAt: '2026-09-13 04:02:00' });
   balance(db, LYON, { debt: 12.5, credit: 50.25, deposit: 100, takenAt: '2026-09-14 04:02:00' });
   balance(db, PARIS, { debt: 7.5, credit: 0, deposit: 30, takenAt: '2026-09-14 04:01:00' });
@@ -113,12 +114,14 @@ describe('GET /api/account/balance', () => {
     currency: 'EUR',
   });
 
-  test('adds up the latest balance of every account without the parameter', async () => {
-    // Lyon's latest, Paris's and the Unknown account's, taken last by Lyon's import
-    expect(await ocm.get('/api/account/balance')).toEqual({
-      status: 200, body: balance('2026-09-14 04:02:00', 21, 55, 130),
+  // Lyon's latest and Paris's, of September, the latest month of a balance, the latest taken
+  // by Lyon's import. The removed account's, of March, adds nothing.
+  test('adds up the latest balance of every account of the latest month without the parameter',
+    async () => {
+      expect(await ocm.get('/api/account/balance')).toEqual({
+        status: 200, body: balance('2026-09-14 04:02:00', 20, 50.25, 130),
+      });
     });
-  });
 
   test('gives the latest balance of the account whose NIC handle it gives', async () => {
     expect(await ocm.get(`/api/account/balance${of(LYON)}`)).toEqual({
@@ -129,14 +132,18 @@ describe('GET /api/account/balance', () => {
     });
   });
 
-  test('gives the balance of the Unknown account: the latest without an account', async () => {
-    expect(await ocm.get(`/api/account/balance${of(UNKNOWN_ACCOUNT)}`)).toEqual({
-      status: 200, body: balance('2026-06-30 08:00:00', 1, 4.75, 0),
+  test('gives its latest balance to an account whose latest is of an earlier month',
+    async () => {
+      expect(await ocm.get(`/api/account/balance${of(REMOVED)}`)).toEqual({
+        status: 200, body: balance('2026-03-31 04:00:00', 100, 0, 0),
+      });
     });
-  });
 
-  test('gives no balance for an account whose import recorded none', async () => {
-    expect(await ocm.get(`/api/account/balance${of(NEW_ACCOUNT)}`)).toEqual({
+  test.each([
+    ['an account whose import recorded none', NEW_ACCOUNT],
+    ['the Unknown account, whose balances the import drops', UNKNOWN_ACCOUNT],
+  ])('gives no balance for %s', async (_, account) => {
+    expect(await ocm.get(`/api/account/balance${of(account)}`)).toEqual({
       status: 200,
       body: { debt_balance: 0, credit_balance: 0, deposit_total: 0, currency: 'EUR' },
     });
@@ -145,10 +152,11 @@ describe('GET /api/account/balance', () => {
 
 describe('GET /api/account/debts', () => {
   test.each([
-    ['every account, without the parameter', undefined, 21],
+    ['every account of the latest month, without the parameter', undefined, 20],
     ['the account whose NIC handle it gives', LYON, 12.5],
-    ['the Unknown account', UNKNOWN_ACCOUNT, 1],
+    ['an account whose latest is of an earlier month', REMOVED, 100],
     ['an account whose import recorded no balance', NEW_ACCOUNT, 0],
+    ['the Unknown account, whose balances the import drops', UNKNOWN_ACCOUNT, 0],
   ])('gives the debt of the latest balance of %s', async (_, account, debt) => {
     expect(await ocm.get(`/api/account/debts${of(account)}`)).toEqual({
       status: 200, body: { debt_balance: debt, currency: 'EUR' },
