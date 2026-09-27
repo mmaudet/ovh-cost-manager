@@ -1,6 +1,7 @@
 import Modal from '../components/Modal.jsx';
 import TableActions from '../components/TableActions.jsx';
 import { ServersTable, serverCsvColumns } from '../components/ServersTable.jsx';
+import { withAccountNames } from '../utils/accounts.js';
 import { downloadCSV } from '../utils/csv.js';
 import { fmtBytes, fmtMemory, formatMonthLabel } from '../utils/format.js';
 
@@ -10,15 +11,6 @@ import { fmtBytes, fmtMemory, formatMonthLabel } from '../utils/format.js';
 // options, mail), it is kept here because the type is a catch-all and would
 // hide non Web Cloud lines.
 const INFRA_EXCLUDED_TYPES = ['cloud_project', 'domain', 'web_cloud'];
-
-// The services of a list, as its table and its CSV file show them: with the name of the
-// account of each when they show an Account column (#123)
-const withAccountNames = (services, accountColumn) => {
-  if (!accountColumn) return services;
-  return services.map((service) => ({
-    ...service, accountName: accountColumn.nameOf(service.account),
-  }));
-};
 
 // The Infrastructure tab, which the shell renders while it is active: what
 // useInfrastructureTab() returns, with the shell's language, translations (t), amount format

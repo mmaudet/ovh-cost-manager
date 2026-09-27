@@ -79,6 +79,33 @@ export function accountInBrackets(accountColumn, account) {
 }
 
 /**
+ * The rows of a list, as its table and its CSV file show them (#122, #123): with the Account
+ * column, each with the name of its account, accountName, from the NIC handle that the routes
+ * give it; without, as they are.
+ * @param {object[]} rows - Each with the NIC handle of its account, `account`, null for the
+ *   Unknown account
+ * @param {?{ nameOf: function(?string): string }} accountColumn - The Account column of the
+ *   lists (accountColumnOf()), null when they show none
+ * @returns {object[]}
+ */
+export function withAccountNames(rows, accountColumn) {
+  if (!accountColumn) return rows;
+  return rows.map((row) => ({ ...row, accountName: accountColumn.nameOf(row.account) }));
+}
+
+/**
+ * The columns that the CSV file of a list gives for the Account column (#122, #123), for a
+ * spreadsheet to pivot its rows by account: the name of each row's account, which
+ * withAccountNames() gives the rows, under the column's label; none without the column.
+ * @param {?{ label: string }} accountColumn - The Account column of the lists
+ *   (accountColumnOf()), null when they show none
+ * @returns {{ key: string, label: string }[]}
+ */
+export function accountCsvColumns(accountColumn) {
+  return accountColumn ? [{ key: 'accountName', label: accountColumn.label }] : [];
+}
+
+/**
  * What the page shows, as the account selector names it: all accounts, or the account
  * selected (accountLabel()). The report names it in its title (#124). A single-account
  * installation's page offers no account to select, and its report names none.

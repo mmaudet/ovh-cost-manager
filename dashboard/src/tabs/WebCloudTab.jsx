@@ -1,6 +1,7 @@
 import Modal from '../components/Modal.jsx';
 import TableActions from '../components/TableActions.jsx';
 import { WebCloudTable, webCloudCsvColumns } from '../components/WebCloudFamilyTable.jsx';
+import { withAccountNames } from '../utils/accounts.js';
 import { downloadCSV } from '../utils/csv.js';
 import { formatYearMonth } from '../utils/format.js';
 
@@ -15,11 +16,9 @@ const WEB_CLOUD_CATEGORIES = [
 
 // The services of a family, in the order the server lists them, as its table and its CSV file
 // show them: with the name of the account of each when they show an Account column (#122)
-const servicesOf = (family, { webCloudItems, accountColumn }) => {
-  const services = webCloudItems.filter((item) => item.category === family);
-  if (!accountColumn) return services;
-  return services.map((item) => ({ ...item, accountName: accountColumn.nameOf(item.account) }));
-};
+const servicesOf = (family, { webCloudItems, accountColumn }) => withAccountNames(
+  webCloudItems.filter((item) => item.category === family), accountColumn,
+);
 
 // The Web Cloud tab, which the shell renders while it is active: what useWebCloudTab()
 // returns, with the shell's language, translations (t) and amount format (fmt), and the

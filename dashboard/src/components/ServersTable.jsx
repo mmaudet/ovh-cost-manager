@@ -1,3 +1,4 @@
+import { accountCsvColumns } from '../utils/accounts.js';
 import { fmtMemory } from '../utils/format.js';
 
 // Dedicated servers inventory, shared by the inline panel and its modal. With the Account
@@ -42,7 +43,8 @@ const ServersTable = ({ servers, accountColumn, language, t }) => (
 
 /**
  * The columns of the servers' CSV file, for downloadCSV(): the account's after the server's
- * id when the table shows it, for a spreadsheet to pivot the servers by account (#123).
+ * id when the table shows it, for a spreadsheet to pivot the servers by account (#123, see
+ * accountCsvColumns()).
  * @param {string} language - The page's, 'fr' or 'en'
  * @param {?{ label: string }} [accountColumn] - The Account column of the lists
  *   (accountColumnOf()), null when they show none
@@ -51,7 +53,7 @@ const ServersTable = ({ servers, accountColumn, language, t }) => (
 const serverCsvColumns = (language, accountColumn = null) => [
   { key: 'display_name', label: language === 'en' ? 'Name' : 'Nom' },
   { key: 'id', label: 'ID' },
-  ...(accountColumn ? [{ key: 'accountName', label: accountColumn.label }] : []),
+  ...accountCsvColumns(accountColumn),
   { key: 'datacenter', label: language === 'en' ? 'Datacenter' : 'Datacentre' },
   { key: 'cpu', label: 'CPU' },
   // In megabytes, as the API gives them, named in the units of the language (#88)

@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { translations } from '../../src/i18n/translations.js';
-import { accountColumnOf, accountInBrackets, accountsOf } from '../../src/utils/accounts.js';
+import {
+  accountColumnOf, accountCsvColumns, accountInBrackets, accountsOf, withAccountNames,
+} from '../../src/utils/accounts.js';
 import {
   lyonAccount, removedAccount, unknownAccount, unnamedAccount,
 } from '../fixtures/accounts.js';
@@ -88,5 +90,39 @@ describe('accountInBrackets', () => {
 
   it('is none without the Account column', () => {
     expect(accountInBrackets(null, lyonAccount.nic)).toBeNull();
+  });
+});
+
+// The rows of a list as its table and its CSV file show them (#122, #123)
+describe('withAccountNames', () => {
+  const column = accountColumnOf(accounts, null, inFrench);
+  const rows = [
+    { id: 'ns3000001.ip-203-0-113.eu', account: lyonAccount.nic },
+    { id: 'ns3000004.ip-203-0-113.eu', account: null },
+  ];
+
+  it('gives each row the name of its account with the Account column', () => {
+    expect(withAccountNames(rows, column)).toEqual([
+      { ...rows[0], accountName: 'Lyon subsidiary' },
+      { ...rows[1], accountName: 'Compte inconnu' },
+    ]);
+    // The rows it was given stay as they were
+    expect(rows[0]).not.toHaveProperty('accountName');
+  });
+
+  it('gives the rows as they are without it', () => {
+    expect(withAccountNames(rows, null)).toBe(rows);
+  });
+});
+
+// So that a spreadsheet can pivot the rows of a list by account (#122, #123)
+describe('accountCsvColumns', () => {
+  it("is the column of the name of each row's account, with the Account column's label", () => {
+    expect(accountCsvColumns(accountColumnOf(accounts, null, inEnglish)))
+      .toEqual([{ key: 'accountName', label: 'Account' }]);
+  });
+
+  it('is none without the Account column', () => {
+    expect(accountCsvColumns(null)).toEqual([]);
   });
 });
