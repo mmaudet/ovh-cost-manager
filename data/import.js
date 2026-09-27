@@ -1260,61 +1260,67 @@ async function importBill(ovh, billId, { nic, params, projectMap, resourceTypeMa
  * @param {object} run - `params`, the options of the run, `importType`, as its log entry
  *   names it, `toDate`, the day it imports the bills to, and `heartbeat()`, which keeps the
  *   run's lock
- * @returns {Promise<{projects: number, bills: number, details: number}>} What it imported
- * @throws {Error} When the list of its projects or of its bills cannot be fetched, which
- *   fails the account
+ * @returns {Promise<{imported: {projects: number, bills: number, details: number},
+ *   error: (*|undefined)}>} What it wrote, counted as it wrote it, even when it failed
+ *   partway, as its rows stay; and what failed it, when the list of its projects or of its
+ *   bills could not be fetched
  */
 async function importAccount(ovh, nic, { params, importType, toDate, heartbeat }) {
   const imported = { projects: 0, bills: 0, details: 0 };
-
-  // The projects first: their ids tell the bill lines of Public Cloud
-  const projects = await fetchProjects(ovh);
-  const projectMap = {};
-  for (const project of projects) {
-    db.projects.upsert({ ...project, account: nic });
-    projectMap[project.id] = project.name;
-  }
-  imported.projects = projects.length;
-
-  // Then the inventories, when asked: they tell the type of the services that bill lines name
-  const resourceTypeMap = params.includeInventory
-    ? await importInventory(ovh, projectMap, nic)
-    : {};
-
-  const billIds = await fetchBills(ovh, billsStartOf(nic, params), toDate);
-  console.log('\nProcessing bills...');
-  for (const [index, billId] of billIds.entries()) {
-    // Each bill keeps the run's lock: a whole history takes long
-    heartbeat();
-    process.stdout.write(`  [${index + 1}/${billIds.length}] ${billId}...`);
-    // A differential import only adds the bills it lacks, which keeps the daily run short
-    if (importType === 'differential' && db.bills.exists(billId)) {
-      console.log(' skipped (exists)');
-      continue;
+  try {
+    // The projects first: their ids tell the bill lines of Public Cloud
+    const projects = await fetchProjects(ovh);
+    const projectMap = {};
+    for (const project of projects) {
+      db.projects.upsert({ ...project, account: nic });
+      projectMap[project.id] = project.name;
+      imported.projects += 1;
     }
-    try {
-      const lines = await importBill(ovh, billId, { nic, params, projectMap, resourceTypeMap });
-      imported.bills += 1;
-      imported.details += lines;
-      console.log(` ${lines} details`);
-    } catch (err) {
-      // The bill is skipped, as a failed item is, and counted in the summary
-      failedItemCount += 1;
-      console.log(` ERROR: ${describeError(err)}`);
-    }
-  }
 
-  // The other datasets, only when asked: each takes many calls
-  if (params.includeConsumption) {
-    await importConsumption(ovh, nic);
+    // Then the inventories, when asked: they tell the type of the services that bill lines
+    // name
+    const resourceTypeMap = params.includeInventory
+      ? await importInventory(ovh, projectMap, nic)
+      : {};
+
+    const billIds = await fetchBills(ovh, billsStartOf(nic, params), toDate);
+    console.log('\nProcessing bills...');
+    for (const [index, billId] of billIds.entries()) {
+      // Each bill keeps the run's lock: a whole history takes long
+      heartbeat();
+      process.stdout.write(`  [${index + 1}/${billIds.length}] ${billId}...`);
+      // A differential import only adds the bills it lacks, which keeps the daily run short
+      if (importType === 'differential' && db.bills.exists(billId)) {
+        console.log(' skipped (exists)');
+        continue;
+      }
+      try {
+        const lines = await importBill(ovh, billId, { nic, params, projectMap, resourceTypeMap });
+        imported.bills += 1;
+        imported.details += lines;
+        console.log(` ${lines} details`);
+      } catch (err) {
+        // The bill is skipped, as a failed item is, and counted in the summary
+        failedItemCount += 1;
+        console.log(` ERROR: ${describeError(err)}`);
+      }
+    }
+
+    // The other datasets, only when asked: each takes many calls
+    if (params.includeConsumption) {
+      await importConsumption(ovh, nic);
+    }
+    if (params.includeAccount) {
+      await importAccountData(ovh, nic);
+    }
+    if (params.includeCloudDetails) {
+      await importCloudDetails(ovh, Object.keys(projectMap));
+    }
+    return { imported };
+  } catch (err) {
+    // A call that rejects with nothing fails the account all the same
+    return { imported, error: err || new Error(describeError(err)) };
   }
-  if (params.includeAccount) {
-    await importAccountData(ovh, nic);
-  }
-  if (params.includeCloudDetails) {
-    await importCloudDetails(ovh, Object.keys(projectMap));
-  }
-  return imported;
 }
 
 function printUsage() {
@@ -1480,16 +1486,17 @@ async function runImport(params) {
     const heartbeat = () => db.importLog.heartbeat(importId);
     for (const account of accounts.filter(({ error }) => !error)) {
       if (several) console.log(`\n=== ACCOUNT ${describeAccount(account)} ===`);
-      try {
-        const imported = await importAccount(account.client, account.nic,
-          { params, importType, toDate, heartbeat });
-        for (const figure of Object.keys(stats)) stats[figure] += imported[figure];
-        db.accounts.recordImport(account.nic, { status: 'success' });
-      } catch (err) {
+      const { imported, error } = await importAccount(account.client, account.nic,
+        { params, importType, toDate, heartbeat });
+      // What it wrote counts, even when it failed partway: its rows stay
+      for (const figure of Object.keys(stats)) stats[figure] += imported[figure];
+      if (error) {
         // The next accounts are imported all the same
-        account.error = err;
-        db.accounts.recordImport(account.nic, { status: 'failed', error: reasonOf(err) });
-        if (several) console.error(`Account ${describeAccount(account)}: ${reasonOf(err)}`);
+        account.error = error;
+        db.accounts.recordImport(account.nic, { status: 'failed', error: reasonOf(error) });
+        if (several) console.error(`Account ${describeAccount(account)}: ${reasonOf(error)}`);
+      } else {
+        db.accounts.recordImport(account.nic, { status: 'success' });
       }
       heartbeat();
     }

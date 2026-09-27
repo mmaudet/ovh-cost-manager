@@ -72,6 +72,14 @@ function serveBills(accountRoutes, bills) {
   }
 }
 
+// Serves on these routes these Public Cloud projects, named by their ids
+function serveProjects(accountRoutes, ids) {
+  accountRoutes.set('/cloud/project', ok(ids));
+  for (const id of ids) {
+    accountRoutes.set(`/cloud/project/${id}`, ok({ description: id, status: 'ok' }));
+  }
+}
+
 // A bill of the account, as an earlier import stored it
 const storeBill = (id, date, nic) => db.bills.upsert({
   id, date, price_without_tax: 10, price_with_tax: 12, tax: 2, currency: 'EUR', pdf_url: null,
@@ -286,6 +294,27 @@ describe('an account that fails', () => {
       ['partial', '1 of 2 accounts failed: "Lyon" (xx1111-ovh): Internal server error'],
     ]);
     expect(process.exit).toHaveBeenCalledWith(1);
+  });
+
+  // What it wrote before it failed stays, and counts in the figures of the run
+  test('counts in the figures of the run what it wrote before it failed', async () => {
+    const lyon = serveAccount(LYON);
+    const paris = serveAccount(PARIS);
+    serveBills(lyon.routes, [['FR-L1', '2026-09-01']]);
+    serveProjects(lyon.routes, ['proj-l1', 'proj-l2']);
+    // Its projects are stored, then its bill list fails
+    serveProjects(paris.routes, ['proj-p1', 'proj-p2']);
+    paris.routes.set('/me/bill', fail(500, 'Internal server error'));
+    useAccounts({ served: lyon }, { served: paris });
+
+    await importSeptember();
+
+    const { status, projects_imported: projects, bills_imported: bills } = db.importLog.getLatest();
+    expect({ status, projects, bills }).toEqual({ status: 'partial', projects: 4, bills: 1 });
+    expect(db.projects.getAll()).toHaveLength(4);
+    expect(summary()).toEqual([
+      '\n=== IMPORT PARTIAL ===', 'Projects: 4', 'Bills: 1', 'Details: 1', 'Failed items: 0',
+    ]);
   });
 
   // Its NIC handle is unknown: GET /me names it
