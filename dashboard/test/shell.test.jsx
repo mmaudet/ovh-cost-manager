@@ -425,6 +425,98 @@ describe('dashboard shell', () => {
 
       expect(screen.queryByText(/^Dernière synchronisation il y a/)).not.toBeInTheDocument();
     });
+
+    // A single-account installation, whose accounts route lists its account: the banner reads
+    // the latest run, as ever, rather than when the account's last import succeeded (#124)
+    it.each([
+      ['warns of a run 31 days old', '2026-08-15 08:00:00', '2026-09-14 04:02:30',
+        'Dernière synchronisation il y a 31 jours.'
+          + ' Exécutez npm run import:diff pour mettre à jour.'],
+      ['does not warn of a recent run', '2026-09-14 04:02:30', '2026-07-01 04:00:00', null],
+    ])('reads the latest run with a single account: %s', async (_, run, lastSuccessAt, shown) => {
+      await renderDashboard({
+        ...lastImportedAt(run), accounts: [{ ...lyonAccount, lastSuccessAt }],
+      });
+
+      const warning = screen.queryByText(/^Dernière synchronisation il y a/);
+      if (shown === null) expect(warning).not.toBeInTheDocument();
+      else expect(warning).toHaveTextContent(shown);
+    });
+
+    // An instance of several accounts (#124): the banner names each configured account whose
+    // last import that succeeded ended more than 30 days ago, or which none has, whatever the
+    // latest run, which a run that some accounts failed keeps recent. An account removed from
+    // config.json is no longer imported, and no import reads the Unknown account.
+    describe('with several accounts', () => {
+      // The banner, whatever it says: of accounts, or of the latest run
+      const warning = () => screen.queryByText(new RegExp('^(Sans synchronisation réussie'
+        + '|No successful synchronization|Dernière synchronisation il y a|Last synchronization)'));
+      // Yesterday's run, which yy2222-ovh failed, as every run since 1 August, and Nantes, as
+      // every run since it was configured
+      const failedAt = (at) => ({ at, status: 'failed', error: 'Invalid key' });
+      const partialRun = {
+        ...account.importStatus.latest, status: 'partial', error_message: '2 of 3 accounts failed',
+      };
+      const staleAccounts = {
+        ...severalAccounts,
+        importStatus: { latest: partialRun, running: false, history: [partialRun] },
+        accounts: [
+          lyonAccount,
+          {
+            ...unnamedAccount,
+            lastImport: failedAt('2026-09-14 04:02:10'), lastSuccessAt: '2026-08-01 04:00:00',
+          },
+          {
+            ...lyonAccount, id: 'vv5555-ovh', nic: 'vv5555-ovh', name: 'Nantes',
+            lastImport: failedAt('2026-09-14 04:02:20'), lastSuccessAt: null,
+          },
+          { ...removedAccount, lastSuccessAt: '2026-06-30 04:00:00' },
+          unknownAccount,
+        ],
+      };
+
+      it('names each configured account not synchronised for 30 days, until dismissed',
+        async () => {
+          const { user } = await renderDashboard(staleAccounts);
+
+          expect(warning()).toHaveTextContent(
+            'Sans synchronisation réussie depuis plus de 30 jours : yy2222-ovh (45 jours),'
+              + ' Nantes (jamais). Exécutez npm run import:diff pour mettre à jour.',
+          );
+
+          await user.click(screen.getByRole('button', { name: 'Fermer' }));
+
+          expect(warning()).not.toBeInTheDocument();
+        });
+
+      // More than 30 days, as with a single account, whatever the latest run
+      it.each([
+        ['30 days ago', '2026-08-16 08:00:00', null],
+        ['31 days ago', '2026-08-15 08:00:00', 'Lyon subsidiary (31 jours)'],
+      ])('warns of an account synchronised %s only if it is older', async (_, at, named) => {
+        const run = { ...account.importStatus.latest, completed_at: '2026-08-01 04:00:00' };
+        await renderDashboard({
+          ...severalAccounts,
+          importStatus: { latest: run, running: false, history: [run] },
+          accounts: [{ ...lyonAccount, lastSuccessAt: at }, unnamedAccount, removedAccount],
+        });
+
+        if (named === null) expect(warning()).not.toBeInTheDocument();
+        else expect(warning()).toHaveTextContent(`30 jours : ${named}.`);
+      });
+
+      it('says so in the language of the page', async () => {
+        // The language the page remembers from an earlier visit
+        localStorage.setItem('ovh-dashboard-language', 'en');
+
+        await renderDashboard(staleAccounts);
+
+        expect(warning()).toHaveTextContent(
+          'No successful synchronization for more than 30 days: yy2222-ovh (45 days),'
+            + ' Nantes (never). Run npm run import:diff to update.',
+        );
+      });
+    });
   });
 
   describe('footer', () => {

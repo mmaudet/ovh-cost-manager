@@ -92,6 +92,9 @@ export const translations = {
     syncWarningDays: 'jours',
     syncWarningAction: 'Exécutez',
     syncWarningToUpdate: 'pour mettre à jour.',
+    // With several accounts, the accounts that it names follow (#124)
+    staleAccountsWarning: 'Sans synchronisation réussie depuis plus de',
+    staleAccountsWarningDays: 'jours :',
 
     // Manual resync
     resync: 'Synchroniser',
@@ -286,6 +289,9 @@ export const translations = {
     syncWarningDays: 'days ago',
     syncWarningAction: 'Run',
     syncWarningToUpdate: 'to update.',
+    // With several accounts, the accounts that it names follow (#124)
+    staleAccountsWarning: 'No successful synchronization for more than',
+    staleAccountsWarningDays: 'days:',
 
     // Manual resync
     resync: 'Resync',

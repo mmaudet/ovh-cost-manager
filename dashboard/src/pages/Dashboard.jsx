@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { Fragment, useState, useEffect, useRef } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   fetchAccounts, fetchMonths, fetchSummary, fetchByProject, fetchByService,
@@ -43,6 +43,10 @@ const IMPORT_TYPE_KEYS = {
   period: 'importTypePeriod',
   differential: 'importTypeDifferential'
 };
+
+// The age, in days, beyond which the banner warns of a synchronisation
+const SYNC_WARNING_DAYS = 30;
+const DAY_MS = 1000 * 60 * 60 * 24;
 
 // The colours of each tone of the "vs previous month" variation: red when the cost grows,
 // green when it shrinks, grey when the variation rounds to 0 (#87)
@@ -327,12 +331,6 @@ export default function Dashboard() {
     );
   }
 
-  // Calculate days since last import
-  const daysSinceLastImport = importStatus?.latest?.completed_at
-    ? Math.floor((new Date() - new Date(importStatus.latest.completed_at)) / (1000 * 60 * 60 * 24))
-    : null;
-  const showSyncWarning = daysSinceLastImport !== null && daysSinceLastImport > 30 && !syncWarningDismissed;
-
   // The accounts whose last synchronisation the footer shows, one line each, when the page
   // offers several (#124): every account but the Unknown account, which no import reads, in
   // the order of the accounts route. Null when the page offers none, or before any account's
@@ -342,6 +340,28 @@ export default function Dashboard() {
     && accounts.some(({ lastImport }) => lastImport !== null)
     ? accounts.filter(({ unknown }) => !unknown)
     : null;
+
+  // Calculate days since last import
+  const daysSinceLastImport = importStatus?.latest?.completed_at
+    ? Math.floor((new Date() - new Date(importStatus.latest.completed_at)) / DAY_MS)
+    : null;
+  // With the accounts' lines, the banner warns of each configured account whose last import
+  // that succeeded ended too long ago, or which none has, with its age in days, null for
+  // never: not of the latest run, which a run that some accounts failed keeps recent (#124).
+  // An account no longer configured is no longer imported. Null without the accounts' lines:
+  // the banner then warns of the latest run, as before several accounts.
+  const staleAccounts = syncedAccounts && syncedAccounts
+    .filter(({ configured }) => configured)
+    .map((account) => ({
+      ...account,
+      days: account.lastSuccessAt === null
+        ? null
+        : Math.floor((new Date() - parseSqliteDate(account.lastSuccessAt)) / DAY_MS),
+    }))
+    .filter(({ days }) => days === null || days > SYNC_WARNING_DAYS);
+  const showSyncWarning = !syncWarningDismissed && (staleAccounts
+    ? staleAccounts.length > 0
+    : daysSinceLastImport !== null && daysSinceLastImport > SYNC_WARNING_DAYS);
   // The footer shows the latest import's line alone without them, as before several
   // accounts. With them, it shows it while an import runs: the cue that the page asks every
   // 30 s whether it is over (#51).
@@ -358,7 +378,25 @@ export default function Dashboard() {
             <div className="flex items-center gap-3">
               <span className="text-amber-600 text-xl">⚠️</span>
               <p className="text-amber-800 text-sm">
-                {t('syncWarning')} <strong>{daysSinceLastImport}</strong> {t('syncWarningDays')}.{' '}
+                {staleAccounts ? (
+                  // Each account as the account selector names it, and its age
+                  <>
+                    {t('staleAccountsWarning')} {SYNC_WARNING_DAYS}{' '}
+                    {t('staleAccountsWarningDays')}{' '}
+                    {staleAccounts.map(({ days, ...account }, index) => (
+                      <Fragment key={account.id}>
+                        {index > 0 && ', '}
+                        <strong>{accountLabel(account, t)}</strong>
+                        {' ('}{days === null ? t('lastSyncNever') : `${days} ${t('days')}`}{')'}
+                      </Fragment>
+                    ))}.{' '}
+                  </>
+                ) : (
+                  <>
+                    {t('syncWarning')} <strong>{daysSinceLastImport}</strong>{' '}
+                    {t('syncWarningDays')}.{' '}
+                  </>
+                )}
                 {t('syncWarningAction')} <code className="bg-amber-100 px-1 rounded">npm run import:diff</code> {t('syncWarningToUpdate')}
               </p>
             </div>
