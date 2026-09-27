@@ -179,18 +179,6 @@ describe('the other lists of the projects of every account', () => {
       { name: 'Legacy', value: 60 },
     ]);
   });
-
-  test('export each project once in the costs by project', async () => {
-    const res = await fetch(`${ocm.url}/api/export/by-project?${SEPTEMBER}`);
-
-    // Read as text, without the byte order mark that starts the file
-    expect((await res.text()).split('\n')).toEqual([
-      '"Projet";"ID Projet";"Total HT";"Nb Lignes"',
-      '"Production";"project-production";600;2',
-      '"Staging";"project-staging";280;3',
-      '"Legacy";"project-legacy";60;1',
-    ]);
-  });
 });
 
 describe('GET /api/analysis/by-resource-type', () => {

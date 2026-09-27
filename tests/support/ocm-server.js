@@ -113,7 +113,8 @@ async function spawnOcm(envOf, config, seed) {
  * @param {function(object)} [options.seed] - writes to its database before it
  *   starts, through the data layer (data/db.js) that it is handed
  * @returns {Promise<{ url: string, output: function(): string,
- *   logged: function(string): Promise, get: function(string): Promise, stop: function }>}
+ *   logged: function(string): Promise, get: function(string): Promise,
+ *   getText: function(string): Promise, stop: function }>}
  */
 async function startOcm(envOf, { config, seed } = {}) {
   const { home, url, env, child, exited, output } = await spawnOcm(envOf, config, seed);
@@ -125,6 +126,17 @@ async function startOcm(envOf, { config, seed } = {}) {
     get: async (path) => {
       const res = await fetch(`${url}${path}`);
       return { status: res.status, body: await res.json() };
+    },
+    // Resolves with the status, the headers and the body of the server's answer to a path, as
+    // the text of its bytes, such as a CSV export's: Response.text() would drop the byte order
+    // mark that starts one
+    getText: async (path) => {
+      const res = await fetch(`${url}${path}`);
+      return {
+        status: res.status,
+        headers: res.headers,
+        body: Buffer.from(await res.arrayBuffer()).toString('utf8'),
+      };
     },
     // Resolves once the server's output holds this text, which reaches the
     // test apart from the answers, and may come after them. Rejects, with the

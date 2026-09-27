@@ -785,25 +785,36 @@ function registerRoutes() {
   // those it no longer lists, which keep their data but are no longer imported, and the
   // Unknown account, while it holds rows (#114). An account's id, its NIC handle, is the value
   // that the account parameter of the other routes takes.
+  const listAccounts = () => {
+    const accounts = db.accounts.getAll().map(account => ({
+      id: account.nic,
+      nic: account.nic,
+      name: account.name ?? account.nic,
+      budget: account.budget,
+      currency: account.currency,
+      configured: account.configured,
+      unknown: false,
+      lastImport: account.last_import_at === null ? null : {
+        at: account.last_import_at,
+        status: account.last_import_status,
+        error: account.last_import_error
+      },
+      lastSuccessAt: account.last_success_at
+    }));
+    if (db.accounts.hasRowsWithoutAccount()) accounts.push(UNKNOWN_ACCOUNT_ENTRY);
+    return accounts;
+  };
+
+  // Whether the database holds several accounts: two at least of those that the accounts
+  // route lists, the Unknown account and the accounts no longer configured included, as the
+  // dashboard offers the account selector then (offersAccounts(), in
+  // dashboard/src/utils/accounts.js). The CSV exports then name the account of each row
+  // (#137), and a single-account installation keeps its files as they were.
+  const holdsSeveralAccounts = () => listAccounts().length >= 2;
+
   app.get('/api/accounts', (req, res) => {
     try {
-      const accounts = db.accounts.getAll().map(account => ({
-        id: account.nic,
-        nic: account.nic,
-        name: account.name ?? account.nic,
-        budget: account.budget,
-        currency: account.currency,
-        configured: account.configured,
-        unknown: false,
-        lastImport: account.last_import_at === null ? null : {
-          at: account.last_import_at,
-          status: account.last_import_status,
-          error: account.last_import_error
-        },
-        lastSuccessAt: account.last_success_at
-      }));
-      if (db.accounts.hasRowsWithoutAccount()) accounts.push(UNKNOWN_ACCOUNT_ENTRY);
-      res.json(accounts);
+      res.json(listAccounts());
     } catch (err) {
       res.status(500).json({ error: err.message });
     }
@@ -889,8 +900,35 @@ function registerRoutes() {
     return [header, ...rows].join('\n');
   }
 
-  // Export bills as CSV
-  app.get('/api/export/bills', (req, res) => {
+  // The column of the CSV exports that names the account of each row, for a spreadsheet to
+  // pivot the rows by account (#137): the NIC handle, which toCSV() leaves empty for the Unknown
+  // account, null. Named as the account parameter, and last, so that the other columns keep
+  // the places that a single-account installation's files give them.
+  const ACCOUNT_COLUMN = Object.freeze({ key: 'account', label: 'account' });
+
+  /**
+   * Answers a request with the CSV file of an export, as every export writes it: a byte order
+   * mark, for Excel to read the file as UTF-8, then its rows under their columns, and the
+   * account column after them when the database holds several accounts (#137)
+   * @param {object} res - The Express response
+   * @param {string} filename - The name of the file
+   * @param {object[]} rows - Its rows, each with `account`, the NIC handle of its account, null
+   *   for the Unknown account, which the account column shows
+   * @param {Array<{key: string, label: string}>} columns - Its own columns
+   * @param {boolean} [severalAccounts] - Whether the database holds several accounts, as the
+   *   export read it for its rows when they depend on it, so that a request reads it once:
+   *   holdsSeveralAccounts() by default
+   */
+  function sendCsv(res, filename, rows, columns, severalAccounts = holdsSeveralAccounts()) {
+    const csv = toCSV(rows, severalAccounts ? [...columns, ACCOUNT_COLUMN] : columns);
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send('\ufeff' + csv); // BOM for Excel UTF-8 compatibility
+  }
+
+  // The bills of a period as CSV: those of the account the request asks for, or of every
+  // account without one, each with its account when the database holds several (#137)
+  app.get('/api/export/bills', accountParameter, (req, res) => {
     try {
       const { from, to } = req.query;
       const validation = validateDateRange(from, to);
@@ -898,7 +936,7 @@ function registerRoutes() {
         return res.status(400).json({ error: validation.error });
       }
 
-      const bills = db.bills.getAll(from, to);
+      const bills = db.bills.getAll(from, to, req.account);
 
       const columns = [
         { key: 'id', label: 'Facture' },
@@ -909,19 +947,17 @@ function registerRoutes() {
         { key: 'currency', label: 'Devise' }
       ];
 
-      const csv = toCSV(bills, columns);
       const filename = `factures_${from}_${to}.csv`;
-
-      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-      res.send('\ufeff' + csv); // BOM for Excel UTF-8 compatibility
+      sendCsv(res, filename, bills, columns);
     } catch (err) {
       res.status(500).json({ error: err.message });
     }
   });
 
-  // Export bill details as CSV
-  app.get('/api/export/details', (req, res) => {
+  // The bill lines of a period as CSV: those of the bills of the account the request asks for,
+  // or of every account without one, each with its bill's account when the database holds
+  // several (#137)
+  app.get('/api/export/details', accountParameter, (req, res) => {
     try {
       const { from, to } = req.query;
       const validation = validateDateRange(from, to);
@@ -929,25 +965,7 @@ function registerRoutes() {
         return res.status(400).json({ error: validation.error });
       }
 
-      const database = db.getDb();
-      const details = database.prepare(`
-      SELECT
-        d.bill_id,
-        b.date,
-        p.name as project_name,
-        d.service_type,
-        d.resource_type,
-        d.description,
-        d.quantity,
-        d.unit_price,
-        d.total_price,
-        b.payment_status
-      FROM bill_details d
-      JOIN bills b ON d.bill_id = b.id
-      LEFT JOIN projects p ON d.project_id = p.id
-      WHERE b.date >= ? AND b.date <= ?
-      ORDER BY b.date, d.bill_id
-    `).all(from, to);
+      const details = db.details.getByPeriod(from, to, req.account);
 
       const columns = [
         { key: 'bill_id', label: 'Facture' },
@@ -962,19 +980,19 @@ function registerRoutes() {
         { key: 'payment_status', label: 'Statut Paiement' }
       ];
 
-      const csv = toCSV(details, columns);
       const filename = `details_${from}_${to}.csv`;
-
-      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-      res.send('\ufeff' + csv);
+      sendCsv(res, filename, details, columns);
     } catch (err) {
       res.status(500).json({ error: err.message });
     }
   });
 
-  // Export costs by project as CSV
-  app.get('/api/export/by-project', (req, res) => {
+  // The costs of each project of a period as CSV: those of the account the request asks for,
+  // or of every account without one (#137). When the database holds several accounts, a
+  // project comes once for each account that billed it, with that account, as the dashboard's
+  // lists that name the account of each project give them (#118): its costs are not summed
+  // across accounts in a row that could name only one of them.
+  app.get('/api/export/by-project', accountParameter, (req, res) => {
     try {
       const { from, to } = req.query;
       const validation = validateDateRange(from, to);
@@ -982,7 +1000,8 @@ function registerRoutes() {
         return res.status(400).json({ error: validation.error });
       }
 
-      const data = db.analysis.byProject(from, to);
+      const severalAccounts = holdsSeveralAccounts();
+      const data = db.analysis.byProject(from, to, req.account, { byAccount: severalAccounts });
 
       const columns = [
         { key: 'project_name', label: 'Projet' },
@@ -991,12 +1010,8 @@ function registerRoutes() {
         { key: 'details_count', label: 'Nb Lignes' }
       ];
 
-      const csv = toCSV(data, columns);
       const filename = `couts_par_projet_${from}_${to}.csv`;
-
-      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-      res.send('\ufeff' + csv);
+      sendCsv(res, filename, data, columns, severalAccounts);
     } catch (err) {
       res.status(500).json({ error: err.message });
     }
@@ -1542,12 +1557,15 @@ function registerRoutes() {
   // Enhanced CSV Export Endpoints (Phase 5)
   // ========================
 
-  // Export inventory as CSV
-  app.get('/api/export/inventory', (req, res) => {
+  // The dedicated servers, VPS and storage services of the inventory as CSV: those of the
+  // account the request asks for, or of every account without one, each with its account when
+  // the database holds several (#137). A service that two accounts' APIs list is stored, and
+  // exported, once (ADR 0002).
+  app.get('/api/export/inventory', accountParameter, (req, res) => {
     try {
-      const servers = db.inventory.getAllServers();
-      const vps = db.inventory.getAllVps();
-      const storage = db.inventory.getAllStorage();
+      const servers = db.inventory.getAllServers(req.account);
+      const vps = db.inventory.getAllVps(req.account);
+      const storage = db.inventory.getAllStorage(req.account);
 
       // Combine into a single export
       const data = [
@@ -1559,7 +1577,8 @@ function registerRoutes() {
           specs: `${s.cpu} / ${s.ram_size}MB RAM`,
           state: s.state,
           expiration: s.expiration_date || '',
-          renewal: s.renewal_type || ''
+          renewal: s.renewal_type || '',
+          account: s.account,
         })),
         ...vps.map(v => ({
           type: 'VPS',
@@ -1569,7 +1588,8 @@ function registerRoutes() {
           specs: `${v.vcpus} vCPU / ${v.ram_mb}MB RAM / ${v.disk_gb}GB`,
           state: v.state,
           expiration: v.expiration_date || '',
-          renewal: v.renewal_type || ''
+          renewal: v.renewal_type || '',
+          account: v.account,
         })),
         ...storage.map(s => ({
           type: 'Storage',
@@ -1579,7 +1599,8 @@ function registerRoutes() {
           specs: `${s.total_size_gb}GB`,
           state: '',
           expiration: s.expiration_date || '',
-          renewal: ''
+          renewal: '',
+          account: s.account,
         }))
       ];
 
@@ -1594,12 +1615,8 @@ function registerRoutes() {
         { key: 'renewal', label: 'Renouvellement' }
       ];
 
-      const csv = toCSV(data, columns);
       const filename = `inventaire_${new Date().toISOString().split('T')[0]}.csv`;
-
-      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-      res.send('\ufeff' + csv);
+      sendCsv(res, filename, data, columns);
     } catch (err) {
       res.status(500).json({ error: err.message });
     }

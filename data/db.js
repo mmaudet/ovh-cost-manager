@@ -277,24 +277,29 @@ const billOps = {
     return stmt.run(requireAccount('bills', bill));
   },
 
-  getAll: (fromDate, toDate) => {
-    const db = getDb();
-    let query = 'SELECT * FROM bills';
-    const params = [];
-
-    if (fromDate && toDate) {
-      query += ' WHERE date >= ? AND date <= ?';
-      params.push(fromDate, toDate);
-    } else if (fromDate) {
-      query += ' WHERE date >= ?';
+  /**
+   * The bills between two dates, each optional, the latest first
+   * @param {?string} [fromDate] - The first day, none by default
+   * @param {?string} [toDate] - The last day, none by default
+   * @param {?string} [account] - The account whose bills to list (see accountCondition()):
+   *   every account's by default (#137)
+   * @returns {object[]} The bills, each with the NIC handle of its account
+   */
+  getAll: (fromDate, toDate, account = null) => {
+    const ofAccount = accountCondition(account, 'account');
+    const conditions = [ofAccount.sql];
+    const params = [...ofAccount.params];
+    if (fromDate) {
+      conditions.push('date >= ?');
       params.push(fromDate);
-    } else if (toDate) {
-      query += ' WHERE date <= ?';
+    }
+    if (toDate) {
+      conditions.push('date <= ?');
       params.push(toDate);
     }
-
-    query += ' ORDER BY date DESC';
-    return db.prepare(query).all(...params);
+    return getDb().prepare(`
+      SELECT * FROM bills WHERE ${conditions.join(' AND ')} ORDER BY date DESC
+    `).all(...params);
   },
 
   getById: (id) => {
@@ -372,6 +377,42 @@ const detailOps = {
   getByBillId: (billId) => {
     const db = getDb();
     return db.prepare('SELECT * FROM bill_details WHERE bill_id = ?').all(billId);
+  },
+
+  /**
+   * The bill lines of the bills between two dates, both included, as the CSV export of the
+   * bill lines gives them: each with the date, the payment status and the account of its bill,
+   * as a bill line belongs to the account of its bill (ADR 0002), and the name of its project.
+   * By date, then bill.
+   * @param {string} fromDate
+   * @param {string} toDate
+   * @param {?string} [account] - The account whose bills' lines to list (see
+   *   accountCondition()): every account's by default (#137)
+   * @returns {object[]} The lines, each with `account`, the NIC handle of its bill's account,
+   *   null for the Unknown account
+   */
+  getByPeriod: (fromDate, toDate, account = null) => {
+    const ofAccount = accountCondition(account, 'b.account');
+    return getDb().prepare(`
+      SELECT
+        d.bill_id,
+        b.date,
+        p.name as project_name,
+        d.service_type,
+        d.resource_type,
+        d.description,
+        d.quantity,
+        d.unit_price,
+        d.total_price,
+        b.payment_status,
+        b.account
+      FROM bill_details d
+      JOIN bills b ON d.bill_id = b.id
+      LEFT JOIN projects p ON d.project_id = p.id
+      WHERE b.date >= ? AND b.date <= ?
+        AND ${ofAccount.sql}
+      ORDER BY b.date, d.bill_id
+    `).all(fromDate, toDate, ...ofAccount.params);
   },
 
   deleteByBillId: (billId) => {
