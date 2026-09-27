@@ -147,8 +147,11 @@ export const fetchInventoryStorage = async (account = null) => {
   return data;
 };
 
-export const fetchExpiringServices = async (days = 30) => {
-  const { data } = await api.get('/inventory/expiring', { params: { days } });
+// The services of the account that expire within `days` days, or already have (#123)
+export const fetchExpiringServices = async (days = 30, account = null) => {
+  const { data } = await api.get('/inventory/expiring', {
+    params: { days, ...accountParams(account) },
+  });
   return data;
 };
 

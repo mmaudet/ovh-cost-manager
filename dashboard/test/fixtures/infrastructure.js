@@ -126,7 +126,8 @@ export const infrastructure = {
 // accounts, and for each account, by its id. The server just delivered is
 // the unnamed account's, which has a VPS too; the account that config.json no
 // longer lists keeps the server it was billed for; the Unknown account holds
-// a server and a storage service stored before OCM told accounts apart.
+// a server and a storage service stored before OCM told accounts apart. Five
+// of them expire within 30 days of 15 September, or already have.
 
 const deliveredServer = { ...newServer, account: UNNAMED };
 const removedServer = {
@@ -185,6 +186,11 @@ const legacyServerRental = {
   total: 90,
   line_count: 1,
 };
+// A service about to expire, as /api/inventory/expiring lists it
+const expiring = (type, { id, display_name: displayName, expiration_date: date, account }) => ({
+  id, display_name: displayName, type, expiration_date: date, account,
+});
+
 // The Veeam backups of September, which are the unnamed account's
 const septemberBackups = infrastructure.resourceTypeDetails.backup['2026-09'];
 // A service that bill lines name, as the account whose bills they are on billed it
@@ -196,6 +202,14 @@ export const infrastructureOfSeveralAccounts = {
     inventoryServers: [billedServer, removedServer, legacyServer, deliveredServer],
     inventoryVps: [stagingVps, vps],
     inventoryStorage: [oldStorage, fileStorage],
+    // Soonest first, those already expired first
+    expiringServices: [
+      expiring('storage', oldStorage),
+      expiring('dedicated_server', removedServer),
+      expiring('dedicated_server', billedServer),
+      expiring('vps', vps),
+      expiring('vps', stagingVps),
+    ],
     // The bill lines of a resource type by service and account, for the list that names the
     // account of each service: those of September by service, each billed to one account
     resourceTypeDetailsByAccount: {
@@ -208,22 +222,26 @@ export const infrastructureOfSeveralAccounts = {
       inventoryServers: [billedServer],
       inventoryVps: [vps],
       inventoryStorage: [fileStorage],
+      expiringServices: [expiring('dedicated_server', billedServer), expiring('vps', vps)],
       resourceTypeDetails: { dedicated_server: { '2026-09': [serverRental] } },
     },
     [UNNAMED]: {
       inventoryServers: [deliveredServer],
       inventoryVps: [stagingVps],
+      expiringServices: [expiring('vps', stagingVps)],
       resourceTypeDetails: { backup: { '2026-09': septemberBackups } },
     },
     // Up to August, its latest month
     [REMOVED]: {
       inventoryServers: [removedServer],
+      expiringServices: [expiring('dedicated_server', removedServer)],
       resourceTypeDetails: { dedicated_server: { '2026-08': [removedServerRental] } },
     },
     // Up to July, its only month
     unknown: {
       inventoryServers: [legacyServer],
       inventoryStorage: [oldStorage],
+      expiringServices: [expiring('storage', oldStorage)],
       resourceTypeDetails: { dedicated_server: { '2026-07': [legacyServerRental] } },
     },
   },

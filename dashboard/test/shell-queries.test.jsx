@@ -161,6 +161,8 @@ describe('query keys', () => {
         ['byProject', '2026-09-01', '2026-09-30', 'xx1111-ovh'],
         ['byResourceType', '2026-09-01', '2026-09-30', 'xx1111-ovh'],
         ['gpuSummary', '2026-09-01', '2026-09-30', 'xx1111-ovh'],
+        // The services about to expire, which the header counts and the Overview lists (#123)
+        ['expiringServices', 'xx1111-ovh'],
         // The Compare tab's, which wait for the tab: month A, August, whose summary shares the
         // key of the shell's month before, and month B, September, which shares the shell's
         // keys, and that of the Backup tab's Veeam backups

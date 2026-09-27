@@ -92,7 +92,8 @@ describe('Overview tab', () => {
     for (const fetchFigures of figuresOfTheMonth) {
       expect(fetchFigures).toHaveBeenCalledWith('2026-09-01', '2026-09-30', null);
     }
-    expect(api.fetchExpiringServices).toHaveBeenCalledWith(30);
+    // For all accounts (null), as the instance knows a single one (#123)
+    expect(api.fetchExpiringServices).toHaveBeenCalledWith(30, null);
     // The budget
     expect(api.fetchConfig).toHaveBeenCalled();
   });
@@ -454,8 +455,9 @@ describe('Overview tab', () => {
   });
 
   // An instance of several accounts (#118): the tab shows the figures of the account selected
-  // in the header, or those of all accounts, where its lists name the account of each project.
-  // The budget and the services about to expire follow it in their own tickets (#117, #123).
+  // in the header, or those of all accounts, where its lists name the account of each project,
+  // and the services about to expire of each (#123). The budget follows it in its own ticket
+  // (#117).
   describe('with several accounts', () => {
     // The breakdown by project and the GPU costs of September, with a single account, or with
     // all accounts but without the Account column
@@ -737,5 +739,72 @@ describe('Overview tab', () => {
             ['Cloud Total', '830.40€', '100%'],
           ]);
       });
+
+    // The inventory's services about to expire, which the header counts too (#123): see
+    // fixtures/infrastructure.js
+    describe('services about to expire', () => {
+      // Those of every account, soonest first, each named by its account: its name, or else
+      // its NIC handle, and the Unknown account for a service that no account claimed
+      const everyAccountsExpiring = [
+        'Expirations proches',
+        'Stockage', 'old-nas', 'Compte inconnu', 'Expiré depuis 5 jours',
+        'Serveurs dédiés', 'db-server', 'zz3333-ovh', 'Expire dans 2 jours',
+        'Serveurs dédiés', 'backup-server', 'Lyon subsidiary', 'Expire dans 5 jours',
+        'VPS', 'vps-0a1b2c3d.vps.ovh.net', 'Lyon subsidiary', 'Expire dans 25 jours',
+        'VPS', 'staging-vps', 'yy2222-ovh', 'Expire dans 27 jours',
+      ];
+
+      it('are those of the account selected, in the card and in the header', async () => {
+        const { user } = await renderDashboard(severalAccounts);
+        expect(texts(headerBadge('Expirations proches'))).toEqual(['5', 'Expirations proches']);
+
+        await selectAccount(user, 'Lyon subsidiary');
+
+        expect(api.fetchExpiringServices).toHaveBeenCalledWith(30, lyonAccount.id);
+        expect(texts(expirationCard())).toEqual([
+          'Expirations proches',
+          'Serveurs dédiés', 'backup-server', 'Expire dans 5 jours',
+          'VPS', 'vps-0a1b2c3d.vps.ovh.net', 'Expire dans 25 jours',
+        ]);
+        expect(texts(headerBadge('Expirations proches'))).toEqual(['2', 'Expirations proches']);
+
+        // Whatever the month, as the inventory is what exists now
+        await selectAccount(user, 'Compte inconnu');
+
+        expect(texts(expirationCard())).toEqual([
+          'Expirations proches', 'Stockage', 'old-nas', 'Expiré depuis 5 jours',
+        ]);
+        expect(texts(headerBadge('Expirations proches'))).toEqual(['1', 'Expirations proches']);
+
+        await selectAccount(user, 'Tous les comptes');
+
+        expect(texts(expirationCard())).toEqual(everyAccountsExpiring);
+        expect(texts(headerBadge('Expirations proches'))).toEqual(['5', 'Expirations proches']);
+      });
+
+      it('name the account of each service when the page shows all accounts', async () => {
+        const { user } = await renderDashboard(severalAccounts);
+
+        expect(texts(expirationCard())).toEqual(everyAccountsExpiring);
+
+        await selectLanguage(user, 'en');
+
+        expect(texts(expirationCard('Expiring soon')).slice(0, 5)).toEqual([
+          'Expiring soon', 'Storage', 'old-nas', 'Unknown account', 'Expired 5 days ago',
+        ]);
+      });
+
+      // As the page shows them before an instance could import several accounts
+      it.each([
+        ['a single account', [lyonAccount]],
+        ['no account, as before the first import since the upgrade', []],
+      ])('name no account with %s', async (_, accounts) => {
+        await renderDashboard({ ...severalAccounts, accounts });
+
+        expect(texts(expirationCard())).toEqual(everyAccountsExpiring.filter((text) => ![
+          'Compte inconnu', 'zz3333-ovh', 'Lyon subsidiary', 'yy2222-ovh',
+        ].includes(text)));
+      });
+    });
   });
 });

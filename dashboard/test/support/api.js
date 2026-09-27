@@ -146,7 +146,9 @@ const answers = {
     entry('inventoryVps', emptyAnswers.list)(ofAccount(data, account)),
   fetchInventoryStorage: (data, account) =>
     entry('inventoryStorage', emptyAnswers.list)(ofAccount(data, account)),
-  fetchExpiringServices: entry('expiringServices', emptyAnswers.list),
+  // And so do the services about to expire, over the days of the request
+  fetchExpiringServices: (data, days, account) =>
+    entry('expiringServices', emptyAnswers.list)(ofAccount(data, account)),
   fetchByResourceType: entryForPeriodOfAccount('byResourceType', emptyAnswers.list),
   // So do the bill lines of a resource type, by type and period (#123)
   fetchResourceTypeDetails: (data, type, from, to, account) =>

@@ -99,8 +99,9 @@ export default function Dashboard() {
   // The account the page shows, page-wide: null for all accounts, undefined until the page
   // knows it. The months list, the KPI cards of the month's figures and of the current month's
   // consumption (#116), the Overview's figures (#118), the Compare tab and the Veeam backups
-  // (#119), and the Web Cloud (#122) and Infrastructure (#123) tabs follow it; the other cards
-  // and tabs follow it in the next tickets (#117 to #123).
+  // (#119), the Web Cloud (#122) and Infrastructure (#123) tabs, and the services about to
+  // expire (#123) follow it; the other cards and tabs follow it in the next tickets (#117 to
+  // #123).
   const { selectedAccount, selectAccount } = useSelectedAccount(accounts);
   // The Account column of the lists, which name the account of each row with all accounts
   // shown, when the page offers several (#121): null when they name none
@@ -193,10 +194,12 @@ export default function Dashboard() {
     fetch: fetchConsumptionForecast,
   }));
 
-  const { data: expiringServices = [] } = useQuery({
-    queryKey: ['expiringServices'],
-    queryFn: () => fetchExpiringServices(30)
-  });
+  // The services of the account shown that expire within 30 days, or already have, whatever
+  // the month: the header counts them, and the Overview lists them (#123)
+  const { data: expiringServices = [] } = useQuery(accountQuery(selectedAccount, {
+    key: ['expiringServices'],
+    fetch: (account) => fetchExpiringServices(30, account),
+  }));
 
   // Each tab's state and queries, in the order of the tab bar: its hook runs on every render,
   // before the loading screen, so that the tab keeps them while another one is open (ADR 0001)
