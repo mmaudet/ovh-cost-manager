@@ -10,6 +10,15 @@ import { renderTabHook, TAB_IDS, WAITING } from '../support/hooks.jsx';
 // the hook requests and returns for the selected month, the active tab and the account
 // shown, null for all accounts (#122).
 
+// What the shell passes the hook (ADR 0001): the month selected and whether the months of
+// the account shown hold it, which they do in these tests once a month is selected, the
+// active tab, and the account shown, all accounts unless told otherwise
+const shellProps = (props) => ({
+  holdsSelectedMonth: props.selectedMonth !== null,
+  selectedAccount: null,
+  ...props,
+});
+
 const [september, august] = months;
 // A month as /api/months lists it, at the turn of a year
 const january = {
@@ -24,7 +33,7 @@ describe('useWebCloudTab', () => {
     'requests nothing while the %s tab is active',
     async (activeTab) => {
       const { result } = await renderTabHook(useWebCloudTab,
-        { selectedMonth: september, activeTab, selectedAccount: null });
+        shellProps({ selectedMonth: september, activeTab }));
 
       expect(api.fetchWebCloudSummary).not.toHaveBeenCalled();
       expect(api.fetchWebCloudItems).not.toHaveBeenCalled();
@@ -35,7 +44,7 @@ describe('useWebCloudTab', () => {
 
   it('requests nothing before a month is selected', async () => {
     const { result, queryClient } = await renderTabHook(useWebCloudTab,
-      { selectedMonth: null, activeTab: 'webcloud', selectedAccount: null });
+      shellProps({ selectedMonth: null, activeTab: 'webcloud' }));
 
     expect(api.fetchWebCloudSummary).not.toHaveBeenCalled();
     expect(api.fetchWebCloudItems).not.toHaveBeenCalled();
@@ -47,11 +56,28 @@ describe('useWebCloudTab', () => {
       .toMatchObject(WAITING);
   });
 
+  // While the months of the account just selected load, or when it lacks the month selected,
+  // until the shell selects its latest month (#115): the 12 months that end on a month it
+  // lacks would never show (#120)
+  it('waits until the months of the account shown hold the month selected', async () => {
+    const { result, queryClient } = await renderTabHook(useWebCloudTab, shellProps(
+      { selectedMonth: september, holdsSelectedMonth: false, activeTab: 'webcloud' },
+    ));
+
+    expect(api.fetchWebCloudSummary).not.toHaveBeenCalled();
+    expect(api.fetchWebCloudItems).not.toHaveBeenCalled();
+    expect(result.current.webCloudItems).toEqual([]);
+    expect(queryClient.getQueryState(['webCloudSummary', '2025-10-01', '2026-09-30']))
+      .toMatchObject(WAITING);
+    expect(queryClient.getQueryState(['webCloudItems', '2025-10-01', '2026-09-30']))
+      .toMatchObject(WAITING);
+  });
+
   it('requests the 12 months that end on the selected month once the tab opens', async () => {
     const { rerender } = await renderTabHook(useWebCloudTab,
-      { selectedMonth: september, activeTab: 'overview', selectedAccount: null });
+      shellProps({ selectedMonth: september, activeTab: 'overview' }));
 
-    await rerender({ selectedMonth: september, activeTab: 'webcloud', selectedAccount: null });
+    await rerender(shellProps({ selectedMonth: september, activeTab: 'webcloud' }));
 
     expect(api.fetchWebCloudSummary).toHaveBeenCalledWith('2025-10-01', '2026-09-30', null);
     expect(api.fetchWebCloudItems).toHaveBeenCalledWith('2025-10-01', '2026-09-30', null);
@@ -59,7 +85,7 @@ describe('useWebCloudTab', () => {
 
   it('returns the period, and the summary and the services billed over it', async () => {
     const { result } = await renderTabHook(useWebCloudTab,
-      { selectedMonth: september, activeTab: 'webcloud', selectedAccount: null });
+      shellProps({ selectedMonth: september, activeTab: 'webcloud' }));
 
     expect(result.current.webCloudPeriod).toEqual({ from: '2025-10-01', to: '2026-09-30' });
     expect(result.current.webCloudSummary).toEqual({
@@ -84,7 +110,7 @@ describe('useWebCloudTab', () => {
 
   it('caches each answer under the name of its query and its period', async () => {
     const { keysOf } = await renderTabHook(useWebCloudTab,
-      { selectedMonth: september, activeTab: 'webcloud', selectedAccount: null });
+      shellProps({ selectedMonth: september, activeTab: 'webcloud' }));
 
     expect(keysOf('webCloudSummary')).toEqual([['webCloudSummary', '2025-10-01', '2026-09-30']]);
     expect(keysOf('webCloudItems')).toEqual([['webCloudItems', '2025-10-01', '2026-09-30']]);
@@ -92,9 +118,9 @@ describe('useWebCloudTab', () => {
 
   it('follows the selected month', async () => {
     const { result, rerender } = await renderTabHook(useWebCloudTab,
-      { selectedMonth: september, activeTab: 'webcloud', selectedAccount: null });
+      shellProps({ selectedMonth: september, activeTab: 'webcloud' }));
 
-    await rerender({ selectedMonth: august, activeTab: 'webcloud', selectedAccount: null });
+    await rerender(shellProps({ selectedMonth: august, activeTab: 'webcloud' }));
 
     expect(api.fetchWebCloudSummary).toHaveBeenCalledWith('2025-09-01', '2026-08-31', null);
     expect(api.fetchWebCloudItems).toHaveBeenCalledWith('2025-09-01', '2026-08-31', null);
@@ -109,7 +135,7 @@ describe('useWebCloudTab', () => {
   // Until then, the tab shows that it is loading, not zero services billed (#62)
   it('says it is loading until the answers for the period arrive (#62)', async () => {
     const { result, rerender } = await renderTabHook(useWebCloudTab,
-      { selectedMonth: september, activeTab: 'overview', selectedAccount: null });
+      shellProps({ selectedMonth: september, activeTab: 'overview' }));
     // What the hook says as the requests leave, and once their answers arrived
     const loading = [];
     const loadingUntilAnswered = async (props) => {
@@ -119,13 +145,9 @@ describe('useWebCloudTab', () => {
       loading.push(result.current.loadingWebCloud);
     };
 
-    await loadingUntilAnswered(
-      { selectedMonth: september, activeTab: 'webcloud', selectedAccount: null },
-    );
+    await loadingUntilAnswered(shellProps({ selectedMonth: september, activeTab: 'webcloud' }));
     // Another period waits for its own answers
-    await loadingUntilAnswered(
-      { selectedMonth: august, activeTab: 'webcloud', selectedAccount: null },
-    );
+    await loadingUntilAnswered(shellProps({ selectedMonth: august, activeTab: 'webcloud' }));
 
     expect(loading).toEqual([true, false, true, false]);
   });
@@ -135,11 +157,11 @@ describe('useWebCloudTab', () => {
     'says the answers could not be loaded once %s fails (#62)',
     async (request) => {
       const { result, rerender } = await renderTabHook(useWebCloudTab,
-        { selectedMonth: september, activeTab: 'webcloud', selectedAccount: null });
+        shellProps({ selectedMonth: september, activeTab: 'webcloud' }));
       expect(result.current.failedWebCloud).toBe(false);
       api[request].mockRejectedValue(new Error('Request failed with status code 500'));
 
-      await rerender({ selectedMonth: august, activeTab: 'webcloud', selectedAccount: null });
+      await rerender(shellProps({ selectedMonth: august, activeTab: 'webcloud' }));
 
       expect(result.current.failedWebCloud).toBe(true);
       expect(result.current.loadingWebCloud).toBe(false);
@@ -149,7 +171,7 @@ describe('useWebCloudTab', () => {
   // The period itself is unit tested with webCloudPeriodEndingOn()
   it('requests the 12 months that end on a January from the February before', async () => {
     const { result } = await renderTabHook(useWebCloudTab,
-      { selectedMonth: january, activeTab: 'webcloud', selectedAccount: null });
+      shellProps({ selectedMonth: january, activeTab: 'webcloud' }));
 
     expect(result.current.webCloudPeriod).toEqual({ from: '2025-02-01', to: '2026-01-31' });
     expect(api.fetchWebCloudSummary).toHaveBeenCalledWith('2025-02-01', '2026-01-31', null);
@@ -159,7 +181,7 @@ describe('useWebCloudTab', () => {
   // With several accounts in the instance (#122): see fixtures/accounts.js
   describe('account shown', () => {
     const onTheTab = (selectedAccount) =>
-      ({ selectedMonth: september, activeTab: 'webcloud', selectedAccount });
+      shellProps({ selectedMonth: september, activeTab: 'webcloud', selectedAccount });
 
     it('requests the services of the account selected, and caches them under its id',
       async () => {
@@ -221,11 +243,11 @@ describe('useWebCloudTab', () => {
 
   it('keeps the family of the "show all" modal when another tab opens', async () => {
     const { result, rerender } = await renderTabHook(useWebCloudTab,
-      { selectedMonth: september, activeTab: 'webcloud', selectedAccount: null });
+      shellProps({ selectedMonth: september, activeTab: 'webcloud' }));
     expect(result.current.showAllWebCloud).toBeNull();
 
     act(() => result.current.setShowAllWebCloud('email'));
-    await rerender({ selectedMonth: september, activeTab: 'overview', selectedAccount: null });
+    await rerender(shellProps({ selectedMonth: september, activeTab: 'overview' }));
 
     expect(result.current.showAllWebCloud).toBe('email');
   });

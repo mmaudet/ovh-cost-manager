@@ -8,13 +8,17 @@ import { accountQuery } from '../utils/accounts.js';
 import { webCloudPeriodEndingOn } from '../utils/webCloudPeriod.js';
 
 // The services of the account shown (#122): selectedAccount, the shell's, is null for all
-// accounts, and undefined while the page does not know it yet, which the queries wait for
-const useWebCloudTab = ({ selectedMonth, activeTab, selectedAccount }) => {
+// accounts, and undefined while the page does not know it yet, which the queries wait for.
+// They wait too until the months of the account shown hold the month selected,
+// holdsSelectedMonth, as the shell checks it: not while they load, nor when the account lacks
+// the month, until the shell selects its latest month (#115). The 12 months that end on a
+// month the account lacks would never show (#120).
+const useWebCloudTab = ({ selectedMonth, holdsSelectedMonth, activeTab, selectedAccount }) => {
   const [showAllWebCloud, setShowAllWebCloud] = useState(null); // category key, null when closed
 
   const webCloudPeriod = webCloudPeriodEndingOn(selectedMonth);
-  // The queries run once the tab is open, with a period to ask for
-  const enabled = !!webCloudPeriod && activeTab === 'webcloud';
+  // The queries run once the tab is open, on a month that the account shown has
+  const enabled = holdsSelectedMonth && activeTab === 'webcloud';
 
   const {
     data: webCloudSummary, isPending: summaryPending, isError: summaryFailed,

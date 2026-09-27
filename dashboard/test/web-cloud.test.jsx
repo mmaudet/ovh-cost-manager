@@ -398,11 +398,10 @@ describe('Web Cloud tab with several accounts', () => {
       ]);
     });
 
-  // The month selected stays until the account's months list loads, and says it lacks it,
-  // as the header's summary waits for (#115). Skipped until phase 2 of the #122 review: the
-  // tab's queries then wait on the shell's holdsSelectedMonth, which #120 brings. Until then
-  // they ask for the stale window of September, then for August's.
-  it.skip('asks for no services of the 12 months ending on a month the account selected lacks',
+  // The month selected stays until the account's months list loads, and says it lacks it, as
+  // the header's summary and the other tabs wait for (#115, #120): the 12 months that end on
+  // it would never show
+  it('asks for no services of the 12 months ending on a month the account selected lacks',
     async () => {
       const { user } = await renderDashboard(severalAccounts);
       await openTab(user, 'Web Cloud');
