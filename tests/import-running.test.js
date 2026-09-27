@@ -74,6 +74,24 @@ describe('importLog.isRunning', () => {
     expect(db.importLog.isRunning()).toBe(true);
   });
 
+  // A run over several accounts, or over an account's whole history, can take longer than
+  // 30 minutes: it keeps its lock as it goes (#113)
+  test('is true for a run started more than 30 minutes ago that showed it is alive since', () => {
+    startImportMinutesAgo(45);
+    db.importLog.heartbeat(db.importLog.getLatest().id);
+    expect(db.importLog.isRunning()).toBe(true);
+  });
+
+  test('is false for a run that last showed it is alive more than 30 minutes ago', () => {
+    startImportMinutesAgo(90);
+    const { id } = db.importLog.getLatest();
+    db.importLog.heartbeat(id);
+    db.getDb().prepare(`
+      UPDATE import_log SET heartbeat_at = datetime('now', '-31 minutes') WHERE id = ?
+    `).run(id);
+    expect(db.importLog.isRunning()).toBe(false);
+  });
+
   test('only looks at the latest import', () => {
     startImportMinutesAgo(5);
     const id = db.importLog.start('differential', null, null);

@@ -177,6 +177,61 @@ describe('an import of several accounts', () => {
     });
 });
 
+describe('the lock of a run', () => {
+  // Makes the run look as if it had started, and last shown that it is alive, 40 minutes ago,
+  // as a long run would without keeping its lock. Gives whether it still holds it then.
+  function ageTheLock() {
+    db.getDb().prepare(`
+      UPDATE import_log SET
+        started_at = datetime('now', '-40 minutes'),
+        heartbeat_at = datetime('now', '-40 minutes')
+      WHERE status = 'running'
+    `).run();
+    return db.importLog.isRunning();
+  }
+
+  // Before a route answers, runs `before`
+  const around = (accountRoutes, route, before) => {
+    const answer = accountRoutes.get(route);
+    accountRoutes.set(route, (params) => {
+      before();
+      return answer(params);
+    });
+  };
+
+  // A whole history takes long
+  test('is kept after each bill, however long the run takes', async () => {
+    const lyon = serveAccount(LYON);
+    serveBills(lyon.routes, [['FR-L1', '2026-09-01'], ['FR-L2', '2026-09-02']]);
+    useAccounts({ served: lyon });
+    const held = {};
+    around(lyon.routes, '/me/bill/FR-L1', () => { held.aged = ageTheLock(); });
+    around(lyon.routes, '/me/bill/FR-L2', () => { held.atNextBill = db.importLog.isRunning(); });
+
+    await importSeptember();
+
+    expect(held).toEqual({ aged: false, atNextBill: true });
+  });
+
+  test('is kept from one account to the next', async () => {
+    const lyon = serveAccount(LYON);
+    const paris = serveAccount(PARIS);
+    // No bill: the account's own import is all that can keep the lock
+    serveBills(lyon.routes, []);
+    serveBills(paris.routes, []);
+    useAccounts({ served: lyon }, { served: paris });
+    const held = {};
+    around(lyon.routes, '/me/bill', () => { held.aged = ageTheLock(); });
+    around(paris.routes, '/cloud/project', () => {
+      held.atNextAccount = db.importLog.isRunning();
+    });
+
+    await importSeptember();
+
+    expect(held).toEqual({ aged: false, atNextAccount: true });
+  });
+});
+
 describe('a differential import of several accounts', () => {
   // Lyon was imported up to its bill of August. Paris was added since: none of its bills is
   // stored, and its first is older than Lyon's latest.

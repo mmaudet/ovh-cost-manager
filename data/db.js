@@ -99,6 +99,8 @@ function getDb() {
     // import of the account records
     addColumnIfNotExists(db, 'accounts', 'name', 'TEXT');
     addColumnIfNotExists(db, 'accounts', 'budget', 'INTEGER');
+    // What keeps the lock of a long import (#113)
+    addColumnIfNotExists(db, 'import_log', 'heartbeat_at', 'DATETIME');
   }
   return db;
 }
@@ -312,17 +314,25 @@ const importLogOps = {
     return db.prepare('SELECT * FROM import_log ORDER BY id DESC').all();
   },
 
+  // Records that the running import is alive, which keeps its lock: a run over several
+  // accounts, or over an account's whole history, can take longer than 30 minutes (#113)
+  heartbeat: (id) => {
+    const db = getDb();
+    return db.prepare('UPDATE import_log SET heartbeat_at = CURRENT_TIMESTAMP WHERE id = ?')
+      .run(id);
+  },
+
   // An import is in progress when the latest entry is still 'running' and
-  // started less than 30 minutes ago (an older one is a crashed run).
-  // started_at is a UTC CURRENT_TIMESTAMP without timezone, so its age is
-  // computed in SQL against 'now', which is UTC too.
+  // started, or last showed it is alive, less than 30 minutes ago (an older
+  // one is a crashed run). The times are UTC CURRENT_TIMESTAMPs without
+  // timezone, so their age is computed in SQL against 'now', which is UTC too.
   isRunning: () => {
     const db = getDb();
     const running = db.prepare(`
       SELECT 1 FROM import_log
       WHERE id = (SELECT MAX(id) FROM import_log)
         AND status = 'running'
-        AND datetime(started_at) > datetime('now', '-30 minutes')
+        AND datetime(COALESCE(heartbeat_at, started_at)) > datetime('now', '-30 minutes')
     `).get();
     return Boolean(running);
   }

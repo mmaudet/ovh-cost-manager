@@ -1258,12 +1258,13 @@ async function importBill(ovh, billId, { nic, params, projectMap, resourceTypeMa
  * @param {object} ovh - The OVH API client of the account
  * @param {string} nic - The NIC handle of the account
  * @param {object} run - `params`, the options of the run, `importType`, as its log entry
- *   names it, and `toDate`, the day it imports the bills to
+ *   names it, `toDate`, the day it imports the bills to, and `heartbeat()`, which keeps the
+ *   run's lock
  * @returns {Promise<{projects: number, bills: number, details: number}>} What it imported
  * @throws {Error} When the list of its projects or of its bills cannot be fetched, which
  *   fails the account
  */
-async function importAccount(ovh, nic, { params, importType, toDate }) {
+async function importAccount(ovh, nic, { params, importType, toDate, heartbeat }) {
   const imported = { projects: 0, bills: 0, details: 0 };
 
   // The projects first: their ids tell the bill lines of Public Cloud
@@ -1283,6 +1284,8 @@ async function importAccount(ovh, nic, { params, importType, toDate }) {
   const billIds = await fetchBills(ovh, billsStartOf(nic, params), toDate);
   console.log('\nProcessing bills...');
   for (const [index, billId] of billIds.entries()) {
+    // Each bill keeps the run's lock: a whole history takes long
+    heartbeat();
     process.stdout.write(`  [${index + 1}/${billIds.length}] ${billId}...`);
     // A differential import only adds the bills it lacks, which keeps the daily run short
     if (importType === 'differential' && db.bills.exists(billId)) {
@@ -1461,11 +1464,14 @@ async function runImport(params) {
       }
     }
 
+    // The run's entry of the import log is the lock that the other imports check: the run
+    // shows that it is alive as it goes, however long it takes
+    const heartbeat = () => db.importLog.heartbeat(importId);
     for (const account of accounts.filter(({ error }) => !error)) {
       if (several) console.log(`\n=== ACCOUNT ${describeAccount(account)} ===`);
       try {
         const imported = await importAccount(account.client, account.nic,
-          { params, importType, toDate });
+          { params, importType, toDate, heartbeat });
         for (const figure of Object.keys(stats)) stats[figure] += imported[figure];
         db.accounts.recordImport(account.nic, { status: 'success' });
       } catch (err) {
@@ -1474,6 +1480,7 @@ async function runImport(params) {
         db.accounts.recordImport(account.nic, { status: 'failed', error: reasonOf(err) });
         if (several) console.error(`Account ${describeAccount(account)}: ${reasonOf(err)}`);
       }
+      heartbeat();
     }
 
     const failed = accounts.filter(({ error }) => error);

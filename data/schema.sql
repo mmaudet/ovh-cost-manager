@@ -66,7 +66,8 @@ CREATE TABLE IF NOT EXISTS import_log (
   details_imported INTEGER DEFAULT 0,
   projects_imported INTEGER DEFAULT 0,
   status TEXT DEFAULT 'running', -- 'running', 'success', 'failed', 'partial'
-  error_message TEXT
+  error_message TEXT,
+  heartbeat_at DATETIME          -- When the running import last showed that it is alive
 );
 
 -- Indexes for performance
