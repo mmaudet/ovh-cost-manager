@@ -211,15 +211,18 @@ const billOps = {
   },
 
   /**
-   * @param {?string} [account] - The NIC handle of an account, whose bills alone count
+   * @param {?string} [account] - The account whose bills count (see accountCondition()):
+   *   every account's by default
    * @returns {?string} The date of the latest bill stored, of the account when one is given;
    *   null when there is none
    */
   getLatestDate: (account = null) => {
-    const db = getDb();
-    const result = account === null
-      ? db.prepare('SELECT MAX(date) as latest FROM bills').get()
-      : db.prepare('SELECT MAX(date) as latest FROM bills WHERE account = ?').get(account);
+    const ofAccount = accountCondition(account, 'b.account');
+    const result = getDb().prepare(`
+      SELECT MAX(b.date) as latest
+      FROM bills b
+      WHERE ${ofAccount.sql}
+    `).get(...ofAccount.params);
     return result?.latest;
   },
 
