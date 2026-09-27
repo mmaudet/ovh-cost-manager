@@ -755,9 +755,9 @@ function registerRoutes() {
 
   // The entry of the Unknown account (see CONTEXT.md), which holds the rows stored before the
   // accounts that no configured account claimed (#114). Its id is the value that the account
-  // parameter of the other routes takes for it.
-  const UNKNOWN_ACCOUNT = Object.freeze({
-    id: 'unknown',
+  // parameter of the other routes takes for it (#115).
+  const UNKNOWN_ACCOUNT_ENTRY = Object.freeze({
+    id: db.UNKNOWN_ACCOUNT,
     nic: null,
     name: null,
     currency: null,
@@ -790,7 +790,7 @@ function registerRoutes() {
           error: account.last_import_error
         }
       }));
-      if (db.accounts.hasRowsWithoutAccount()) accounts.push(UNKNOWN_ACCOUNT);
+      if (db.accounts.hasRowsWithoutAccount()) accounts.push(UNKNOWN_ACCOUNT_ENTRY);
       res.json(accounts);
     } catch (err) {
       res.status(500).json({ error: err.message });
