@@ -411,7 +411,7 @@ async function importAccountData(nic) {
         for (const movId of movementIds) {
           try {
             const mov = await ovh.requestPromised('GET', `/me/credit/balance/${balanceId}/movement/${movId}`);
-            db.account.insertCreditMovement({
+            db.balance.insertCreditMovement({
               id: `${balanceId}_${movId}`,
               balance_name: balanceId,
               amount: mov?.amount?.value || 0,
@@ -449,7 +449,7 @@ async function importAccountData(nic) {
     console.error(`  Error fetching deposits: ${err.message}`);
   }
 
-  db.account.insertBalance({
+  db.balance.insertBalance({
     debt_balance: debtBalance,
     credit_balance: creditBalance,
     deposit_total: depositTotal,
@@ -1261,7 +1261,7 @@ async function runImport(params) {
 
           // Update payment info if available
           if (paymentInfo) {
-            db.account.updateBillPayment(billId, paymentInfo);
+            db.balance.updateBillPayment(billId, paymentInfo);
           }
 
           // Delete existing details (for updates)

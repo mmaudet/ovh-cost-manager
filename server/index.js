@@ -1069,7 +1069,7 @@ function registerRoutes() {
 
   app.get('/api/account/balance', (req, res) => {
     try {
-      const balance = db.account.getLatestBalance();
+      const balance = db.balance.getLatestBalance();
       if (!balance) {
         return res.json({ debt_balance: 0, credit_balance: 0, deposit_total: 0, currency: 'EUR' });
       }
@@ -1088,7 +1088,7 @@ function registerRoutes() {
 
   app.get('/api/account/credits', (req, res) => {
     try {
-      const movements = db.account.getCreditMovements();
+      const movements = db.balance.getCreditMovements();
       res.json(movements);
     } catch (err) {
       res.status(500).json({ error: err.message });
@@ -1097,7 +1097,7 @@ function registerRoutes() {
 
   app.get('/api/account/debts', (req, res) => {
     try {
-      const balance = db.account.getLatestBalance();
+      const balance = db.balance.getLatestBalance();
       res.json({
         debt_balance: Math.round((balance?.debt_balance || 0) * 100) / 100,
         currency: balance?.currency || 'EUR'

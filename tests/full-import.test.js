@@ -146,10 +146,10 @@ describe('a full import', () => {
   // Only the latest balance and consumption snapshots are read, which the import fetches
   // again, as it fetches every credit movement and the consumption history
   test('clears the account and consumption snapshots, which it imports again', async () => {
-    db.account.insertBalance({
+    db.balance.insertBalance({
       debt_balance: 0, credit_balance: 50, deposit_total: 0, currency: 'EUR',
     });
-    db.account.insertCreditMovement({
+    db.balance.insertCreditMovement({
       id: 'b1_m1', balance_name: 'b1', amount: 50, date: '2026-09-01', description: 'Voucher',
       movement_type: 'credit',
     });
@@ -166,8 +166,8 @@ describe('a full import', () => {
     await importFull();
 
     expect({
-      balance: db.account.getLatestBalance(),
-      credits: db.account.getCreditMovements(),
+      balance: db.balance.getLatestBalance(),
+      credits: db.balance.getCreditMovements(),
       snapshot: db.consumption.getLatestSnapshot(),
       history: db.consumption.getHistory(),
     }).toEqual({ balance: undefined, credits: [], snapshot: undefined, history: [] });

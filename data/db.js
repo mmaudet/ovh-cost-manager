@@ -282,8 +282,7 @@ const importLogOps = {
   }
 };
 
-// The OVH accounts that the imports read, by the NIC handle that GET /me names (#112). Not
-// to be confused with the operations on an account's balance, accountOps below.
+// The OVH accounts that the imports read, by the NIC handle that GET /me names (#112)
 const accountsOps = {
   // An account that an import reads, with the currency it bills in
   upsert: ({ nic, currency }) => {
@@ -541,7 +540,7 @@ const consumptionOps = {
 };
 
 // Account balance operations (Phase 2)
-const accountOps = {
+const balanceOps = {
   insertBalance: (balance) => {
     const db = getDb();
     const stmt = db.prepare(`
@@ -1901,7 +1900,7 @@ module.exports = {
   accounts: accountsOps,
   analysis: analysisOps,
   consumption: consumptionOps,
-  account: accountOps,
+  balance: balanceOps,
   inventory: inventoryOps,
   cloudDetails: cloudDetailOps,
   webCloud: webCloudOps
