@@ -2,13 +2,15 @@
 /**
  * OVH Bills Data Import Script
  *
- * Imports billing data from OVH API into local SQLite database.
+ * Imports billing data from OVH API into local SQLite database, for each account that the
+ * configuration gives, one after the other (#113).
  *
  * Usage:
  *   node import.js --full                    # Full import (clears existing data)
  *   node import.js --from 2025-01-01 --to 2025-12-31  # Import specific period
  *   node import.js --diff                    # Differential import (since last import)
  *   node import.js --diff --since 2025-06-01 # Differential from specific date
+ *   node import.js --diff --account xx1111-ovh  # The account of this NIC handle only
  */
 
 const path = require('path');
@@ -16,6 +18,7 @@ const os = require('os');
 const util = require('util');
 const Jsonfile = require('jsonfile');
 const db = require('./db');
+const { readAccounts } = require('./accounts-config');
 const { classifyService, classifyResourceTypeFromDomain } = require('./classify');
 const { monthBounds } = require('./months');
 
@@ -26,7 +29,8 @@ if (db.importLog.isRunning()) {
   process.exit(0);
 }
 
-// Load configuration (credentials + settings)
+// The places of the configuration (credentials + settings), in the order the import reads
+// them
 const APP_DATA = path.resolve(os.homedir(), 'my-ovh-bills');
 const CONFIG_PATHS = [
   path.resolve(__dirname, '..', 'config.json'),      // Project root
@@ -34,30 +38,49 @@ const CONFIG_PATHS = [
   path.resolve(APP_DATA, 'credentials.json')          // Legacy: ~/my-ovh-bills/credentials.json
 ];
 
-let ovh;
-let config = {};
-let configLoaded = false;
-
-for (const configPath of CONFIG_PATHS) {
-  try {
-    const loadedConfig = Jsonfile.readFileSync(configPath);
-    // Handle both new format (with credentials key) and legacy format
-    const cred = loadedConfig.credentials || loadedConfig;
-    ovh = require('ovh')(cred);
-    config = loadedConfig;
-    configLoaded = true;
-    break;
-  } catch (e) {
-    // Try next path
+/**
+ * Reads the accounts to import, as strictly as the server reads its settings
+ * (data/accounts-config.js), from the first configuration file that gives any: as before
+ * #113, a file of other settings leaves them to the next place.
+ * @returns {{source: string, accounts: object[]}} The file, and its accounts in its order,
+ *   as readAccounts() gives them
+ * @throws {Error} naming a file that exists but cannot be read, or the setting and the file
+ *   of a value that the accounts do not take; or when no file gives an account
+ */
+function loadAccounts() {
+  for (const file of CONFIG_PATHS) {
+    let config;
+    try {
+      config = Jsonfile.readFileSync(file);
+    } catch (err) {
+      if (err.code === 'ENOENT') continue;
+      // jsonfile starts the message of a parse error with the file
+      throw new Error(`${file} cannot be read: ${String(err.message).replace(`${file}: `, '')}`);
+    }
+    if (typeof config !== 'object' || config === null || Array.isArray(config)) {
+      throw new Error(`${file} must hold a JSON object`);
+    }
+    const accounts = readAccounts(config, file);
+    if (accounts.length > 0) return { source: file, accounts };
   }
+  throw new Error([
+    'No valid configuration file found.',
+    'Searched paths:',
+    ...CONFIG_PATHS.map(file => `  - ${file}`),
+    '',
+    'Please create config.json with valid OVH API credentials.',
+  ].join('\n'));
 }
 
-if (!configLoaded) {
-  console.error('Error: No valid configuration file found.');
-  console.error('Searched paths:');
-  CONFIG_PATHS.forEach(p => console.error(`  - ${p}`));
-  console.error('\nPlease create config.json with valid OVH API credentials.');
-  process.exit(1);
+// The OVH API client of the account being read or imported: runImport() creates one from the
+// credentials of each account, and sets it for each in turn
+let ovh = null;
+
+// A client of the OVH API for these credentials. Loaded when first used, as before: the tests
+// of the lock run this script with the client disabled.
+function createClient(credentials) {
+  // A copy: the client writes the settings of its endpoint in what it is given
+  return require('ovh')({ ...credentials });
 }
 
 // Parallel batch size for API calls (keep reasonable to avoid OVH rate-limiting)
@@ -146,7 +169,8 @@ function parseArgs() {
     includeAccount: false,
     includeInventory: false,
     includeCloudDetails: false,
-    all: false
+    all: false,
+    account: null
   };
 
   for (let i = 0; i < args.length; i++) {
@@ -154,6 +178,9 @@ function parseArgs() {
       params.full = true;
     } else if (args[i] === '--diff') {
       params.diff = true;
+    } else if (args[i] === '--account') {
+      // The NIC handle of the account, or '' when none follows, which runImport() refuses
+      params.account = args[i + 1] && !args[i + 1].startsWith('--') ? args[++i] : '';
     } else if (args[i] === '--from' && args[i + 1]) {
       params.from = args[++i];
     } else if (args[i] === '--to' && args[i + 1]) {
@@ -205,6 +232,101 @@ async function readAccount() {
       + 'imports');
   }
   return { nic: me.nichandle, currency: me.currency?.code ?? null };
+}
+
+// --- The accounts of a run ---
+
+// Why an account, or a run, failed: the message of its error, or else the error described
+function reasonOf(err) {
+  return err?.message || describeError(err);
+}
+
+// 'a', 'a and b', 'a, b and c'
+function joinWithAnd(items) {
+  return items.length > 1 ? `${items.slice(0, -1).join(', ')} and ${items.at(-1)}` : items[0];
+}
+
+// An account of the run as the messages name it: its entry of the configuration, by its name
+// or its place, and its NIC handle once GET /me has named it
+function describeAccount(account) {
+  return account.nic ? `${account.entry.label} (${account.nic})` : account.entry.label;
+}
+
+/**
+ * Reads the account of each configured entry through GET /me, one after the other, each with
+ * a client of its own credentials. Nothing is written yet: two entries of one account must
+ * fail the run before it imports anything.
+ * @param {object[]} entries - The accounts of the configuration, in its order
+ * @returns {Promise<object[]>} An account for each entry, in their order: its entry, and its
+ *   NIC handle, currency and client, or else the error that fails it
+ */
+async function readEveryAccount(entries) {
+  const accounts = [];
+  for (const entry of entries) {
+    try {
+      ovh = createClient(entry.credentials);
+      const { nic, currency } = await readAccount();
+      accounts.push({ entry, nic, currency, client: ovh });
+      console.log(entries.length > 1 ? `Account ${entry.label}: ${nic}` : `Account: ${nic}`);
+    } catch (err) {
+      accounts.push({ entry, error: err });
+      // A single account's error ends the run's output
+      if (entries.length > 1) console.error(`Account ${entry.label}: ${reasonOf(err)}`);
+    }
+  }
+  return accounts;
+}
+
+// Two entries whose credentials lead to one account would import it twice, and the run
+// could not tell which name or budget is its own: it fails before importing anything,
+// naming them
+function failOnSameAccount(accounts, source) {
+  const labelsByNic = new Map();
+  for (const account of accounts.filter(({ nic }) => nic)) {
+    labelsByNic.set(account.nic, [...(labelsByNic.get(account.nic) || []), account.entry.label]);
+  }
+  const repeated = [...labelsByNic].filter(([, labels]) => labels.length > 1);
+  if (repeated.length > 0) {
+    throw new Error(repeated.map(([nic, labels]) =>
+      `${joinWithAnd(labels)} in ${source} are the same account, ${nic}: list each account once`,
+    ).join('; '));
+  }
+}
+
+// The totals add up the amounts of the accounts: with several accounts configured, an
+// account that bills in another currency than the first configured account fails. When that
+// one cannot be read, the first that can gives the currency of the run.
+function failOtherCurrencies(accounts) {
+  const named = accounts.filter(({ nic }) => nic);
+  const reference = named[0];
+  if (!reference) return;
+  const which = reference === accounts[0]
+    ? 'the first configured account'
+    : 'the first configured account that could be read';
+  for (const account of named.filter(({ currency }) => currency !== reference.currency)) {
+    account.error = new Error(`The account bills in ${account.currency}, not in `
+      + `${reference.currency} as ${describeAccount(reference)}, ${which}: every account must `
+      + 'bill in the same currency');
+  }
+}
+
+// The account of this NIC handle, which --account limits the run to. When none has it, it
+// may be one whose GET /me failed: the error names them, with their errors.
+function findAccount(accounts, nic, source) {
+  const account = accounts.find(candidate => candidate.nic === nic);
+  if (account) return account;
+  const unread = accounts.filter(candidate => !candidate.nic)
+    .map(candidate => `${candidate.entry.label}: ${reasonOf(candidate.error)}`);
+  throw new Error(`No account configured in ${source} has the NIC handle ${nic}`
+    + (unread.length > 0 ? `, unless it is one that could not be read: ${unread.join('; ')}` : ''));
+}
+
+// Why a run ended failed or partial: the error of its account, when it has a single one, or
+// else each account that failed, with its error
+function failureMessage(accounts, failed) {
+  if (accounts.length === 1) return reasonOf(failed[0].error);
+  const each = failed.map(account => `${describeAccount(account)}: ${reasonOf(account.error)}`);
+  return `${failed.length} of ${accounts.length} accounts failed: ${each.join('; ')}`;
 }
 
 // Fetch all cloud projects
@@ -1156,12 +1278,198 @@ async function importCloudDetails(projectIds) {
   if (consumptionMonth) db.cloudDetails.setCurrentConsumptionMonth(consumptionMonth);
 }
 
-// Main import function
+// The day the bills of an account start from, null for its first: in a differential import,
+// its own latest bill, unless --since says from when, so that an account added since the
+// last import gets its whole history
+function billsStartOf(nic, params) {
+  if (params.full) return null;
+  if (params.diff) return params.since || db.bills.getLatestDate(nic) || null;
+  return params.from;
+}
+
+/**
+ * Imports one account through `ovh`, the client of its credentials: its projects, its bills
+ * from the day that billsStartOf() gives, and the datasets that the options ask for. Every
+ * row it writes carries the account's NIC handle, or reaches it through its bill or project.
+ * @param {string} nic - The NIC handle of the account
+ * @param {object} run - The run: `params`, its options, `importType`, as its log entry names
+ *   it, `toDate`, the day it imports the bills to, and `stats`, which the account adds to
+ * @throws {Error} When a call that the account cannot be imported without fails, which fails
+ *   the account
+ */
+async function importAccount(nic, { params, importType, toDate, stats }) {
+  // Fetch and store projects
+  const projects = await fetchProjects();
+  const projectMap = {};
+  for (const project of projects) {
+    db.projects.upsert({ ...project, account: nic });
+    projectMap[project.id] = project.name;
+    stats.projects++;
+  }
+
+  // Phase 3: Import inventory and build resource type map
+  let resourceTypeMap = {};
+  if (params.includeInventory) {
+    resourceTypeMap = await importInventory(projectMap, nic);
+  }
+
+  // Fetch bills
+  const billIds = await fetchBills(billsStartOf(nic, params), toDate);
+
+  // Process each bill
+  console.log('\nProcessing bills...');
+  for (let i = 0; i < billIds.length; i++) {
+    const billId = billIds[i];
+    process.stdout.write(`  [${i + 1}/${billIds.length}] ${billId}...`);
+
+    // Skip if already exists (for differential)
+    if (importType === 'differential' && db.bills.exists(billId)) {
+      console.log(' skipped (exists)');
+      continue;
+    }
+
+    try {
+      const { bill, details } = await fetchBillDetails(billId);
+
+      // Fetch payment info if account import is enabled (Phase 2)
+      let paymentInfo = null;
+      if (params.includeAccount) {
+        paymentInfo = await fetchBillPayment(billId);
+      }
+
+      // Process and store bill + details in a transaction
+      // This ensures atomic write: either all data is written or none
+      db.transaction(() => {
+        // Store bill
+        db.bills.upsert({ ...bill, account: nic });
+
+        // Update payment info if available
+        if (paymentInfo) {
+          db.balance.updateBillPayment(billId, paymentInfo);
+        }
+
+        // Delete existing details (for updates)
+        db.details.deleteByBillId(billId);
+
+        // Process and store details with project mapping
+        // Note: d.domain from OVH API contains the project ID for cloud resources
+        // For non-cloud resources (domains, web hosting), d.domain is a domain name
+        const processedDetails = details.map(d => {
+          // Déterminer le type de ressource dès l'import
+          let resource_type = 'other';
+          // Priorité : mapping inventaire, puis classification domain
+          if (resourceTypeMap && resourceTypeMap[d.domain]) {
+            resource_type = resourceTypeMap[d.domain];
+          } else {
+            resource_type = classifyResourceTypeFromDomain(d.domain, d.description);
+          }
+          // Projet cloud
+          const isCloudProject = projectMap.hasOwnProperty(d.domain);
+          return {
+            ...d,
+            project_id: isCloudProject ? d.domain : null,
+            service_type: classifyService(d.description),
+            resource_type
+          };
+        });
+
+        db.details.insertMany(processedDetails);
+      });
+
+      stats.bills++;
+      stats.details += details.length;
+
+      console.log(` ${details.length} details`);
+    } catch (err) {
+      // The bill is skipped, as a failed item is
+      failedItemCount += 1;
+      console.log(` ERROR: ${describeError(err)}`);
+    }
+  }
+
+
+  // Phase 1: Import consumption data
+  if (params.includeConsumption) {
+    await importConsumption(nic);
+  }
+
+  // Phase 2: Import account data
+  if (params.includeAccount) {
+    await importAccountData(nic);
+  }
+
+  // Phase 4: Import cloud project details
+  if (params.includeCloudDetails) {
+    await importCloudDetails(Object.keys(projectMap));
+  }
+}
+
+function printUsage() {
+  console.error('Usage:');
+  console.error('  node import.js --full');
+  console.error('  node import.js --from 2025-01-01 --to 2025-12-31');
+  console.error('  node import.js --diff');
+  console.error('  node import.js --diff --since 2025-06-01');
+  console.error('');
+  console.error('Additional data flags:');
+  console.error('  --include-consumption   Import consumption data (current/forecast/history)');
+  console.error('  --include-account       Import account balance, debts, credits');
+  console.error('  --include-inventory     Import service inventory (servers, VPS, storage)');
+  console.error('  --include-cloud-details Import cloud project instances, quotas, consumption');
+  console.error('  --all                   Import all additional data');
+  console.error('  --account <NIC handle>  Import the configured account of this NIC handle only');
+}
+
+// The summary that ends a run which imported its accounts, or some of them
+function printSummary(title, stats) {
+  console.log(`\n=== ${title} ===`);
+  console.log(`Projects: ${stats.projects}`);
+  console.log(`Bills: ${stats.bills}`);
+  console.log(`Details: ${stats.details}`);
+  console.log(`Failed items: ${failedItemCount}`);
+}
+
+/**
+ * Imports every account of the configuration, one after the other, under the lock of one
+ * import log entry, or the account that --account names. An account that fails does not stop
+ * the others: the run then ends partial, naming those that failed, or failed when all did.
+ * @param {object} params - The options, as parseArgs() reads them
+ */
 async function runImport(params) {
   const stats = { bills: 0, details: 0, projects: 0 };
   failedItemCount = 0;
 
-  // Determine import type and dates
+  if (!params.full && !params.diff && !params.from) {
+    printUsage();
+    process.exit(1);
+    return;
+  }
+  if (params.account === '') {
+    console.error('Error: --account needs the NIC handle of the account to import');
+    process.exit(1);
+    return;
+  }
+  // Clearing the data of a single account comes with #114
+  if (params.full && params.account) {
+    console.error('Error: --full clears every account, so it cannot be limited to one with '
+      + '--account yet: run --full alone, or --account with --diff or --from');
+    process.exit(1);
+    return;
+  }
+
+  // The accounts, before the lock is taken: a malformed configuration imports nothing
+  let configuration;
+  try {
+    configuration = loadAccounts();
+  } catch (err) {
+    console.error(`Error: ${err.message}`);
+    process.exit(1);
+    return;
+  }
+  const several = configuration.accounts.length > 1;
+
+  // Determine import type and dates. The log entry records the latest bill of the database
+  // as the start of a differential import: each account then starts from its own.
   let importType = 'period';
   let fromDate = params.from;
   let toDate = params.to || new Date().toISOString().split('T')[0];
@@ -1187,182 +1495,109 @@ async function runImport(params) {
       }
     }
     console.log(`\n=== DIFFERENTIAL IMPORT ===`);
-    console.log(`Importing bills since: ${fromDate || 'beginning'}\n`);
-  } else if (params.from) {
+    console.log(params.since
+      ? `Importing bills since: ${params.since}\n`
+      : 'Importing the bills of each account since its latest bill\n');
+  } else {
     console.log(`\n=== PERIOD IMPORT ===`);
     console.log(`From: ${fromDate}`);
     console.log(`To: ${toDate}\n`);
-  } else {
-    console.error('Usage:');
-    console.error('  node import.js --full');
-    console.error('  node import.js --from 2025-01-01 --to 2025-12-31');
-    console.error('  node import.js --diff');
-    console.error('  node import.js --diff --since 2025-06-01');
-    console.error('');
-    console.error('Additional data flags:');
-    console.error('  --include-consumption   Import consumption data (current/forecast/history)');
-    console.error('  --include-account       Import account balance, debts, credits');
-    console.error('  --include-inventory     Import service inventory (servers, VPS, storage)');
-    console.error('  --include-cloud-details Import cloud project instances, quotas, consumption');
-    console.error('  --all                   Import all additional data');
-    process.exit(1);
   }
 
   // The import log's entry is the lock that the other imports check, so it is written
   // before any call to the API. It records the run even when GET /me fails.
   const importId = db.importLog.start(importType, fromDate, toDate);
-  // Set once GET /me answers, so that a failure after it is recorded on the account too
-  let account = null;
 
   try {
-    // Before any write or clear: a key that cannot name its account must leave the data as
+    // Before any write or clear: an account that cannot name itself must leave the data as
     // it is, since nothing could tell whose rows it would write
-    account = await readAccount();
-    console.log(`Account: ${account.nic}`);
-    // Rows stored before the upgrade carry no account. With a single account configured,
-    // they can only be its own: they get it at the first import, and none is left after
+    const read = await readEveryAccount(configuration.accounts);
+    failOnSameAccount(read, configuration.source);
+    if (several) failOtherCurrencies(read);
+    // The accounts of the run, each with the error that fails it, if any
+    const accounts = params.account
+      ? [findAccount(read, params.account, configuration.source)]
+      : read;
+
+    // Each account named is recorded, with the name and budget of its entry, and the
+    // failure of one that bills in another currency
+    const [only] = accounts;
     const attributed = db.transaction(() => {
-      db.accounts.upsert(account);
-      return db.accounts.attributeRowsWithoutAccount(account.nic);
+      for (const { entry, nic, currency, error } of accounts.filter(account => account.nic)) {
+        db.accounts.upsert({ nic, currency, name: entry.name, budget: entry.budget });
+        if (error) db.accounts.recordImport(nic, { status: 'failed', error: reasonOf(error) });
+      }
+      // Rows stored before the upgrade carry no account. With a single account configured,
+      // they can only be its own: they get it at the first import, and none is left after.
+      // With several, whose they are is for each account's API to tell (#114).
+      return !several && only.nic ? db.accounts.attributeRowsWithoutAccount(only.nic) : 0;
     });
     if (attributed > 0) {
-      console.log(`  Attributed ${attributed} rows stored before to the account ${account.nic}`);
+      console.log(`  Attributed ${attributed} rows stored before to the account ${only.nic}`);
     }
 
     if (params.full) {
-      // Cleared only now, so that a failed GET /me clears nothing, and in one transaction.
-      // The import log keeps the entry of this import, which the other imports check.
-      db.transaction(() => {
-        db.clearAll(importId);
-      });
-    }
-
-    // Fetch and store projects
-    const projects = await fetchProjects();
-    const projectMap = {};
-    for (const project of projects) {
-      db.projects.upsert({ ...project, account: account.nic });
-      projectMap[project.id] = project.name;
-      stats.projects++;
-    }
-
-    // Phase 3: Import inventory and build resource type map
-    let resourceTypeMap = {};
-    if (params.includeInventory) {
-      resourceTypeMap = await importInventory(projectMap, account.nic);
-    }
-
-    // Fetch bills
-    const billIds = await fetchBills(fromDate, toDate);
-
-    // Process each bill
-    console.log('\nProcessing bills...');
-    for (let i = 0; i < billIds.length; i++) {
-      const billId = billIds[i];
-      process.stdout.write(`  [${i + 1}/${billIds.length}] ${billId}...`);
-
-      // Skip if already exists (for differential)
-      if (importType === 'differential' && db.bills.exists(billId)) {
-        console.log(' skipped (exists)');
-        continue;
-      }
-
-      try {
-        const { bill, details } = await fetchBillDetails(billId);
-
-        // Fetch payment info if account import is enabled (Phase 2)
-        let paymentInfo = null;
-        if (params.includeAccount) {
-          paymentInfo = await fetchBillPayment(billId);
-        }
-
-        // Process and store bill + details in a transaction
-        // This ensures atomic write: either all data is written or none
+      const unimportable = accounts.filter(({ error }) => error);
+      if (unimportable.length === 0) {
+        // Cleared only once every account has named itself, and in one transaction: it
+        // would drop the data of an account that it cannot import again. The import log
+        // keeps the entry of this import, which the other imports check.
         db.transaction(() => {
-          // Store bill
-          db.bills.upsert({ ...bill, account: account.nic });
-
-          // Update payment info if available
-          if (paymentInfo) {
-            db.balance.updateBillPayment(billId, paymentInfo);
-          }
-
-          // Delete existing details (for updates)
-          db.details.deleteByBillId(billId);
-
-          // Process and store details with project mapping
-          // Note: d.domain from OVH API contains the project ID for cloud resources
-          // For non-cloud resources (domains, web hosting), d.domain is a domain name
-          const processedDetails = details.map(d => {
-            // Déterminer le type de ressource dès l'import
-            let resource_type = 'other';
-            // Priorité : mapping inventaire, puis classification domain
-            if (resourceTypeMap && resourceTypeMap[d.domain]) {
-              resource_type = resourceTypeMap[d.domain];
-            } else {
-              resource_type = classifyResourceTypeFromDomain(d.domain, d.description);
-            }
-            // Projet cloud
-            const isCloudProject = projectMap.hasOwnProperty(d.domain);
-            return {
-              ...d,
-              project_id: isCloudProject ? d.domain : null,
-              service_type: classifyService(d.description),
-              resource_type
-            };
-          });
-
-          db.details.insertMany(processedDetails);
+          db.clearAll(importId);
         });
-
-        stats.bills++;
-        stats.details += details.length;
-
-        console.log(` ${details.length} details`);
-      } catch (err) {
-        // The bill is skipped, as a failed item is
-        failedItemCount += 1;
-        console.log(` ERROR: ${describeError(err)}`);
+      } else if (several) {
+        console.warn('Clearing nothing, as some accounts cannot be imported: '
+          + `${joinWithAnd(unimportable.map(describeAccount))}`);
       }
     }
 
-
-    // Phase 1: Import consumption data
-    if (params.includeConsumption) {
-      await importConsumption(account.nic);
+    for (const account of accounts.filter(({ error }) => !error)) {
+      if (several) console.log(`\n=== ACCOUNT ${describeAccount(account)} ===`);
+      ovh = account.client;
+      try {
+        await importAccount(account.nic, { params, importType, toDate, stats });
+        db.accounts.recordImport(account.nic, { status: 'success' });
+      } catch (err) {
+        // The next accounts are imported all the same
+        account.error = err;
+        db.accounts.recordImport(account.nic, { status: 'failed', error: reasonOf(err) });
+        if (several) console.error(`Account ${describeAccount(account)}: ${reasonOf(err)}`);
+      }
     }
 
-    // Phase 2: Import account data
-    if (params.includeAccount) {
-      await importAccountData(account.nic);
+    const failed = accounts.filter(({ error }) => error);
+    if (failed.length === accounts.length) {
+      throw new Error(failureMessage(accounts, failed));
     }
-
-    // Phase 4: Import cloud project details
-    if (params.includeCloudDetails) {
-      await importCloudDetails(Object.keys(projectMap));
+    if (failed.length > 0) {
+      const message = failureMessage(accounts, failed);
+      db.importLog.partial(importId, stats, message);
+      printSummary('IMPORT PARTIAL', stats);
+      console.error(message);
+      process.exit(1);
+      return;
     }
 
     // Complete import log
     db.importLog.complete(importId, stats);
-    db.accounts.recordImport(account.nic, { status: 'success' });
-
-    console.log('\n=== IMPORT COMPLETE ===');
-    console.log(`Projects: ${stats.projects}`);
-    console.log(`Bills: ${stats.bills}`);
-    console.log(`Details: ${stats.details}`);
-    console.log(`Failed items: ${failedItemCount}`);
-
+    printSummary('IMPORT COMPLETE', stats);
   } catch (err) {
-    db.importLog.fail(importId, err.message);
-    if (account) {
-      db.accounts.recordImport(account.nic, { status: 'failed', error: err.message });
-    }
+    db.importLog.fail(importId, reasonOf(err));
     console.error('\n=== IMPORT FAILED ===');
-    console.error(err.message);
+    console.error(reasonOf(err));
     process.exit(1);
   } finally {
     db.closeDb();
   }
+}
+
+// The phases that run on their own, as their tests run them, read the OVH API through the
+// client of the first configured account, unless an import has set one
+function onItsOwn(phase) {
+  return (...args) => {
+    ovh ??= createClient(loadAccounts().accounts[0].credentials);
+    return phase(...args);
+  };
 }
 
 // Run, unless required by the tests
@@ -1371,4 +1606,8 @@ if (require.main === module) {
   runImport(params);
 }
 
-module.exports = { importCloudDetails, importInventory, runImport };
+module.exports = {
+  importCloudDetails: onItsOwn(importCloudDetails),
+  importInventory: onItsOwn(importInventory),
+  runImport,
+};

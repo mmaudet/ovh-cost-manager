@@ -95,6 +95,10 @@ function getDb() {
     for (const table of ACCOUNT_TABLES) {
       addColumnIfNotExists(db, table, 'account', 'TEXT');
     }
+    // The name and budget of each account's entry in config.json (#113), which the next
+    // import of the account records
+    addColumnIfNotExists(db, 'accounts', 'name', 'TEXT');
+    addColumnIfNotExists(db, 'accounts', 'budget', 'INTEGER');
   }
   return db;
 }
@@ -183,9 +187,16 @@ const billOps = {
     return db.prepare('SELECT * FROM bills WHERE id = ?').get(id);
   },
 
-  getLatestDate: () => {
+  /**
+   * @param {?string} [account] - The NIC handle of an account, whose bills alone count
+   * @returns {?string} The date of the latest bill stored, of the account when one is given;
+   *   null when there is none
+   */
+  getLatestDate: (account = null) => {
     const db = getDb();
-    const result = db.prepare('SELECT MAX(date) as latest FROM bills').get();
+    const result = account === null
+      ? db.prepare('SELECT MAX(date) as latest FROM bills').get()
+      : db.prepare('SELECT MAX(date) as latest FROM bills WHERE account = ?').get(account);
     return result?.latest;
   },
 
@@ -274,6 +285,23 @@ const importLogOps = {
     return stmt.run(errorMessage, id);
   },
 
+  // Ends an import that some of its accounts failed, and the others imported (#113): what
+  // they imported, and the error that names the accounts that failed
+  partial: (id, stats, errorMessage) => {
+    const db = getDb();
+    const stmt = db.prepare(`
+      UPDATE import_log SET
+        completed_at = CURRENT_TIMESTAMP,
+        bills_imported = ?,
+        details_imported = ?,
+        projects_imported = ?,
+        status = 'partial',
+        error_message = ?
+      WHERE id = ?
+    `);
+    return stmt.run(stats.bills, stats.details, stats.projects, errorMessage, id);
+  },
+
   getLatest: () => {
     const db = getDb();
     return db.prepare('SELECT * FROM import_log ORDER BY id DESC LIMIT 1').get();
@@ -303,17 +331,21 @@ const importLogOps = {
 // The OVH accounts that the imports read, by the NIC handle that GET /me names (#112)
 const accountsOps = {
   /**
-   * Records an account that an import reads, or updates the currency of one it knows.
+   * Records an account that an import reads, or updates one it knows: its currency, and the
+   * name and budget of its entry in config.json, which only an import can match with the
+   * account (#113). A rename in config.json thus shows once the account is imported again.
    * @param {object} account - As GET /me names it
    * @param {string} account.nic - Its NIC handle
    * @param {?string} account.currency - The code of the currency it bills in, such as EUR
+   * @param {?string} [account.name] - The name of its entry, null when it has none
+   * @param {?number} [account.budget] - The budget of its entry, null when it has none
    */
-  upsert: ({ nic, currency }) => {
+  upsert: ({ nic, currency, name = null, budget = null }) => {
     const db = getDb();
     return db.prepare(`
-      INSERT INTO accounts (nic, currency) VALUES (@nic, @currency)
-      ON CONFLICT(nic) DO UPDATE SET currency = @currency
-    `).run({ nic, currency });
+      INSERT INTO accounts (nic, currency, name, budget) VALUES (@nic, @currency, @name, @budget)
+      ON CONFLICT(nic) DO UPDATE SET currency = @currency, name = @name, budget = @budget
+    `).run({ nic, currency, name, budget });
   },
 
   /**
