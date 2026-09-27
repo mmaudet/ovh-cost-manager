@@ -185,10 +185,11 @@ describe('an account the server does not know', () => {
   });
 });
 
-// A single-account installation gets the answers it got before an instance could import
-// several accounts: each service once, whether its bills belong to the account, or to none,
-// as until the first import since the upgrade. The domain example.net was renewed in March,
-// then transferred in June: two bill lines of one service.
+// A single-account installation gets the same answers as before an instance could import
+// several accounts, but for the account that each service now names: each service once, with
+// the same figures, whether its bills belong to the account, or to none, as until the first
+// import since the upgrade. The domain example.net was renewed in March, then transferred in
+// June: two bill lines of one service.
 describe.each([
   ['whose every bill belongs to its account', LYON],
   ['imported before OCM told accounts apart', null],
@@ -222,23 +223,25 @@ describe.each([
     await single?.stop();
   });
 
-  test('lists each service once without the parameter, with the cost of its lines', async () => {
-    expect(await get(`/api/web-cloud/items?${YEAR}`, single)).toEqual({
-      status: 200,
-      body: [
-        // The most recent wording
-        service('example.net', account, 'domain', 'example.net - .net transfert - 12 mois',
-          2, '2026-03-05', '2026-06-10', 21.98),
-        service('example.org', account, 'email', 'MX plan account rental for 12 months',
-          1, '2026-06-10', '2026-06-10', 12),
-        service('example.com', account, 'domain',
-          'example.com - .com demande de renouvellement - 12 mois',
-          1, '2026-03-05', '2026-03-05', 10.49),
-      ],
+  test('lists each service once without the parameter, as before, with its account added',
+    async () => {
+      expect(await get(`/api/web-cloud/items?${YEAR}`, single)).toEqual({
+        status: 200,
+        body: [
+          // The most recent wording
+          service('example.net', account, 'domain', 'example.net - .net transfert - 12 mois',
+            2, '2026-03-05', '2026-06-10', 21.98),
+          service('example.org', account, 'email', 'MX plan account rental for 12 months',
+            1, '2026-06-10', '2026-06-10', 12),
+          service('example.com', account, 'domain',
+            'example.com - .com demande de renouvellement - 12 mois',
+            1, '2026-03-05', '2026-03-05', 10.49),
+        ],
+      });
     });
-  });
 
-  test('counts each service once without the parameter', async () => {
+  // The summary has no account field: its answer is the one from before
+  test('counts each service once without the parameter, as before', async () => {
     expect(await get(`/api/web-cloud/summary?${YEAR}`, single)).toEqual({
       status: 200, body: summary({ domain: [2, 32.47], email: [1, 12] }, 44.47),
     });
