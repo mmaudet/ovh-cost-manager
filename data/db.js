@@ -379,6 +379,42 @@ const detailOps = {
     return db.prepare('SELECT * FROM bill_details WHERE bill_id = ?').all(billId);
   },
 
+  /**
+   * The bill lines of the bills between two dates, both included, as the CSV export of the
+   * bill lines gives them: each with the date, the payment status and the account of its bill,
+   * as a bill line belongs to the account of its bill (ADR 0002), and the name of its project.
+   * By date, then bill.
+   * @param {string} fromDate
+   * @param {string} toDate
+   * @param {?string} [account] - The account whose bills' lines to list (see
+   *   accountCondition()): every account's by default (#137)
+   * @returns {object[]} The lines, each with `account`, the NIC handle of its bill's account,
+   *   null for the Unknown account
+   */
+  getByPeriod: (fromDate, toDate, account = null) => {
+    const ofAccount = accountCondition(account, 'b.account');
+    return getDb().prepare(`
+      SELECT
+        d.bill_id,
+        b.date,
+        p.name as project_name,
+        d.service_type,
+        d.resource_type,
+        d.description,
+        d.quantity,
+        d.unit_price,
+        d.total_price,
+        b.payment_status,
+        b.account
+      FROM bill_details d
+      JOIN bills b ON d.bill_id = b.id
+      LEFT JOIN projects p ON d.project_id = p.id
+      WHERE b.date >= ? AND b.date <= ?
+        AND ${ofAccount.sql}
+      ORDER BY b.date, d.bill_id
+    `).all(fromDate, toDate, ...ofAccount.params);
+  },
+
   deleteByBillId: (billId) => {
     const db = getDb();
     return db.prepare('DELETE FROM bill_details WHERE bill_id = ?').run(billId);

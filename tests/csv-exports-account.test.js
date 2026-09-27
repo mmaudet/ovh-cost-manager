@@ -247,7 +247,7 @@ describe.each([
   // Its account, or the Unknown account for the rows without one, gives the same files as
   // every account, without the account column
   test('exports the same files for its account', async () => {
-    for (const route of [`/api/export/bills?${SEPTEMBER}`]) {
+    for (const route of [`/api/export/bills?${SEPTEMBER}`, `/api/export/details?${SEPTEMBER}`]) {
       expect(await exported(single, forAccount(route, account ?? UNKNOWN_ACCOUNT)))
         .toEqual(await exported(single, route));
     }
@@ -296,6 +296,48 @@ describe('a database of several accounts', () => {
       });
   });
 
+  // A bill line belongs to the account of its bill (ADR 0002)
+  describe('GET /api/export/details', () => {
+    const route = `/api/export/details?${SEPTEMBER}`;
+    const details = (...lines) => csvFile(
+      'details_2026-09-01_2026-09-30.csv', withAccount(DETAILS), ...lines,
+    );
+    // No bill's payment is known
+    const lyon = [
+      '"FR1001";"2026-09-05";"Production";"Compute";"cloud_project";"Instances b3-8 GRA11";'
+        + `1;600;600;;"${LYON}"`,
+      '"FR1001";"2026-09-05";"Staging";"AI/ML";"cloud_project";"Instances l40s-180 GRA11";'
+        + `1;50;50;;"${LYON}"`,
+    ];
+    const paris = [
+      '"FR2001";"2026-09-10";"Staging";"Compute";"cloud_project";"Instances b3-16 GRA11";'
+        + `1;230;230;;"${PARIS}"`,
+      '"FR2001";"2026-09-10";;"Other";"domain";"Nom de domaine example.com - 1 an";'
+        + `1;40;40;;"${PARIS}"`,
+    ];
+    const legacy = [
+      '"FR0001";"2026-09-20";"Legacy";"AI/ML";"cloud_project";"Instances t1-45 GRA11";1;60;60;;',
+      '"FR0001";"2026-09-20";;"Other";"domain";"Nom de domaine legacy.example.org - 1 an";'
+        + '1;30;30;;',
+    ];
+
+    test('exports the bill lines of every account without the parameter, each with its account',
+      async () => {
+        expect(await exportOf(route)).toEqual(details(...lyon, ...paris, ...legacy));
+      });
+
+    test('exports the lines of the bills of the account whose NIC handle it gives', async () => {
+      expect(await exportOf(route, LYON)).toEqual(details(...lyon));
+      expect(await exportOf(route, PARIS)).toEqual(details(...paris));
+    });
+
+    test('exports those of the Unknown account, and none of an account without a bill',
+      async () => {
+        expect(await exportOf(route, UNKNOWN_ACCOUNT)).toEqual(details(...legacy));
+        expect(await exportOf(route, NEW_ACCOUNT)).toEqual(details());
+      });
+  });
+
   // Rather than export every account's rows, or none, for a request that names an account
   describe('an account the server does not know', () => {
     test.each([
@@ -303,7 +345,9 @@ describe('a database of several accounts', () => {
       ['an empty value', ''],
       ['several values', `${LYON}&account=${PARIS}`],
     ])('is refused by the exports, naming the parameter: %s', async (_, value) => {
-      for (const route of [`/api/export/bills?${SEPTEMBER}`]) {
+      for (const route of [
+        `/api/export/bills?${SEPTEMBER}`, `/api/export/details?${SEPTEMBER}`,
+      ]) {
         expect(await ocm.get(forAccount(route, value))).toEqual({ status: 400, body: REFUSED });
       }
     });

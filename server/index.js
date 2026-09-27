@@ -950,8 +950,10 @@ function registerRoutes() {
     }
   });
 
-  // Export bill details as CSV
-  app.get('/api/export/details', (req, res) => {
+  // The bill lines of a period as CSV: those of the bills of the account the request asks for,
+  // or of every account without one, each with its bill's account when the database holds
+  // several (#137)
+  app.get('/api/export/details', accountParameter, (req, res) => {
     try {
       const { from, to } = req.query;
       const validation = validateDateRange(from, to);
@@ -959,27 +961,9 @@ function registerRoutes() {
         return res.status(400).json({ error: validation.error });
       }
 
-      const database = db.getDb();
-      const details = database.prepare(`
-      SELECT
-        d.bill_id,
-        b.date,
-        p.name as project_name,
-        d.service_type,
-        d.resource_type,
-        d.description,
-        d.quantity,
-        d.unit_price,
-        d.total_price,
-        b.payment_status
-      FROM bill_details d
-      JOIN bills b ON d.bill_id = b.id
-      LEFT JOIN projects p ON d.project_id = p.id
-      WHERE b.date >= ? AND b.date <= ?
-      ORDER BY b.date, d.bill_id
-    `).all(from, to);
+      const details = db.details.getByPeriod(from, to, req.account);
 
-      const columns = [
+      const columns = exportColumns([
         { key: 'bill_id', label: 'Facture' },
         { key: 'date', label: 'Date' },
         { key: 'project_name', label: 'Projet' },
@@ -990,7 +974,7 @@ function registerRoutes() {
         { key: 'unit_price', label: 'Prix Unitaire' },
         { key: 'total_price', label: 'Prix Total' },
         { key: 'payment_status', label: 'Statut Paiement' }
-      ];
+      ], holdsSeveralAccounts());
 
       const csv = toCSV(details, columns);
       const filename = `details_${from}_${to}.csv`;
