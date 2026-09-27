@@ -12,6 +12,7 @@ import { useSelectedAccount } from '../hooks/useSelectedAccount.js';
 import Logo from '../components/Logo';
 import { AccountSelector } from '../components/AccountSelector.jsx';
 import { HeaderSelect } from '../components/HeaderSelect.jsx';
+import { ImportStatus } from '../components/ImportStatus.jsx';
 import { ResyncButton } from '../components/ResyncButton.jsx';
 import {
   accountColumnOf, accountLabel, accountQuery, accountsOf, offersAccounts, scopeLabel,
@@ -42,18 +43,6 @@ const IMPORT_TYPE_KEYS = {
   period: 'importTypePeriod',
   differential: 'importTypeDifferential'
 };
-// How the import history shows each import_log status: its translation key, and its colour.
-// A partial import, one that some accounts failed and the others imported (#113), is a
-// warning.
-const IMPORT_STATUSES = {
-  running: { key: 'importStatusRunning', tone: 'text-blue-600' },
-  success: { key: 'importStatusSuccess', tone: 'text-green-600' },
-  partial: { key: 'importStatusPartial', tone: 'text-amber-600' },
-  failed: { key: 'importStatusFailed', tone: 'text-red-600' }
-};
-// A status that the page does not know shows as it is, as an error
-const importStatusOf = (status) =>
-  IMPORT_STATUSES[status] || { key: status, tone: IMPORT_STATUSES.failed.tone };
 
 // The colours of each tone of the "vs previous month" variation: red when the cost grows,
 // green when it shrinks, grey when the variation rounds to 0 (#87)
@@ -695,12 +684,9 @@ export default function Dashboard() {
               {account.lastImport.status !== 'success' && (
                 <>
                   {' ('}
-                  <span
-                    className={importStatusOf(account.lastImport.status).tone}
-                    title={account.lastImport.error || undefined}
-                  >
-                    {t(importStatusOf(account.lastImport.status).key)}
-                  </span>
+                  <ImportStatus
+                    status={account.lastImport.status} error={account.lastImport.error} t={t}
+                  />
                   {')'}
                 </>
               )}
@@ -741,12 +727,7 @@ export default function Dashboard() {
                       <td className="py-1 px-2">
                         {/* Why it failed or ended partial, which names the accounts that
                             failed (#113) */}
-                        <span
-                          className={importStatusOf(h.status).tone}
-                          title={h.error_message || undefined}
-                        >
-                          {t(importStatusOf(h.status).key)}
-                        </span>
+                        <ImportStatus status={h.status} error={h.error_message} t={t} />
                       </td>
                       <td className="py-1 px-2 text-right text-gray-600">{h.bills_imported ?? '-'}</td>
                     </tr>
