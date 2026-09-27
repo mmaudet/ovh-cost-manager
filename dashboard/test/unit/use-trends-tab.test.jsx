@@ -22,8 +22,13 @@ const billedSinceJuly2025 = { ...account, ...sinceJuly2025 };
 // The account shown when the page shows all accounts, as the shell holds it (#120)
 const allAccounts = null;
 // What the shell passes the hook (ADR 0001): the months list of the account shown, the month
-// selected, the active tab, and the account shown, all accounts unless told otherwise
-const shellProps = (props) => ({ selectedAccount: allAccounts, ...props });
+// selected and whether that list holds it, which the shell checks as below, the active tab,
+// and the account shown, all accounts unless told otherwise
+const shellProps = (props) => ({
+  holdsSelectedMonth: props.months.some(({ value }) => value === props.selectedMonth?.value),
+  selectedAccount: allAccounts,
+  ...props,
+});
 
 // The periods offered, as [months, translation key]
 const periods = (options) => options.map(({ months: count, key }) => [count, key]);
@@ -155,8 +160,9 @@ describe('useTrendsTab', () => {
     });
 
   // As while the months list of the account just selected loads, or when that account lacks
-  // the month selected, until the shell selects its latest month (#115): the periods offered
-  // would count the months of no list, or would end on a month the account lacks (#120)
+  // the month selected, until the shell selects its latest month (#115): the shell then says
+  // the list does not hold the month (holdsSelectedMonth), and the periods offered would
+  // count the months of no list, or would end on a month the account lacks (#120)
   describe('months list without the selected month', () => {
     it.each([
       ['while it loads', []],

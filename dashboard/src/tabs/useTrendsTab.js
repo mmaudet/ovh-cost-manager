@@ -12,19 +12,17 @@ import { monthWindowEndingOn } from '../utils/monthWindow.js';
 
 // The tab shows the trends of the account that the header shows, selectedAccount: null for
 // all accounts, undefined while the page does not know it yet (#120). The months list and
-// the month selected are that account's.
-const useTrendsTab = ({ months, selectedMonth, selectedAccount, activeTab }) => {
+// the month selected are that account's, and holdsSelectedMonth whether the list holds that
+// month, as the shell checks it.
+const useTrendsTab = ({
+  months, selectedMonth, holdsSelectedMonth, selectedAccount, activeTab,
+}) => {
   // The period the user picks, in months: 6 by default
   const [chosenPeriod, setChosenPeriod] = useState(6);
 
   // The period ends on the month selected in the header, that month included, as the 12
   // months of the Web Cloud tab do (#66)
   const endMonth = selectedMonth?.value;
-  // The trends wait until the months list holds that month. It does not while the months of
-  // the account just selected load, nor when that account lacks the month, until the shell
-  // selects its latest month (#115): the period would then count no month, or end on a month
-  // the account lacks, and the tab would ask for trends it never shows (#120).
-  const holdsEndMonth = months.some((month) => month.value === endMonth);
 
   // The periods offered go up to the first one that covers the months of data up to it
   const maxMonths = monthsBetween(months[months.length - 1]?.value, endMonth);
@@ -34,17 +32,21 @@ const useTrendsTab = ({ months, selectedMonth, selectedAccount, activeTab }) => 
   const longestPeriod = availablePeriods[availablePeriods.length - 1].months;
   const trendPeriod = Math.min(chosenPeriod, longestPeriod);
 
+  // The trends wait until the months list holds the month selected. It does not while the
+  // months of the account just selected load, nor when that account lacks the month, until
+  // the shell selects its latest month (#115): the period would then count no month, or end
+  // on a month the account lacks, and the tab would ask for trends it never shows (#120).
   const { data: monthlyTrend = [] } = useQuery(accountQuery(selectedAccount, {
     key: ['monthlyTrend', trendPeriod, endMonth],
     fetch: (account) => fetchMonthlyTrend(trendPeriod, endMonth, account),
-    enabled: holdsEndMonth,
+    enabled: holdsSelectedMonth,
   }));
 
   const { data: trendByCategory = { categories: [], data: [] } } = useQuery(
     accountQuery(selectedAccount, {
       key: ['monthlyTrendByCategory', trendPeriod, endMonth],
       fetch: (account) => fetchMonthlyTrendByCategory(trendPeriod, endMonth, account),
-      enabled: holdsEndMonth,
+      enabled: holdsSelectedMonth,
     }),
   );
   // Categories hidden from the by-category chart (toggled via the legend).
@@ -60,7 +62,7 @@ const useTrendsTab = ({ months, selectedMonth, selectedAccount, activeTab }) => 
   const { data: gpuTrend } = useQuery(accountQuery(selectedAccount, {
     key: ['gpuTrend', gpuTrendWindow?.from, gpuTrendWindow?.to],
     fetch: (account) => fetchGpuSummary(gpuTrendWindow.from, gpuTrendWindow.to, account),
-    enabled: holdsEndMonth && activeTab === 'trends',
+    enabled: holdsSelectedMonth && activeTab === 'trends',
   }));
 
   return {

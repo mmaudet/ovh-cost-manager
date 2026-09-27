@@ -113,7 +113,8 @@ export default function Dashboard() {
 
   // Whether the months billed to the account shown hold the month selected: not while they
   // load, nor when the user selected an account not billed that month, until the page selects
-  // its latest month (below)
+  // its latest month (below). The queries of that month wait until they do: the tab hooks get
+  // it from here, rather than check it again (#120).
   const holdsSelectedMonth = months.some((m) => m.value === selectedMonth?.value);
 
   // The figures of the month selected, once the account shown has it
@@ -197,7 +198,9 @@ export default function Dashboard() {
 
   const compareTab = useCompareTab({ months, selectedMonth, activeTab });
 
-  const trendsTab = useTrendsTab({ months, selectedMonth, selectedAccount, activeTab });
+  const trendsTab = useTrendsTab({
+    months, selectedMonth, holdsSelectedMonth, selectedAccount, activeTab,
+  });
 
   const publicCloudTab = usePublicCloudTab({ selectedMonth, activeTab, selectedProject });
 
