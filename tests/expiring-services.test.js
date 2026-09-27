@@ -7,6 +7,7 @@
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
+const { ACCOUNT } = require('./support/accounts');
 
 describe('services about to expire', () => {
   let db;
@@ -16,16 +17,18 @@ describe('services about to expire', () => {
   const server = (id, displayName, expirationDate) => db.inventory.upsertServer({
     id, display_name: displayName, reverse: id, datacenter: 'rbx8', os: 'debian12_64',
     state: 'ok', cpu: 'Intel Xeon-E 2388G', ram_size: 65536, disk_info: '[]', bandwidth: 1000,
-    expiration_date: expirationDate, renewal_type: 'automatic',
+    expiration_date: expirationDate, renewal_type: 'automatic', account: ACCOUNT.nic,
   });
   const vps = (id, displayName, expirationDate) => db.inventory.upsertVps({
     id, display_name: displayName, model: 'vps-le-2-2-40', zone: 'Region OpenStack: os-gra7',
     state: 'running', os: '', vcpus: 2, ram_mb: 2048, disk_gb: 40,
     expiration_date: expirationDate, renewal_type: 'automatic', ip_addresses: '[]',
+    account: ACCOUNT.nic,
   });
   const storage = (id, displayName, expirationDate) => db.inventory.upsertStorage({
     id, service_type: 'netapp', display_name: displayName, region: 'eu-west-gra',
     total_size_gb: 1024, used_size_gb: 0, share_count: 3, expiration_date: expirationDate,
+    account: ACCOUNT.nic,
   });
 
   // A service of the list, as /api/inventory/expiring answers

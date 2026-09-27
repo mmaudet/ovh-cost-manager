@@ -10,6 +10,7 @@ const os = require('os');
 const path = require('path');
 const { spawnSync } = require('child_process');
 const { pathToFileURL } = require('url');
+const { ACCOUNT } = require('./support/accounts');
 
 const root = path.join(__dirname, '..');
 const sides = pathToFileURL(path.join(root, 'scripts', 'compare-dashboard', 'sides.mjs')).href;
@@ -55,7 +56,7 @@ function fillSnapshot(db) {
   for (const id of ['FR0000001', 'FR0000002']) {
     db.bills.upsert({
       id, date: '2026-09-01', price_without_tax: 10, price_with_tax: 12, tax: 2,
-      currency: 'EUR', pdf_url: null, html_url: null,
+      currency: 'EUR', pdf_url: null, html_url: null, account: ACCOUNT.nic,
     });
   }
   db.getDb().exec('ALTER TABLE cloud_instances DROP COLUMN plan_code');

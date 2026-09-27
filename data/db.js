@@ -29,6 +29,32 @@ const DATA_DIR = process.env.DATA_DIR || loadDataDirFromConfig() || __dirname;
 const DB_PATH = path.resolve(DATA_DIR, 'ovh-bills.db');
 const SCHEMA_PATH = path.resolve(__dirname, 'schema.sql');
 
+// The tables fed by the OVH API whose rows belong to no bill or project: each row holds the
+// NIC handle of its account in an `account` column, which tells the accounts of one
+// database apart (#112, ADR 0002). The other rows find their account through their bill
+// (the bill lines) or their project (the instances, volumes, snapshots, buckets,
+// consumption and quotas of a Public Cloud project).
+const ACCOUNT_TABLES = [
+  'bills', 'projects', 'dedicated_servers', 'vps_instances', 'storage_services',
+  'account_balance', 'consumption_snapshots', 'consumption_history', 'credit_movements',
+];
+
+/**
+ * Checks that a row that a writer of ACCOUNT_TABLES stores carries the NIC handle of its
+ * account. Written without it, a row would lose the account it has, as the upserts
+ * overwrite it, and the next import would give the row to whichever account it reads.
+ * @param {string} table - The table written, which the error names
+ * @param {object} row - The row, whose `account` is the NIC handle of its account
+ * @returns {object} The row
+ * @throws {Error} When the row has no account
+ */
+function requireAccount(table, row) {
+  if (typeof row.account !== 'string' || row.account === '') {
+    throw new Error(`Cannot write a row of ${table} without the NIC handle of its account`);
+  }
+  return row;
+}
+
 let db = null;
 
 /**
@@ -65,6 +91,10 @@ function getDb() {
     addColumnIfNotExists(db, 'bills', 'payment_date', 'DATETIME');
     addColumnIfNotExists(db, 'bills', 'payment_status', 'TEXT');
     addColumnIfNotExists(db, 'cloud_instances', 'plan_code', 'TEXT');
+    // Empty in a database from before #112: the next import fills it
+    for (const table of ACCOUNT_TABLES) {
+      addColumnIfNotExists(db, table, 'account', 'TEXT');
+    }
   }
   return db;
 }
@@ -84,15 +114,16 @@ const projectOps = {
   upsert: (project) => {
     const db = getDb();
     const stmt = db.prepare(`
-      INSERT INTO projects (id, name, description, status, created_at, updated_at)
-      VALUES (@id, @name, @description, @status, @created_at, CURRENT_TIMESTAMP)
+      INSERT INTO projects (id, name, description, status, created_at, updated_at, account)
+      VALUES (@id, @name, @description, @status, @created_at, CURRENT_TIMESTAMP, @account)
       ON CONFLICT(id) DO UPDATE SET
         name = @name,
         description = @description,
         status = @status,
-        updated_at = CURRENT_TIMESTAMP
+        updated_at = CURRENT_TIMESTAMP,
+        account = @account
     `);
-    return stmt.run(project);
+    return stmt.run(requireAccount('projects', project));
   },
 
   getAll: () => {
@@ -111,8 +142,8 @@ const billOps = {
   upsert: (bill) => {
     const db = getDb();
     const stmt = db.prepare(`
-      INSERT INTO bills (id, date, price_without_tax, price_with_tax, tax, currency, pdf_url, html_url, imported_at)
-      VALUES (@id, @date, @price_without_tax, @price_with_tax, @tax, @currency, @pdf_url, @html_url, CURRENT_TIMESTAMP)
+      INSERT INTO bills (id, date, price_without_tax, price_with_tax, tax, currency, pdf_url, html_url, imported_at, account)
+      VALUES (@id, @date, @price_without_tax, @price_with_tax, @tax, @currency, @pdf_url, @html_url, CURRENT_TIMESTAMP, @account)
       ON CONFLICT(id) DO UPDATE SET
         date = @date,
         price_without_tax = @price_without_tax,
@@ -121,9 +152,10 @@ const billOps = {
         currency = @currency,
         pdf_url = @pdf_url,
         html_url = @html_url,
-        imported_at = CURRENT_TIMESTAMP
+        imported_at = CURRENT_TIMESTAMP,
+        account = @account
     `);
-    return stmt.run(bill);
+    return stmt.run(requireAccount('bills', bill));
   },
 
   getAll: (fromDate, toDate) => {
@@ -265,6 +297,70 @@ const importLogOps = {
         AND datetime(started_at) > datetime('now', '-30 minutes')
     `).get();
     return Boolean(running);
+  }
+};
+
+// The OVH accounts that the imports read, by the NIC handle that GET /me names (#112)
+const accountsOps = {
+  /**
+   * Records an account that an import reads, or updates the currency of one it knows.
+   * @param {object} account - As GET /me names it
+   * @param {string} account.nic - Its NIC handle
+   * @param {?string} account.currency - The code of the currency it bills in, such as EUR
+   */
+  upsert: ({ nic, currency }) => {
+    const db = getDb();
+    return db.prepare(`
+      INSERT INTO accounts (nic, currency) VALUES (@nic, @currency)
+      ON CONFLICT(nic) DO UPDATE SET currency = @currency
+    `).run({ nic, currency });
+  },
+
+  /**
+   * Gives the account every row of ACCOUNT_TABLES that has none. The writers refuse a row
+   * without an account, so these are the rows stored before the upgrade: with a single
+   * account configured, they can only be its own.
+   * @param {string} nic - The NIC handle of the account
+   * @returns {number} How many rows it gave the account
+   */
+  attributeRowsWithoutAccount: (nic) => {
+    const db = getDb();
+    const attribute = db.transaction(() => {
+      let attributed = 0;
+      for (const table of ACCOUNT_TABLES) {
+        attributed += db.prepare(`UPDATE ${table} SET account = ? WHERE account IS NULL`)
+          .run(nic).changes;
+      }
+      return attributed;
+    });
+    return attribute();
+  },
+
+  /**
+   * Records how the last import of the account ended, and that it ended now, for the
+   * accounts route to tell whether its data is fresh.
+   * @param {string} nic - The NIC handle of the account
+   * @param {object} result
+   * @param {string} result.status - 'success' or 'failed'
+   * @param {?string} [result.error] - Why it failed
+   */
+  recordImport: (nic, { status, error = null }) => {
+    const db = getDb();
+    return db.prepare(`
+      UPDATE accounts SET
+        last_import_at = CURRENT_TIMESTAMP,
+        last_import_status = ?,
+        last_import_error = ?
+      WHERE nic = ?
+    `).run(status, error, nic);
+  },
+
+  /**
+   * @returns {object[]} Every account recorded, by NIC handle, as the accounts table holds it
+   */
+  getAll: () => {
+    const db = getDb();
+    return db.prepare('SELECT * FROM accounts ORDER BY nic').all();
   }
 };
 
@@ -442,10 +538,10 @@ const consumptionOps = {
   insertSnapshot: (snapshot) => {
     const db = getDb();
     const stmt = db.prepare(`
-      INSERT INTO consumption_snapshots (snapshot_date, period_start, period_end, current_total, forecast_total, currency, raw_data)
-      VALUES (CURRENT_TIMESTAMP, @period_start, @period_end, @current_total, @forecast_total, @currency, @raw_data)
+      INSERT INTO consumption_snapshots (snapshot_date, period_start, period_end, current_total, forecast_total, currency, raw_data, account)
+      VALUES (CURRENT_TIMESTAMP, @period_start, @period_end, @current_total, @forecast_total, @currency, @raw_data, @account)
     `);
-    return stmt.run(snapshot);
+    return stmt.run(requireAccount('consumption_snapshots', snapshot));
   },
 
   getLatestSnapshot: () => {
@@ -456,10 +552,10 @@ const consumptionOps = {
   insertHistory: (entry) => {
     const db = getDb();
     const stmt = db.prepare(`
-      INSERT INTO consumption_history (period_start, period_end, service_type, total, currency, raw_data, imported_at)
-      VALUES (@period_start, @period_end, @service_type, @total, @currency, @raw_data, CURRENT_TIMESTAMP)
+      INSERT INTO consumption_history (period_start, period_end, service_type, total, currency, raw_data, imported_at, account)
+      VALUES (@period_start, @period_end, @service_type, @total, @currency, @raw_data, CURRENT_TIMESTAMP, @account)
     `);
-    return stmt.run(entry);
+    return stmt.run(requireAccount('consumption_history', entry));
   },
 
   getHistory: (fromDate, toDate) => {
@@ -481,14 +577,14 @@ const consumptionOps = {
 };
 
 // Account balance operations (Phase 2)
-const accountOps = {
+const balanceOps = {
   insertBalance: (balance) => {
     const db = getDb();
     const stmt = db.prepare(`
-      INSERT INTO account_balance (snapshot_date, debt_balance, credit_balance, deposit_total, currency)
-      VALUES (CURRENT_TIMESTAMP, @debt_balance, @credit_balance, @deposit_total, @currency)
+      INSERT INTO account_balance (snapshot_date, debt_balance, credit_balance, deposit_total, currency, account)
+      VALUES (CURRENT_TIMESTAMP, @debt_balance, @credit_balance, @deposit_total, @currency, @account)
     `);
-    return stmt.run(balance);
+    return stmt.run(requireAccount('account_balance', balance));
   },
 
   getLatestBalance: () => {
@@ -499,10 +595,10 @@ const accountOps = {
   insertCreditMovement: (movement) => {
     const db = getDb();
     const stmt = db.prepare(`
-      INSERT OR REPLACE INTO credit_movements (id, balance_name, amount, date, description, movement_type, imported_at)
-      VALUES (@id, @balance_name, @amount, @date, @description, @movement_type, CURRENT_TIMESTAMP)
+      INSERT OR REPLACE INTO credit_movements (id, balance_name, amount, date, description, movement_type, imported_at, account)
+      VALUES (@id, @balance_name, @amount, @date, @description, @movement_type, CURRENT_TIMESTAMP, @account)
     `);
-    return stmt.run(movement);
+    return stmt.run(requireAccount('credit_movements', movement));
   },
 
   getCreditMovements: () => {
@@ -543,14 +639,15 @@ const inventoryOps = {
   upsertServer: (server) => {
     const db = getDb();
     const stmt = db.prepare(`
-      INSERT INTO dedicated_servers (id, display_name, reverse, datacenter, os, state, cpu, ram_size, disk_info, bandwidth, expiration_date, renewal_type, imported_at)
-      VALUES (@id, @display_name, @reverse, @datacenter, @os, @state, @cpu, @ram_size, @disk_info, @bandwidth, @expiration_date, @renewal_type, CURRENT_TIMESTAMP)
+      INSERT INTO dedicated_servers (id, display_name, reverse, datacenter, os, state, cpu, ram_size, disk_info, bandwidth, expiration_date, renewal_type, imported_at, account)
+      VALUES (@id, @display_name, @reverse, @datacenter, @os, @state, @cpu, @ram_size, @disk_info, @bandwidth, @expiration_date, @renewal_type, CURRENT_TIMESTAMP, @account)
       ON CONFLICT(id) DO UPDATE SET
         display_name = @display_name, reverse = @reverse, datacenter = @datacenter, os = @os, state = @state,
         cpu = @cpu, ram_size = @ram_size, disk_info = @disk_info, bandwidth = @bandwidth,
-        expiration_date = @expiration_date, renewal_type = @renewal_type, imported_at = CURRENT_TIMESTAMP
+        expiration_date = @expiration_date, renewal_type = @renewal_type, imported_at = CURRENT_TIMESTAMP,
+        account = @account
     `);
-    return stmt.run(server);
+    return stmt.run(requireAccount('dedicated_servers', server));
   },
 
   getAllServers: () => {
@@ -562,14 +659,15 @@ const inventoryOps = {
   upsertVps: (vps) => {
     const db = getDb();
     const stmt = db.prepare(`
-      INSERT INTO vps_instances (id, display_name, model, zone, state, os, vcpus, ram_mb, disk_gb, expiration_date, renewal_type, ip_addresses, imported_at)
-      VALUES (@id, @display_name, @model, @zone, @state, @os, @vcpus, @ram_mb, @disk_gb, @expiration_date, @renewal_type, @ip_addresses, CURRENT_TIMESTAMP)
+      INSERT INTO vps_instances (id, display_name, model, zone, state, os, vcpus, ram_mb, disk_gb, expiration_date, renewal_type, ip_addresses, imported_at, account)
+      VALUES (@id, @display_name, @model, @zone, @state, @os, @vcpus, @ram_mb, @disk_gb, @expiration_date, @renewal_type, @ip_addresses, CURRENT_TIMESTAMP, @account)
       ON CONFLICT(id) DO UPDATE SET
         display_name = @display_name, model = @model, zone = @zone, state = @state, os = @os,
         vcpus = @vcpus, ram_mb = @ram_mb, disk_gb = @disk_gb,
-        expiration_date = @expiration_date, renewal_type = @renewal_type, ip_addresses = @ip_addresses, imported_at = CURRENT_TIMESTAMP
+        expiration_date = @expiration_date, renewal_type = @renewal_type, ip_addresses = @ip_addresses, imported_at = CURRENT_TIMESTAMP,
+        account = @account
     `);
-    return stmt.run(vps);
+    return stmt.run(requireAccount('vps_instances', vps));
   },
 
   getAllVps: () => {
@@ -581,14 +679,15 @@ const inventoryOps = {
   upsertStorage: (storage) => {
     const db = getDb();
     const stmt = db.prepare(`
-      INSERT INTO storage_services (id, service_type, display_name, region, total_size_gb, used_size_gb, share_count, expiration_date, imported_at)
-      VALUES (@id, @service_type, @display_name, @region, @total_size_gb, @used_size_gb, @share_count, @expiration_date, CURRENT_TIMESTAMP)
+      INSERT INTO storage_services (id, service_type, display_name, region, total_size_gb, used_size_gb, share_count, expiration_date, imported_at, account)
+      VALUES (@id, @service_type, @display_name, @region, @total_size_gb, @used_size_gb, @share_count, @expiration_date, CURRENT_TIMESTAMP, @account)
       ON CONFLICT(id) DO UPDATE SET
         service_type = @service_type, display_name = @display_name, region = @region,
         total_size_gb = @total_size_gb, used_size_gb = @used_size_gb, share_count = @share_count,
-        expiration_date = @expiration_date, imported_at = CURRENT_TIMESTAMP
+        expiration_date = @expiration_date, imported_at = CURRENT_TIMESTAMP,
+        account = @account
     `);
-    return stmt.run(storage);
+    return stmt.run(requireAccount('storage_services', storage));
   },
 
   getAllStorage: () => {
@@ -1706,12 +1805,16 @@ const cloudDetailOps = {
   }
 };
 
-// Clear the imported data, for a full import. What the import cannot fetch again is kept:
-// the consumption of each project, of which OVH gives the current month only (#54), with
-// the month of its last import (import_state) and the projects it belongs to. The account
-// and consumption snapshots are cleared: only their latest is read, which the import
-// fetches again.
-function clearAll() {
+/**
+ * Clears the imported data, for a full import. What the import cannot fetch again is kept:
+ * the consumption of each project, of which OVH gives the current month only (#54), with
+ * the month of its last import (import_state) and the projects it belongs to. The account
+ * and consumption snapshots are cleared: only their latest is read, which the import
+ * fetches again.
+ * @param {?number} [importId] - The import log entry of the full import, which is kept, as
+ *   it tells the other imports that this one runs. The rest of the log is cleared.
+ */
+function clearAll(importId = null) {
   const db = getDb();
   // Supprimer d'abord toutes les tables qui référencent projects ou bills
   db.exec('DELETE FROM bill_details');
@@ -1723,7 +1826,7 @@ function clearAll() {
   db.exec('DELETE FROM bills');
   db.exec('DELETE FROM projects WHERE id NOT IN (SELECT project_id FROM project_consumption)');
   // Optionnel : vider aussi les autres tables annexes si besoin
-  db.exec('DELETE FROM import_log');
+  db.prepare('DELETE FROM import_log WHERE id IS NOT ?').run(importId);
   db.exec('DELETE FROM consumption_snapshots');
   db.exec('DELETE FROM consumption_history');
   db.exec('DELETE FROM account_balance');
@@ -1834,9 +1937,10 @@ module.exports = {
   bills: billOps,
   details: detailOps,
   importLog: importLogOps,
+  accounts: accountsOps,
   analysis: analysisOps,
   consumption: consumptionOps,
-  account: accountOps,
+  balance: balanceOps,
   inventory: inventoryOps,
   cloudDetails: cloudDetailOps,
   webCloud: webCloudOps

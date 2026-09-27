@@ -4,6 +4,7 @@
  */
 
 const { routes, ok, useThrowawayImport } = require('./support/simulated-ovh');
+const { ACCOUNT } = require('./support/accounts');
 
 jest.mock('ovh', () => require('./support/simulated-ovh').ovh);
 jest.mock('jsonfile', () => require('./support/simulated-ovh').jsonfile);
@@ -32,7 +33,7 @@ async function importFull() {
 }
 
 const storeProject = (id) => db.projects.upsert({
-  id, name: id, description: null, status: 'ok', created_at: null,
+  id, name: id, description: null, status: 'ok', created_at: null, account: ACCOUNT.nic,
 });
 
 // What a project consumed in a month, as the import stores it
@@ -87,7 +88,7 @@ describe('a full import', () => {
   test('clears the bills, the projects and the inventories, which it imports again', async () => {
     db.bills.upsert({
       id: 'FR1', date: '2026-09-01', price_without_tax: 10, price_with_tax: 12, tax: 2,
-      currency: 'EUR', pdf_url: null, html_url: null,
+      currency: 'EUR', pdf_url: null, html_url: null, account: ACCOUNT.nic,
     });
     db.details.insert({
       id: 'FR1_1', bill_id: 'FR1', project_id: null, domain: 'example.com',
@@ -107,12 +108,12 @@ describe('a full import', () => {
     db.inventory.upsertServer({
       id: 'ns1.example.net', display_name: 'ns1', reverse: '', datacenter: 'rbx', os: '',
       state: 'ok', cpu: '', ram_size: 0, disk_info: '[]', bandwidth: 0, expiration_date: null,
-      renewal_type: '',
+      renewal_type: '', account: ACCOUNT.nic,
     });
     db.inventory.upsertVps({
       id: 'vps-1.vps.ovh.net', display_name: 'vps-1', model: '', zone: '', state: 'running',
       os: 'Debian 12', vcpus: 2, ram_mb: 2048, disk_gb: 40, expiration_date: null,
-      renewal_type: '', ip_addresses: '[]',
+      renewal_type: '', ip_addresses: '[]', account: ACCOUNT.nic,
     });
     serveProjects();
 
@@ -131,31 +132,44 @@ describe('a full import', () => {
     });
   });
 
+  // Its own entry is the one that the other imports check while it runs
+  test('clears the log of the imports before it, but for its own entry', async () => {
+    const earlier = db.importLog.start('differential', '2026-08-01', '2026-09-15');
+    db.importLog.complete(earlier, { bills: 1, details: 2, projects: 0 });
+    serveProjects();
+
+    await importFull();
+
+    expect(db.importLog.getAll().map(entry => [entry.type, entry.status]))
+      .toEqual([['full', 'success']]);
+  });
+
   // Only the latest balance and consumption snapshots are read, which the import fetches
   // again, as it fetches every credit movement and the consumption history
   test('clears the account and consumption snapshots, which it imports again', async () => {
-    db.account.insertBalance({
+    db.balance.insertBalance({
       debt_balance: 0, credit_balance: 50, deposit_total: 0, currency: 'EUR',
+      account: ACCOUNT.nic,
     });
-    db.account.insertCreditMovement({
+    db.balance.insertCreditMovement({
       id: 'b1_m1', balance_name: 'b1', amount: 50, date: '2026-09-01', description: 'Voucher',
-      movement_type: 'credit',
+      movement_type: 'credit', account: ACCOUNT.nic,
     });
     db.consumption.insertSnapshot({
       period_start: '2026-09-01', period_end: '2026-09-15', current_total: 100,
-      forecast_total: 200, currency: 'EUR', raw_data: '{}',
+      forecast_total: 200, currency: 'EUR', raw_data: '{}', account: ACCOUNT.nic,
     });
     db.consumption.insertHistory({
       period_start: '2026-08-01', period_end: '2026-08-31', service_type: 'cloud', total: 90,
-      currency: 'EUR', raw_data: '{}',
+      currency: 'EUR', raw_data: '{}', account: ACCOUNT.nic,
     });
     serveProjects();
 
     await importFull();
 
     expect({
-      balance: db.account.getLatestBalance(),
-      credits: db.account.getCreditMovements(),
+      balance: db.balance.getLatestBalance(),
+      credits: db.balance.getCreditMovements(),
       snapshot: db.consumption.getLatestSnapshot(),
       history: db.consumption.getHistory(),
     }).toEqual({ balance: undefined, credits: [], snapshot: undefined, history: [] });

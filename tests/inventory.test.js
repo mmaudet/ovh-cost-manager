@@ -8,6 +8,7 @@
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
+const { ACCOUNT } = require('./support/accounts');
 
 let db;
 let dataDir;
@@ -25,7 +26,7 @@ const server = (fields) => ({
   id: 'ns123.ovh.net', display_name: 'My Server', reverse: 'ns123.ovh.net', datacenter: 'rbx2',
   os: 'debian11', state: 'ok', cpu: 'Intel Xeon E-2386G', ram_size: 65536,
   disk_info: '[{"type":"SSD","capacity":480,"count":2}]', bandwidth: 1000,
-  expiration_date: '2025-06-15', renewal_type: 'automatic', ...fields,
+  expiration_date: '2025-06-15', renewal_type: 'automatic', account: ACCOUNT.nic, ...fields,
 });
 
 // A service of the inventory, as the dashboard reads it
@@ -41,7 +42,7 @@ beforeAll(() => {
   // Seed a project for FK constraints
   db.projects.upsert({
     id: 'proj-001', name: 'Test Project', description: 'A test project', status: 'ok',
-    created_at: null,
+    created_at: null, account: ACCOUNT.nic,
   });
 });
 
@@ -90,6 +91,7 @@ describe('VPS Instances (Phase 3)', () => {
       id: 'vps-abc123.vps.ovh.net', display_name: 'My VPS', model: 'VPS Value 2-4-80',
       zone: 'EU', state: 'running', os: 'Ubuntu 22.04', vcpus: 2, ram_mb: 4096, disk_gb: 80,
       expiration_date: '2025-12-31', renewal_type: 'automatic', ip_addresses: '["1.2.3.4"]',
+      account: ACCOUNT.nic,
     });
 
     const vps = storedVps('vps-abc123.vps.ovh.net');
@@ -110,7 +112,7 @@ describe('Storage Services (Phase 3)', () => {
     db.inventory.upsertStorage({
       id: 'netapp-001', service_type: 'netapp', display_name: 'Production NetApp',
       region: 'GRA', total_size_gb: 1024, used_size_gb: 512, share_count: 3,
-      expiration_date: '2025-09-01',
+      expiration_date: '2025-09-01', account: ACCOUNT.nic,
     });
 
     const storage = db.inventory.getAllStorage().find(s => s.id === 'netapp-001');
@@ -125,7 +127,7 @@ describe('Bill Details resource_type (Phase 3)', () => {
   test('stores resource_type on bill details', () => {
     db.bills.upsert({
       id: 'FR100', date: '2025-01-01', price_without_tax: 100, price_with_tax: 120, tax: 20,
-      currency: 'EUR', pdf_url: null, html_url: null,
+      currency: 'EUR', pdf_url: null, html_url: null, account: ACCOUNT.nic,
     });
     db.details.insertMany([
       {

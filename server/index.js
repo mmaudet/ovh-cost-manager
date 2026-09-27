@@ -732,6 +732,32 @@ function registerRoutes() {
   });
 
   // ========================
+  // Accounts Endpoint
+  // ========================
+
+  // The accounts that the imports recorded, for tools and the dashboard to present them and
+  // tell whether their data is fresh (#112). Empty until the first import after the upgrade.
+  // The name is the NIC handle until names can be configured (#113); lastImport is null
+  // until an import of the account has ended.
+  app.get('/api/accounts', (req, res) => {
+    try {
+      const accounts = db.accounts.getAll().map(account => ({
+        nic: account.nic,
+        name: account.nic,
+        currency: account.currency,
+        lastImport: account.last_import_at === null ? null : {
+          at: account.last_import_at,
+          status: account.last_import_status,
+          error: account.last_import_error
+        }
+      }));
+      res.json(accounts);
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ========================
   // Available months endpoint (for selectors)
   // ========================
 
@@ -1044,7 +1070,7 @@ function registerRoutes() {
 
   app.get('/api/account/balance', (req, res) => {
     try {
-      const balance = db.account.getLatestBalance();
+      const balance = db.balance.getLatestBalance();
       if (!balance) {
         return res.json({ debt_balance: 0, credit_balance: 0, deposit_total: 0, currency: 'EUR' });
       }
@@ -1063,7 +1089,7 @@ function registerRoutes() {
 
   app.get('/api/account/credits', (req, res) => {
     try {
-      const movements = db.account.getCreditMovements();
+      const movements = db.balance.getCreditMovements();
       res.json(movements);
     } catch (err) {
       res.status(500).json({ error: err.message });
@@ -1072,7 +1098,7 @@ function registerRoutes() {
 
   app.get('/api/account/debts', (req, res) => {
     try {
-      const balance = db.account.getLatestBalance();
+      const balance = db.balance.getLatestBalance();
       res.json({
         debt_balance: Math.round((balance?.debt_balance || 0) * 100) / 100,
         currency: balance?.currency || 'EUR'

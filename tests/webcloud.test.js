@@ -11,6 +11,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { classifyWebCloud, WEB_CLOUD_FAMILIES } = require('../data/classify');
+const { ACCOUNT } = require('./support/accounts');
 
 describe('classifyWebCloud', () => {
   describe('domain names', () => {
@@ -145,10 +146,13 @@ describe('webCloud items and summary', () => {
     process.env.DATA_DIR = dataDir;
     db = require('../data/db');
 
-    db.projects.upsert({ id: PROJECT_ID, name: 'my-project', description: null, status: 'ok', created_at: null });
+    db.projects.upsert({
+      id: PROJECT_ID, name: 'my-project', description: null, status: 'ok', created_at: null,
+      account: ACCOUNT.nic,
+    });
     db.bills.upsert({
       id: 'FR0001', date: '2026-03-15', price_without_tax: 45.5, price_with_tax: 54.6,
-      tax: 9.1, currency: 'EUR', pdf_url: null, html_url: null
+      tax: 9.1, currency: 'EUR', pdf_url: null, html_url: null, account: ACCOUNT.nic
     });
     db.details.insertMany([
       line('L1', 'example.com', 'example.com - .com demande de renouvellement - 12 mois', 10.5, 'domain'),

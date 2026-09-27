@@ -9,6 +9,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { trendWindow } = require('../data/months');
+const { ACCOUNT } = require('./support/accounts');
 
 describe('monthly trend queries', () => {
   let db;
@@ -19,6 +20,7 @@ describe('monthly trend queries', () => {
     db.bills.upsert({
       id, date, price_without_tax: cloud + server, price_with_tax: (cloud + server) * 1.2,
       tax: (cloud + server) * 0.2, currency: 'EUR', pdf_url: null, html_url: null,
+      account: ACCOUNT.nic,
     });
     const line = (suffix, price, resourceType) => ({
       id: `${id}-${suffix}`, bill_id: id, project_id: null, domain: `${suffix}.example`,
