@@ -1308,10 +1308,19 @@ async function importBill(ovh, billId, { nic, params, projectMap, resourceTypeMa
 async function importAccount(ovh, nic, { params, importType, toDate, heartbeat }) {
   const imported = { projects: 0, bills: 0, details: 0 };
   try {
-    // With several accounts configured, the rows stored before the accounts are each
-    // account's whose API lists them (#114): its bills first, before its latest bill tells
-    // where its import starts. The writers of its projects and services claim those it lists.
+    // Unless the database had one account alone, the rows stored before the accounts are
+    // each account's whose API lists them (#114): its bills first, before its latest bill
+    // tells where its import starts. The writers of its projects and services claim those it
+    // lists.
     if (db.accounts.hasRowsWithoutAccount('bills')) await claimBillsOfBefore(ovh, nic);
+    // Once one account alone claimed the bills stored before, the database was its own, and
+    // it gets the rest: before the datasets, so that its own history replaces the months
+    // stored then, rather than adding them twice
+    const given = db.accounts.attributeToSoleClaimer();
+    if (given) {
+      console.log(`  Attributed ${given.attributed} rows stored before to the account `
+        + `${given.nic}, which claimed every bill stored then`);
+    }
 
     // The projects first: their ids tell the bill lines of Public Cloud
     const projects = await fetchProjects(ovh);

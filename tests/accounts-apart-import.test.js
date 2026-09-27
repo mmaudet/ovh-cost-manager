@@ -5,7 +5,7 @@
  */
 
 const {
-  ok, calls, serveAccount, useConfig, useThrowawayImport,
+  ok, fail, calls, serveAccount, useConfig, useThrowawayImport,
 } = require('./support/simulated-ovh');
 const { LYON, PARIS, bill, project } = require('./support/accounts');
 const { ROOT_TABLES, asBefore114 } = require('./support/database-before');
@@ -244,17 +244,21 @@ describe.each(Object.entries(KINDS))('a %s that two accounts list', (_, { table,
 });
 
 // Serves on these routes an account's consumption: nothing yet this month, and a history of
-// one month, which OVH gives for the past year
-function serveConsumption(accountRoutes, month, total) {
+// these months, which OVH gives for the past year, each for this total
+function serveHistory(accountRoutes, months, total = 100) {
   accountRoutes.set('/me/consumption/usage/current', ok([]));
   accountRoutes.set('/me/consumption/usage/forecast', ok([]));
-  accountRoutes.set('/me/consumption/usage/history', ok([{
+  accountRoutes.set('/me/consumption/usage/history', ok(months.map(month => ({
     beginDate: `${month}-01T00:00:00+02:00`,
     endDate: `${month}-28T23:59:59+02:00`,
     price: { value: total, currencyCode: 'EUR' },
     elements: [{ planFamily: 'consumption' }],
-  }]));
+  }))));
 }
+
+// The same, with a history of one month
+const serveConsumption = (accountRoutes, month, total) =>
+  serveHistory(accountRoutes, [month], total);
 
 // A month of the account's consumption history, as an earlier import stored it
 const storeHistory = (month, nic) => db.consumption.insertHistory({
@@ -804,19 +808,21 @@ describe('the rows stored before the accounts, with several accounts configured'
     });
   });
 
-  // It clears the accounts that it imports, not the Unknown account
+  // It clears the accounts that it imports, not the Unknown account. A bill that no account
+  // lists keeps the database from being Paris's alone.
   test('are kept by a full import, but for those that an account claims', async () => {
     const { paris } = serveLyonAndParis();
     storeDataOf(PARIS, 'P');
+    storeBill('FR-X0', '2026-07-01', PARIS);
     forgetAccounts();
     const history = allIdsIn('consumption_history');
     serveBills(paris.routes, [['FR-P0', '2026-08-01']]);
 
     await runImport({ full: true });
 
-    expect(accountsOf('bills')).toEqual([['FR-P0', PARIS]]);
+    expect(accountsOf('bills')).toEqual([['FR-P0', PARIS], ['FR-X0', null]]);
     expect(idsWithoutAccount()).toEqual({
-      bills: [],
+      bills: ['FR-X0'],
       projects: ['proj-P-idle', 'proj-P-used'],
       dedicated_servers: ['ns-P'],
       vps_instances: ['vps-P'],
@@ -864,4 +870,92 @@ describe('the rows that no account claims, once a single account is left configu
     });
     expect(idsWithoutAccount()).toEqual(leftUnknown);
   });
+});
+
+// A database from before the accounts held the data of the single account that OCM took the
+// credentials of: once every bill stored then is claimed, and by one account, it was that
+// account's, which gets every other row without an account
+describe('the rows stored before the accounts, whose bills one account claims', () => {
+  // Lyon and Paris, whose APIs list no project, service or balance, and no history for Lyon
+  function serveLyonAndParis() {
+    const lyon = serveInEuros(LYON);
+    const paris = serveInEuros(PARIS);
+    for (const served of [lyon, paris]) {
+      serveProjects(served.routes);
+      serveInventories(served.routes);
+      serveBalance(served.routes, {});
+      serveHistory(served.routes, []);
+    }
+    return { lyon, paris };
+  }
+
+  // What the version before the accounts stored of Paris, with its history of June and July,
+  // and, to make the base hold two accounts' bills, a bill of Lyon's
+  function storeBase({ withLyonsBill = false } = {}) {
+    storeDataOf(PARIS, 'P');
+    storeHistory('2026-06', PARIS);
+    storeServer('ns-P-cancelled', PARIS);
+    if (withLyonsBill) storeBill('FR-L0', '2026-08-01', LYON);
+    forgetAccounts();
+  }
+
+  // The months of the consumption history stored, whatever their account
+  const historyMonths = () => db.consumption.getHistory().map(entry => entry.period_start);
+
+  test.each([['Lyon, then Paris', [LYON, PARIS]], ['Paris, then Lyon', [PARIS, LYON]]])(
+    'go to the account that claims them, configured %s, with no month or movement twice',
+    async (_, order) => {
+      const { lyon, paris } = serveLyonAndParis();
+      storeBase();
+      serveBills(lyon.routes, [['FR-L1', '2026-09-01']]);
+      serveBills(paris.routes, [['FR-P0', '2026-08-01'], ['FR-P1', '2026-09-01']]);
+      // OVH gives Paris its history of June and July again, and the movement stored then
+      serveHistory(paris.routes, ['2026-06', '2026-07', '2026-08']);
+      serveBalance(paris.routes, { PREPAID_ACCOUNT: [[1, 50]] });
+      const served = { [LYON]: lyon, [PARIS]: paris };
+      useAccounts(...order.map(nic => ({ served: served[nic] })));
+
+      await importAsTheCron();
+
+      expect(idsWithoutAccount()).toEqual(Object.fromEntries(ROOT_TABLES.map(t => [t, []])));
+      expect(historyMonths()).toEqual(['2026-08-01', '2026-07-01', '2026-06-01']);
+      expect(storedMovements()).toEqual([[PARIS, 'PREPAID_ACCOUNT_1', 50]]);
+      expect(accountsOf('projects')).toEqual([['proj-P-idle', PARIS], ['proj-P-used', PARIS]]);
+    });
+
+  // Neither was its account: the spec's default
+  test('stay without an account when two accounts claim them', async () => {
+    const { lyon, paris } = serveLyonAndParis();
+    storeBase({ withLyonsBill: true });
+    const history = allIdsIn('consumption_history');
+    serveBills(lyon.routes, [['FR-L0', '2026-08-01']]);
+    serveBills(paris.routes, [['FR-P0', '2026-08-01']]);
+    useAccounts({ served: lyon }, { served: paris });
+
+    await importAsTheCron();
+
+    expect(idsWithoutAccount()).toMatchObject({
+      bills: [], dedicated_servers: ['ns-P', 'ns-P-cancelled'], consumption_history: history,
+    });
+  });
+
+  // Each account's claims count, whichever run made them
+  test('stay without an account when a second account claims them in a later run',
+    async () => {
+      const { lyon, paris } = serveLyonAndParis();
+      storeBase({ withLyonsBill: true });
+      const history = allIdsIn('consumption_history');
+      serveBills(lyon.routes, [['FR-L0', '2026-08-01']]);
+      paris.routes.set('/me/bill', fail(500, 'Internal server error'));
+      useAccounts({ served: lyon }, { served: paris });
+      await importAsTheCron();
+      serveBills(paris.routes, [['FR-P0', '2026-08-01']]);
+
+      await importAsTheCron();
+
+      expect(accountsOf('bills')).toEqual([['FR-L0', LYON], ['FR-P0', PARIS]]);
+      expect(idsWithoutAccount()).toMatchObject({
+        dedicated_servers: ['ns-P', 'ns-P-cancelled'], consumption_history: history,
+      });
+    });
 });

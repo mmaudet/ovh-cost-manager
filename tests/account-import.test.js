@@ -265,6 +265,7 @@ describe('an import', () => {
       name: null,
       budget: null,
       position: 0,
+      claimed_bills: 0,
     }]);
     // It ended during the import
     const ended = accounts[0].last_import_at;
@@ -287,6 +288,7 @@ describe('an import', () => {
       name: null,
       budget: null,
       position: 0,
+      claimed_bills: 0,
     }]);
   });
 });

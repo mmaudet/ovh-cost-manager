@@ -206,6 +206,9 @@ function getDb() {
         `);
       }
     }).immediate();
+    // How many bills stored before the accounts each account claimed, which tells whether
+    // the database was one account's (#114)
+    addColumnIfNotExists(db, 'accounts', 'claimed_bills', 'INTEGER NOT NULL DEFAULT 0');
     // What keeps the lock of a long import (#113)
     addColumnIfNotExists(db, 'import_log', 'heartbeat_at', 'DATETIME');
     // The credit movements keyed by their account too (#114): their ids, which join the name
@@ -576,19 +579,45 @@ const accountsOps = {
   },
 
   /**
-   * Gives the account the bills without an account that its API lists (#114): with several
-   * accounts configured, the bills stored before the accounts are each account's whose full
-   * bill list names them. Those that no account lists keep none.
-   * @param {string} nic - The NIC handle of the account
+   * Gives the account the bills without an account that its API lists (#114): the bills
+   * stored before the accounts are each account's whose full bill list names them. Those
+   * that no account lists keep none. The account's count of claimed bills records the
+   * claims, over every run, for attributeToSoleClaimer().
+   * @param {string} nic - The NIC handle of the account, which the accounts table records
    * @param {Array<string>} billIds - Every bill that its API lists, by number
    * @returns {number} How many it claimed
    */
   claimBills: (nic, billIds) => {
     const db = getDb();
-    return db.prepare(`
-      UPDATE bills SET account = ?
-      WHERE account IS NULL AND id IN (SELECT CAST(value AS TEXT) FROM json_each(?))
-    `).run(nic, JSON.stringify(billIds)).changes;
+    const claim = db.transaction(() => {
+      const claimed = db.prepare(`
+        UPDATE bills SET account = ?
+        WHERE account IS NULL AND id IN (SELECT CAST(value AS TEXT) FROM json_each(?))
+      `).run(nic, JSON.stringify(billIds)).changes;
+      db.prepare('UPDATE accounts SET claimed_bills = claimed_bills + ? WHERE nic = ?')
+        .run(claimed, nic);
+      return claimed;
+    });
+    return claim();
+  },
+
+  /**
+   * Gives every row without an account to the account that claimed every bill stored before
+   * the accounts, once no bill is left without an account and no other account claimed any
+   * (#114): the version before the accounts imported the single account that OCM took the
+   * credentials of, so the database was that account's. Its consumption history, its credit
+   * movements and the rest then go to it, which its own import replaces rather than adds.
+   * @returns {?{nic: string, attributed: number}} The account and how many rows it got, or
+   *   null when nothing tells that the database was one account's, or no row is left
+   */
+  attributeToSoleClaimer: () => {
+    if (accountsOps.hasRowsWithoutAccount('bills')) return null;
+    const claimers = getDb().prepare('SELECT nic FROM accounts WHERE claimed_bills > 0')
+      .pluck().all();
+    if (claimers.length !== 1) return null;
+    const [nic] = claimers;
+    const attributed = accountsOps.attributeRowsWithoutAccount(nic);
+    return attributed > 0 ? { nic, attributed } : null;
   },
 
   /**
