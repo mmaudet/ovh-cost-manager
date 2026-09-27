@@ -2111,8 +2111,12 @@ const webCloudOps = {
   },
 
   /**
-   * Count and cost per family, for the summary cards: of the services of the account (see
-   * accountCondition()), every account's by default.
+   * Count and cost per family, for the summary cards, of the services that getItems() lists:
+   * a service billed to several accounts counts once for each.
+   * @param {string} fromDate
+   * @param {string} toDate
+   * @param {?string} [account] - The account whose bills count (see accountCondition()):
+   *   every account's by default
    */
   getSummary: (fromDate, toDate, account = null) => {
     const items = webCloudOps.getItems(fromDate, toDate, account);

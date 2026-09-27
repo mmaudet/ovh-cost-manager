@@ -33,8 +33,14 @@ const WebCloudTable = ({ items, showAccountColumn, language, t, fmt }) => (
   </table>
 );
 
-// The columns of a family's CSV file: the account's after the service's when the table shows
-// it, for a spreadsheet to pivot the services by account (#122)
+/**
+ * The columns of a family's CSV file, for downloadCSV(): the account's after the service's
+ * when the table shows it, for a spreadsheet to pivot the services by account (#122).
+ * @param {string} language - The page's, 'fr' or 'en'
+ * @param {function(string): string} t - The page's translations
+ * @param {boolean} showAccountColumn - Whether the table shows the Account column
+ * @returns {{ key: string, label: string }[]}
+ */
 const webCloudCsvColumns = (language, t, showAccountColumn) => [
   { key: 'name', label: language === 'en' ? 'Service' : 'Service' },
   ...(showAccountColumn ? [{ key: 'accountName', label: t('account') }] : []),
