@@ -138,14 +138,29 @@ function seedAccounts(db) {
 const forAccount = (route, account) =>
   `${route}${route.includes('?') ? '&' : '?'}account=${account}`;
 
+// The day of a request, in UTC, which names the inventory's file
+const today = () => new Date().toISOString().split('T')[0];
+
+// The name of the inventory's file, exported on a day. exported() gives it with EXPORT_DAY for
+// the day of the export.
+const inventoryFile = (day) => `inventaire_${day}.csv`;
+const EXPORT_DAY = '<day of the export>';
+
 // What the server answers to an export: its status, the type and the name of the file, and
-// its content
+// its content. The inventory's file is named after the day of the export, in UTC: the day the
+// request was sent, or the next one when it was answered after midnight. Either reads as
+// EXPORT_DAY, so that a run at midnight passes; any other day stays, and fails the test.
 async function exported(ocm, path) {
+  const sent = today();
   const { status, headers, body } = await ocm.getText(path);
+  const answered = today();
+  const named = (day) => `attachment; filename="${inventoryFile(day)}"`;
+  const disposition = headers.get('content-disposition');
   return {
     status,
     type: headers.get('content-type'),
-    disposition: headers.get('content-disposition'),
+    disposition: [sent, answered].map(named).includes(disposition)
+      ? named(EXPORT_DAY) : disposition,
     body,
   };
 }
@@ -167,9 +182,6 @@ const DETAILS = '"Facture";"Date";"Projet";"Type Service";"Type Ressource";"Desc
 const BY_PROJECT = '"Projet";"ID Projet";"Total HT";"Nb Lignes"';
 const INVENTORY = '"Type";"ID";"Nom";"Localisation";"Specifications";"Etat";"Expiration";'
   + '"Renouvellement"';
-
-// The inventory's file is named after the day of the export, in UTC
-const today = () => new Date().toISOString().split('T')[0];
 
 // A single-account installation gets the files it got before an instance could import several
 // accounts. Its rows belong to its account, or to none, as until the first import since the
@@ -231,7 +243,7 @@ describe.each([
   // The servers, then the VPS, then the storage services, each by name
   test('exports the services of the inventory', async () => {
     expect(await exported(single, '/api/export/inventory')).toEqual(csvFile(
-      `inventaire_${today()}.csv`,
+      inventoryFile(EXPORT_DAY),
       INVENTORY,
       '"Dedicated Server";"ns3000001.ip-203-0-113.eu";"backup-server";"rbx8";'
         + '"Intel Xeon-E 2388G / 65536MB RAM";"ok";"2027-01-31";"automatic"',
@@ -379,7 +391,7 @@ describe('a database of several accounts', () => {
   describe('GET /api/export/inventory', () => {
     const route = '/api/export/inventory';
     const inventory = (...lines) => csvFile(
-      `inventaire_${today()}.csv`, withAccount(INVENTORY), ...lines,
+      inventoryFile(EXPORT_DAY), withAccount(INVENTORY), ...lines,
     );
     // The line of a server, which the servers of the tests share their specifications in, up
     // to the cell of its account
