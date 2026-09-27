@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { screen, within } from '@testing-library/react';
 import { account } from './fixtures/account.js';
-import { lyonAccount, severalAccounts } from './fixtures/accounts.js';
+import { lyonAccount, removedAccount, severalAccounts } from './fixtures/accounts.js';
 import { api } from './support/api.js';
 import {
   BOM,
@@ -703,6 +703,20 @@ describe('Public Cloud tab', () => {
       await selectAccount(user, 'yy2222-ovh');
 
       expect(detailHeadings()).toEqual([]);
+    });
+
+    // The month selected stays until the months list of the account loads, and says it lacks
+    // it: the header then selects the account's latest month, August (#115, #120)
+    it('asks for no figures of a month that the account selected lacks', async () => {
+      const { user } = await renderDashboard(severalAccounts);
+      await openTab(user, 'Public Cloud');
+
+      await selectAccount(user, 'zz3333-ovh (non configuré)');
+
+      expect(api.fetchPublicCloudStats)
+        .not.toHaveBeenCalledWith('2026-09-01', '2026-09-30', removedAccount.id);
+      expect(api.fetchPublicCloudStats)
+        .toHaveBeenCalledWith('2026-08-01', '2026-08-31', removedAccount.id);
     });
 
     // The project stays selected across account switches (#56), open only while the account

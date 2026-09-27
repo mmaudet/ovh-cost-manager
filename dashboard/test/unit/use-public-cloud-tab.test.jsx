@@ -11,16 +11,20 @@ import { renderTabHook, TAB_IDS, WAITING } from '../support/hooks.jsx';
 // The state and data queries of the Public Cloud tab, as the dashboard shell sees them: what
 // the hook requests and returns for the selected month, the active tab, the selected project
 // and the account shown. The shell holds the project: the tab, the Overview and the logo set
-// it. It holds the account too, which the header selects (#115): null for all accounts.
+// it. It holds the account too, which the header selects (#115): null for all accounts. And it
+// tells whether the months of the account shown hold the month selected (#120).
 
 const [september, august] = months;
 // Projects as the Overview selects them: an id and a name
 const production = { id: 'project-production', name: 'Production' };
 const staging = { id: 'project-staging', name: 'Staging' };
-// The tab open on September, no project open, all accounts shown
+// The tab open on September, no project open, all accounts shown, whose months hold September
 const onTheTab = {
-  selectedMonth: september, activeTab: 'inventory', selectedProject: null, selectedAccount: null,
+  selectedMonth: september, holdsSelectedMonth: true, activeTab: 'inventory',
+  selectedProject: null, selectedAccount: null,
 };
+// No month selected yet, as the shell holds it until the months list loads
+const noMonth = { selectedMonth: null, holdsSelectedMonth: false };
 
 // The requests of the resources of a project, and those the hook made
 const PROJECT_REQUESTS = [
@@ -121,13 +125,27 @@ describe('usePublicCloudTab', () => {
 
     it('wait for a month for the figures, not for the projects', async () => {
       const { result, queryClient } = await renderTabHook(usePublicCloudTab,
-        { ...onTheTab, selectedMonth: null });
+        { ...onTheTab, ...noMonth });
 
       expect(names(result.current.projectsEnriched))
         .toEqual(['Production', 'Staging', 'Sandbox']);
       expect(api.fetchPublicCloudStats).not.toHaveBeenCalled();
       expect(queryClient.getQueryState(['publicCloudStats', undefined, undefined]))
         .toMatchObject(WAITING);
+    });
+
+    // While the months of the account just selected load, or when it lacks the month selected,
+    // until the shell selects its latest month (#115): the figures of a month it lacks would
+    // never show
+    it('wait until the months of the account shown hold the month selected', async () => {
+      const { result, queryClient } = await renderTabHook(usePublicCloudTab,
+        { ...onTheTab, holdsSelectedMonth: false });
+
+      expect(api.fetchProjectsEnriched).toHaveBeenCalledWith(null);
+      expect(api.fetchPublicCloudStats).not.toHaveBeenCalled();
+      expect(queryClient.getQueryState(['publicCloudStats', '2026-09-01', '2026-09-30']))
+        .toMatchObject(WAITING);
+      expect(result.current.publicCloudStats).toBeUndefined();
     });
 
     it('follow the selected month', async () => {
@@ -434,7 +452,7 @@ describe('usePublicCloudTab', () => {
 
     it('wait for a month for what is billed in it, not for the rest', async () => {
       const { result, queryClient } = await renderTabHook(usePublicCloudTab,
-        { ...onTheTab, selectedMonth: null, selectedProject: production });
+        { ...onTheTab, ...noMonth, selectedProject: production });
 
       // The instances too, which come with their costs in the month (#71)
       expect(made(PROJECT_REQUESTS)).toEqual(['fetchProjectConsumption', 'fetchProjectQuotas']);
@@ -452,6 +470,23 @@ describe('usePublicCloudTab', () => {
       }
       expect(result.current.projectInstanceTotal).toBeUndefined();
     });
+
+    it('wait until the months of the account shown hold the month selected, but for the rest',
+      async () => {
+        const { result, queryClient } = await renderTabHook(usePublicCloudTab,
+          { ...onTheTab, holdsSelectedMonth: false, selectedProject: production });
+
+        expect(made(PROJECT_REQUESTS)).toEqual(['fetchProjectConsumption', 'fetchProjectQuotas']);
+        for (const name of [
+          'projectInstances', 'projectInstanceTotal', 'projectBuckets', 'projectVolumes',
+          'projectSnapshots', 'projectSavingsPlans',
+        ]) {
+          expect(queryClient.getQueryState(
+            [name, 'project-production', '2026-09-01', '2026-09-30'],
+          ), name).toMatchObject(WAITING);
+        }
+        expect(result.current.projectInstances).toEqual([]);
+      });
   });
 
   // Each panel of the open project opens its "show all" modal with a setter of its own

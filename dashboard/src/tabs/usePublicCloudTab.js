@@ -14,7 +14,13 @@ import { accountQuery } from '../utils/accounts.js';
 // on this tab, and the logo closes it. The hook reads it, as it reads the selected month and
 // the account shown (#121): the projects and the figures of the month are those of that
 // account, and a project's resources those of the project, which belongs to one account.
-const usePublicCloudTab = ({ selectedMonth, activeTab, selectedProject, selectedAccount }) => {
+// What is billed in the month selected waits until the months of the account shown hold that
+// month, holdsSelectedMonth, as the shell checks it: not while they load, nor when the account
+// lacks the month, until the shell selects its latest month (#115). A month the account lacks
+// would never show (#120).
+const usePublicCloudTab = ({
+  selectedMonth, holdsSelectedMonth, activeTab, selectedProject, selectedAccount,
+}) => {
   const [showAllBuckets, setShowAllBuckets] = useState(false);
   const [showAllInstances, setShowAllInstances] = useState(false);
   const [showAllVolumes, setShowAllVolumes] = useState(false);
@@ -46,7 +52,7 @@ const usePublicCloudTab = ({ selectedMonth, activeTab, selectedProject, selected
   const { data: projectInstances = [] } = useQuery({
     queryKey: ['projectInstances', openProject?.id, selectedMonth?.from, selectedMonth?.to],
     queryFn: () => fetchProjectInstances(openProject.id, selectedMonth.from, selectedMonth.to),
-    enabled: !!openProject && !!selectedMonth,
+    enabled: !!openProject && holdsSelectedMonth,
   });
   // The unallocated row is not an instance
   const instanceCount = projectInstances.filter(i => !i.unallocated).length;
@@ -61,39 +67,39 @@ const usePublicCloudTab = ({ selectedMonth, activeTab, selectedProject, selected
   const { data: projectVolumes = [] } = useQuery({
     queryKey: ['projectVolumes', openProject?.id, selectedMonth?.from, selectedMonth?.to],
     queryFn: () => fetchProjectVolumes(openProject.id, selectedMonth.from, selectedMonth.to),
-    enabled: !!openProject?.id && !!selectedMonth
+    enabled: !!openProject?.id && holdsSelectedMonth
   });
 
   const { data: projectSnapshots = [] } = useQuery({
     queryKey: ['projectSnapshots', openProject?.id, selectedMonth?.from, selectedMonth?.to],
     queryFn: () => fetchProjectSnapshots(openProject.id, selectedMonth.from, selectedMonth.to),
-    enabled: !!openProject?.id && !!selectedMonth
+    enabled: !!openProject?.id && holdsSelectedMonth
   });
 
   const { data: projectSavingsPlans = [] } = useQuery({
     queryKey: ['projectSavingsPlans', openProject?.id, selectedMonth?.from, selectedMonth?.to],
     queryFn: () => fetchProjectSavingsPlans(openProject.id, selectedMonth.from, selectedMonth.to),
-    enabled: !!openProject?.id && !!selectedMonth
+    enabled: !!openProject?.id && holdsSelectedMonth
   });
 
   const { data: projectBuckets = [] } = useQuery({
     queryKey: ['projectBuckets', openProject?.id, selectedMonth?.from, selectedMonth?.to],
     queryFn: () => fetchProjectBuckets(openProject.id, selectedMonth.from, selectedMonth.to),
-    enabled: !!openProject && !!selectedMonth
+    enabled: !!openProject && holdsSelectedMonth
   });
 
   // Project instance total cost (filtered by selected month)
   const { data: projectInstanceTotal } = useQuery({
     queryKey: ['projectInstanceTotal', openProject?.id, selectedMonth?.from, selectedMonth?.to],
     queryFn: () => fetchProjectInstanceTotal(openProject.id, selectedMonth.from, selectedMonth.to),
-    enabled: !!openProject && !!selectedMonth
+    enabled: !!openProject && holdsSelectedMonth
   });
 
   // Public Cloud stats (Kubernetes, S3, Registry, etc.)
   const { data: publicCloudStats } = useQuery(accountQuery(selectedAccount, {
     key: ['publicCloudStats', selectedMonth?.from, selectedMonth?.to],
     fetch: (account) => fetchPublicCloudStats(selectedMonth.from, selectedMonth.to, account),
-    enabled: !!selectedMonth && activeTab === 'inventory',
+    enabled: holdsSelectedMonth && activeTab === 'inventory',
   }));
 
   return {

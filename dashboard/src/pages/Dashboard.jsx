@@ -206,7 +206,7 @@ export default function Dashboard() {
   });
 
   const publicCloudTab = usePublicCloudTab({
-    selectedMonth, activeTab, selectedProject, selectedAccount,
+    selectedMonth, holdsSelectedMonth, activeTab, selectedProject, selectedAccount,
   });
 
   const webCloudTab = useWebCloudTab({ selectedMonth, activeTab });
