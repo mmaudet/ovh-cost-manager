@@ -29,8 +29,8 @@ function freePort() {
   });
 }
 
-async function waitFor(check, what, output) {
-  const deadline = Date.now() + 15000;
+async function waitFor(check, what, output, timeout = 15000) {
+  const deadline = Date.now() + timeout;
   while (Date.now() < deadline) {
     if (await check().catch(() => false)) {
       return;
@@ -83,7 +83,8 @@ async function spawnOcm(envOf, config) {
  *   throwaway places, from its URL, such as for OIDC_BASE_URL
  * @param {object} [options]
  * @param {object} [options.config] - the content of its config.json
- * @returns {Promise<{ url: string, output: function(): string, stop: function }>}
+ * @returns {Promise<{ url: string, output: function(): string,
+ *   logged: function(string): Promise, stop: function }>}
  */
 async function startOcm(envOf, { config } = {}) {
   const { home, url, env, child, exited, output } = await spawnOcm(envOf, config);
@@ -91,6 +92,12 @@ async function startOcm(envOf, { config } = {}) {
   const server = {
     url,
     output,
+    // Resolves once the server's output holds this text, which reaches the
+    // test apart from the answers, and may come after them. Rejects, with the
+    // output, after a wait shorter than Jest's default timeout.
+    logged: (text) => waitFor(
+      async () => output().includes(text), `logged ${text}`, output, 3000
+    ),
     stop: async () => {
       child.kill();
       await exited;

@@ -13,14 +13,14 @@ const { monthBounds } = require('../data/months');
 
 // Import auth module
 const auth = require('./auth');
-const { createOriginCheck, readAllowedOrigins } = require('./cors');
+const { createOriginCheckMiddleware, readAllowedOrigins } = require('./cors');
 const { createHostCheckMiddleware } = require('./hosts');
 const { importsEnabled } = require('./imports');
 const { trendWindowFromQuery } = require('./months');
 const { readConfigFile } = require('./config-file');
 const { buildRateLimitConfig } = require('./rate-limit-config');
 const { isHealthCheck } = require('./auth/health');
-const { requestLogLine, blockedOriginLogLine } = require('./request-log');
+const { requestLogLine } = require('./request-log');
 
 // Load configuration: the first config.json that exists. One that cannot be
 // read stops the server, rather than let it run without its settings
@@ -60,33 +60,12 @@ const hostCheck = createHostCheckMiddleware({
 });
 
 // CORS configuration - restrict to allowed origins and the request's own
-const isAllowedOrigin = createOriginCheck({
+const originCheck = createOriginCheckMiddleware({
   // ALLOWED_ORIGINS, or allowedOrigins in config.json
   allowedOrigins,
   isDev: process.env.NODE_ENV !== 'production',
   trustProxy: rateLimitConfig.trustProxy,
 });
-
-// Per-request options, as the check reads the request's headers
-function corsOptionsDelegate(req, callback) {
-  const origin = req.headers.origin;
-  const allowed = isAllowedOrigin(origin, {
-    host: req.headers.host,
-    forwardedHost: req.headers['x-forwarded-host'],
-    forwardedProto: req.headers['x-forwarded-proto'],
-    encrypted: Boolean(req.socket.encrypted),
-  });
-
-  if (allowed) {
-    callback(null, {
-      origin: true,
-      credentials: true, // Allow cookies for authentication
-    });
-  } else {
-    console.warn(blockedOriginLogLine(origin));
-    callback(new Error('Not allowed by CORS'));
-  }
-}
 
 // Rate limiting - protect against DoS and brute-force attacks
 const apiLimiter = rateLimit({
@@ -187,7 +166,12 @@ if (rateLimitConfig.trustProxy) {
 if (hostCheck) {
   app.use(hostCheck);
 }
-app.use(cors(corsOptionsDelegate));
+app.use(originCheck);
+// Every request that gets here passed the check: CORS reflects its origin
+app.use(cors({
+  origin: true,
+  credentials: true, // Allow cookies for authentication
+}));
 app.use(express.json());
 app.use(cookieParser());
 

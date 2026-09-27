@@ -1,5 +1,8 @@
 /**
- * The origin check of the CORS middleware.
+ * The origin check, and its middleware, which runs before the CORS one. A
+ * request from an origin the check refuses gets a 403, and reaches no route
+ * or static file: a browser sends a simple cross-origin request, such as a
+ * form's POST, without asking first, and CORS would only hide the answer.
  *
  * Allowed: requests without an Origin, the listed origins, localhost in
  * development, and the request's own origin. Chromium sends an Origin even on
@@ -9,7 +12,12 @@
  */
 
 const { LOOPBACK_HOSTNAMES, firstValue, lastValue, parseHost } = require('./hostHeader');
+const { blockedOriginLogLine } = require('./request-log');
 const { parseList } = require('./settings');
+
+// An Origin header may hold kilobytes: the log keeps the length of the longest
+// origin, https:// with a domain name of 253 characters and a port
+const MAX_LOGGED_ORIGIN_LENGTH = 'https://'.length + 253 + ':65535'.length;
 
 /**
  * The origins listed besides the dashboard's own: ALLOWED_ORIGINS, or else
@@ -121,4 +129,36 @@ function parseOrigin(origin) {
   return ['http:', 'https:'].includes(url.protocol) ? url : null;
 }
 
-module.exports = { createOriginCheck, readAllowedOrigins };
+/**
+ * The check as Express middleware, to mount before the CORS one: it answers a
+ * request from an origin it refuses with a 403, as the Host check answers
+ * with a 421, and logs it on one line.
+ *
+ * @param {object} settings - as for createOriginCheck()
+ * @param {object} [logger] - the console, or a stand-in with warn()
+ * @returns {function} the middleware
+ */
+function createOriginCheckMiddleware(settings, logger = console) {
+  const isAllowedOrigin = createOriginCheck(settings);
+  return function originCheck(req, res, next) {
+    const origin = req.headers.origin;
+    const allowed = isAllowedOrigin(origin, {
+      host: req.headers.host,
+      forwardedHost: req.headers['x-forwarded-host'],
+      forwardedProto: req.headers['x-forwarded-proto'],
+      encrypted: Boolean(req.socket.encrypted),
+    });
+    if (allowed) {
+      return next();
+    }
+    const shown = origin.length > MAX_LOGGED_ORIGIN_LENGTH
+      ? `${origin.slice(0, MAX_LOGGED_ORIGIN_LENGTH - 3)}...`
+      : origin;
+    logger.warn(blockedOriginLogLine(shown));
+    // The answer depends on the Origin: a cache must not give it for another
+    res.vary('Origin');
+    return res.status(403).json({ error: 'Origin not allowed' });
+  };
+}
+
+module.exports = { createOriginCheck, createOriginCheckMiddleware, readAllowedOrigins };
