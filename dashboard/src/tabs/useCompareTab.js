@@ -7,6 +7,7 @@ import {
   fetchSummary, fetchByProject, fetchByService, fetchByResourceType, fetchBackupStats,
 } from '../services/api.js';
 import { accountQuery } from '../utils/accounts.js';
+import { holdsMonth } from '../utils/months.js';
 import { projectsByAccountQuery } from './projectsByAccountQueries.js';
 
 /**
@@ -40,12 +41,11 @@ const useCompareTab = ({ months, activeTab, selectedAccount, accountColumn }) =>
     }));
   };
 
-  // Whether the months list holds a month compared: not before months A and B have their
+  // Whether the months list holds each month compared: not before months A and B have their
   // defaults, nor while the list of the account just selected loads, nor when that account
   // was not billed that month
-  const holds = (month) => months.some((m) => m.value === month?.value);
-  const holdsMonthA = holds(compareMonthA);
-  const holdsMonthB = holds(compareMonthB);
+  const holdsMonthA = holdsMonth(months, compareMonthA);
+  const holdsMonthB = holdsMonth(months, compareMonthB);
 
   // The months list that months A and B were last checked against. The tab checks them when
   // another list loads, not when the user picks one: the user may compare a month with itself.
@@ -67,58 +67,57 @@ const useCompareTab = ({ months, activeTab, selectedAccount, accountColumn }) =>
     }
   }, [months, holdsMonthA, holdsMonthB, compareMonthA, compareMonthB]);
 
-  // A figure of month A or B, for the account shown (#119), once the tab is open. Each month
-  // waits until the months list holds it, as the shell's queries of its month do: no request
-  // goes out for a month that the account lacks, before the tab moves to one it was billed in.
-  // Its key is that of the same figure of the shell or of the Backup tab, for the same month
-  // and account (ADR 0001).
-  const figureOf = (name, month, holdsMonth, fetch) => accountQuery(selectedAccount, {
+  // Whether the queries of month A or B may run: once the tab is open, and once the months
+  // list holds the month, as the shell's queries of its month wait for it. No request goes
+  // out for a month that the account lacks, before the tab moves to one it was billed in.
+  const asksFor = (month) => activeTab === 'compare' && holdsMonth(months, month);
+
+  // A figure of month A or B, for the account shown (#119), which fetchFigure(from, to,
+  // account) requests. Its key is that of the same figure of the shell or of the Backup tab,
+  // for the same month and account (ADR 0001).
+  const figureOf = (name, month, fetchFigure) => accountQuery(selectedAccount, {
     key: [name, month?.from, month?.to],
-    fetch: (account) => fetch(month.from, month.to, account),
-    enabled: holdsMonth && activeTab === 'compare',
+    fetch: (account) => fetchFigure(month.from, month.to, account),
+    enabled: asksFor(month),
   });
 
   // Comparison data
-  const { data: compareDataA } = useQuery(
-    figureOf('summary', compareMonthA, holdsMonthA, fetchSummary),
-  );
-  const { data: compareDataB } = useQuery(
-    figureOf('summary', compareMonthB, holdsMonthB, fetchSummary),
-  );
+  const { data: compareDataA } = useQuery(figureOf('summary', compareMonthA, fetchSummary));
+  const { data: compareDataB } = useQuery(figureOf('summary', compareMonthB, fetchSummary));
 
   const { data: byServiceA = [] } = useQuery(
-    figureOf('byService', compareMonthA, holdsMonthA, fetchByService),
+    figureOf('byService', compareMonthA, fetchByService),
   );
   const { data: byServiceB = [] } = useQuery(
-    figureOf('byService', compareMonthB, holdsMonthB, fetchByService),
+    figureOf('byService', compareMonthB, fetchByService),
   );
 
   // The projects of month A or B: once each, for the account shown, or, while the comparison
   // names the account of each project, with all accounts shown, once for each account that
   // billed them, with that account (#119). Those are the Overview's projects by account,
   // under the same key (#118): its query and this one share a month's answer.
-  const projectsOf = (month, holdsMonth) => (accountColumn
-    ? projectsByAccountQuery(month, holdsMonth && activeTab === 'compare')
-    : figureOf('byProject', month, holdsMonth, fetchByProject));
+  const projectsOf = (month) => (accountColumn
+    ? projectsByAccountQuery(month, asksFor(month))
+    : figureOf('byProject', month, fetchByProject));
 
-  const { data: byProjectA = [] } = useQuery(projectsOf(compareMonthA, holdsMonthA));
-  const { data: byProjectB = [] } = useQuery(projectsOf(compareMonthB, holdsMonthB));
+  const { data: byProjectA = [] } = useQuery(projectsOf(compareMonthA));
+  const { data: byProjectB = [] } = useQuery(projectsOf(compareMonthB));
 
   // What the infrastructure, backup and Private Cloud comparisons show (#32): the costs of
   // each resource type, under the key of those the page loads for its selected month, and
   // the Veeam backups, under the key of those the Backup tab loads for it
   const { data: byResourceTypeA = [] } = useQuery(
-    figureOf('byResourceType', compareMonthA, holdsMonthA, fetchByResourceType),
+    figureOf('byResourceType', compareMonthA, fetchByResourceType),
   );
   const { data: byResourceTypeB = [] } = useQuery(
-    figureOf('byResourceType', compareMonthB, holdsMonthB, fetchByResourceType),
+    figureOf('byResourceType', compareMonthB, fetchByResourceType),
   );
 
   const { data: backupStatsA } = useQuery(
-    figureOf('backupStats', compareMonthA, holdsMonthA, fetchBackupStats),
+    figureOf('backupStats', compareMonthA, fetchBackupStats),
   );
   const { data: backupStatsB } = useQuery(
-    figureOf('backupStats', compareMonthB, holdsMonthB, fetchBackupStats),
+    figureOf('backupStats', compareMonthB, fetchBackupStats),
   );
 
   return {

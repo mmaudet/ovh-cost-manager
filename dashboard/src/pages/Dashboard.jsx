@@ -20,6 +20,7 @@ import {
 import { formatCurrency, formatMonthLabel, yearMonthOf } from '../utils/format.js';
 import { parseSqliteDate } from '../utils/sqliteDate.js';
 import { generateMarkdownReport, reportFileName } from '../utils/markdownReport.js';
+import { holdsMonth } from '../utils/months.js';
 import { shiftMonths } from '../utils/monthWindow.js';
 import { variationDisplay, variationPercent } from '../utils/variation.js';
 import { useWebCloudTab } from '../tabs/useWebCloudTab.js';
@@ -117,7 +118,7 @@ export default function Dashboard() {
   // load, nor when the user selected an account not billed that month, until the page selects
   // its latest month (below). The queries of that month wait until they do: the tab hooks get
   // it from here, rather than check it again (#120).
-  const holdsSelectedMonth = months.some((m) => m.value === selectedMonth?.value);
+  const holdsSelectedMonth = holdsMonth(months, selectedMonth);
 
   // The figures of the month selected, once the account shown has it
   const { data: summary, isLoading: loadingSummary } = useQuery(accountQuery(selectedAccount, {
