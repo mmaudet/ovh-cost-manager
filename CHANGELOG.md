@@ -14,7 +14,12 @@ sections were written afterwards from the git history.
 
 ## 2.4.2 - 2026-09-27
 
-<!-- Upgrade notes and highlights of this release, if any. -->
+This release brings the new logo of OVH Cost Manager: its pictogram in the
+dashboard's header and as its favicon, and the whole logo in the README, with
+a variant for GitHub's dark theme. The README's screenshots are new too, taken
+on anonymised data, with the Public Cloud and Web Cloud tabs. Nothing changes
+in the configuration or the data: pull the new image and recreate the
+container.
 
 ### New features
 * feat: use the new logo in the dashboard, its favicon and the README, with new screenshots by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/104
