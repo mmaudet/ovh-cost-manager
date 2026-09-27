@@ -12,7 +12,7 @@
 
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { fetchGpuProjectsByAccount, fetchProjectsByAccount } from '../services/api.js';
+import { gpuProjectsByAccountQuery, projectsByAccountQuery } from './projectsByAccountQueries.js';
 
 // selectedMonth: the month of the header, which the months of the account shown hold when
 // holdsSelectedMonth says so, as the shell checks it. accountColumn: the Account column of
@@ -30,16 +30,10 @@ const useOverviewTab = ({ selectedMonth, holdsSelectedMonth, accountColumn }) =>
   // The projects of the month by account, for all accounts, while the lists name the account
   // of each: the breakdown by project, and the GPU costs by project. As the shell's queries of
   // the month, they wait until the months of the account shown hold it.
-  const byAccount = (key, fetch) => ({
-    queryKey: [key, selectedMonth?.from, selectedMonth?.to],
-    queryFn: () => fetch(selectedMonth.from, selectedMonth.to),
-    enabled: accountColumn !== null && holdsSelectedMonth,
-  });
-  const { data: projectsByAccount = [] } = useQuery(
-    byAccount('projectsByAccount', fetchProjectsByAccount),
-  );
+  const enabled = accountColumn !== null && holdsSelectedMonth;
+  const { data: projectsByAccount = [] } = useQuery(projectsByAccountQuery(selectedMonth, enabled));
   const { data: gpuProjectsByAccount = [] } = useQuery(
-    byAccount('gpuProjectsByAccount', fetchGpuProjectsByAccount),
+    gpuProjectsByAccountQuery(selectedMonth, enabled),
   );
 
   return {

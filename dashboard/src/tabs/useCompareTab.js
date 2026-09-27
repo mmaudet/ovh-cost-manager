@@ -5,9 +5,9 @@ import { useState, useEffect, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   fetchSummary, fetchByProject, fetchByService, fetchByResourceType, fetchBackupStats,
-  fetchProjectsByAccount,
 } from '../services/api.js';
 import { accountQuery } from '../utils/accounts.js';
+import { projectsByAccountQuery } from './projectsByAccountQueries.js';
 
 /**
  * The state and data queries of the Compare tab, which compares two months of the account
@@ -98,11 +98,7 @@ const useCompareTab = ({ months, activeTab, selectedAccount, accountColumn }) =>
   // billed them, with that account (#119). Those are the Overview's projects by account,
   // under the same key (#118): its query and this one share a month's answer.
   const projectsOf = (month, holdsMonth) => (accountColumn
-    ? {
-      queryKey: ['projectsByAccount', month?.from, month?.to],
-      queryFn: () => fetchProjectsByAccount(month.from, month.to),
-      enabled: holdsMonth && activeTab === 'compare',
-    }
+    ? projectsByAccountQuery(month, holdsMonth && activeTab === 'compare')
     : figureOf('byProject', month, holdsMonth, fetchByProject));
 
   const { data: byProjectA = [] } = useQuery(projectsOf(compareMonthA, holdsMonthA));

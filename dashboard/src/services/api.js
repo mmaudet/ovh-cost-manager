@@ -59,9 +59,11 @@ export const fetchByProject = async (from, to, account = null) => {
   return data;
 };
 
-// The Overview's lists of projects that name the account of each, for all accounts (#118):
-// each project once for each account whose bills billed it, with that account, rather than
-// once. The costs by project, and the GPU costs by project.
+// The lists of projects that name the account of each, for all accounts: each project once
+// for each account whose bills billed it, with that account, rather than once. The costs by
+// project, which the Overview's breakdown by project (#118) and the Compare tab's comparison
+// by project (#119) show, and the GPU costs by project, which the Overview shows. The tabs
+// ask for them through tabs/projectsByAccountQueries.js.
 export const fetchProjectsByAccount = async (from, to) => {
   const { data } = await api.get('/analysis/by-project', {
     params: { from, to, byAccount: true },
