@@ -316,6 +316,22 @@ export function disclosure(summary) {
   return screen.getByText(summary).closest('details');
 }
 
+// The footer: where the data comes from, when it was last synchronised, and the import
+// history
+export function footer() {
+  return screen.getByText(
+    /^(Données synchronisées via l'API OVHcloud|Data synchronized via OVHcloud API)$/,
+  ).parentElement;
+}
+
+// The lines of the footer that say when the data was last synchronised, each as the user
+// reads it: the latest import's, or each account's when the page offers several (#124).
+// They follow the line that says where the data comes from, before the import history.
+export function lastSyncLines() {
+  const [, ...lines] = [...footer().children].filter((child) => child.tagName === 'P');
+  return lines.map((line) => normalize(line.textContent));
+}
+
 // The dimmed backdrop around a dialog, which closes it on a click
 export function backdropOf(dialog) {
   return dialog.parentElement;

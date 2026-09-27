@@ -1,6 +1,7 @@
-import { describe, it, expect, vi } from 'vitest';
+import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
 import { screen, within } from '@testing-library/react';
 import { account } from './fixtures/account.js';
+import { lyonAccount, severalAccounts } from './fixtures/accounts.js';
 import { api, holdBack, serve } from './support/api.js';
 import { captureFileDownloads } from './support/downloads.js';
 import {
@@ -12,6 +13,7 @@ import {
   fakeTimers,
   headerBadge,
   importStatusesOf,
+  lastSyncLines,
   loadingScreen,
   openTab,
   optionsOf,
@@ -543,6 +545,18 @@ describe('dashboard shell', () => {
 
       expect(screen.getByText('Aucun import enregistré')).toBeVisible();
     });
+
+    // A single-account installation, whose accounts route lists its account, or none until
+    // the first import since the upgrade: the page offers no account to select, and the
+    // footer says when the latest import ended, as ever (#124)
+    it.each([
+      ['a single account', [lyonAccount]],
+      ['no account, as before the first import since the upgrade', []],
+    ])('shows the latest import alone with %s', async (_, accounts) => {
+      await renderDashboard({ ...severalAccounts, accounts });
+
+      expect(lastSyncLines()).toEqual(['Dernière sync: 14/09/2026 06:02:30 (3 factures)']);
+    });
   });
 
   describe('resync', () => {
@@ -762,6 +776,45 @@ describe('dashboard shell', () => {
   });
 
   describe('report export', () => {
+    // The report of September, as the page downloads it. All in French: the title, the
+    // period, the totals and the percentages (#60), with a space before the colon.
+    const septemberReport = [
+      '# Rapport de coûts OVH - Septembre 2026',
+      '',
+      '**Période :** du 2026-09-01 au 2026-09-30',
+      '',
+      '## Résumé',
+      '',
+      '| Métrique | Valeur |',
+      '|--------|-------|',
+      // French amounts separate thousands with a narrow no-break space
+      '| Coût Total | 1\u202f250,40€ |',
+      '| Total Cloud | 830,40€ |',
+      '| Total hors Cloud | 420,00€ |',
+      '| Moyenne Journalière | 41,68€ |',
+      '| Projets Actifs | 2 |',
+      '',
+      '## Par Type de Service',
+      '',
+      '| Service | Coût | % |',
+      '|---------|------|---|',
+      // and French percentages their sign with a no-break space
+      '| Compute | 800,40€ | 64,0\u00a0% |',
+      '| Storage | 250,00€ | 20,0\u00a0% |',
+      '| Other | 200,00€ | 16,0\u00a0% |',
+      '',
+      '## Top Projets',
+      '',
+      '| Projet | Coût |',
+      '|---------|------|',
+      '| Production | 610,40€ |',
+      '| Staging | 220,00€ |',
+      '',
+      '---',
+      '*Généré le 15/09/2026 12:00:00*',
+      '',
+    ];
+
     it('downloads the report of the month as Markdown', async () => {
       const { user } = await renderDashboard();
       const downloadedFiles = captureFileDownloads();
@@ -772,46 +825,26 @@ describe('dashboard shell', () => {
       expect(files).toHaveLength(1);
       expect(files[0].name).toBe('ovh-report-2026-09.md');
       expect(files[0].type).toBe('text/markdown');
-      // All in French: the title, the period, the totals and the percentages (#60), with a
-      // space before the colon
-      expect(files[0].content).toBe([
-        '# Rapport de coûts OVH - Septembre 2026',
-        '',
-        '**Période :** du 2026-09-01 au 2026-09-30',
-        '',
-        '## Résumé',
-        '',
-        '| Métrique | Valeur |',
-        '|--------|-------|',
-        // French amounts separate thousands with a narrow no-break space
-        '| Coût Total | 1\u202f250,40€ |',
-        '| Total Cloud | 830,40€ |',
-        '| Total hors Cloud | 420,00€ |',
-        '| Moyenne Journalière | 41,68€ |',
-        '| Projets Actifs | 2 |',
-        '',
-        '## Par Type de Service',
-        '',
-        '| Service | Coût | % |',
-        '|---------|------|---|',
-        // and French percentages their sign with a no-break space
-        '| Compute | 800,40€ | 64,0\u00a0% |',
-        '| Storage | 250,00€ | 20,0\u00a0% |',
-        '| Other | 200,00€ | 16,0\u00a0% |',
-        '',
-        '## Top Projets',
-        '',
-        '| Projet | Coût |',
-        '|---------|------|',
-        '| Production | 610,40€ |',
-        '| Staging | 220,00€ |',
-        '',
-        '---',
-        '*Généré le 15/09/2026 12:00:00*',
-        '',
-      ].join('\n'));
+      expect(files[0].content).toBe(septemberReport.join('\n'));
       // Ready for another export
       expect(screen.getByDisplayValue('Choisir...')).toBeInTheDocument();
+    });
+
+    // A single-account installation, whose accounts route lists its account, or none until
+    // the first import since the upgrade: the page offers no account to select, and the
+    // report names none, in its title nor in its file's name (#124)
+    it.each([
+      ['a single account', [lyonAccount]],
+      ['no account, as before the first import since the upgrade', []],
+    ])('names no account with %s', async (_, accounts) => {
+      const { user } = await renderDashboard({ ...severalAccounts, accounts });
+      const downloadedFiles = captureFileDownloads();
+
+      await user.selectOptions(screen.getByDisplayValue('Choisir...'), 'Markdown');
+
+      expect(await downloadedFiles()).toEqual([{
+        name: 'ovh-report-2026-09.md', type: 'text/markdown', content: septemberReport.join('\n'),
+      }]);
     });
 
     it('writes the report in the language of the page', async () => {
@@ -830,13 +863,48 @@ describe('dashboard shell', () => {
       expect(report).toContain('## Top Projects');
     });
 
-    it('prints the page for the PDF export', async () => {
-      const { user } = await renderDashboard();
-      const print = vi.spyOn(window, 'print');
+    describe('as PDF', () => {
+      // The title of the page, which the browser gives the PDF: index.html's, which jsdom's
+      // document lacks
+      const PAGE_TITLE = 'OVH Cost Manager';
+      beforeEach(() => {
+        document.title = PAGE_TITLE;
+      });
+      afterEach(() => {
+        document.title = '';
+      });
+      // The title of the page each time it printed, as the browser prints it before
+      // window.print() returns
+      const printedTitles = () => {
+        const titles = [];
+        vi.spyOn(window, 'print').mockImplementation(() => {
+          titles.push(document.title);
+        });
+        return titles;
+      };
 
-      await user.selectOptions(screen.getByDisplayValue('Choisir...'), 'PDF');
+      it('prints the page for the PDF export', async () => {
+        const { user } = await renderDashboard();
+        const print = vi.spyOn(window, 'print');
 
-      expect(print).toHaveBeenCalledOnce();
+        await user.selectOptions(screen.getByDisplayValue('Choisir...'), 'PDF');
+
+        expect(print).toHaveBeenCalledOnce();
+      });
+
+      // Nor does the PDF of a single-account installation name any account (#124)
+      it.each([
+        ['a single account', [lyonAccount]],
+        ['no account, as before the first import since the upgrade', []],
+      ])('prints the page under its own title with %s', async (_, accounts) => {
+        const { user } = await renderDashboard({ ...severalAccounts, accounts });
+        const titles = printedTitles();
+
+        await user.selectOptions(screen.getByDisplayValue('Choisir...'), 'PDF');
+
+        expect(titles).toEqual([PAGE_TITLE]);
+        expect(document.title).toBe(PAGE_TITLE);
+      });
     });
   });
 
