@@ -1014,6 +1014,29 @@ describe('dashboard shell', () => {
         expect(titles).toEqual([PAGE_TITLE]);
         expect(document.title).toBe(PAGE_TITLE);
       });
+
+      // With several accounts, the page's title names what it shows while it prints, after
+      // its own, as the Markdown report's title does (#124), and is its own again once printed
+      it('prints the page under a title that names the accounts it shows', async () => {
+        const { user } = await renderDashboard(severalAccounts);
+        const titles = printedTitles();
+        const exportPdf = () =>
+          user.selectOptions(screen.getByDisplayValue(/^(Choisir|Choose)\.\.\.$/), 'PDF');
+
+        await exportPdf();
+        await selectAccount(user, 'Lyon subsidiary');
+        await exportPdf();
+        await selectLanguage(user, 'en');
+        await selectAccount(user, 'Unknown account');
+        await exportPdf();
+
+        expect(titles).toEqual([
+          'OVH Cost Manager - Tous les comptes',
+          'OVH Cost Manager - Lyon subsidiary',
+          'OVH Cost Manager - Unknown account',
+        ]);
+        expect(document.title).toBe(PAGE_TITLE);
+      });
     });
   });
 

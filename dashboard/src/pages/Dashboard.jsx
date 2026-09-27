@@ -433,7 +433,13 @@ export default function Dashboard() {
                         a.click();
                         URL.revokeObjectURL(url);
                       } else if (format === 'pdf') {
+                        // The browser gives the PDF the title of the page, which names what
+                        // the page shows while it prints, as the Markdown report's title does
+                        // (#124). print() returns once the print dialog is closed.
+                        const pageTitle = document.title;
+                        if (scope) document.title = `${pageTitle} - ${scope}`;
                         window.print();
+                        document.title = pageTitle;
                       }
                       e.target.value = '';
                     }}
