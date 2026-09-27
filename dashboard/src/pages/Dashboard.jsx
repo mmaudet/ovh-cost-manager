@@ -12,7 +12,7 @@ import { useSelectedAccount } from '../hooks/useSelectedAccount.js';
 import Logo from '../components/Logo';
 import { AccountSelector } from '../components/AccountSelector.jsx';
 import { ResyncButton } from '../components/ResyncButton.jsx';
-import { accountsOf, withAccount } from '../utils/accounts.js';
+import { accountQuery, accountsOf } from '../utils/accounts.js';
 import { formatCurrency, formatMonthLabel, yearMonthOf } from '../utils/format.js';
 import { parseSqliteDate } from '../utils/sqliteDate.js';
 import { generateMarkdownReport } from '../utils/markdownReport.js';
@@ -99,24 +99,23 @@ export default function Dashboard() {
   });
   const accounts = accountList ? accountsOf(accountList) : (accountsFailed ? [] : undefined);
 
-  // The account the page shows, page-wide: null for all accounts. The months list and the
-  // KPI cards of the month's figures follow it; the other cards and the tabs follow it in the
-  // next tickets (#116 to #123).
-  const { selectedAccount, accountKnown, selectAccount } = useSelectedAccount(accounts);
+  // The account the page shows, page-wide: null for all accounts, undefined until the page
+  // knows it. The months list and the KPI cards of the month's figures follow it; the other
+  // cards and the tabs follow it in the next tickets (#116 to #123).
+  const { selectedAccount, selectAccount } = useSelectedAccount(accounts);
 
-  // The months billed to the account shown, once the page knows it
-  const { data: months = [], isSuccess: monthsLoaded } = useQuery({
-    queryKey: withAccount(['months'], selectedAccount),
-    queryFn: () => fetchMonths(selectedAccount),
-    enabled: accountKnown,
-  });
+  // The months billed to the account shown
+  const { data: months = [], isSuccess: monthsLoaded } = useQuery(accountQuery(selectedAccount, {
+    key: ['months'],
+    fetch: fetchMonths,
+  }));
 
   // Fetch data for selected month
-  const { data: summary, isLoading: loadingSummary } = useQuery({
-    queryKey: withAccount(['summary', selectedMonth?.from, selectedMonth?.to], selectedAccount),
-    queryFn: () => fetchSummary(selectedMonth.from, selectedMonth.to, selectedAccount),
-    enabled: !!selectedMonth
-  });
+  const { data: summary, isLoading: loadingSummary } = useQuery(accountQuery(selectedAccount, {
+    key: ['summary', selectedMonth?.from, selectedMonth?.to],
+    fetch: (account) => fetchSummary(selectedMonth.from, selectedMonth.to, account),
+    enabled: !!selectedMonth,
+  }));
 
   // The month just before the selected one in the calendar, as the months list gives it:
   // none when nothing was billed that month, as before the first billed month. The "vs
@@ -127,11 +126,13 @@ export default function Dashboard() {
   const previousMonth = selectedMonth
     ? months.find((m) => m.from === shiftMonths(selectedMonth.from, -1))
     : undefined;
-  const { data: previousSummary, isLoading: loadingPreviousSummary } = useQuery({
-    queryKey: withAccount(['summary', previousMonth?.from, previousMonth?.to], selectedAccount),
-    queryFn: () => fetchSummary(previousMonth.from, previousMonth.to, selectedAccount),
-    enabled: !!previousMonth,
-  });
+  const { data: previousSummary, isLoading: loadingPreviousSummary } = useQuery(
+    accountQuery(selectedAccount, {
+      key: ['summary', previousMonth?.from, previousMonth?.to],
+      fetch: (account) => fetchSummary(previousMonth.from, previousMonth.to, account),
+      enabled: !!previousMonth,
+    }),
+  );
 
   const { data: byService = [] } = useQuery({
     queryKey: ['byService', selectedMonth?.from, selectedMonth?.to],

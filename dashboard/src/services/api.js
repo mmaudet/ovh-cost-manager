@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { accountParams } from '../utils/accounts.js';
 
 const API_BASE = '/api';
 
@@ -29,18 +30,18 @@ export const fetchAccounts = async () => {
   return data;
 };
 
-// The parameters of a request that follows the account selected: its id, the NIC handle of
-// an account or `unknown` for the Unknown account, or none for all accounts (#115)
-const withAccountParam = (params, account) => (account ? { ...params, account } : params);
+// The functions whose last argument is an account ask for its answer: the id of an account,
+// the NIC handle of an account or `unknown` for the Unknown account, or null, by default, for
+// all accounts (#115)
 
-// The months billed to the account, to any account when it is null
+// The months billed to the account
 export const fetchMonths = async (account = null) => {
-  const { data } = await api.get('/months', { params: withAccountParam({}, account) });
+  const { data } = await api.get('/months', { params: accountParams(account) });
   return data;
 };
 
 export const fetchSummary = async (from, to, account = null) => {
-  const { data } = await api.get('/summary', { params: withAccountParam({ from, to }, account) });
+  const { data } = await api.get('/summary', { params: { from, to, ...accountParams(account) } });
   return data;
 };
 

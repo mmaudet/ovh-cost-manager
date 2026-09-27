@@ -1,4 +1,5 @@
-// The accounts of the instance (#110), as the page offers them to select (#115)
+// The accounts of the instance (#110), as the page offers them to select, and the queries
+// that follow the account shown (#115)
 
 /**
  * The accounts that GET /api/accounts lists, in its order, as the page uses them. The route
@@ -30,7 +31,32 @@ export function accountLabel(account, t) {
   return account.configured ? account.name : `${account.name} (${t('notConfigured')})`;
 }
 
-// The key of a query that follows the account selected: its key, then the account's id, or
-// nothing more for all accounts, as its request then names none. A query shared with a tab
-// that does not follow the account yet thus keeps sharing its key for all accounts (ADR 0001).
-export const withAccount = (key, account) => (account === null ? key : [...key, account]);
+// Whether the key and the request of a query name the account shown: not for all accounts,
+// null, which the page asks for as it did before several accounts. A query that a tab shares
+// with the shell thus keeps sharing its key for all accounts (ADR 0001).
+const namesAccount = (account) => account !== null;
+
+// The parameters that name the account in a request: none for all accounts
+export const accountParams = (account) => (namesAccount(account) ? { account } : {});
+
+/**
+ * The options of a query that follows the account shown, for useQuery: its key and its
+ * request name the account, after the rest, or neither does for all accounts. The query
+ * waits while the page does not know the account yet.
+ * @param {?string|undefined} account - The id of the account shown: null for all accounts,
+ *   undefined while the page does not know it (useSelectedAccount())
+ * @param {object} query
+ * @param {Array} query.key - Its key for all accounts
+ * @param {function(?string): Promise} query.fetch - Requests its answer for an account, as
+ *   the functions of services/api.js do with their last argument
+ * @param {boolean} [query.enabled] - Whether it may run besides, such as once it has the
+ *   month it needs
+ * @returns {{ queryKey: Array, queryFn: function(): Promise, enabled: boolean }}
+ */
+export function accountQuery(account, { key, fetch, enabled = true }) {
+  return {
+    queryKey: namesAccount(account) ? [...key, account] : key,
+    queryFn: () => fetch(account),
+    enabled: account !== undefined && enabled,
+  };
+}
