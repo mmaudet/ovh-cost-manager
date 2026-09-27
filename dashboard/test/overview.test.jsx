@@ -668,6 +668,71 @@ describe('Overview tab', () => {
       expect(api.fetchGpuProjectsByAccount).not.toHaveBeenCalled();
     });
 
+    // The costs by resource type and the GPU costs of the month that the shell loads for the
+    // tab feed other cards and tabs too, which follow the account with them
+    describe('as other cards and tabs read them', () => {
+      it('count the resources of the account selected in the card of every resource',
+        async () => {
+          const { user } = await renderDashboard(severalAccounts);
+          const resources = () => texts(cardOf('Total ressources'));
+          expect(resources())
+            .toEqual(['Total ressources', '9', '1 Serveurs dédiés · 0 VPS · 2 Projets Cloud']);
+
+          await selectAccount(user, 'Lyon subsidiary');
+
+          expect(resources())
+            .toEqual(['Total ressources', '3', '1 Serveurs dédiés · 0 VPS · 1 Projets Cloud']);
+
+          await selectAccount(user, 'yy2222-ovh');
+
+          expect(resources())
+            .toEqual(['Total ressources', '6', '0 Serveurs dédiés · 0 VPS · 1 Projets Cloud']);
+        });
+
+      it('fill the cards and the costs of the Infrastructure tab with those of the account',
+        async () => {
+          const { user } = await renderDashboard(severalAccounts);
+          await openTab(user, 'Infrastructure');
+          const dedicatedServers = () => texts(cardRowOf('Serveurs dédiés')).slice(0, 3);
+          const costs = () => texts(cardOf(screen.getByRole('heading',
+            { name: /^Coûts par type de ressource/ })));
+          expect(dedicatedServers()).toEqual(['Serveurs dédiés', '1', '270,00€']);
+          expect(costs()).toEqual([
+            'Coûts par type de ressource', '(Septembre 2026)',
+            'Dedicated Servers', '270,00€', '▼', 'Backup', '90,00€', '▼',
+            'Licenses', '25,00€', '▼',
+          ]);
+
+          await selectAccount(user, 'yy2222-ovh');
+
+          expect(dedicatedServers()).toEqual(['Serveurs dédiés', '0', '0,00€']);
+          expect(costs()).toEqual([
+            'Coûts par type de ressource', '(Septembre 2026)',
+            'Backup', '90,00€', '▼', 'Licenses', '25,00€', '▼',
+          ]);
+        });
+
+      // Among the cards of the Public Cloud tab's own queries, which follow the account in
+      // #121
+      it('count the Cloud projects and GPU instances of the account on the Public Cloud tab',
+        async () => {
+          const { user } = await renderDashboard(severalAccounts);
+          await openTab(user, 'Public Cloud');
+          const cardsFromTheShell = () => [...cardRowOf('Kubernetes').children]
+            .map((card) => texts(card))
+            .filter(([label]) => ['Projets Cloud', 'Instances GPU'].includes(label));
+          expect(cardsFromTheShell()).toEqual([['Projets Cloud', '2'], ['Instances GPU', '1']]);
+
+          await selectAccount(user, 'Lyon subsidiary');
+
+          expect(cardsFromTheShell()).toEqual([['Projets Cloud', '1'], ['Instances GPU', '1']]);
+
+          await selectAccount(user, 'yy2222-ovh');
+
+          expect(cardsFromTheShell()).toEqual([['Projets Cloud', '1'], ['Instances GPU', '0']]);
+        });
+    });
+
     it('names the Unknown account in the Account column, in the language of the page',
       async () => {
         // An account, and the Unknown account, whose bills paid for a project that no account
