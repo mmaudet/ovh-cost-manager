@@ -55,6 +55,27 @@ function requireAccount(table, row) {
   return row;
 }
 
+// The value that selects the Unknown account (see CONTEXT.md), the rows without an account,
+// in the queries that can keep one account's rows and in the account parameter of the
+// server's routes (#115). No NIC handle reads so.
+const UNKNOWN_ACCOUNT = 'unknown';
+
+/**
+ * The condition that keeps the rows of an account in a query that can keep one account's
+ * rows (#115, ADR 0002), to join with AND to its WHERE clause, and its parameters. Such a
+ * query takes the account as the server's routes read it from their account parameter.
+ * @param {?string} account - null for every account, UNKNOWN_ACCOUNT for the Unknown
+ *   account, or else the NIC handle of an account
+ * @param {string} column - The column of the query that holds the NIC handle of its rows'
+ *   account: `b.account` for its bills, `p.account` for its projects
+ * @returns {{ sql: string, params: string[] }} Always true for every account
+ */
+function accountCondition(account, column) {
+  if (account === null) return { sql: '1 = 1', params: [] };
+  if (account === UNKNOWN_ACCOUNT) return { sql: `${column} IS NULL`, params: [] };
+  return { sql: `${column} = ?`, params: [account] };
+}
+
 let db = null;
 
 /**
@@ -200,6 +221,21 @@ const billOps = {
       ? db.prepare('SELECT MAX(date) as latest FROM bills').get()
       : db.prepare('SELECT MAX(date) as latest FROM bills WHERE account = ?').get(account);
     return result?.latest;
+  },
+
+  /**
+   * @param {?string} [account] - The account whose bills count (see accountCondition()):
+   *   every account's by default
+   * @returns {string[]} The months billed, as YYYY-MM, most recent first
+   */
+  getMonths: (account = null) => {
+    const ofAccount = accountCondition(account, 'b.account');
+    return getDb().prepare(`
+      SELECT DISTINCT strftime('%Y-%m', b.date) as month
+      FROM bills b
+      WHERE ${ofAccount.sql}
+      ORDER BY month DESC
+    `).pluck().all(...ofAccount.params);
   },
 
   exists: (id) => {
@@ -399,6 +435,11 @@ const accountsOps = {
     `).get(name);
   },
 
+  // Whether an import recorded the account of a NIC handle: one that the server's routes can
+  // select (#115)
+  isRecorded: (nic) =>
+    getDb().prepare('SELECT 1 FROM accounts WHERE nic = ?').get(nic) !== undefined,
+
   /**
    * @returns {object[]} Every account recorded, by NIC handle, as the accounts table holds it
    */
@@ -408,19 +449,15 @@ const accountsOps = {
   }
 };
 
-// The filter of the queries that can keep the rows of one account (#115), when they are
-// given none: every account's rows. The server builds the others from the account
-// parameter of its routes (server/account-filter.js): an SQL condition on the column that
-// holds the NIC handle of the rows' account, `b.account` in the queries built on bills.
-const ALL_ACCOUNTS = Object.freeze({ sql: '1 = 1', params: [] });
-
 // Analysis queries
 const analysisOps = {
-  // The costs of each project billed between two dates, most expensive first, on the bills
-  // that the account filter keeps. A project missing from the projects table keeps the id of
-  // its bill lines, without a name: the dashboard tells such projects apart by their id (#55).
-  byProject: (fromDate, toDate, accountFilter = ALL_ACCOUNTS) => {
+  // The costs of each project billed between two dates, most expensive first, on the bills of
+  // the account (see accountCondition()), every account's by default. A project missing from
+  // the projects table keeps the id of its bill lines, without a name: the dashboard tells
+  // such projects apart by their id (#55).
+  byProject: (fromDate, toDate, account = null) => {
     const db = getDb();
+    const ofAccount = accountCondition(account, 'b.account');
     return db.prepare(`
       SELECT
         d.project_id as project_id,
@@ -432,10 +469,10 @@ const analysisOps = {
       LEFT JOIN projects p ON d.project_id = p.id
       WHERE b.date >= ? AND b.date <= ?
         AND d.project_id IS NOT NULL
-        AND ${accountFilter.sql}
+        AND ${ofAccount.sql}
       GROUP BY d.project_id
       ORDER BY total DESC
-    `).all(fromDate, toDate, ...accountFilter.params);
+    `).all(fromDate, toDate, ...ofAccount.params);
   },
 
   byService: (fromDate, toDate) => {
@@ -516,9 +553,11 @@ const analysisOps = {
     })));
   },
 
-  // The totals of the bills between two dates that the account filter keeps
-  summary: (fromDate, toDate, accountFilter = ALL_ACCOUNTS) => {
+  // The totals of the bills between two dates of the account (see accountCondition()), every
+  // account's by default
+  summary: (fromDate, toDate, account = null) => {
     const db = getDb();
+    const ofAccount = accountCondition(account, 'b.account');
 
     const totals = db.prepare(`
       SELECT
@@ -530,8 +569,8 @@ const analysisOps = {
       FROM bill_details d
       JOIN bills b ON d.bill_id = b.id
       WHERE b.date >= ? AND b.date <= ?
-        AND ${accountFilter.sql}
-    `).get(fromDate, toDate, ...accountFilter.params);
+        AND ${ofAccount.sql}
+    `).get(fromDate, toDate, ...ofAccount.params);
 
     return totals;
   },
@@ -1973,6 +2012,7 @@ module.exports = {
   clearAll,
   transaction,
   allocateProRata,
+  UNKNOWN_ACCOUNT,
   projects: projectOps,
   bills: billOps,
   details: detailOps,

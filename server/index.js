@@ -14,7 +14,7 @@ const { readAccounts } = require('../data/accounts-config');
 
 // Import auth module
 const auth = require('./auth');
-const { accountFilter, accountParameter } = require('./account-filter');
+const { createAccountParameterMiddleware } = require('./account-parameter');
 const { createOriginCheckMiddleware, readAllowedOrigins } = require('./cors');
 const { createHostCheckMiddleware } = require('./hosts');
 const { importsEnabled } = require('./imports');
@@ -359,10 +359,10 @@ function validateDateRange(from, to) {
 function registerRoutes() {
 
   // The account parameter of the data routes (#115): req.account, the account a request
-  // asks for, from a NIC handle that an import recorded, or the Unknown account; every
-  // account without the parameter. accountFilter() turns it into a condition of their queries.
-  const accountParam = accountParameter((nic) => db.getDb()
-    .prepare('SELECT 1 FROM accounts WHERE nic = ?').get(nic) !== undefined);
+  // asks for, which they pass on to their queries
+  const accountParameter = createAccountParameterMiddleware({
+    isRecordedAccount: db.accounts.isRecorded,
+  });
 
   // ========================
   // Projects Endpoints
@@ -656,7 +656,7 @@ function registerRoutes() {
 
   // The figures of a period: those of the account the request asks for, or of every account
   // without one (#115)
-  app.get('/api/summary', accountParam, (req, res) => {
+  app.get('/api/summary', accountParameter, (req, res) => {
     try {
       const { from, to } = req.query;
       const validation = validateDateRange(from, to);
@@ -664,9 +664,8 @@ function registerRoutes() {
         return res.status(400).json({ error: validation.error });
       }
 
-      const bills = accountFilter(req.account, 'b.account');
-      const summary = db.analysis.summary(from, to, bills);
-      const byProject = db.analysis.byProject(from, to, bills);
+      const summary = db.analysis.summary(from, to, req.account);
+      const byProject = db.analysis.byProject(from, to, req.account);
 
       // Calculate daily average
       const startDate = new Date(from);
@@ -779,27 +778,20 @@ function registerRoutes() {
 
   // The months billed to the account the request asks for, or to any account without one
   // (#115)
-  app.get('/api/months', accountParam, (req, res) => {
+  app.get('/api/months', accountParameter, (req, res) => {
     try {
-      const database = db.getDb();
-      const bills = accountFilter(req.account, 'b.account');
-      const months = database.prepare(`
-      SELECT DISTINCT strftime('%Y-%m', b.date) as month
-      FROM bills b
-      WHERE ${bills.sql}
-      ORDER BY month DESC
-    `).all(...bills.params);
+      const months = db.bills.getMonths(req.account);
 
       // Format months with French labels
       const monthNames = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
         'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'];
 
-      const result = months.map(row => {
-        const [year, month] = row.month.split('-');
+      const result = months.map(yearMonth => {
+        const [year, month] = yearMonth.split('-');
         return {
-          value: row.month,
+          value: yearMonth,
           label: `${monthNames[parseInt(month) - 1]} ${year}`,
-          ...monthBounds(row.month)
+          ...monthBounds(yearMonth)
         };
       });
 
