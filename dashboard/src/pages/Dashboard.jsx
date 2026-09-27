@@ -19,7 +19,7 @@ import {
 } from '../utils/accounts.js';
 import { formatCurrency, formatMonthLabel, yearMonthOf } from '../utils/format.js';
 import { parseSqliteDate } from '../utils/sqliteDate.js';
-import { generateMarkdownReport } from '../utils/markdownReport.js';
+import { generateMarkdownReport, reportFileName } from '../utils/markdownReport.js';
 import { shiftMonths } from '../utils/monthWindow.js';
 import { variationDisplay, variationPercent } from '../utils/variation.js';
 import { useWebCloudTab } from '../tabs/useWebCloudTab.js';
@@ -419,17 +419,13 @@ export default function Dashboard() {
                       if (format === 'md') {
                         // The figures of the account shown, which the shell holds (#115, #118)
                         const md = generateMarkdownReport(
-                          summary, byService, byProject, selectedMonth, language, scope,
+                          summary, byService, byProject, selectedMonth, language, { scope },
                         );
                         const blob = new Blob([md], { type: 'text/markdown' });
                         const url = URL.createObjectURL(blob);
                         const a = document.createElement('a');
                         a.href = url;
-                        // The file of an account selected names it too (#124), by its id, a NIC
-                        // handle or unknown, which any file system takes, unlike the names of
-                        // config.json
-                        const ofAccount = selectedAccount ? `-${selectedAccount}` : '';
-                        a.download = `ovh-report-${selectedMonth.value}${ofAccount}.md`;
+                        a.download = reportFileName(selectedMonth.value, selectedAccount);
                         a.click();
                         URL.revokeObjectURL(url);
                       } else if (format === 'pdf') {

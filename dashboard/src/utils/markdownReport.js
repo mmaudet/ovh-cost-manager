@@ -9,13 +9,14 @@ import { formatCurrency, formatMonthLabel, formatPercent, localeOf } from './for
  *   (/api/analysis/by-project)
  * @param {object|undefined} selectedMonth - The month, as /api/months lists it: N/A without one
  * @param {string} [language] - 'fr' or 'en'
- * @param {?string} [scope] - What the figures cover, as the page names it: all accounts, or
- *   the account selected (scopeLabel()), which the title names after the month (#124). None
- *   for a single-account installation, whose title names the month alone.
+ * @param {object} [options]
+ * @param {?string} [options.scope] - What the figures cover, as the page names it: all
+ *   accounts, or the account selected (scopeLabel()), which the title names after the month
+ *   (#124). None for a single-account installation, whose title names the month alone.
  * @returns {string}
  */
 const generateMarkdownReport = (
-  summary, byService, byProject, selectedMonth, language = 'fr', scope = null,
+  summary, byService, byProject, selectedMonth, language = 'fr', { scope = null } = {},
 ) => {
   const locale = localeOf(language);
   const fmt = (v) => formatCurrency(v, language);
@@ -59,4 +60,18 @@ const generateMarkdownReport = (
   return md;
 };
 
-export { generateMarkdownReport };
+/**
+ * The name of the file that the page downloads the report of a month in: the month, and the
+ * account shown when one is selected (#124), by its id, which any file system takes, unlike
+ * the names that config.json gives.
+ * @param {string} month - The month, as 'YYYY-MM'
+ * @param {?string} account - The id of the account shown, a NIC handle or the value of the
+ *   Unknown account: null for all accounts, as on a single-account page
+ * @returns {string}
+ */
+const reportFileName = (month, account) => {
+  const accountSuffix = account === null ? '' : `-${account}`;
+  return `ovh-report-${month}${accountSuffix}.md`;
+};
+
+export { generateMarkdownReport, reportFileName };
