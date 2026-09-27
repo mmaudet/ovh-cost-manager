@@ -6,10 +6,14 @@ import { useQuery } from '@tanstack/react-query';
 import {
   fetchMonthlyTrend, fetchMonthlyTrendByCategory, fetchGpuSummary,
 } from '../services/api.js';
+import { accountQuery } from '../utils/accounts.js';
 import { monthsBetween, availablePeriodsFor } from '../utils/trendPeriods.js';
 import { monthWindowEndingOn } from '../utils/monthWindow.js';
 
-const useTrendsTab = ({ months, selectedMonth, activeTab }) => {
+// The tab shows the trends of the account that the header shows, selectedAccount: null for
+// all accounts, undefined while the page does not know it yet (#120). The months list and
+// the month selected are that account's.
+const useTrendsTab = ({ months, selectedMonth, selectedAccount, activeTab }) => {
   // The period the user picks, in months: 6 by default
   const [chosenPeriod, setChosenPeriod] = useState(6);
 
@@ -25,17 +29,19 @@ const useTrendsTab = ({ months, selectedMonth, activeTab }) => {
   const longestPeriod = availablePeriods[availablePeriods.length - 1].months;
   const trendPeriod = Math.min(chosenPeriod, longestPeriod);
 
-  const { data: monthlyTrend = [] } = useQuery({
-    queryKey: ['monthlyTrend', trendPeriod, endMonth],
-    queryFn: () => fetchMonthlyTrend(trendPeriod, endMonth),
+  const { data: monthlyTrend = [] } = useQuery(accountQuery(selectedAccount, {
+    key: ['monthlyTrend', trendPeriod, endMonth],
+    fetch: (account) => fetchMonthlyTrend(trendPeriod, endMonth, account),
     enabled: !!endMonth,
-  });
+  }));
 
-  const { data: trendByCategory = { categories: [], data: [] } } = useQuery({
-    queryKey: ['monthlyTrendByCategory', trendPeriod, endMonth],
-    queryFn: () => fetchMonthlyTrendByCategory(trendPeriod, endMonth),
-    enabled: !!endMonth,
-  });
+  const { data: trendByCategory = { categories: [], data: [] } } = useQuery(
+    accountQuery(selectedAccount, {
+      key: ['monthlyTrendByCategory', trendPeriod, endMonth],
+      fetch: (account) => fetchMonthlyTrendByCategory(trendPeriod, endMonth, account),
+      enabled: !!endMonth,
+    }),
+  );
   // Categories hidden from the by-category chart (toggled via the legend).
   const [hiddenCategories, setHiddenCategories] = useState(() => new Set());
   const toggleCategory = (key) => setHiddenCategories(prev => {
@@ -46,11 +52,11 @@ const useTrendsTab = ({ months, selectedMonth, activeTab }) => {
 
   // GPU cost trend, over the same months (for trends tab)
   const gpuTrendWindow = monthWindowEndingOn(selectedMonth, trendPeriod);
-  const { data: gpuTrend } = useQuery({
-    queryKey: ['gpuTrend', gpuTrendWindow?.from, gpuTrendWindow?.to],
-    queryFn: () => fetchGpuSummary(gpuTrendWindow.from, gpuTrendWindow.to),
+  const { data: gpuTrend } = useQuery(accountQuery(selectedAccount, {
+    key: ['gpuTrend', gpuTrendWindow?.from, gpuTrendWindow?.to],
+    fetch: (account) => fetchGpuSummary(gpuTrendWindow.from, gpuTrendWindow.to, account),
     enabled: !!gpuTrendWindow && activeTab === 'trends',
-  });
+  }));
 
   return {
     trendPeriod,

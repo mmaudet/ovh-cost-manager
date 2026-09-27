@@ -1,5 +1,6 @@
 import { account } from './account.js';
 import { months } from './calendar.js';
+import { trendsOf } from './trends.js';
 
 // Several OVHcloud accounts in one instance (#110): the synthetic account of account.js, as
 // the accounts that billed it. Their costs add up to its figures, which the page gets for all
@@ -7,8 +8,8 @@ import { months } from './calendar.js';
 //
 // The accounts route lists them as it does since #114: with their id, the value of the
 // account parameter, whether config.json still lists them, and which one is the Unknown
-// account. What the page asks for with an account, its months list and its summaries, is
-// under `ofAccount`, by the id of the account (see support/api.js).
+// account. What the page asks for with an account, such as its months list and its
+// summaries, is under `ofAccount`, by the id of the account (see support/api.js).
 
 const [september, august, july] = months;
 
@@ -81,6 +82,14 @@ export const severalAccounts = {
           billsCount: 1, projectsCount: 1, topProjects: [{ name: 'Production', value: 680 }],
         }),
       },
+      // The Trends tab's, over the 3 months up to September that its months allow (#120)
+      ...trendsOf('2026-07', '2026-09', {
+        '2026-07': { cloud_project: 680 },
+        '2026-08': { cloud_project: 512, dedicated_server: 70, domain: 30 },
+        '2026-09': { cloud_project: 610.4, dedicated_server: 270, license: 10 },
+      }),
+      // Its Production project has all the GPU costs of every account
+      gpuSummary: { '2026-07/2026-09': account.gpuSummary['2026-07/2026-09'] },
     },
     [unnamedAccount.id]: {
       months: [september, august],
@@ -94,6 +103,11 @@ export const severalAccounts = {
           billsCount: 1, projectsCount: 1, topProjects: [{ name: 'Staging', value: 190 }],
         }),
       },
+      // Over the 3 months up to September: July, before its first bill, at 0 €. No GPU.
+      ...trendsOf('2026-07', '2026-09', {
+        '2026-08': { cloud_project: 190, backup: 40 },
+        '2026-09': { cloud_project: 220, backup: 90, domain: 35, license: 15 },
+      }),
     },
     [removedAccount.id]: {
       months: [august, july],
@@ -107,6 +121,11 @@ export const severalAccounts = {
           billsCount: 1, projectsCount: 0, topProjects: [],
         }),
       },
+      // Over the 3 months up to August, its latest month
+      ...trendsOf('2026-06', '2026-08', {
+        '2026-07': { dedicated_server: 180 },
+        '2026-08': { dedicated_server: 200 },
+      }),
     },
     [unknownAccount.id]: {
       months: [july],
@@ -116,6 +135,10 @@ export const severalAccounts = {
           billsCount: 1, projectsCount: 0, topProjects: [],
         }),
       },
+      // Over the 3 months up to July, its only month
+      ...trendsOf('2026-05', '2026-07', {
+        '2026-07': { dedicated_server: 90, domain: 30 },
+      }),
     },
   },
 };

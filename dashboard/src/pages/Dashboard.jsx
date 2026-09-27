@@ -197,7 +197,7 @@ export default function Dashboard() {
 
   const compareTab = useCompareTab({ months, selectedMonth, activeTab });
 
-  const trendsTab = useTrendsTab({ months, selectedMonth, activeTab });
+  const trendsTab = useTrendsTab({ months, selectedMonth, selectedAccount, activeTab });
 
   const publicCloudTab = usePublicCloudTab({ selectedMonth, activeTab, selectedProject });
 

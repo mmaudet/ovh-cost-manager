@@ -113,11 +113,13 @@ const answers = {
   fetchProjectsEnriched: entry('projectsEnriched', emptyAnswers.list),
   fetchByProject: entryForPeriod('byProject', emptyAnswers.list),
   fetchByService: entryForPeriod('byService', emptyAnswers.list),
-  // Trends: by the month they end on, then by their number of months
-  fetchMonthlyTrend: (data, months, end) =>
-    data.monthlyTrend?.[end]?.[months] ?? emptyAnswers.list(),
-  fetchMonthlyTrendByCategory: (data, months, end) =>
-    data.monthlyTrendByCategory?.[end]?.[months] ?? emptyAnswers.trendByCategory(),
+  // Trends: by the month they end on, then by their number of months, and those of the
+  // account the page selects (#120)
+  fetchMonthlyTrend: (data, months, end, account) =>
+    ofAccount(data, account).monthlyTrend?.[end]?.[months] ?? emptyAnswers.list(),
+  fetchMonthlyTrendByCategory: (data, months, end, account) =>
+    ofAccount(data, account).monthlyTrendByCategory?.[end]?.[months]
+      ?? emptyAnswers.trendByCategory(),
   fetchImportStatus: entry('importStatus', emptyAnswers.importStatus),
   triggerImport: () => ({ started: true }),
   fetchConfig: entry('config', emptyAnswers.config),
@@ -141,7 +143,9 @@ const answers = {
   fetchProjectQuotas: (data, projectId) => data.projectQuotas?.[projectId] ?? emptyAnswers.list(),
   fetchProjectBuckets: entryForProject('projectBuckets', emptyAnswers.list),
   fetchProjectInstanceTotal: entryForProject('projectInstanceTotal', emptyAnswers.instanceTotal),
-  fetchGpuSummary: entryForPeriod('gpuSummary', emptyAnswers.gpuSummary),
+  // The GPU costs of a period, of the account the page selects (#120)
+  fetchGpuSummary: (data, from, to, account) =>
+    entryForPeriod('gpuSummary', emptyAnswers.gpuSummary)(ofAccount(data, account), from, to),
   fetchPublicCloudStats: entryForPeriod('publicCloudStats', emptyAnswers.publicCloudStats),
   fetchBackupStats: entryForPeriod('backupStats', emptyAnswers.backupStats),
 };
