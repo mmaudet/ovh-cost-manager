@@ -1088,10 +1088,12 @@ function registerRoutes() {
     }
   });
 
-  app.get('/api/consumption/usage-history', (req, res) => {
+  // The consumption history of the account the request asks for, or, without one, that of
+  // every account, whose entries for a period add up (#116)
+  app.get('/api/consumption/usage-history', accountParameter, (req, res) => {
     try {
       const { from, to } = req.query;
-      const history = db.consumption.getHistory(from, to);
+      const history = db.consumption.getHistory(from, to, req.account);
       const result = history.map(h => ({
         period_start: h.period_start,
         period_end: h.period_end,

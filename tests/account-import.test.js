@@ -436,7 +436,8 @@ describe('the first import after the upgrade', () => {
   });
 
   // With a single account, the readers of the account-wide figures give what they gave, but
-  // for the account of the rows: the balance of all accounts is then that account's (#116)
+  // for the account of the rows: the balance and the history of all accounts are then that
+  // account's (#116)
   test('leaves what the readers of the account-wide figures give', async () => {
     await storeRowsOfBefore();
     routes.set('/cloud/project', ok([]));
@@ -446,7 +447,7 @@ describe('the first import after the upgrade', () => {
       balance: db.balance.getBalance(),
       credits: db.balance.getCreditMovements().map(withoutAccount),
       snapshot: withoutAccount(db.consumption.getLatestSnapshot()),
-      history: db.consumption.getHistory().map(withoutAccount),
+      history: db.consumption.getHistory(),
       consumptionMonth: db.cloudDetails.getCurrentConsumptionMonth(),
     });
     const before = read();

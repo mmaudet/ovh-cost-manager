@@ -1,10 +1,11 @@
 /**
  * The account parameter of the routes of the account-wide figures (#116), on the server
  * started in a child process over a database that the test seeds with several accounts: the
- * balance and the movements of the credits. A NIC handle that the accounts table records
- * selects that account's figures, the reserved value `unknown` those of the Unknown account,
- * and no parameter those of every account: the sum of each account's latest, as each account's
- * import records its own (#114), and the accounts bill in one currency.
+ * balance and the movements of the credits, and the consumption history. A NIC handle that
+ * the accounts table records selects that account's figures, the reserved value `unknown`
+ * those of the Unknown account, and no parameter those of every account: the sum of each
+ * account's, as each account's import records its own (#114), and the accounts bill in one
+ * currency.
  */
 
 const {
@@ -46,9 +47,32 @@ function storeMovement(db, account, { id, amount, date }) {
   `).run(movement);
 }
 
-// Two accounts, with their balances and credits, and the Unknown account's, which an import
-// before the accounts stored. The latest balance of each account is not the latest stored.
-// Every NIC handle, name and amount is made up.
+// An entry of the consumption history of an account, as its import stores each one that OVH
+// gives, the Unknown account's written as the database held it
+function storeHistory(db, account, [from, to], serviceType, total) {
+  const entry = {
+    period_start: from, period_end: to, service_type: serviceType, total, currency: 'EUR',
+    raw_data: '{}',
+  };
+  if (account !== null) {
+    db.consumption.insertHistory({ ...entry, account });
+    return;
+  }
+  db.getDb().prepare(`
+    INSERT INTO consumption_history (period_start, period_end, service_type, total, currency,
+      raw_data)
+    VALUES (@period_start, @period_end, @service_type, @total, @currency, @raw_data)
+  `).run(entry);
+}
+
+// The periods of the history: whole months
+const JUNE = ['2026-06-01', '2026-06-30'];
+const JULY = ['2026-07-01', '2026-07-31'];
+const AUGUST = ['2026-08-01', '2026-08-31'];
+
+// Two accounts, with their balances, credits and consumption history, and the Unknown
+// account's, which an import before the accounts stored. The latest balance of each account
+// is not the latest stored. Every NIC handle, name and amount is made up.
 function seed(db) {
   db.accounts.upsert({ nic: LYON, currency: 'EUR', name: 'Lyon subsidiary' });
   db.accounts.upsert({ nic: PARIS, currency: 'EUR' });
@@ -64,6 +88,15 @@ function seed(db) {
   // The same id as Lyon's: two accounts' movements can share their ids (#114)
   storeMovement(db, PARIS, { id: 'VOUCHER_1', amount: 30, date: '2026-08-15T10:00:00+02:00' });
   storeMovement(db, null, { id: 'PREPAID_1', amount: 10, date: '2026-06-01T10:00:00+02:00' });
+
+  storeHistory(db, null, JUNE, 'consumption', 80);
+  // Of another service type than Lyon's July
+  storeHistory(db, null, JULY, 'cloud', 20);
+  storeHistory(db, LYON, JULY, 'consumption', 175.5);
+  storeHistory(db, LYON, AUGUST, 'consumption', 190.25);
+  storeHistory(db, PARIS, AUGUST, 'consumption', 60);
+  // A second entry of Paris's for August, as OVH may give an account several for a period
+  storeHistory(db, PARIS, AUGUST, 'storage', 12);
 }
 
 let ocm;
@@ -168,6 +201,51 @@ describe('GET /api/account/credits', () => {
   });
 });
 
+describe('GET /api/consumption/usage-history', () => {
+  // An entry of the history as the route answers it
+  const entry = ([from, to], serviceType, total) => ({
+    period_start: from, period_end: to, total, currency: 'EUR', service_type: serviceType,
+  });
+  const history = (parameters = '') => ocm.get(`/api/consumption/usage-history${parameters}`);
+
+  // The first entry of each account for a period adds up with the first of the others, the
+  // second with the second: a period's entries of one account stay apart, as before
+  test('adds up the entries of every account for each period without the parameter',
+    async () => {
+      expect(await history()).toEqual({
+        status: 200,
+        body: [
+          entry(AUGUST, 'storage', 12),
+          entry(AUGUST, 'consumption', 250.25),
+          // Entries of two service types, which their sum does not name
+          entry(JULY, null, 195.5),
+          entry(JUNE, 'consumption', 80),
+        ],
+      });
+    });
+
+  test('adds up the entries of the period between two dates', async () => {
+    expect(await history('?from=2026-07-01&to=2026-08-31')).toEqual({
+      status: 200,
+      body: [
+        entry(AUGUST, 'storage', 12),
+        entry(AUGUST, 'consumption', 250.25),
+        entry(JULY, null, 195.5),
+      ],
+    });
+  });
+
+  test.each([
+    [LYON, [entry(AUGUST, 'consumption', 190.25), entry(JULY, 'consumption', 175.5)]],
+    // Its two entries for August, the latest stored first
+    [PARIS, [entry(AUGUST, 'storage', 12), entry(AUGUST, 'consumption', 60)]],
+    [UNKNOWN_ACCOUNT, [entry(JULY, 'cloud', 20), entry(JUNE, 'consumption', 80)]],
+    [NEW_ACCOUNT, []],
+  ])('gives the entries of the account %s only', async (account, entries) => {
+    expect(await history(of(account))).toEqual({ status: 200, body: entries });
+  });
+});
+
 // Rather than answer for all accounts, or for none, to a request that names an account
 describe('an account the server does not know', () => {
   test.each([
@@ -175,7 +253,10 @@ describe('an account the server does not know', () => {
     ['an empty value', 'account='],
     ['several values', `account=${LYON}&account=${PARIS}`],
   ])('is refused, naming the parameter: %s', async (_, parameter) => {
-    for (const route of ['/api/account/balance', '/api/account/debts', '/api/account/credits']) {
+    for (const route of [
+      '/api/account/balance', '/api/account/debts', '/api/account/credits',
+      '/api/consumption/usage-history',
+    ]) {
       expect(await ocm.get(`${route}?${parameter}`)).toEqual({ status: 400, body: REFUSED });
     }
   });
