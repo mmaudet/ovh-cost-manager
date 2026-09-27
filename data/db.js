@@ -30,9 +30,10 @@ const DATA_DIR = process.env.DATA_DIR || loadDataDirFromConfig() || __dirname;
 const DB_PATH = path.resolve(DATA_DIR, 'ovh-bills.db');
 const SCHEMA_PATH = path.resolve(__dirname, 'schema.sql');
 
-// The tables whose rows carry the NIC handle of their account (#112, ADR 0002), see
-// data/ownership.js, which tells which account each row belongs to
-const { ACCOUNT_TABLES } = ownership;
+// The tables whose rows carry the NIC handle of their account (#112, ADR 0002), and the value
+// that selects the Unknown account (#115): see data/ownership.js, which tells which account
+// each row belongs to
+const { ACCOUNT_TABLES, UNKNOWN_ACCOUNT } = ownership;
 
 /**
  * Checks that a row that a writer of ACCOUNT_TABLES stores carries the NIC handle of its
@@ -49,11 +50,6 @@ function requireAccount(table, row) {
   }
   return row;
 }
-
-// The value that selects the Unknown account (see CONTEXT.md), the rows without an account,
-// in the queries that can keep one account's rows and in the account parameter of the
-// server's routes (#115). No NIC handle reads so.
-const UNKNOWN_ACCOUNT = 'unknown';
 
 /**
  * The condition that keeps the rows of an account in a query that can keep one account's

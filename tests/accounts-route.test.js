@@ -5,12 +5,14 @@
  */
 
 const { startOcm } = require('./support/ocm-server');
-const { SQLITE_TIME, LYON, PARIS, NEW_ACCOUNT, bill } = require('./support/accounts');
+const {
+  SQLITE_TIME, LYON, PARIS, NEW_ACCOUNT, UNKNOWN_ACCOUNT, bill,
+} = require('./support/accounts');
 const { asBefore114 } = require('./support/database-before');
 
 // The entry of the Unknown account (see CONTEXT.md): the rows that no account claims (#114)
 const UNKNOWN = {
-  id: 'unknown', nic: null, name: null, currency: null, configured: false, unknown: true,
+  id: UNKNOWN_ACCOUNT, nic: null, name: null, currency: null, configured: false, unknown: true,
   lastImport: null,
 };
 
@@ -157,7 +159,7 @@ test('lists the configured accounts in their order, then the others, then the Un
         { id: LYON, configured: true, unknown: false },
         { id: 'ab4444-ovh', configured: false, unknown: false },
         { id: NEW_ACCOUNT, configured: false, unknown: false },
-        { id: 'unknown', configured: false, unknown: true },
+        { id: UNKNOWN_ACCOUNT, configured: false, unknown: true },
       ]);
     expect(accounts.at(-1)).toEqual(UNKNOWN);
   }, 30000);
@@ -173,7 +175,7 @@ test('lists the Unknown account while some table holds rows without an account',
     `).run();
   });
 
-  expect(accounts.map(account => account.id)).toEqual([LYON, 'unknown']);
+  expect(accounts.map(account => account.id)).toEqual([LYON, UNKNOWN_ACCOUNT]);
 }, 30000);
 
 // Every account recorded then was configured at its last import: until the next import

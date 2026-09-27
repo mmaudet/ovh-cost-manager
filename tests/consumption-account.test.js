@@ -7,6 +7,7 @@
 const Database = require('better-sqlite3');
 const path = require('path');
 const fs = require('fs');
+const { LYON } = require('./support/accounts');
 
 let db;
 let testDbPath;
@@ -107,8 +108,8 @@ describe('Credit Movements (Phase 2)', () => {
   test('inserts credit movements', () => {
     db.prepare(`
       INSERT INTO credit_movements (id, balance_name, amount, date, description, movement_type, account)
-      VALUES ('mov_1', 'main', 100.00, '2025-01-15', 'Voucher applied', 'credit', 'xx1111-ovh')
-    `).run();
+      VALUES ('mov_1', 'main', 100.00, '2025-01-15', 'Voucher applied', 'credit', ?)
+    `).run(LYON);
 
     const row = db.prepare('SELECT * FROM credit_movements WHERE id = ?').get('mov_1');
     expect(row).toBeTruthy();
@@ -119,8 +120,8 @@ describe('Credit Movements (Phase 2)', () => {
   test('upserts on conflict', () => {
     db.prepare(`
       INSERT OR REPLACE INTO credit_movements (id, balance_name, amount, date, description, movement_type, account)
-      VALUES ('mov_1', 'main', 150.00, '2025-01-15', 'Voucher updated', 'credit', 'xx1111-ovh')
-    `).run();
+      VALUES ('mov_1', 'main', 150.00, '2025-01-15', 'Voucher updated', 'credit', ?)
+    `).run(LYON);
 
     const row = db.prepare('SELECT * FROM credit_movements WHERE id = ?').get('mov_1');
     expect(row.amount).toBe(150.00);

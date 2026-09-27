@@ -12,7 +12,8 @@
 
 const { UNKNOWN_ACCOUNT } = require('../data/db');
 
-const REFUSAL = "Invalid 'account' parameter: expected the NIC handle of an account, or unknown";
+const REFUSAL = "Invalid 'account' parameter: expected the NIC handle of an account, or "
+  + UNKNOWN_ACCOUNT;
 
 // The account that the parameter's value names: { account }, null for every account when
 // there is no value, or { error } when it names none. A repeated parameter reads as an array.

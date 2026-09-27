@@ -9,6 +9,11 @@
  * it to them, and exposes them on its accounts operations.
  */
 
+// The value that selects the Unknown account, the rows without an account, in the queries
+// that can keep one account's rows and in the account parameter of the server's routes
+// (#115). No NIC handle reads so.
+const UNKNOWN_ACCOUNT = 'unknown';
+
 // The tables fed by the OVH API whose rows belong to no bill or project: each row holds the
 // NIC handle of its account in an `account` column, which tells the accounts of one database
 // apart (#112). The other rows find their account through their bill (the bill lines) or
@@ -28,7 +33,9 @@ const ACCOUNT_TABLES = [
 // configuration. A writer gives a service stored before the accounts, without one, to the
 // account that lists it. Then, once the account's bills are stored, takeOverBilledRows()
 // gives it the services that it lists and bills.
-const LISTED_SERVICE_TABLES = ['projects', 'dedicated_servers', 'vps_instances', 'storage_services'];
+const LISTED_SERVICE_TABLES = [
+  'projects', 'dedicated_servers', 'vps_instances', 'storage_services',
+];
 
 // The resources of a Public Cloud project, which reach their account through their project
 const PROJECT_RESOURCE_TABLES = [
@@ -98,7 +105,9 @@ function rekeyTable(database, schema, table) {
   database.exec(`CREATE TABLE ${rekeyed} (${definition[1]}\n)`);
   const inBoth = new Set(columnsOf(database, rekeyed));
   const columns = columnsOf(database, table).filter(column => inBoth.has(column)).join(', ');
-  database.exec(`INSERT INTO ${rekeyed} (rowid, ${columns}) SELECT rowid, ${columns} FROM ${table}`);
+  database.exec(`
+    INSERT INTO ${rekeyed} (rowid, ${columns}) SELECT rowid, ${columns} FROM ${table}
+  `);
   database.exec(`DROP TABLE ${table}`);
   database.exec(`ALTER TABLE ${rekeyed} RENAME TO ${table}`);
   database.exec(schema);
@@ -308,6 +317,7 @@ function clearAll(database) {
 }
 
 module.exports = {
+  UNKNOWN_ACCOUNT,
   ACCOUNT_TABLES,
   LISTED_SERVICE_TABLES,
   idInList,

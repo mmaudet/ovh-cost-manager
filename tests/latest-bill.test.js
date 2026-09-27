@@ -7,7 +7,7 @@
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const { LYON, PARIS, NEW_ACCOUNT, bill } = require('./support/accounts');
+const { LYON, PARIS, NEW_ACCOUNT, UNKNOWN_ACCOUNT, bill } = require('./support/accounts');
 
 let db;
 let dataDir;
@@ -39,7 +39,7 @@ describe('the date of the latest bill', () => {
   test.each([
     ['every account', null, '2026-09-10'],
     ['an account, by its NIC handle', LYON, '2026-08-05'],
-    ['the Unknown account: the bills without an account', 'unknown', '2026-06-20'],
+    ['the Unknown account: the bills without an account', UNKNOWN_ACCOUNT, '2026-06-20'],
   ])('is that of %s', (_, account, date) => {
     expect(db.bills.getLatestDate(account)).toBe(date);
   });

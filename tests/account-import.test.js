@@ -5,7 +5,7 @@
  */
 
 const { routes, ok, fail, me, useThrowawayImport } = require('./support/simulated-ovh');
-const { ACCOUNT, SQLITE_TIME } = require('./support/accounts');
+const { ACCOUNT, PARIS, SQLITE_TIME } = require('./support/accounts');
 const { ROOT_TABLES, asBeforeAccounts } = require('./support/database-before');
 
 jest.mock('ovh', () => require('./support/simulated-ovh').ovh);
@@ -247,7 +247,7 @@ describe('an import', () => {
     });
 
   test('records the account, its currency, and when and how its import ended', async () => {
-    routes.set('/me', me({ nic: 'yy2222-ovh', currency: 'CAD' }));
+    routes.set('/me', me({ nic: PARIS, currency: 'CAD' }));
     serveBills();
     const started = sqliteNow();
 
@@ -257,7 +257,7 @@ describe('an import', () => {
     // The legacy credentials give it no name and no budget (#113), and it is configured
     // (#114)
     expect(accounts).toEqual([{
-      nic: 'yy2222-ovh',
+      nic: PARIS,
       currency: 'CAD',
       last_import_at: expect.stringMatching(SQLITE_TIME),
       last_import_status: 'success',

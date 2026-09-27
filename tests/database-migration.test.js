@@ -9,6 +9,7 @@ const os = require('os');
 const path = require('path');
 const Database = require('better-sqlite3');
 const ownership = require('../data/ownership');
+const { LYON } = require('./support/accounts');
 
 const DATA_LAYER = path.resolve(__dirname, '..', 'data', 'db.js');
 
@@ -71,8 +72,10 @@ describe('the new key of a table (rekeyTable)', () => {
     const database = new Database(':memory:');
     database.exec('CREATE TABLE notes (id TEXT PRIMARY KEY, body TEXT, added TEXT, owner TEXT)');
     database.exec('CREATE INDEX idx_notes_added ON notes(added)');
-    const note = database.prepare('INSERT INTO notes (rowid, id, body, added, owner) VALUES (?, ?, ?, ?, ?)');
-    note.run(3, 'n1', 'First', '2026-09-01', 'xx1111-ovh');
+    const note = database.prepare(`
+      INSERT INTO notes (rowid, id, body, added, owner) VALUES (?, ?, ?, ?, ?)
+    `);
+    note.run(3, 'n1', 'First', '2026-09-01', LYON);
     note.run(7, 'n2', 'Second', '2026-09-02', null);
     return database;
   }
@@ -99,7 +102,7 @@ CREATE INDEX IF NOT EXISTS idx_notes_added ON notes(added);
         ['id', 2], ['body', 0], ['added', 0], ['owner', 1],
       ]);
       expect(database.prepare('SELECT rowid, * FROM notes ORDER BY rowid').all()).toEqual([
-        { rowid: 3, id: 'n1', body: 'First', added: '2026-09-01', owner: 'xx1111-ovh' },
+        { rowid: 3, id: 'n1', body: 'First', added: '2026-09-01', owner: LYON },
         { rowid: 7, id: 'n2', body: 'Second', added: '2026-09-02', owner: null },
       ]);
       expect(database.prepare("SELECT name, tbl_name FROM sqlite_master WHERE type <> 'table'")

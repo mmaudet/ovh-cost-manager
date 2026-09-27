@@ -9,7 +9,7 @@ const {
   routes, ok, calls, clientCredentials, CREDENTIALS, CONFIG_FILES, serveAccount, useConfig,
   useConfigFiles, useThrowawayImport,
 } = require('./support/simulated-ovh');
-const { ACCOUNT } = require('./support/accounts');
+const { ACCOUNT, LYON: LYON_NIC, PARIS: PARIS_NIC } = require('./support/accounts');
 
 jest.mock('ovh', () => require('./support/simulated-ovh').ovh);
 jest.mock('jsonfile', () => require('./support/simulated-ovh').jsonfile);
@@ -27,8 +27,8 @@ beforeEach(() => {
 });
 
 // Two accounts that OVH serves, invented
-const LYON = { nic: 'xx1111-ovh', currency: 'EUR' };
-const PARIS = { nic: 'yy2222-ovh', currency: 'EUR' };
+const LYON = { nic: LYON_NIC, currency: 'EUR' };
+const PARIS = { nic: PARIS_NIC, currency: 'EUR' };
 
 // Serves on these routes one bill of September, of one line, and no Public Cloud project
 function serveBill(accountRoutes, billId) {

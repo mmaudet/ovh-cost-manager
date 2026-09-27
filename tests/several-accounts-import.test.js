@@ -7,6 +7,7 @@
 const {
   ok, fail, calls, CONFIG_FILES, serveAccount, useConfig, useThrowawayImport,
 } = require('./support/simulated-ovh');
+const { LYON: LYON_NIC, PARIS: PARIS_NIC, NEW_ACCOUNT } = require('./support/accounts');
 
 jest.mock('ovh', () => require('./support/simulated-ovh').ovh);
 jest.mock('jsonfile', () => require('./support/simulated-ovh').jsonfile);
@@ -26,9 +27,9 @@ beforeEach(() => {
 });
 
 // The accounts that OVH serves, invented. Montréal bills in another currency.
-const LYON = { nic: 'xx1111-ovh', currency: 'EUR' };
-const PARIS = { nic: 'yy2222-ovh', currency: 'EUR' };
-const MONTREAL = { nic: 'zz3333-ovh', currency: 'CAD' };
+const LYON = { nic: LYON_NIC, currency: 'EUR' };
+const PARIS = { nic: PARIS_NIC, currency: 'EUR' };
+const MONTREAL = { nic: NEW_ACCOUNT, currency: 'CAD' };
 
 // Credentials that lead to no account, as a revoked key
 const REVOKED = {
@@ -345,7 +346,7 @@ describe('an account that fails', () => {
       [LYON.nic, 'failed', 'Internal server error'], [PARIS.nic, 'success', null],
     ]);
     expect(runs()).toEqual([
-      ['partial', '1 of 2 accounts failed: "Lyon" (xx1111-ovh): Internal server error'],
+      ['partial', `1 of 2 accounts failed: "Lyon" (${LYON.nic}): Internal server error`],
     ]);
     expect(process.exit).toHaveBeenCalledWith(1);
   });
@@ -413,7 +414,7 @@ describe('an account that fails', () => {
 
     await importSeptember();
 
-    const message = '2 of 2 accounts failed: "Lyon" (xx1111-ovh): Internal server error; '
+    const message = `2 of 2 accounts failed: "Lyon" (${LYON.nic}): Internal server error; `
       + 'accounts[1]: This credential is not valid';
     expect(runs()).toEqual([['failed', message]]);
     expect(console.error.mock.calls.slice(-2)).toEqual([['\n=== IMPORT FAILED ==='], [message]]);
@@ -432,7 +433,7 @@ describe('two entries that lead to the same account', () => {
     await importSeptember();
 
     const message = `"Lyon" and accounts[2] in ${CONFIG_FILES.project} are the same account, `
-      + 'xx1111-ovh: list each account once';
+      + `${LYON.nic}: list each account once`;
     expect(runs()).toEqual([['failed', message]]);
     expect(calls.map(call => call.route)).toEqual(['/me', '/me', '/me']);
     expect(db.accounts.getAll()).toEqual([]);
@@ -451,14 +452,14 @@ describe('the currency of the accounts', () => {
 
       await importSeptember();
 
-      const refusal = 'The account bills in CAD, not in EUR as "Lyon" (xx1111-ovh), the first '
+      const refusal = `The account bills in CAD, not in EUR as "Lyon" (${LYON.nic}), the first `
         + 'configured account: every account must bill in the same currency';
       expect(storedBills()).toEqual([['FR-L1', LYON.nic]]);
       expect(lastImports()).toEqual([
         [LYON.nic, 'success', null], [MONTREAL.nic, 'failed', refusal],
       ]);
       expect(runs()).toEqual([
-        ['partial', `1 of 2 accounts failed: accounts[1] (zz3333-ovh): ${refusal}`],
+        ['partial', `1 of 2 accounts failed: accounts[1] (${MONTREAL.nic}): ${refusal}`],
       ]);
       // Read, never imported
       expect(routesCalledWith(montreal)).toEqual(['/me']);
@@ -474,11 +475,12 @@ describe('the currency of the accounts', () => {
 
       await importSeptember();
 
-      const refusal = 'The account bills in EUR, not in CAD as "Montréal" (zz3333-ovh), the first '
-        + 'configured account that could be read: every account must bill in the same currency';
+      const refusal = 'The account bills in EUR, not in CAD as "Montréal" '
+        + `(${MONTREAL.nic}), the first configured account that could be read: every account `
+        + 'must bill in the same currency';
       expect(storedBills()).toEqual([['CA-M1', MONTREAL.nic]]);
       expect(runs()).toEqual([['partial', '2 of 3 accounts failed: accounts[0]: This credential '
-        + `is not valid; accounts[2] (xx1111-ovh): ${refusal}`]]);
+        + `is not valid; accounts[2] (${LYON.nic}): ${refusal}`]]);
     });
 
   test('is not checked with a single account', async () => {
@@ -536,8 +538,8 @@ describe('an import limited to one account (--account)', () => {
 
     expect(runs()).toEqual([[
       'failed',
-      '1 of 1 account failed: accounts[1] (zz3333-ovh): The account bills in CAD, not in EUR '
-        + 'as "Lyon" (xx1111-ovh), the first configured account: every account must bill in '
+      `1 of 1 account failed: accounts[1] (${MONTREAL.nic}): The account bills in CAD, not in EUR `
+        + `as "Lyon" (${LYON.nic}), the first configured account: every account must bill in `
         + 'the same currency',
     ]]);
     expect(storedBills()).toEqual([]);
@@ -573,7 +575,7 @@ describe('an import limited to one account (--account)', () => {
 
       expect(runs()).toEqual([[
         'failed',
-        `No account configured in ${CONFIG_FILES.project} has the NIC handle yy2222-ovh, unless `
+        `No account configured in ${CONFIG_FILES.project} has the NIC handle ${PARIS.nic}, unless `
           + 'it is one that could not be read: accounts[1]: This credential is not valid',
       ]]);
     });
@@ -583,10 +585,10 @@ describe('an import limited to one account (--account)', () => {
     serveBills(lyon.routes, [['FR-L1', '2026-09-01']]);
     useAccounts({ served: lyon });
 
-    await importSeptember({ account: 'zz3333-ovh' });
+    await importSeptember({ account: MONTREAL.nic });
 
     const message = `No account configured in ${CONFIG_FILES.project} has the NIC handle `
-      + 'zz3333-ovh';
+      + MONTREAL.nic;
     expect(runs()).toEqual([['failed', message]]);
     expect(storedBills()).toEqual([]);
     expect(process.exit).toHaveBeenCalledWith(1);

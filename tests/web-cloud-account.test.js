@@ -7,7 +7,7 @@
  * two accounts' bills is a service of each.
  */
 
-const { LYON, PARIS, NEW_ACCOUNT, REFUSED, bill } = require('./support/accounts');
+const { LYON, PARIS, NEW_ACCOUNT, UNKNOWN_ACCOUNT, REFUSED, bill } = require('./support/accounts');
 const { startOcm } = require('./support/ocm-server');
 
 // A Web Cloud bill line, of no Public Cloud project. The wording gives its family.
@@ -111,7 +111,7 @@ describe('GET /api/web-cloud/items', () => {
 
   test('lists the services of the Unknown account: those of the bills without an account',
     async () => {
-      expect(await ocm.get(`/api/web-cloud/items?${YEAR}&account=unknown`)).toEqual({
+      expect(await ocm.get(`/api/web-cloud/items?${YEAR}&account=${UNKNOWN_ACCOUNT}`)).toEqual({
         status: 200, body: [UNCLAIMED_ZONE],
       });
     });
@@ -153,7 +153,7 @@ describe('GET /api/web-cloud/summary', () => {
   });
 
   test('counts and adds up the services of the Unknown account', async () => {
-    expect(await ocm.get(`/api/web-cloud/summary?${YEAR}&account=unknown`)).toEqual({
+    expect(await ocm.get(`/api/web-cloud/summary?${YEAR}&account=${UNKNOWN_ACCOUNT}`)).toEqual({
       status: 200, body: summary({ dnsZone: [1, 1.2] }, 1.2),
     });
   });

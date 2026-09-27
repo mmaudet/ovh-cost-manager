@@ -8,7 +8,9 @@
  * routes of one project, by its id, take no parameter.
  */
 
-const { LYON, PARIS, NEW_ACCOUNT, REFUSED, bill, project } = require('./support/accounts');
+const {
+  LYON, PARIS, NEW_ACCOUNT, UNKNOWN_ACCOUNT, REFUSED, bill, project,
+} = require('./support/accounts');
 const { startOcm } = require('./support/ocm-server');
 
 const PRODUCTION = 'project-production';
@@ -144,7 +146,7 @@ describe('GET /api/projects', () => {
 
   test('lists the projects of the Unknown account, and none of an account without one',
     async () => {
-      expect(listed(await ocm.get('/api/projects?account=unknown')))
+      expect(listed(await ocm.get(`/api/projects?account=${UNKNOWN_ACCOUNT}`)))
         .toEqual({ status: 200, body: [[LEGACY, null]] });
       expect(await ocm.get(`/api/projects?account=${NEW_ACCOUNT}`))
         .toEqual({ status: 200, body: [] });
@@ -179,7 +181,7 @@ describe('GET /api/projects/enriched', () => {
   });
 
   test('lists the projects of the Unknown account: those without an account', async () => {
-    expect(await ocm.get('/api/projects/enriched?account=unknown'))
+    expect(await ocm.get(`/api/projects/enriched?account=${UNKNOWN_ACCOUNT}`))
       .toEqual({ status: 200, body: [legacy] });
   });
 
@@ -251,7 +253,7 @@ describe('GET /api/analysis/public-cloud-stats', () => {
 
   test('counts the resources of the Unknown account: of the bills and projects without one',
     async () => {
-      expect(await stats('&account=unknown')).toEqual({
+      expect(await stats(`&account=${UNKNOWN_ACCOUNT}`)).toEqual({
         status: 200,
         body: figures({
           instances: { total: 64 },
