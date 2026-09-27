@@ -2,8 +2,8 @@
 -- SQLite database for storing OVH billing data
 
 -- The OVH accounts that the imports read (see CONTEXT.md), by the NIC handle that GET /me
--- names. The tables that the OVH API feeds hold it in their `account` column, or reach it
--- through the bill or the project their rows belong to.
+-- names. Each row fed by the OVH API holds that NIC handle in an `account` column, or finds
+-- it through its bill or its project.
 CREATE TABLE IF NOT EXISTS accounts (
   nic TEXT PRIMARY KEY NOT NULL, -- NIC handle
   currency TEXT,                 -- The currency the account bills in

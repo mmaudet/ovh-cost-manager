@@ -29,10 +29,11 @@ const DATA_DIR = process.env.DATA_DIR || loadDataDirFromConfig() || __dirname;
 const DB_PATH = path.resolve(DATA_DIR, 'ovh-bills.db');
 const SCHEMA_PATH = path.resolve(__dirname, 'schema.sql');
 
-// The tables that the OVH API feeds whose rows carry the NIC handle of their account, in an
-// `account` column (#112). The other rows reach their account through the bill or the
-// project they belong to: the bill lines through their bill, and the instances, volumes,
-// snapshots, buckets, consumption and quotas of a Public Cloud project through the project.
+// The tables fed by the OVH API whose rows belong to no bill or project: each row holds the
+// NIC handle of its account in an `account` column, which tells the accounts of one
+// database apart (#112, ADR 0002). The other rows find their account through their bill
+// (the bill lines) or their project (the instances, volumes, snapshots, buckets,
+// consumption and quotas of a Public Cloud project).
 const ACCOUNT_TABLES = [
   'bills', 'projects', 'dedicated_servers', 'vps_instances', 'storage_services',
   'account_balance', 'consumption_snapshots', 'consumption_history', 'credit_movements',
@@ -90,6 +91,7 @@ function getDb() {
     addColumnIfNotExists(db, 'bills', 'payment_date', 'DATETIME');
     addColumnIfNotExists(db, 'bills', 'payment_status', 'TEXT');
     addColumnIfNotExists(db, 'cloud_instances', 'plan_code', 'TEXT');
+    // Empty in a database from before #112: the next import fills it
     for (const table of ACCOUNT_TABLES) {
       addColumnIfNotExists(db, table, 'account', 'TEXT');
     }
@@ -300,7 +302,12 @@ const importLogOps = {
 
 // The OVH accounts that the imports read, by the NIC handle that GET /me names (#112)
 const accountsOps = {
-  // An account that an import reads, with the currency it bills in
+  /**
+   * Records an account that an import reads, or updates the currency of one it knows.
+   * @param {object} account - As GET /me names it
+   * @param {string} account.nic - Its NIC handle
+   * @param {?string} account.currency - The code of the currency it bills in, such as EUR
+   */
   upsert: ({ nic, currency }) => {
     const db = getDb();
     return db.prepare(`
@@ -309,9 +316,13 @@ const accountsOps = {
     `).run({ nic, currency });
   },
 
-  // Attributes to the account every row of ACCOUNT_TABLES that has none: the rows imported
-  // before the imports recorded the account, all of them at the first import after the
-  // upgrade. Returns how many rows it attributed.
+  /**
+   * Gives the account every row of ACCOUNT_TABLES that has none. The writers refuse a row
+   * without an account, so these are the rows stored before the upgrade: with a single
+   * account configured, they can only be its own.
+   * @param {string} nic - The NIC handle of the account
+   * @returns {number} How many rows it gave the account
+   */
   attributeRowsWithoutAccount: (nic) => {
     const db = getDb();
     const attribute = db.transaction(() => {
@@ -325,7 +336,14 @@ const accountsOps = {
     return attribute();
   },
 
-  // Records that the account's last import ended now: 'success', or 'failed' and its error
+  /**
+   * Records how the last import of the account ended, and that it ended now, for the
+   * accounts route to tell whether its data is fresh.
+   * @param {string} nic - The NIC handle of the account
+   * @param {object} result
+   * @param {string} result.status - 'success' or 'failed'
+   * @param {?string} [result.error] - Why it failed
+   */
   recordImport: (nic, { status, error = null }) => {
     const db = getDb();
     return db.prepare(`
@@ -337,6 +355,9 @@ const accountsOps = {
     `).run(status, error, nic);
   },
 
+  /**
+   * @returns {object[]} Every account recorded, by NIC handle, as the accounts table holds it
+   */
   getAll: () => {
     const db = getDb();
     return db.prepare('SELECT * FROM accounts ORDER BY nic').all();
@@ -1784,12 +1805,15 @@ const cloudDetailOps = {
   }
 };
 
-// Clear the imported data, for a full import. What the import cannot fetch again is kept:
-// the consumption of each project, of which OVH gives the current month only (#54), with
-// the month of its last import (import_state) and the projects it belongs to. The account
-// and consumption snapshots are cleared: only their latest is read, which the import
-// fetches again. The import log is cleared too, but for the entry of the import that
-// clears the data, `importId`, which the other imports check.
+/**
+ * Clears the imported data, for a full import. What the import cannot fetch again is kept:
+ * the consumption of each project, of which OVH gives the current month only (#54), with
+ * the month of its last import (import_state) and the projects it belongs to. The account
+ * and consumption snapshots are cleared: only their latest is read, which the import
+ * fetches again.
+ * @param {?number} [importId] - The import log entry of the full import, which is kept, as
+ *   it tells the other imports that this one runs. The rest of the log is cleared.
+ */
 function clearAll(importId = null) {
   const db = getDb();
   // Supprimer d'abord toutes les tables qui référencent projects ou bills

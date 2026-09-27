@@ -735,9 +735,10 @@ function registerRoutes() {
   // Accounts Endpoint
   // ========================
 
-  // The OVH accounts that the imports read, as the imports record them: none before the
-  // first import since the upgrade (#112). An account's name is its NIC handle until names
-  // can be configured, and its last import is null until one has ended.
+  // The accounts that the imports recorded, for tools and the dashboard to present them and
+  // tell whether their data is fresh (#112). Empty until the first import after the upgrade.
+  // The name is the NIC handle until names can be configured (#113); lastImport is null
+  // until an import of the account has ended.
   app.get('/api/accounts', (req, res) => {
     try {
       const accounts = db.accounts.getAll().map(account => ({

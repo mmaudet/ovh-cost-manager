@@ -180,10 +180,15 @@ function parseArgs() {
   return params;
 }
 
-// The account that the API key reads, as GET /me names it: its NIC handle, which every row
-// that the import writes carries, and its currency. A key created for the versions before
-// may lack the right GET /me, to which OVH answers 403 "This call has not been granted":
-// the error names the right.
+/**
+ * Reads the account that the API key gives access to, from GET /me: the import needs its
+ * NIC handle before it writes anything, as every row it writes carries it.
+ * @returns {Promise<{nic: string, currency: ?string}>} Its NIC handle, and the code of the
+ *   currency it bills in
+ * @throws {Error} When GET /me fails. A key created before the import needed GET /me may
+ *   not be granted it: OVH then answers 403 "This call has not been granted", and the
+ *   error names the right that the key lacks.
+ */
 async function readAccount() {
   let me;
   try {
@@ -317,7 +322,11 @@ function sumConsumptionEntries(entries) {
   return entries.reduce((sum, e) => sum + (e?.price?.value || 0), 0);
 }
 
-// The consumption of the account whose NIC handle is `nic`
+/**
+ * Imports the consumption of the account: the month's usage so far and its forecast, as a
+ * snapshot, and the history of the past year.
+ * @param {string} nic - The NIC handle of the account, which every row it stores carries
+ */
 async function importConsumption(nic) {
   console.log('\n--- Importing consumption data ---');
 
@@ -381,7 +390,11 @@ async function importConsumption(nic) {
 
 // --- Phase 2: Account balance, debts, credits ---
 
-// The balance and the credit movements of the account whose NIC handle is `nic`
+/**
+ * Imports the balance of the account: its debt, credits and deposits, as a snapshot, and
+ * the movements of its credits.
+ * @param {string} nic - The NIC handle of the account, which every row it stores carries
+ */
 async function importAccountData(nic) {
   console.log('\n--- Importing account data ---');
 
@@ -493,7 +506,15 @@ function removeUnlistedServices(answer, deleteNotIn, kind) {
   return answer;
 }
 
-// The inventories of the account whose NIC handle is `nic`
+/**
+ * Imports the inventories of the dedicated servers, VPS and NetApp storage services, and
+ * removes the services that OVH no longer lists.
+ * @param {Object<string, string>} projectMap - The name of each Public Cloud project, by id
+ * @param {string} nic - The NIC handle of the account, which every service it stores
+ *   carries: without it, each service fails to be stored, as a failed item
+ * @returns {Promise<Object<string, string>>} The resource type of each project and service,
+ *   by the id that a bill line names it with, in its domain
+ */
 async function importInventory(projectMap, nic) {
     // Private Cloud Hosts
     if (ovh.requestPromised && db.inventory.upsertPrivateCloudHost) {
@@ -1187,17 +1208,19 @@ async function runImport(params) {
     process.exit(1);
   }
 
-  // Start import log: the other imports check it, so it comes before any call to the API
+  // The import log's entry is the lock that the other imports check, so it is written
+  // before any call to the API. It records the run even when GET /me fails.
   const importId = db.importLog.start(importType, fromDate, toDate);
-  // The account imported, once GET /me has named it
+  // Set once GET /me answers, so that a failure after it is recorded on the account too
   let account = null;
 
   try {
-    // Before any data is written or cleared: a key that cannot tell the account writes none
+    // Before any write or clear: a key that cannot name its account must leave the data as
+    // it is, since nothing could tell whose rows it would write
     account = await readAccount();
     console.log(`Account: ${account.nic}`);
-    // The rows stored before the account was recorded are its own: with one account, all
-    // those of an existing database, at the first import after the upgrade
+    // Rows stored before the upgrade carry no account. With a single account configured,
+    // they can only be its own: they get it at the first import, and none is left after
     const attributed = db.transaction(() => {
       db.accounts.upsert(account);
       return db.accounts.attributeRowsWithoutAccount(account.nic);
@@ -1207,8 +1230,8 @@ async function runImport(params) {
     }
 
     if (params.full) {
-      // Clear all data in a transaction for atomicity. The import log keeps this import's
-      // entry, which the other imports check.
+      // Cleared only now, so that a failed GET /me clears nothing, and in one transaction.
+      // The import log keeps the entry of this import, which the other imports check.
       db.transaction(() => {
         db.clearAll(importId);
       });
