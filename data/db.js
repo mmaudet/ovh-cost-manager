@@ -498,6 +498,12 @@ const analysisOps = {
   // the account (see accountCondition()), every account's by default. A project missing from
   // the projects table keeps the id of its bill lines, without a name: the dashboard tells
   // such projects apart by their id (#55).
+  //
+  // Each row carries the account of the bills it adds up, the NIC handle that `account` holds
+  // or null for the Unknown account, as a bill line belongs to the account of its bill (ADR
+  // 0002). A project billed to several accounts, such as one moved from an account to
+  // another, has a row for each (#118): every account's rows are then those that each
+  // account's alone would give.
   byProject: (fromDate, toDate, account = null) => {
     const db = getDb();
     const ofAccount = accountCondition(account, 'b.account');
@@ -506,20 +512,24 @@ const analysisOps = {
         d.project_id as project_id,
         p.name as project_name,
         SUM(d.total_price) as total,
-        COUNT(d.id) as details_count
+        COUNT(d.id) as details_count,
+        b.account as account
       FROM bill_details d
       JOIN bills b ON d.bill_id = b.id
       LEFT JOIN projects p ON d.project_id = p.id
       WHERE b.date >= ? AND b.date <= ?
         AND d.project_id IS NOT NULL
         AND ${ofAccount.sql}
-      GROUP BY d.project_id
+      GROUP BY d.project_id, b.account
       ORDER BY total DESC
     `).all(fromDate, toDate, ...ofAccount.params);
   },
 
-  byService: (fromDate, toDate) => {
+  // The costs of each service type billed between two dates, most expensive first, on the
+  // bills of the account (see accountCondition()), every account's by default (#118)
+  byService: (fromDate, toDate, account = null) => {
     const db = getDb();
+    const ofAccount = accountCondition(account, 'b.account');
     return db.prepare(`
       SELECT
         d.service_type,
@@ -528,9 +538,10 @@ const analysisOps = {
       FROM bill_details d
       JOIN bills b ON d.bill_id = b.id
       WHERE b.date >= ? AND b.date <= ?
+        AND ${ofAccount.sql}
       GROUP BY d.service_type
       ORDER BY total DESC
-    `).all(fromDate, toDate);
+    `).all(fromDate, toDate, ...ofAccount.params);
   },
 
   dailyTrend: (fromDate, toDate) => {
@@ -866,10 +877,12 @@ const inventoryOps = {
       .sort((a, b) => a.expiration_date.localeCompare(b.expiration_date));
   },
 
-  // Analysis by resource type. The bill lines without a resource type count as 'other', in
+  // Analysis by resource type, on the bills of the account (see accountCondition()), every
+  // account's by default (#118). The bill lines without a resource type count as 'other', in
   // the same row as those typed 'other', as the details of that type list them (#86).
-  byResourceType: (fromDate, toDate) => {
+  byResourceType: (fromDate, toDate, account = null) => {
     const db = getDb();
+    const ofAccount = accountCondition(account, 'b.account');
     return db.prepare(`
       SELECT
         COALESCE(d.resource_type, 'other') as resource_type,
@@ -879,9 +892,10 @@ const inventoryOps = {
       FROM bill_details d
       JOIN bills b ON d.bill_id = b.id
       WHERE b.date >= ? AND b.date <= ?
+        AND ${ofAccount.sql}
       GROUP BY COALESCE(d.resource_type, 'other')
       ORDER BY total DESC
-    `).all(fromDate, toDate);
+    `).all(fromDate, toDate, ...ofAccount.params);
   },
 
   // Details for a specific resource type (grouped by domain)
@@ -1843,7 +1857,8 @@ const cloudDetailOps = {
 
   // GPU cost summary from bill_details (covers full history) + project_consumption (current
   // month), on the bills of the account (see accountCondition()), every account's by default
-  // (#120)
+  // (#120). Each project carries the account of the bills it adds up, as those of
+  // analysis.byProject() do (#118).
   getGpuSummary: (from, to, account = null) => {
     const db = getDb();
 
@@ -1908,17 +1923,18 @@ const cloudDetailOps = {
       ORDER BY total DESC
     `).all(...args);
 
-    // By project from bills
+    // By project from bills, and by account for a project billed to several (#118)
     const byProject = db.prepare(`
       SELECT
         COALESCE(p.name, bd.domain) as project_name,
         bd.domain as project_id,
-        SUM(bd.total_price) as total
+        SUM(bd.total_price) as total,
+        b.account as account
       FROM bill_details bd
       JOIN bills b ON bd.bill_id = b.id
       LEFT JOIN projects p ON bd.domain = p.id
       WHERE ${where}
-      GROUP BY bd.domain
+      GROUP BY bd.domain, b.account
       ORDER BY total DESC
     `).all(...args);
 

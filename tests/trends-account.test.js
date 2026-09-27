@@ -239,9 +239,13 @@ describe('GET /api/gpu/summary', () => {
   // July to September 2026
   const threeMonths = 'from=2026-07-01&to=2026-09-30';
 
-  // The GPU costs of a project, of a model, and a GPU instance, as the route answers them
+  // The GPU costs of a project, of a model, and a GPU instance, as the route answers them:
+  // each project with the account of its bills (#118)
+  const ACCOUNT_OF_PROJECT = {
+    'project-production': LYON, 'project-staging': PARIS, 'project-legacy': null,
+  };
   const ofProject = (name, id, total) => ({
-    project_name: name, project_id: id, total, gpu_flavors: '',
+    project_name: name, project_id: id, total, gpu_flavors: '', account: ACCOUNT_OF_PROJECT[id],
   });
   const MODEL_COLORS = { 'NVIDIA L4': '#22c55e', 'NVIDIA T4': '#06b6d4' };
   const ofModel = (model, total, count) => ({

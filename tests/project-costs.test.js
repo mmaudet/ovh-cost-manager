@@ -29,9 +29,11 @@ describe('costs by project', () => {
     id, name, description: name, status: 'ok', created_at: null, account: ACCOUNT.nic,
   });
 
-  // A row of the costs by project
+  // A row of the costs by project, with the account of the bills it adds up (#118): that of
+  // a project missing from the projects table too
   const costs = (projectId, projectName, total, detailsCount) => ({
     project_id: projectId, project_name: projectName, total, details_count: detailsCount,
+    account: ACCOUNT.nic,
   });
 
   beforeAll(() => {

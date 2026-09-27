@@ -467,7 +467,10 @@ function registerRoutes() {
   // Analysis Endpoints
   // ========================
 
-  app.get('/api/analysis/by-project', (req, res) => {
+  // The costs of each project of a period, for the account the request asks for, or for
+  // every account without one (#118). Each project comes with the account of the bills it
+  // adds up: its NIC handle, or null for the Unknown account.
+  app.get('/api/analysis/by-project', accountParameter, (req, res) => {
     try {
       const { from, to } = req.query;
       const validation = validateDateRange(from, to);
@@ -475,14 +478,15 @@ function registerRoutes() {
         return res.status(400).json({ error: validation.error });
       }
 
-      const data = db.analysis.byProject(from, to);
+      const data = db.analysis.byProject(from, to, req.account);
 
       // Format response
       const result = data.map(row => ({
         projectId: row.project_id,
         projectName: row.project_name || 'Unknown',
         total: Math.round(row.total * 100) / 100,
-        detailsCount: row.details_count
+        detailsCount: row.details_count,
+        account: row.account
       }));
 
       res.json(result);
@@ -491,7 +495,9 @@ function registerRoutes() {
     }
   });
 
-  app.get('/api/analysis/by-service', (req, res) => {
+  // The costs of each service type of a period, for the account the request asks for, or for
+  // every account without one (#118)
+  app.get('/api/analysis/by-service', accountParameter, (req, res) => {
     try {
       const { from, to } = req.query;
       const validation = validateDateRange(from, to);
@@ -499,7 +505,7 @@ function registerRoutes() {
         return res.status(400).json({ error: validation.error });
       }
 
-      const data = db.analysis.byService(from, to);
+      const data = db.analysis.byService(from, to, req.account);
 
       // Define colors for each service type
       const colors = {
@@ -1183,7 +1189,9 @@ function registerRoutes() {
     }
   });
 
-  app.get('/api/analysis/by-resource-type', (req, res) => {
+  // The costs of each resource type of a period, for the account the request asks for, or for
+  // every account without one (#118)
+  app.get('/api/analysis/by-resource-type', accountParameter, (req, res) => {
     try {
       const { from, to } = req.query;
       const validation = validateDateRange(from, to);
@@ -1191,7 +1199,7 @@ function registerRoutes() {
         return res.status(400).json({ error: validation.error });
       }
 
-      const data = db.inventory.byResourceType(from, to);
+      const data = db.inventory.byResourceType(from, to, req.account);
 
       const result = data.map(row => ({
         name: RESOURCE_TYPE_LABELS[row.resource_type] || row.resource_type || 'Other',
@@ -1453,7 +1461,8 @@ function registerRoutes() {
   // ========================
 
   // The GPU costs of the account the request asks for, and the GPU instances of its projects,
-  // or those of every account without one (#120)
+  // or those of every account without one (#120). Each project comes with the account of the
+  // bills it adds up: its NIC handle, or null for the Unknown account (#118).
   app.get('/api/gpu/summary', accountParameter, (req, res) => {
     try {
       const { from, to } = req.query;
@@ -1482,7 +1491,8 @@ function registerRoutes() {
           project_name: p.project_name,
           project_id: p.project_id,
           total: Math.round(p.total * 100) / 100,
-          gpu_flavors: p.gpu_flavors
+          gpu_flavors: p.gpu_flavors,
+          account: p.account
         })),
         monthlyTrend: gpuData.monthlyTrend.map(m => ({
           month: m.month,
