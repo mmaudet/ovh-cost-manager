@@ -678,8 +678,18 @@ const analysisOps = {
     `).all(fromDate, toDate, ...ofAccount.params);
   },
 
-  dailyTrend: (fromDate, toDate) => {
+  /**
+   * The cost of each day between two dates, both included, that has a bill: the total of the
+   * lines of its bills, the earliest day first
+   * @param {string} fromDate - The first day
+   * @param {string} toDate - The last day
+   * @param {?string} [account] - The account whose bills count (see accountCondition()):
+   *   every account's by default (#140)
+   * @returns {Array<{ date: string, total: number }>}
+   */
+  dailyTrend: (fromDate, toDate, account = null) => {
     const db = getDb();
+    const ofAccount = accountCondition(account, 'b.account');
     return db.prepare(`
       SELECT
         b.date,
@@ -687,9 +697,10 @@ const analysisOps = {
       FROM bill_details d
       JOIN bills b ON d.bill_id = b.id
       WHERE b.date >= ? AND b.date <= ?
+        AND ${ofAccount.sql}
       GROUP BY b.date
       ORDER BY b.date
-    `).all(fromDate, toDate);
+    `).all(fromDate, toDate, ...ofAccount.params);
   },
 
   // The cost of every month between two dates, both included, 0 for a month without any

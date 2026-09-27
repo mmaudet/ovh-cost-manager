@@ -554,7 +554,9 @@ function registerRoutes() {
     }
   });
 
-  app.get('/api/analysis/daily-trend', (req, res) => {
+  // The cost of each day of a period that has a bill, for the account the request asks for, or
+  // for every account without one (#140)
+  app.get('/api/analysis/daily-trend', accountParameter, (req, res) => {
     try {
       const { from, to } = req.query;
       const validation = validateDateRange(from, to);
@@ -562,7 +564,7 @@ function registerRoutes() {
         return res.status(400).json({ error: validation.error });
       }
 
-      const data = db.analysis.dailyTrend(from, to);
+      const data = db.analysis.dailyTrend(from, to, req.account);
 
       const result = data.map(row => ({
         date: row.date,

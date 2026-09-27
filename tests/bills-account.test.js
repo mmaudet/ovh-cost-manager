@@ -5,12 +5,12 @@
  * did, whether its rows carry the account or, stored before the accounts (#112), none, as the
  * Unknown account's (see CONTEXT.md).
  *
- * The bills take the account parameter, as the other data routes do (#115, see
+ * Both take the account parameter, as the other data routes do (#115, see
  * account-parameter.test.js): a NIC handle that the accounts table records keeps that
  * account's bills, the reserved value `unknown` the bills without an account (the Unknown
  * account), and no parameter every account's, as before. Any other value is refused. The
- * parameter leaves out the other accounts' bills, and nothing else: those it keeps come whole,
- * in the order that every account's come in.
+ * parameter leaves out the other accounts' bills, and nothing else: the bills it keeps come
+ * whole, in the order that every account's come in, and the daily trend adds up their lines.
  */
 
 const {
@@ -76,6 +76,16 @@ function seedAccounts(db) {
   bill(db, 'FR1001', '2026-09-05', LYON);
   bill(db, 'FR1002', '2026-08-05', LYON);
   bill(db, 'FR2002', '2026-07-10', PARIS);
+  db.details.insertMany([
+    line('FR0001-1', 'FR0001', 80),
+    line('FR0002-1', 'FR0002', 30),
+    line('FR1001-1', 'FR1001', 600),
+    line('FR1001-2', 'FR1001', 100),
+    line('FR1002-1', 'FR1002', 500),
+    line('FR1003-1', 'FR1003', 50),
+    line('FR2001-1', 'FR2001', 240),
+    line('FR2002-1', 'FR2002', 150),
+  ]);
 }
 
 // The ids of the bills that the bills route lists, in its order
@@ -223,14 +233,72 @@ describe('a database of several accounts', () => {
       });
   });
 
+  describe('GET /api/analysis/daily-trend', () => {
+    const trend = (parameters) => ocm.get(`/api/analysis/daily-trend?${parameters}`);
+    // June to September 2026
+    const FOUR_MONTHS = 'from=2026-06-01&to=2026-09-30';
+
+    test('adds up every account without the parameter, as before', async () => {
+      expect(await trend(FOUR_MONTHS)).toEqual({
+        status: 200,
+        body: [
+          { date: '2026-06-20', day: 20, cost: 30 },
+          { date: '2026-07-10', day: 10, cost: 150 },
+          { date: '2026-08-05', day: 5, cost: 500 },
+          { date: '2026-09-05', day: 5, cost: 1070 },
+        ],
+      });
+    });
+
+    test('adds up the bills of the account whose NIC handle it gives', async () => {
+      expect(await trend(`${FOUR_MONTHS}&account=${LYON}`)).toEqual({
+        status: 200,
+        body: [
+          { date: '2026-08-05', day: 5, cost: 500 },
+          { date: '2026-09-05', day: 5, cost: 750 },
+        ],
+      });
+      expect(await trend(`${FOUR_MONTHS}&account=${PARIS}`)).toEqual({
+        status: 200,
+        body: [
+          { date: '2026-07-10', day: 10, cost: 150 },
+          { date: '2026-09-05', day: 5, cost: 240 },
+        ],
+      });
+    });
+
+    test('adds up the bills of the Unknown account: those without an account', async () => {
+      expect(await trend(`${FOUR_MONTHS}&account=${UNKNOWN_ACCOUNT}`)).toEqual({
+        status: 200,
+        body: [
+          { date: '2026-06-20', day: 20, cost: 30 },
+          { date: '2026-09-05', day: 5, cost: 80 },
+        ],
+      });
+    });
+
+    test('gives no day for an account recorded without a bill', async () => {
+      expect(await trend(`${FOUR_MONTHS}&account=${NEW_ACCOUNT}`))
+        .toEqual({ status: 200, body: [] });
+    });
+
+    test('adds up the bills of the account within the period alone', async () => {
+      expect(await trend(`from=2026-09-01&to=2026-09-30&account=${LYON}`)).toEqual({
+        status: 200, body: [{ date: '2026-09-05', day: 5, cost: 750 }],
+      });
+    });
+  });
+
   // Rather than answer for all accounts, or for none, to a request that names an account
   describe('an account the server does not know', () => {
     test.each([
       ['a NIC handle that no import recorded', 'account=ww4444-ovh'],
       ['an empty value', 'account='],
       ['several values', `account=${LYON}&account=${PARIS}`],
-    ])('is refused, naming the parameter: %s', async (_, parameter) => {
+    ])('is refused by both routes, naming the parameter: %s', async (_, parameter) => {
       expect(await ocm.get(`/api/bills?${parameter}`)).toEqual({ status: 400, body: REFUSED });
+      expect(await ocm.get(`/api/analysis/daily-trend?from=2026-06-01&to=2026-09-30&${parameter}`))
+        .toEqual({ status: 400, body: REFUSED });
     });
   });
 });
