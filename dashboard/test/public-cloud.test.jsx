@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { screen, within } from '@testing-library/react';
 import { account } from './fixtures/account.js';
+import { severalAccounts } from './fixtures/accounts.js';
 import { api } from './support/api.js';
 import {
   BOM,
@@ -18,6 +19,7 @@ import {
   renderDashboard,
   rowTextsOf,
   rowsOf,
+  selectAccount,
   selectLanguage,
   selectMonth,
   settle,
@@ -111,8 +113,9 @@ describe('Public Cloud tab', () => {
 
     await openTab(user, 'Public Cloud');
 
-    expect(api.fetchProjectsEnriched).toHaveBeenCalled();
-    expect(api.fetchPublicCloudStats).toHaveBeenCalledWith('2026-09-01', '2026-09-30');
+    // For all accounts
+    expect(api.fetchProjectsEnriched).toHaveBeenCalledWith(null);
+    expect(api.fetchPublicCloudStats).toHaveBeenCalledWith('2026-09-01', '2026-09-30', null);
     // The resources of a project wait until the user opens it
     expect(api.fetchProjectConsumption).not.toHaveBeenCalled();
     expect(api.fetchProjectInstances).not.toHaveBeenCalled();
@@ -602,5 +605,104 @@ describe('Public Cloud tab', () => {
 
     // The month in the language of the page, not in the French of the API (#33)
     expect(within(screen.getByRole('dialog')).getByText('September 2026')).toBeInTheDocument();
+  });
+
+  // Several accounts in the instance, all of them shown by default, or the one the header
+  // selects (#121): see fixtures/accounts.js
+  describe('with several accounts', () => {
+    // The figures of the tab's own queries, one card each, as the user reads them. The Cloud
+    // projects and GPU instances cards read the costs by resource type and the GPU costs that
+    // the shell loads for the Overview too, which follow the account with it (#118).
+    const figuresOfTheTab = () => [...figures().children]
+      .map((card) => texts(card))
+      .filter(([label]) => !['Projets Cloud', 'Instances GPU'].includes(label))
+      .flat();
+    const projectRows = () => rowTextsOf(within(cloudProjects()).getByRole('table')).slice(1);
+    const openOnAccount = async (label) => {
+      const { user } = await renderDashboard(severalAccounts);
+      await openTab(user, 'Public Cloud');
+      await selectAccount(user, label);
+      return { user };
+    };
+
+    it('shows the projects and figures of all accounts by default', async () => {
+      const { user } = await renderDashboard(severalAccounts);
+
+      await openTab(user, 'Public Cloud');
+
+      expect(figuresOfTheTab()).toEqual([
+        'Instances', '5', '718,90€',
+        'Kubernetes', '0',
+        'Stockage Objet', '3', '25,00€',
+        'Volumes', '3', '12,50€',
+        'Snapshots', '2', '6,00€',
+        'Savings plans', '2', '28,00€',
+        'Registre', '1', '40,00€',
+      ]);
+      expect(projectRows().map(([name]) => name)).toEqual(['Production', 'Staging', 'Sandbox']);
+    });
+
+    it('shows the projects and figures of the account selected', async () => {
+      const { user } = await openOnAccount('Lyon subsidiary');
+
+      expect(figuresOfTheTab()).toEqual([
+        'Instances', '5', '538,90€',
+        'Kubernetes', '0',
+        'Stockage Objet', '3', '25,00€',
+        'Volumes', '3', '12,50€',
+        'Snapshots', '2', '6,00€',
+        'Savings plans', '2', '28,00€',
+        'Registre', '0',
+      ]);
+      expect(projectRows()).toEqual([
+        ['Production', 'Customer-facing services', 'ok', '5', '350,00€', '▼'],
+      ]);
+
+      await selectAccount(user, 'yy2222-ovh');
+
+      expect(figuresOfTheTab()).toEqual([
+        'Instances', '0', '180,00€',
+        'Kubernetes', '0',
+        'Stockage Objet', '0',
+        'Volumes', '0',
+        'Snapshots', '0',
+        'Savings plans', '0',
+        'Registre', '1', '40,00€',
+      ]);
+      expect(projectRows()).toEqual([['Staging', 'ok', '0', '52,35€', '▼']]);
+    });
+
+    it('shows the projects of the Unknown account', async () => {
+      await openOnAccount('Compte inconnu');
+
+      expect(projectRows()).toEqual([['Sandbox', 'ok', '0', '-', '▼']]);
+      // Nothing billed in July, its only month
+      expect(figuresOfTheTab()).toEqual([
+        'Instances', '0', 'Kubernetes', '0', 'Stockage Objet', '0', 'Volumes', '0',
+        'Snapshots', '0', 'Savings plans', '0', 'Registre', '0',
+      ]);
+    });
+
+    // A project belongs to one account: its detail shows under its row, which the list of
+    // another account leaves out
+    it('shows the detail of a project of the account selected only', async () => {
+      const { user } = await openOnAccount('Lyon subsidiary');
+
+      await openProject(user, 'Production');
+
+      expect(detailHeadings()).toEqual([
+        ['Consommation par ressource'],
+        ['Instances (5)', '538,90€', 'Tout afficher', 'CSV'],
+        ['Buckets (4)', '25,00€', 'Tout afficher', 'CSV'],
+        ['Volumes (4)', '12,50€', 'Tout afficher', 'CSV'],
+        ['Snapshots (2)', '6,00€', 'Tout afficher', 'CSV'],
+        ['Savings plans (2)', '28,00€', 'Tout afficher', 'CSV'],
+        ['Quotas par région'],
+      ]);
+
+      await selectAccount(user, 'yy2222-ovh');
+
+      expect(detailHeadings()).toEqual([]);
+    });
   });
 });

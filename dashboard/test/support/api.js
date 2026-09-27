@@ -110,7 +110,9 @@ const answers = {
   fetchMonths: (data, account) => entry('months', emptyAnswers.list)(ofAccount(data, account)),
   fetchSummary: (data, from, to, account) =>
     entryForPeriod('summary', emptyAnswers.summary)(ofAccount(data, account), from, to),
-  fetchProjectsEnriched: entry('projectsEnriched', emptyAnswers.list),
+  // So do the Public Cloud projects and figures (#121), not the resources of a project
+  fetchProjectsEnriched: (data, account) =>
+    entry('projectsEnriched', emptyAnswers.list)(ofAccount(data, account)),
   fetchByProject: entryForPeriod('byProject', emptyAnswers.list),
   fetchByService: entryForPeriod('byService', emptyAnswers.list),
   // Trends: by the month they end on, then by their number of months, and those of the
@@ -146,7 +148,9 @@ const answers = {
   // The GPU costs of a period, of the account the page selects (#120)
   fetchGpuSummary: (data, from, to, account) =>
     entryForPeriod('gpuSummary', emptyAnswers.gpuSummary)(ofAccount(data, account), from, to),
-  fetchPublicCloudStats: entryForPeriod('publicCloudStats', emptyAnswers.publicCloudStats),
+  fetchPublicCloudStats: (data, from, to, account) => entryForPeriod(
+    'publicCloudStats', emptyAnswers.publicCloudStats,
+  )(ofAccount(data, account), from, to),
   fetchBackupStats: entryForPeriod('backupStats', emptyAnswers.backupStats),
 };
 

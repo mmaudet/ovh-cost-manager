@@ -1,5 +1,6 @@
 import { account } from './account.js';
 import { months } from './calendar.js';
+import { publicCloudFigures } from './public-cloud.js';
 import { trendsOf } from './trends.js';
 
 // Several OVHcloud accounts in one instance (#110): the synthetic account of account.js, as
@@ -8,10 +9,13 @@ import { trendsOf } from './trends.js';
 //
 // The accounts route lists them as it does since #114: with their id, the value of the
 // account parameter, whether config.json still lists them, and which one is the Unknown
-// account. What the page asks for with an account, such as its months list and its
-// summaries, is under `ofAccount`, by the id of the account (see support/api.js).
+// account. What the page asks for with an account, such as its months list, its summaries
+// and its Public Cloud (#121), is under `ofAccount`, by the id of the account (see
+// support/api.js).
 
 const [september, august, july] = months;
+// The Public Cloud projects of account.js
+const [production, staging, sandbox] = account.projectsEnriched;
 
 // A configured account, named in config.json
 export const lyonAccount = {
@@ -62,9 +66,17 @@ export const unknownAccount = {
 // A month's summary, as /api/summary answers it
 const summaryOf = ({ from, to }, figures) => ({ period: { from, to }, ...figures });
 
+// The Public Cloud projects, each with the NIC handle of its account: Production is the Lyon
+// subsidiary's, Staging the unnamed account's, and Sandbox, which no configured account
+// claimed, the Unknown account's
+const lyonProduction = { ...production, account: lyonAccount.nic };
+const unnamedStaging = { ...staging, account: unnamedAccount.nic };
+const unknownSandbox = { ...sandbox, account: null };
+
 export const severalAccounts = {
   ...account,
   accounts: [lyonAccount, unnamedAccount, removedAccount, unknownAccount],
+  projectsEnriched: [lyonProduction, unnamedStaging, unknownSandbox],
   ofAccount: {
     [lyonAccount.id]: {
       months: [september, august, july],
@@ -90,6 +102,17 @@ export const severalAccounts = {
       }),
       // Its Production project has all the GPU costs of every account
       gpuSummary: { '2026-07/2026-09': account.gpuSummary['2026-07/2026-09'] },
+      projectsEnriched: [lyonProduction],
+      // Its Cloud total of September: every figure of all accounts but those of Staging
+      publicCloudStats: {
+        '2026-09': publicCloudFigures({
+          instances: { total: 538.9 },
+          volumes: { count: 3, total: 12.5 },
+          snapshots: { count: 2, total: 6 },
+          savingsPlans: { count: 2, total: 28 },
+          objectStorage: { count: 3, total: 25 },
+        }),
+      },
     },
     [unnamedAccount.id]: {
       months: [september, august],
@@ -108,6 +131,14 @@ export const severalAccounts = {
         '2026-08': { cloud_project: 190, backup: 40 },
         '2026-09': { cloud_project: 220, backup: 90, domain: 35, license: 15 },
       }),
+      projectsEnriched: [unnamedStaging],
+      // Its Cloud total of September: the instances of Staging, and the registry
+      publicCloudStats: {
+        '2026-09': publicCloudFigures({
+          instances: { total: 180 },
+          registry: { count: 1, total: 40 },
+        }),
+      },
     },
     [removedAccount.id]: {
       months: [august, july],
@@ -139,6 +170,8 @@ export const severalAccounts = {
       ...trendsOf('2026-05', '2026-07', {
         '2026-07': { dedicated_server: 90, domain: 30 },
       }),
+      // Never billed
+      projectsEnriched: [unknownSandbox],
     },
   },
 };

@@ -1,20 +1,26 @@
 import { describe, it, expect } from 'vitest';
 import { act } from '@testing-library/react';
 import { usePublicCloudTab } from '../../src/tabs/usePublicCloudTab.js';
+import {
+  lyonAccount, severalAccounts, unknownAccount, unnamedAccount,
+} from '../fixtures/accounts.js';
 import { months } from '../fixtures/calendar.js';
 import { api } from '../support/api.js';
 import { renderTabHook, TAB_IDS, WAITING } from '../support/hooks.jsx';
 
 // The state and data queries of the Public Cloud tab, as the dashboard shell sees them: what
-// the hook requests and returns for the selected month, the active tab and the selected
-// project. The shell holds the project: the tab, the Overview and the logo set it.
+// the hook requests and returns for the selected month, the active tab, the selected project
+// and the account shown. The shell holds the project: the tab, the Overview and the logo set
+// it. It holds the account too, which the header selects (#115): null for all accounts.
 
 const [september, august] = months;
 // Projects as the Overview selects them: an id and a name
 const production = { id: 'project-production', name: 'Production' };
 const staging = { id: 'project-staging', name: 'Staging' };
-// The tab open on September, no project open
-const onTheTab = { selectedMonth: september, activeTab: 'inventory', selectedProject: null };
+// The tab open on September, no project open, all accounts shown
+const onTheTab = {
+  selectedMonth: september, activeTab: 'inventory', selectedProject: null, selectedAccount: null,
+};
 
 // The requests of the resources of a project, and those the hook made
 const PROJECT_REQUESTS = [
@@ -93,8 +99,9 @@ describe('usePublicCloudTab', () => {
 
       await rerender(onTheTab);
 
-      expect(api.fetchProjectsEnriched).toHaveBeenCalled();
-      expect(api.fetchPublicCloudStats).toHaveBeenCalledWith('2026-09-01', '2026-09-30');
+      // For all accounts
+      expect(api.fetchProjectsEnriched).toHaveBeenCalledWith(null);
+      expect(api.fetchPublicCloudStats).toHaveBeenCalledWith('2026-09-01', '2026-09-30', null);
       // Most consuming first, as the server sorts them
       expect(names(result.current.projectsEnriched))
         .toEqual(['Production', 'Staging', 'Sandbox']);
@@ -127,10 +134,82 @@ describe('usePublicCloudTab', () => {
 
       await rerender({ ...onTheTab, selectedMonth: august });
 
-      expect(api.fetchPublicCloudStats).toHaveBeenCalledWith('2026-08-01', '2026-08-31');
+      expect(api.fetchPublicCloudStats).toHaveBeenCalledWith('2026-08-01', '2026-08-31', null);
       expect(result.current.publicCloudStats.instances).toEqual({ total: 590.6 });
       // The empty bucket was created in September
       expect(result.current.publicCloudStats.objectStorage).toEqual({ count: 2, total: 24.9 });
+    });
+  });
+
+  // Several accounts in the instance (#121): see fixtures/accounts.js
+  describe('projects and figures of the account shown', () => {
+    const lyon = lyonAccount.id;
+
+    it('are requested for the account shown, and cached under keys that name it', async () => {
+      const { result, keysOf } = await renderTabHook(usePublicCloudTab,
+        { ...onTheTab, selectedAccount: lyon }, severalAccounts);
+
+      expect(api.fetchProjectsEnriched).toHaveBeenCalledWith(lyon);
+      expect(api.fetchPublicCloudStats).toHaveBeenCalledWith('2026-09-01', '2026-09-30', lyon);
+      expect(names(result.current.projectsEnriched)).toEqual(['Production']);
+      expect(result.current.publicCloudStats.instances).toEqual({ total: 538.9 });
+      expect(result.current.publicCloudStats.registry).toEqual({ count: 0, total: 0 });
+      // The account after the other parts of the keys, which stay those of all accounts
+      expect(keysOf('projectsEnriched')).toEqual([['projectsEnriched', lyon]]);
+      expect(keysOf('publicCloudStats'))
+        .toEqual([['publicCloudStats', '2026-09-01', '2026-09-30', lyon]]);
+    });
+
+    it('follow the account shown, the Unknown account too, and all accounts again', async () => {
+      const { result, rerender } =
+        await renderTabHook(usePublicCloudTab, onTheTab, severalAccounts);
+
+      await rerender({ ...onTheTab, selectedAccount: unnamedAccount.id });
+
+      expect(names(result.current.projectsEnriched)).toEqual(['Staging']);
+      expect(result.current.publicCloudStats.instances).toEqual({ total: 180 });
+      expect(result.current.publicCloudStats.registry).toEqual({ count: 1, total: 40 });
+
+      await rerender({ ...onTheTab, selectedAccount: unknownAccount.id });
+
+      expect(api.fetchProjectsEnriched).toHaveBeenCalledWith('unknown');
+      expect(names(result.current.projectsEnriched)).toEqual(['Sandbox']);
+      expect(result.current.publicCloudStats.instances).toEqual({ total: 0 });
+
+      await rerender(onTheTab);
+
+      expect(names(result.current.projectsEnriched))
+        .toEqual(['Production', 'Staging', 'Sandbox']);
+      expect(result.current.publicCloudStats.instances).toEqual({ total: 718.9 });
+    });
+
+    // An account selected on an earlier visit, until the accounts list tells whether the page
+    // still offers it (useSelectedAccount())
+    it('wait while the page does not know the account shown', async () => {
+      const { result, queryClient } = await renderTabHook(usePublicCloudTab,
+        { ...onTheTab, selectedAccount: undefined }, severalAccounts);
+
+      expect(api.fetchProjectsEnriched).not.toHaveBeenCalled();
+      expect(api.fetchPublicCloudStats).not.toHaveBeenCalled();
+      expect(queryClient.getQueryState(['projectsEnriched', undefined])).toMatchObject(WAITING);
+      expect(queryClient.getQueryState(
+        ['publicCloudStats', '2026-09-01', '2026-09-30', undefined],
+      )).toMatchObject(WAITING);
+      expect(result.current.projectsEnriched).toEqual([]);
+      expect(result.current.publicCloudStats).toBeUndefined();
+    });
+
+    // A project belongs to one account: its resources are asked for by its id alone
+    it('leave the account out of the resources of the open project', async () => {
+      const { result, keysOf } = await renderTabHook(usePublicCloudTab,
+        { ...onTheTab, selectedAccount: lyon, selectedProject: production }, severalAccounts);
+
+      expect(api.fetchProjectConsumption).toHaveBeenCalledWith('project-production');
+      expect(api.fetchProjectInstances)
+        .toHaveBeenCalledWith('project-production', '2026-09-01', '2026-09-30');
+      expect(keysOf('projectInstances'))
+        .toEqual([['projectInstances', 'project-production', '2026-09-01', '2026-09-30']]);
+      expect(result.current.instanceCount).toBe(5);
     });
   });
 

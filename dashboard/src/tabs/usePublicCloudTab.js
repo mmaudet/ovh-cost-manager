@@ -8,10 +8,13 @@ import {
   fetchProjectVolumes, fetchProjectSnapshots, fetchProjectSavingsPlans, fetchProjectBuckets,
   fetchProjectInstanceTotal, fetchPublicCloudStats,
 } from '../services/api.js';
+import { accountQuery } from '../utils/accounts.js';
 
 // The selected project is the shell's, not the tab's (#36): the Overview opens a project
-// on this tab, and the logo closes it. The hook reads it, as it reads the selected month.
-const usePublicCloudTab = ({ selectedMonth, activeTab, selectedProject }) => {
+// on this tab, and the logo closes it. The hook reads it, as it reads the selected month and
+// the account shown (#121): the projects and the figures of the month are those of that
+// account, and a project's resources those of the project, which belongs to one account.
+const usePublicCloudTab = ({ selectedMonth, activeTab, selectedProject, selectedAccount }) => {
   const [showAllBuckets, setShowAllBuckets] = useState(false);
   const [showAllInstances, setShowAllInstances] = useState(false);
   const [showAllVolumes, setShowAllVolumes] = useState(false);
@@ -19,11 +22,11 @@ const usePublicCloudTab = ({ selectedMonth, activeTab, selectedProject }) => {
   const [showAllSavingsPlans, setShowAllSavingsPlans] = useState(false);
 
   // Enriched projects for the Public Cloud tab
-  const { data: projectsEnriched = [] } = useQuery({
-    queryKey: ['projectsEnriched'],
-    queryFn: fetchProjectsEnriched,
-    enabled: activeTab === 'inventory'
-  });
+  const { data: projectsEnriched = [] } = useQuery(accountQuery(selectedAccount, {
+    key: ['projectsEnriched'],
+    fetch: fetchProjectsEnriched,
+    enabled: activeTab === 'inventory',
+  }));
 
   // Project detail queries
   const { data: projectConsumption = [] } = useQuery({
@@ -80,11 +83,11 @@ const usePublicCloudTab = ({ selectedMonth, activeTab, selectedProject }) => {
   });
 
   // Public Cloud stats (Kubernetes, S3, Registry, etc.)
-  const { data: publicCloudStats } = useQuery({
-    queryKey: ['publicCloudStats', selectedMonth?.from, selectedMonth?.to],
-    queryFn: () => fetchPublicCloudStats(selectedMonth.from, selectedMonth.to),
-    enabled: !!selectedMonth && activeTab === 'inventory'
-  });
+  const { data: publicCloudStats } = useQuery(accountQuery(selectedAccount, {
+    key: ['publicCloudStats', selectedMonth?.from, selectedMonth?.to],
+    fetch: (account) => fetchPublicCloudStats(selectedMonth.from, selectedMonth.to, account),
+    enabled: !!selectedMonth && activeTab === 'inventory',
+  }));
 
   return {
     showAllBuckets,

@@ -45,8 +45,9 @@ export const fetchSummary = async (from, to, account = null) => {
   return data;
 };
 
-export const fetchProjectsEnriched = async () => {
-  const { data } = await api.get('/projects/enriched');
+// The Public Cloud projects of the account, each with its account (#121)
+export const fetchProjectsEnriched = async (account = null) => {
+  const { data } = await api.get('/projects/enriched', { params: accountParams(account) });
   return data;
 };
 
@@ -197,9 +198,11 @@ export const fetchGpuSummary = async (from, to, account = null) => {
   return data;
 };
 
-// Public Cloud stats (Kubernetes, S3, Registry, etc.)
-export const fetchPublicCloudStats = async (from, to) => {
-  const { data } = await api.get('/analysis/public-cloud-stats', { params: { from, to } });
+// Public Cloud stats (Kubernetes, S3, Registry, etc.) of the account (#121)
+export const fetchPublicCloudStats = async (from, to, account = null) => {
+  const { data } = await api.get('/analysis/public-cloud-stats', {
+    params: { from, to, ...accountParams(account) },
+  });
   return data;
 };
 
