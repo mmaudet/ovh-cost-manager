@@ -8,7 +8,7 @@
 
 // The value that selects the Unknown account, from the data layer's module that has no side
 // effect: data/db.js reads config.json when it loads without DATA_DIR
-const { UNKNOWN_ACCOUNT } = require('../../data/ownership');
+const { UNKNOWN_ACCOUNT } = require('../../data/sql-conditions');
 
 // The accounts of a database seeded with several, by NIC handle: two with bills, and one
 // that an import recorded, but that has no bill yet. Invented, as every value of the tests

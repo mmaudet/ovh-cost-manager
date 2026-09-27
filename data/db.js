@@ -2,6 +2,8 @@ const Database = require('better-sqlite3');
 const { classifyWebCloud, WEB_CLOUD_FAMILIES } = require('./classify');
 const { monthsOfWindow } = require('./months');
 const ownership = require('./ownership');
+// The conditions of the queries that keep one account's rows (#115), or a list of ids
+const { UNKNOWN_ACCOUNT, accountCondition, idInList } = require('./sql-conditions');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
@@ -30,10 +32,9 @@ const DATA_DIR = process.env.DATA_DIR || loadDataDirFromConfig() || __dirname;
 const DB_PATH = path.resolve(DATA_DIR, 'ovh-bills.db');
 const SCHEMA_PATH = path.resolve(__dirname, 'schema.sql');
 
-// The tables whose rows carry the NIC handle of their account (#112, ADR 0002), and the value
-// that selects the Unknown account (#115): see data/ownership.js, which tells which account
-// each row belongs to
-const { ACCOUNT_TABLES, UNKNOWN_ACCOUNT } = ownership;
+// The tables whose rows carry the NIC handle of their account (#112, ADR 0002): see
+// data/ownership.js, which tells which account each row belongs to
+const { ACCOUNT_TABLES } = ownership;
 
 /**
  * Checks that a row that a writer of ACCOUNT_TABLES stores carries the NIC handle of its
@@ -49,22 +50,6 @@ function requireAccount(table, row) {
     throw new Error(`Cannot write a row of ${table} without the NIC handle of its account`);
   }
   return row;
-}
-
-/**
- * The condition that keeps the rows of an account in a query that can keep one account's
- * rows (#115, ADR 0002), to join with AND to its WHERE clause, and its parameters. Such a
- * query takes the account as the server's routes read it from their account parameter.
- * @param {?string} account - null for every account, UNKNOWN_ACCOUNT for the Unknown
- *   account, or else the NIC handle of an account
- * @param {string} column - The column of the query that holds the NIC handle of its rows'
- *   account: `b.account` for its bills, `p.account` for its projects
- * @returns {{ sql: string, params: string[] }} Always true for every account
- */
-function accountCondition(account, column) {
-  if (account === null) return { sql: '1 = 1', params: [] };
-  if (account === UNKNOWN_ACCOUNT) return { sql: `${column} IS NULL`, params: [] };
-  return { sql: `${column} = ?`, params: [account] };
 }
 
 /**
@@ -870,7 +855,7 @@ const balanceOps = {
  * `ids`, the list that the OVH API of an account gave of all those that exist now: the
  * services cancelled since an import stored them (#74). It deletes only the services of that
  * account, `account`, its NIC handle: another account's services, and those that no account
- * holds, are not in its list (#114). The ids compare as text (see ownership.idInList()).
+ * holds, are not in its list (#114). The ids compare as text (see idInList()).
  * @param {string} table - The inventory table
  * @param {?string} [serviceType] - For a table whose list covers one type of its services
  *   only, that type: the others stay
@@ -881,7 +866,7 @@ function deleteNotIn(table, serviceType = null) {
   const ofType = serviceType === null ? '' : 'service_type = ? AND ';
   const typeParams = serviceType === null ? [] : [serviceType];
   return (ids, account) => {
-    const listed = ownership.idInList('id', ids);
+    const listed = idInList('id', ids);
     return getDb().prepare(`
       DELETE FROM ${table} WHERE account = ? AND ${ofType}NOT ${listed.sql}
     `).run(account, ...typeParams, ...listed.params).changes;

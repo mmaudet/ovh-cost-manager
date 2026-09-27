@@ -9,10 +9,10 @@
  * it to them, and exposes them on its accounts operations.
  */
 
-// The value that selects the Unknown account, the rows without an account, in the queries
-// that can keep one account's rows and in the account parameter of the server's routes
-// (#115). No NIC handle reads so.
-const UNKNOWN_ACCOUNT = 'unknown';
+const { UNKNOWN_ACCOUNT, accountCondition, idInList } = require('./sql-conditions');
+
+// The condition that keeps the rows without an account: the Unknown account's
+const WITHOUT_ACCOUNT = accountCondition(UNKNOWN_ACCOUNT, 'account');
 
 // The tables fed by the OVH API whose rows belong to no bill or project: each row holds the
 // NIC handle of its account in an `account` column, which tells the accounts of one database
@@ -50,21 +50,6 @@ const SNAPSHOT_TABLES = ['account_balance', 'consumption_snapshots'];
 // the account, but the bills, which go with their lines, and the projects, which the
 // consumption of their past months keeps
 const REFETCHED_TABLES = ACCOUNT_TABLES.filter(table => !['bills', 'projects'].includes(table));
-
-/**
- * The condition that a column's value is one of a list of ids, which the OVH API gives, to
- * join with AND to a WHERE clause, and its parameters. The ids compare as text, as the tables
- * store them: json_each() gives a number as an integer, which no text equals.
- * @param {string} column - The column that holds the ids
- * @param {Array<string|number>} ids - The list
- * @returns {{ sql: string, params: string[] }}
- */
-function idInList(column, ids) {
-  return {
-    sql: `${column} IN (SELECT CAST(value AS TEXT) FROM json_each(?))`,
-    params: [JSON.stringify(ids)],
-  };
-}
 
 // The columns of a table, as PRAGMA table_info gives them
 const columnsOf = (database, table) => database.pragma(`table_info(${table})`)
@@ -126,8 +111,8 @@ function rekeyTable(database, schema, table) {
 function attributeRowsWithoutAccount(database, nic) {
   const attribute = database.transaction(() => [...ACCOUNT_TABLES, 'import_state']
     .reduce((attributed, table) => attributed + database
-      .prepare(`UPDATE OR IGNORE ${table} SET account = ? WHERE account IS NULL`)
-      .run(nic).changes, 0));
+      .prepare(`UPDATE OR IGNORE ${table} SET account = ? WHERE ${WITHOUT_ACCOUNT.sql}`)
+      .run(nic, ...WITHOUT_ACCOUNT.params).changes, 0));
   return attribute();
 }
 
@@ -152,8 +137,8 @@ function isOnlyAccount(database, nic) {
  */
 function hasRowsWithoutAccount(database, table) {
   return (table === undefined ? ACCOUNT_TABLES : [table]).some(name => database
-    .prepare(`SELECT EXISTS (SELECT 1 FROM ${name} WHERE account IS NULL) AS found`)
-    .get().found === 1);
+    .prepare(`SELECT EXISTS (SELECT 1 FROM ${name} WHERE ${WITHOUT_ACCOUNT.sql}) AS found`)
+    .get(...WITHOUT_ACCOUNT.params).found === 1);
 }
 
 /**
@@ -170,8 +155,8 @@ function claimBills(database, nic, billIds) {
   const listed = idInList('id', billIds);
   const claim = database.transaction(() => {
     const claimed = database.prepare(`
-      UPDATE bills SET account = ? WHERE account IS NULL AND ${listed.sql}
-    `).run(nic, ...listed.params).changes;
+      UPDATE bills SET account = ? WHERE ${WITHOUT_ACCOUNT.sql} AND ${listed.sql}
+    `).run(nic, ...WITHOUT_ACCOUNT.params, ...listed.params).changes;
     database.prepare('UPDATE accounts SET claimed_bills = claimed_bills + ? WHERE nic = ?')
       .run(claimed, nic);
     return claimed;
@@ -212,9 +197,9 @@ function attributeToSoleClaimer(database) {
  */
 function claimCreditMovement(database, { id, date, amount, account }) {
   return database.prepare(`
-    UPDATE OR IGNORE credit_movements SET account = @account
-    WHERE account IS NULL AND id = @id AND date IS @date AND amount = @amount
-  `).run({ id, date, amount, account }).changes > 0;
+    UPDATE OR IGNORE credit_movements SET account = ?
+    WHERE ${WITHOUT_ACCOUNT.sql} AND id = ? AND date IS ? AND amount = ?
+  `).run(account, ...WITHOUT_ACCOUNT.params, id, date, amount).changes > 0;
 }
 
 /**
@@ -226,7 +211,8 @@ function claimCreditMovement(database, { id, date, amount, account }) {
  */
 function deleteSnapshotsWithoutAccount(database) {
   const remove = database.transaction(() => SNAPSHOT_TABLES.reduce((deleted, table) =>
-    deleted + database.prepare(`DELETE FROM ${table} WHERE account IS NULL`).run().changes, 0));
+    deleted + database.prepare(`DELETE FROM ${table} WHERE ${WITHOUT_ACCOUNT.sql}`)
+      .run(...WITHOUT_ACCOUNT.params).changes, 0));
   return remove();
 }
 
@@ -269,14 +255,21 @@ function takeOverBilledRows(database, nic, listed) {
   return takeOver();
 }
 
-// Clears what a full import fetches again, of the rows whose account the condition on the
-// `account` column keeps: the bills and their lines, the resources of the projects, the
-// projects but those that the consumption of their past months needs, or that bill lines
-// reference, and the rows of REFETCHED_TABLES. The consumption of the projects, which OVH
-// gives for the current month only (#54), and the month of its last import, stay.
-function clearRefetched(database, { sql, params }) {
+/**
+ * Clears the imported data of an account, for a full import of it: its bills and their
+ * lines, its inventories, the resources of its projects, its balance and consumption
+ * snapshots, its credit movements and its consumption history, which the import fetches
+ * again. What it cannot fetch again is kept: the consumption of each of its projects, which
+ * OVH gives for the current month only (#54), with the month of its last import and the
+ * projects it belongs to. Another account's data, and the rows without an account, stay,
+ * with the projects of this account whose lines are on another account's bills.
+ * @param {object} database - The database
+ * @param {string} nic - The NIC handle of the account
+ */
+function clearAccount(database, nic) {
+  const { sql, params } = accountCondition(nic, 'account');
   const run = (statement) => database.prepare(statement).run(...params);
-  // First the rows that reference the bills and the projects
+  // First the rows that reference its bills and its projects
   run(`DELETE FROM bill_details WHERE bill_id IN (SELECT id FROM bills WHERE ${sql})`);
   for (const table of PROJECT_RESOURCE_TABLES) {
     run(`DELETE FROM ${table} WHERE project_id IN (SELECT id FROM projects WHERE ${sql})`);
@@ -290,25 +283,8 @@ function clearRefetched(database, { sql, params }) {
   for (const table of REFETCHED_TABLES) run(`DELETE FROM ${table} WHERE ${sql}`);
 }
 
-/**
- * Clears the imported data of an account, for a full import of it: its bills and their
- * lines, its inventories, the resources of its projects, its balance and consumption
- * snapshots, its credit movements and its consumption history, which the import fetches
- * again. What it cannot fetch again is kept: the consumption of each of its projects, which
- * OVH gives for the current month only (#54), with the month of its last import and the
- * projects it belongs to. Another account's data, and the rows without an account, stay,
- * with the projects of this account whose lines are on another account's bills.
- * @param {object} database - The database
- * @param {string} nic - The NIC handle of the account
- */
-function clearAccount(database, nic) {
-  clearRefetched(database, { sql: 'account = ?', params: [nic] });
-}
-
 module.exports = {
-  UNKNOWN_ACCOUNT,
   ACCOUNT_TABLES,
-  idInList,
   keyLacks,
   rekeyTable,
   attributeRowsWithoutAccount,
