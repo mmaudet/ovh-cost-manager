@@ -13,7 +13,9 @@ import Logo from '../components/Logo';
 import { AccountSelector } from '../components/AccountSelector.jsx';
 import { HeaderSelect } from '../components/HeaderSelect.jsx';
 import { ResyncButton } from '../components/ResyncButton.jsx';
-import { accountColumnOf, accountQuery, accountsOf, scopeLabel } from '../utils/accounts.js';
+import {
+  accountColumnOf, accountLabel, accountQuery, accountsOf, offersAccounts, scopeLabel,
+} from '../utils/accounts.js';
 import { formatCurrency, formatMonthLabel, yearMonthOf } from '../utils/format.js';
 import { parseSqliteDate } from '../utils/sqliteDate.js';
 import { generateMarkdownReport } from '../utils/markdownReport.js';
@@ -315,6 +317,14 @@ export default function Dashboard() {
     : null;
   const showSyncWarning = daysSinceLastImport !== null && daysSinceLastImport > 30 && !syncWarningDismissed;
 
+  // The accounts whose last synchronisation the footer shows, one line each, when the page
+  // offers several (#124): those whose last import has ended, in the order of the accounts
+  // route. The Unknown account has none, as no import reads it. Null when the page offers
+  // none: the footer then shows the latest import's line alone, as before.
+  const syncedAccounts = accounts && offersAccounts(accounts)
+    ? accounts.filter(({ lastImport }) => lastImport !== null)
+    : null;
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 p-4 md:p-6">
       <div className="max-w-6xl mx-auto space-y-6">
@@ -426,8 +436,9 @@ export default function Dashboard() {
                         const url = URL.createObjectURL(blob);
                         const a = document.createElement('a');
                         a.href = url;
-                        // The file of an account selected names it too (#124), by its NIC
-                        // handle, which any file system takes, unlike the names of config.json
+                        // The file of an account selected names it too (#124), by its id, a NIC
+                        // handle or unknown, which any file system takes, unlike the names of
+                        // config.json
                         const ofAccount = selectedAccount ? `-${selectedAccount}` : '';
                         a.download = `ovh-report-${selectedMonth.value}${ofAccount}.md`;
                         a.click();
@@ -675,7 +686,26 @@ export default function Dashboard() {
         {/* Footer */}
         <div className="text-center text-sm text-gray-400 pt-4 pb-2">
           <p>{t('syncedVia')}</p>
-          {importStatus?.latest && (
+          {syncedAccounts ? syncedAccounts.map((account) => (
+            // Each account as the account selector names it. One whose last import failed
+            // says so, with why over it, as the import history does (#113).
+            <p key={account.id} className="mt-1">
+              {accountLabel(account, t)} — {t('lastSync')}:{' '}
+              {parseSqliteDate(account.lastImport.at).toLocaleString(locale)}
+              {account.lastImport.status !== 'success' && (
+                <>
+                  {' ('}
+                  <span
+                    className={importStatusOf(account.lastImport.status).tone}
+                    title={account.lastImport.error || undefined}
+                  >
+                    {t(importStatusOf(account.lastImport.status).key)}
+                  </span>
+                  {')'}
+                </>
+              )}
+            </p>
+          )) : importStatus?.latest && (
             <p className="mt-1">
               {t('lastSync')}: {importStatus.latest.completed_at ? (
                 <>

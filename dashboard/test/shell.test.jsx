@@ -1,7 +1,9 @@
 import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
 import { screen, within } from '@testing-library/react';
 import { account } from './fixtures/account.js';
-import { lyonAccount, severalAccounts } from './fixtures/accounts.js';
+import {
+  lyonAccount, removedAccount, severalAccounts, unknownAccount, unnamedAccount,
+} from './fixtures/accounts.js';
 import { api, holdBack, serve } from './support/api.js';
 import { captureFileDownloads } from './support/downloads.js';
 import {
@@ -11,8 +13,10 @@ import {
   dropdown,
   emptyState,
   fakeTimers,
+  footer,
   headerBadge,
   importStatusesOf,
+  importToneOf,
   lastSyncLines,
   loadingScreen,
   openTab,
@@ -558,6 +562,71 @@ describe('dashboard shell', () => {
 
       expect(lastSyncLines()).toEqual(['Dernière sync: 14/09/2026 06:02:30 (3 factures)']);
     });
+
+    // An instance of several accounts (#124): the footer says when each account's last import
+    // ended, as the accounts route gives it, so that the user can tell whose data is stale.
+    // See fixtures/accounts.js.
+    describe('with several accounts', () => {
+      // Its last import failed, say. The route lists the accounts by NIC handle.
+      const reason = 'This credential is not valid';
+      const failedAccount = {
+        ...lyonAccount,
+        id: 'ww4444-ovh',
+        nic: 'ww4444-ovh',
+        name: 'Marseille',
+        lastImport: { at: '2026-09-14 04:02:40', status: 'failed', error: reason },
+      };
+      const withFailedAccount = {
+        ...severalAccounts, accounts: [failedAccount, ...severalAccounts.accounts],
+      };
+
+      // Each account as the account selector names it, in the order of the route, and when
+      // its last import ended, in local time. The Unknown account has none: no import reads
+      // it. The account selected makes no difference.
+      it('says when each account was last synchronised, whatever the account shown',
+        async () => {
+          const { user } = await renderDashboard(severalAccounts);
+          const lines = [
+            'Lyon subsidiary — Dernière sync: 14/09/2026 06:02:30',
+            'yy2222-ovh — Dernière sync: 14/09/2026 06:02:10',
+            'zz3333-ovh (non configuré) — Dernière sync: 31/08/2026 06:01:00',
+          ];
+          expect(lastSyncLines()).toEqual(lines);
+
+          await selectAccount(user, 'Lyon subsidiary');
+
+          expect(lastSyncLines()).toEqual(lines);
+        });
+
+      // As the import history says it of a run (#113): its status in red, and why over it
+      it('says when the last import of an account failed, and why', async () => {
+        await renderDashboard(withFailedAccount);
+
+        expect(lastSyncLines()).toEqual([
+          'Marseille — Dernière sync: 14/09/2026 06:02:40 (échoué)',
+          'Lyon subsidiary — Dernière sync: 14/09/2026 06:02:30',
+          'yy2222-ovh — Dernière sync: 14/09/2026 06:02:10',
+          'zz3333-ovh (non configuré) — Dernière sync: 31/08/2026 06:01:00',
+        ]);
+        const failed = within(footer()).getByTitle(reason);
+        expect(failed).toHaveTextContent('échoué');
+        expect(importToneOf(failed)).toBe('error');
+      });
+
+      it('says so in the language of the page', async () => {
+        // The language the page remembers from an earlier visit
+        localStorage.setItem('ovh-dashboard-language', 'en');
+
+        await renderDashboard(withFailedAccount);
+
+        expect(lastSyncLines()).toEqual([
+          'Marseille — Last sync: 9/14/2026, 6:02:40 AM (failed)',
+          'Lyon subsidiary — Last sync: 9/14/2026, 6:02:30 AM',
+          'yy2222-ovh — Last sync: 9/14/2026, 6:02:10 AM',
+          'zz3333-ovh (not configured) — Last sync: 8/31/2026, 6:01:00 AM',
+        ]);
+      });
+    });
   });
 
   describe('resync', () => {
@@ -753,6 +822,44 @@ describe('dashboard shell', () => {
         expect(monthCost()).toBe('1 300,40€');
         expect(lastSync('15/09/2026 12:00:31 (4 factures)')).toBeInTheDocument();
       });
+
+    // With several accounts (#124), the accounts route says when each account's import ended
+    // once the run is over. While it runs, the footer says when each account's last import
+    // ended, as the import history shows the run.
+    it("shows each account's last synchronisation once an import is over", async () => {
+      fakeTimers();
+      await renderDashboard({ ...severalAccounts, importStatus: importStatus(running) });
+
+      expect(lastSyncLines()).toEqual([
+        'Lyon subsidiary — Dernière sync: 14/09/2026 06:02:30',
+        'yy2222-ovh — Dernière sync: 14/09/2026 06:02:10',
+        'zz3333-ovh (non configuré) — Dernière sync: 31/08/2026 06:01:00',
+      ]);
+
+      // Lyon imported, and the other account configured failed: the run ended partial. The
+      // account removed from config.json was not imported.
+      const lastImport = (at, error = null) =>
+        ({ at, status: error ? 'failed' : 'success', error });
+      serve({
+        ...severalAccounts,
+        importStatus: importStatus({
+          ...finished, status: 'partial', error_message: '1 of 2 accounts failed',
+        }),
+        accounts: [
+          { ...lyonAccount, lastImport: lastImport('2026-09-15 10:00:20') },
+          { ...unnamedAccount, lastImport: lastImport('2026-09-15 10:00:31', 'Invalid key') },
+          removedAccount,
+          unknownAccount,
+        ],
+      });
+      await passTime(30000);
+
+      expect(lastSyncLines()).toEqual([
+        'Lyon subsidiary — Dernière sync: 15/09/2026 12:00:20',
+        'yy2222-ovh — Dernière sync: 15/09/2026 12:00:31 (échoué)',
+        'zz3333-ovh (non configuré) — Dernière sync: 31/08/2026 06:01:00',
+      ]);
+    });
 
     it('shows the dashboard once the first import ever is over, even before the refresh (#51)',
       async () => {
