@@ -408,12 +408,18 @@ const accountsOps = {
   }
 };
 
+// The filter of the queries that can keep the rows of one account (#115), when they are
+// given none: every account's rows. The server builds the others from the account
+// parameter of its routes (server/account-filter.js): an SQL condition on the column that
+// holds the NIC handle of the rows' account, `b.account` in the queries built on bills.
+const ALL_ACCOUNTS = Object.freeze({ sql: '1 = 1', params: [] });
+
 // Analysis queries
 const analysisOps = {
-  // The costs of each project billed between two dates, most expensive first. A project
-  // missing from the projects table keeps the id of its bill lines, without a name: the
-  // dashboard tells such projects apart by their id (#55).
-  byProject: (fromDate, toDate) => {
+  // The costs of each project billed between two dates, most expensive first, on the bills
+  // that the account filter keeps. A project missing from the projects table keeps the id of
+  // its bill lines, without a name: the dashboard tells such projects apart by their id (#55).
+  byProject: (fromDate, toDate, accountFilter = ALL_ACCOUNTS) => {
     const db = getDb();
     return db.prepare(`
       SELECT
@@ -426,9 +432,10 @@ const analysisOps = {
       LEFT JOIN projects p ON d.project_id = p.id
       WHERE b.date >= ? AND b.date <= ?
         AND d.project_id IS NOT NULL
+        AND ${accountFilter.sql}
       GROUP BY d.project_id
       ORDER BY total DESC
-    `).all(fromDate, toDate);
+    `).all(fromDate, toDate, ...accountFilter.params);
   },
 
   byService: (fromDate, toDate) => {
@@ -509,7 +516,8 @@ const analysisOps = {
     })));
   },
 
-  summary: (fromDate, toDate) => {
+  // The totals of the bills between two dates that the account filter keeps
+  summary: (fromDate, toDate, accountFilter = ALL_ACCOUNTS) => {
     const db = getDb();
 
     const totals = db.prepare(`
@@ -522,7 +530,8 @@ const analysisOps = {
       FROM bill_details d
       JOIN bills b ON d.bill_id = b.id
       WHERE b.date >= ? AND b.date <= ?
-    `).get(fromDate, toDate);
+        AND ${accountFilter.sql}
+    `).get(fromDate, toDate, ...accountFilter.params);
 
     return totals;
   },

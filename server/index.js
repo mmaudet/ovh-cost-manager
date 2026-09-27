@@ -14,6 +14,7 @@ const { readAccounts } = require('../data/accounts-config');
 
 // Import auth module
 const auth = require('./auth');
+const { accountFilter, accountParameter } = require('./account-filter');
 const { createOriginCheckMiddleware, readAllowedOrigins } = require('./cors');
 const { createHostCheckMiddleware } = require('./hosts');
 const { importsEnabled } = require('./imports');
@@ -357,6 +358,12 @@ function validateDateRange(from, to) {
 
 function registerRoutes() {
 
+  // The account parameter of the data routes (#115): req.account, the account a request
+  // asks for, from a NIC handle that an import recorded, or the Unknown account; every
+  // account without the parameter. accountFilter() turns it into a condition of their queries.
+  const accountParam = accountParameter((nic) => db.getDb()
+    .prepare('SELECT 1 FROM accounts WHERE nic = ?').get(nic) !== undefined);
+
   // ========================
   // Projects Endpoints
   // ========================
@@ -647,7 +654,9 @@ function registerRoutes() {
   // Summary Endpoint
   // ========================
 
-  app.get('/api/summary', (req, res) => {
+  // The figures of a period: those of the account the request asks for, or of every account
+  // without one (#115)
+  app.get('/api/summary', accountParam, (req, res) => {
     try {
       const { from, to } = req.query;
       const validation = validateDateRange(from, to);
@@ -655,8 +664,9 @@ function registerRoutes() {
         return res.status(400).json({ error: validation.error });
       }
 
-      const summary = db.analysis.summary(from, to);
-      const byProject = db.analysis.byProject(from, to);
+      const bills = accountFilter(req.account, 'b.account');
+      const summary = db.analysis.summary(from, to, bills);
+      const byProject = db.analysis.byProject(from, to, bills);
 
       // Calculate daily average
       const startDate = new Date(from);
@@ -767,14 +777,18 @@ function registerRoutes() {
   // Available months endpoint (for selectors)
   // ========================
 
-  app.get('/api/months', (req, res) => {
+  // The months billed to the account the request asks for, or to any account without one
+  // (#115)
+  app.get('/api/months', accountParam, (req, res) => {
     try {
       const database = db.getDb();
+      const bills = accountFilter(req.account, 'b.account');
       const months = database.prepare(`
-      SELECT DISTINCT strftime('%Y-%m', date) as month
-      FROM bills
+      SELECT DISTINCT strftime('%Y-%m', b.date) as month
+      FROM bills b
+      WHERE ${bills.sql}
       ORDER BY month DESC
-    `).all();
+    `).all(...bills.params);
 
       // Format months with French labels
       const monthNames = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
