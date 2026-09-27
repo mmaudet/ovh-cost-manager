@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { screen, within } from '@testing-library/react';
 import { account } from './fixtures/account.js';
-import { lyonAccount, severalAccounts } from './fixtures/accounts.js';
+import { lyonAccount, removedAccount, severalAccounts } from './fixtures/accounts.js';
 import { api, holdBack } from './support/api.js';
 import {
   captureFileDownloads, csvFile, downloadFromPanelAndModal,
@@ -396,6 +396,23 @@ describe('Web Cloud tab with several accounts', () => {
         tableHeader,
         ['example.com', 'Zone DNS Anycast example.com - 12 mois', '2026-07-01', '1,20€'],
       ]);
+    });
+
+  // The month selected stays until the account's months list loads, and says it lacks it,
+  // as the header's summary waits for (#115). Skipped until phase 2 of the #122 review: the
+  // tab's queries then wait on the shell's holdsSelectedMonth, which #120 brings. Until then
+  // they ask for the stale window of September, then for August's.
+  it.skip('asks for no services of the 12 months ending on a month the account selected lacks',
+    async () => {
+      const { user } = await renderDashboard(severalAccounts);
+      await openTab(user, 'Web Cloud');
+
+      await selectAccount(user, 'zz3333-ovh (non configuré)');
+
+      for (const request of [api.fetchWebCloudSummary, api.fetchWebCloudItems]) {
+        expect(request).not.toHaveBeenCalledWith('2025-10-01', '2026-09-30', removedAccount.id);
+        expect(request).toHaveBeenCalledWith('2025-09-01', '2026-08-31', removedAccount.id);
+      }
     });
 
   describe('Account column', () => {
