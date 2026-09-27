@@ -12,6 +12,17 @@ sections were written afterwards from the git history.
 
 <!-- scripts/release.sh inserts each new version above the first version heading. -->
 
+## 2.4.3 - 2026-09-27
+
+<!-- Upgrade notes and highlights of this release, if any. -->
+
+### New features
+* feat: let TRUST_PROXY name how many proxies OCM trusts by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/108
+### Bug fixes
+* fix: answer 403 to a refused CORS origin, without a stack trace by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/107
+
+**Full Changelog**: https://github.com/mmaudet/ovh-cost-manager/compare/v2.4.2...v2.4.3
+
 ## 2.4.2 - 2026-09-27
 
 This release brings the new logo of OVH Cost Manager: its pictogram in the
