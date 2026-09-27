@@ -12,6 +12,41 @@ import { fmtBytes, fmtMemory, formatMonthLabel } from '../utils/format.js';
 // hide non Web Cloud lines.
 const INFRA_EXCLUDED_TYPES = ['cloud_project', 'domain', 'web_cloud'];
 
+// The bill lines of the open resource type by service, under it: with the Account column of
+// the lists, null when they show none, each service's account too, the services then carrying
+// its name, accountName (#123)
+const BillLinesTable = ({ services, accountColumn, language, fmt }) => (
+  <div className="ml-6 mt-2 mb-3">
+    <div className="overflow-x-auto max-h-64 overflow-y-auto rounded-lg border border-gray-200">
+      <table className="w-full text-sm">
+        <thead className="sticky top-0 bg-gray-50">
+          <tr className="border-b">
+            <th className="p-2 text-left font-medium">Service</th>
+            {accountColumn && <th className="p-2 text-left font-medium">{accountColumn.label}</th>}
+            <th className="p-2 text-left font-medium">Description</th>
+            <th className="p-2 text-right font-medium">
+              {language === 'en' ? 'Amount' : 'Montant'}
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          {/* A service billed to several accounts has a row for each (#123) */}
+          {services.map((item, i) => (
+            <tr key={i} className="border-b hover:bg-gray-50">
+              <td className="p-2 font-mono text-xs text-gray-600">{item.domain}</td>
+              {accountColumn && <td className="p-2 text-xs text-gray-600">{item.accountName}</td>}
+              <td className="p-2 text-gray-700 truncate max-w-xs" title={item.description}>
+                {item.description}
+              </td>
+              <td className="p-2 text-right font-medium whitespace-nowrap">{fmt(item.total)}€</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  </div>
+);
+
 // The Infrastructure tab, which the shell renders while it is active: what
 // useInfrastructureTab() returns, with the shell's language, translations (t), amount format
 // (fmt) and selected month, the month's costs by resource type, which load at page start,
@@ -33,24 +68,52 @@ const InfrastructureTab = ({
       {/* Infrastructure Summary Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 xl:grid-cols-8 gap-4">
         {[
-          { type: 'dedicated_server', label: t('dedicatedServers'), color: 'text-red-600', ring: 'ring-red-300' },
-          { type: 'vps', label: t('vpsInstances'), color: 'text-amber-600', ring: 'ring-amber-300' },
-          { type: 'storage', label: t('storageServices'), color: 'text-green-600', ring: 'ring-green-300' },
-          { type: 'load_balancer', label: 'Load Balancers', color: 'text-cyan-600', ring: 'ring-cyan-300' },
-          { type: 'ip_service', label: language === 'en' ? 'IP Addresses' : 'Adresses IP', color: 'text-pink-600', ring: 'ring-pink-300' },
-          { type: 'private_cloud_host', label: language === 'en' ? 'Private Cloud Hosts' : 'Hôtes Private Cloud', color: 'text-violet-600', ring: 'ring-violet-300' },
-          { type: 'private_cloud_datastore', label: language === 'en' ? 'Private Cloud Datastores' : 'Datastores Private Cloud', color: 'text-fuchsia-600', ring: 'ring-fuchsia-300' },
+          {
+            type: 'dedicated_server', label: t('dedicatedServers'),
+            color: 'text-red-600', ring: 'ring-red-300',
+          },
+          {
+            type: 'vps', label: t('vpsInstances'), color: 'text-amber-600', ring: 'ring-amber-300',
+          },
+          {
+            type: 'storage', label: t('storageServices'),
+            color: 'text-green-600', ring: 'ring-green-300',
+          },
+          {
+            type: 'load_balancer', label: 'Load Balancers',
+            color: 'text-cyan-600', ring: 'ring-cyan-300',
+          },
+          {
+            type: 'ip_service', label: language === 'en' ? 'IP Addresses' : 'Adresses IP',
+            color: 'text-pink-600', ring: 'ring-pink-300',
+          },
+          {
+            type: 'private_cloud_host',
+            label: language === 'en' ? 'Private Cloud Hosts' : 'Hôtes Private Cloud',
+            color: 'text-violet-600', ring: 'ring-violet-300',
+          },
+          {
+            type: 'private_cloud_datastore',
+            label: language === 'en' ? 'Private Cloud Datastores' : 'Datastores Private Cloud',
+            color: 'text-fuchsia-600', ring: 'ring-fuchsia-300',
+          },
         ].map(card => {
           const isActive = selectedResourceType === card.type;
           const entry = byResourceType.find(r => r.resource_type === card.type);
           return (
             <div
               key={card.type}
-              className={`bg-white rounded-xl p-5 shadow-sm border cursor-pointer transition-all hover:shadow-md ${isActive ? `ring-2 ${card.ring} border-transparent` : 'border-gray-100'}`}
+              className={[
+                'bg-white rounded-xl p-5 shadow-sm border cursor-pointer transition-all',
+                'hover:shadow-md',
+                isActive ? `ring-2 ${card.ring} border-transparent` : 'border-gray-100',
+              ].join(' ')}
               onClick={() => setSelectedResourceType(isActive ? null : card.type)}
             >
               <span className="text-gray-500 text-sm">{card.label}</span>
-              <div className={`text-3xl font-bold ${card.color} mt-2`}>{entry?.serviceCount || 0}</div>
+              <div className={`text-3xl font-bold ${card.color} mt-2`}>
+                {entry?.serviceCount || 0}
+              </div>
               <div className="text-xs text-gray-400 mt-1">{fmt(entry?.value || 0)}€</div>
             </div>
           );
@@ -74,44 +137,26 @@ const InfrastructureTab = ({
               return (
                 <div key={s.resource_type}>
                   <div
-                    className={`flex items-center gap-3 text-sm rounded-lg px-3 py-2 cursor-pointer hover:bg-gray-50 ${isSelected ? 'bg-gray-100 ring-1 ring-gray-300' : ''}`}
+                    className={[
+                      'flex items-center gap-3 text-sm rounded-lg px-3 py-2 cursor-pointer',
+                      'hover:bg-gray-50',
+                      isSelected ? 'bg-gray-100 ring-1 ring-gray-300' : '',
+                    ].join(' ')}
                     onClick={() => setSelectedResourceType(isSelected ? null : s.resource_type)}
                   >
-                    <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: s.color }} />
+                    <div
+                      className="w-3 h-3 rounded-full flex-shrink-0"
+                      style={{ backgroundColor: s.color }}
+                    />
                     <span className="text-gray-700 font-medium">{s.name}</span>
                     <span className="ml-auto font-bold">{fmt(s.value)}€</span>
                     <span className="text-gray-400 text-xs">{isSelected ? '▲' : '▼'}</span>
                   </div>
                   {isSelected && billedServices.length > 0 && (
-                    <div className="ml-6 mt-2 mb-3">
-                      <div className="overflow-x-auto max-h-64 overflow-y-auto rounded-lg border border-gray-200">
-                        <table className="w-full text-sm">
-                          <thead className="sticky top-0 bg-gray-50">
-                            <tr className="border-b">
-                              <th className="p-2 text-left font-medium">Service</th>
-                              {accountColumn && (
-                                <th className="p-2 text-left font-medium">{accountColumn.label}</th>
-                              )}
-                              <th className="p-2 text-left font-medium">Description</th>
-                              <th className="p-2 text-right font-medium">{language === 'en' ? 'Amount' : 'Montant'}</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {/* A service billed to several accounts has a row for each (#123) */}
-                            {billedServices.map((item, i) => (
-                              <tr key={i} className="border-b hover:bg-gray-50">
-                                <td className="p-2 font-mono text-xs text-gray-600">{item.domain}</td>
-                                {accountColumn && (
-                                  <td className="p-2 text-xs text-gray-600">{item.accountName}</td>
-                                )}
-                                <td className="p-2 text-gray-700 truncate max-w-xs" title={item.description}>{item.description}</td>
-                                <td className="p-2 text-right font-medium whitespace-nowrap">{fmt(item.total)}€</td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
+                    <BillLinesTable
+                      services={billedServices} accountColumn={accountColumn}
+                      language={language} fmt={fmt}
+                    />
                   )}
                 </div>
               );
@@ -154,7 +199,9 @@ const InfrastructureTab = ({
                   {accountColumn && (
                     <th className="p-3 text-left font-medium">{accountColumn.label}</th>
                   )}
-                  <th className="p-3 text-left font-medium">{language === 'en' ? 'Model' : 'Modèle'}</th>
+                  <th className="p-3 text-left font-medium">
+                    {language === 'en' ? 'Model' : 'Modèle'}
+                  </th>
                   <th className="p-3 text-left font-medium">{t('region')}</th>
                   <th className="p-3 text-left font-medium">{t('specs')}</th>
                   <th className="p-3 text-left font-medium">{t('state')}</th>
@@ -176,7 +223,14 @@ const InfrastructureTab = ({
                       {' / '}{v.disk_gb ? fmtBytes(v.disk_gb * 1e9, language) : '-'}
                     </td>
                     <td className="p-3">
-                      <span className={`px-2 py-0.5 rounded text-xs font-medium ${v.state === 'running' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'}`}>
+                      <span
+                        className={[
+                          'px-2 py-0.5 rounded text-xs font-medium',
+                          v.state === 'running'
+                            ? 'bg-green-100 text-green-700'
+                            : 'bg-gray-100 text-gray-700',
+                        ].join(' ')}
+                      >
                         {v.state}
                       </span>
                     </td>
