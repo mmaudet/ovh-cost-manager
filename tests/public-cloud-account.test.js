@@ -137,9 +137,10 @@ afterAll(async () => {
   await ocm?.stop();
 });
 
-// The status and the JSON body of the answer to a path of the server
-async function get(path) {
-  const res = await fetch(`${ocm.url}${path}`);
+// The status and the JSON body of the answer to a path of the server, the one of the seeded
+// accounts unless told otherwise
+async function get(path, server = ocm) {
+  const res = await fetch(`${server.url}${path}`);
   return { status: res.status, body: await res.json() };
 }
 
@@ -259,9 +260,8 @@ describe('GET /api/analysis/public-cloud-stats', () => {
       body: figures({
         kubernetes: { count: 1, total: 30 },
         instances: { total: 60 },
-        // The inventory holds none of its buckets: they are counted on its bills, as they are
-        // for an instance whose inventory was never imported
-        objectStorage: { count: 1, total: 6 },
+        // The inventory holds buckets, none of its projects': the one its bill names is gone
+        objectStorage: { count: 0, total: 6 },
         registry: { count: 1, total: 40 },
       }),
     });
@@ -282,6 +282,74 @@ describe('GET /api/analysis/public-cloud-stats', () => {
   test('counts nothing for an account recorded without a project', async () => {
     expect(await get(`/api/analysis/public-cloud-stats?${september}&account=${NEW_ACCOUNT}`))
       .toEqual({ status: 200, body: figures({}) });
+  });
+});
+
+// Lyon's Analytics project, whose bucket Paris's bill of September names, as when a project
+// moves from an account to another: with its bucket in the inventory, or with no inventory
+// imported at all
+const ANALYTICS = 'project-analytics';
+const billedByParis = ({ inventory }) => (db) => {
+  db.accounts.upsert({ nic: LYON, currency: 'EUR', name: 'Lyon subsidiary' });
+  db.accounts.upsert({ nic: PARIS, currency: 'EUR' });
+  project(db, ANALYTICS, 'Analytics', null, LYON);
+  bill(db, 'FR2101', '2026-09-10', PARIS);
+  db.details.insertMany([
+    line('FR2101-1', 'FR2101', ANALYTICS,
+      'Stockage Standard - Bucket reports sur la région gra', 8),
+  ]);
+  if (inventory) {
+    db.cloudDetails.upsertBucket({
+      id: `${ANALYTICS}:GRA:reports`, project_id: ANALYTICS, name: 'reports', region: 'GRA',
+      storage_class: 'Standard', status: null, objects_count: 12, objects_size: 3600000,
+      created_at: '2026-03-02T08:00:00Z',
+    });
+  }
+};
+
+// A bucket counts once, in one account, so that the accounts add up to all of them: whether
+// the inventory or the bills count the buckets is decided for all accounts at once
+describe('a bucket of a project billed on the bills of another account', () => {
+  // The number of buckets of all accounts, of Lyon, and of Paris
+  const bucketCounts = async (server) => {
+    const counts = [];
+    for (const parameter of ['', `&account=${LYON}`, `&account=${PARIS}`]) {
+      const path = `/api/analysis/public-cloud-stats?${SEPTEMBER}${parameter}`;
+      counts.push((await get(path, server)).body.objectStorage.count);
+    }
+    return counts;
+  };
+
+  describe('in the inventory', () => {
+    let server;
+
+    beforeAll(async () => {
+      server = await startOcm(() => ({}), { seed: billedByParis({ inventory: true }) });
+    }, 30000);
+
+    afterAll(async () => {
+      await server?.stop();
+    });
+
+    test('counts in the account of its project only', async () => {
+      expect(await bucketCounts(server)).toEqual([1, 1, 0]);
+    });
+  });
+
+  describe('with no inventory imported', () => {
+    let server;
+
+    beforeAll(async () => {
+      server = await startOcm(() => ({}), { seed: billedByParis({ inventory: false }) });
+    }, 30000);
+
+    afterAll(async () => {
+      await server?.stop();
+    });
+
+    test('counts in the account of the bill that names it only', async () => {
+      expect(await bucketCounts(server)).toEqual([1, 0, 1]);
+    });
   });
 });
 

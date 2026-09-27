@@ -912,7 +912,8 @@ const inventoryOps = {
    * The figures of the Public Cloud cards over a period (Kubernetes clusters, S3 buckets, etc),
    * for the account (see accountCondition()), every account's by default (#121). The costs are
    * those of the bill lines of its bills; the counts of volumes, snapshots and buckets, those of
-   * the inventory of its projects, as a project's resources belong to its account (ADR 0002).
+   * the inventory of its projects, as a project's resources belong to its account (ADR 0002),
+   * but for the buckets of an inventory that holds none (below).
    * @param {string} fromDate
    * @param {string} toDate
    * @param {?string} [account]
@@ -937,15 +938,26 @@ const inventoryOps = {
     `).get(fromDate, toDate, ...ofBills.params);
 
     // Count object storage buckets from the imported inventory (buckets that exist
-    // right now, including the ones that cost nothing over the period). Falls back
-    // to the billing-derived count when the inventory has never been imported.
-    let s3 = db.prepare(`
-      SELECT COUNT(*) as count FROM object_storage_buckets o
-      LEFT JOIN projects p ON p.id = o.project_id
-      WHERE (o.created_at IS NULL OR SUBSTR(o.created_at, 1, 10) <= ?)
-        AND ${ofProjects.sql}
-    `).get(toDate, ...ofProjects.params);
-    if (!s3?.count) {
+    // right now, including the ones that cost nothing over the period): those of the
+    // account's projects. When the inventory holds no bucket by the end of the period,
+    // whatever its account, as when it has never been imported, count the buckets that
+    // the account's bills name instead. Either way for every account at once, so that a
+    // bucket counts once, in one account: its project's, or its bill's.
+    const inventoryHoldsBuckets = db.prepare(`
+      SELECT EXISTS (
+        SELECT 1 FROM object_storage_buckets
+        WHERE created_at IS NULL OR SUBSTR(created_at, 1, 10) <= ?
+      ) as held
+    `).get(toDate).held === 1;
+    let s3;
+    if (inventoryHoldsBuckets) {
+      s3 = db.prepare(`
+        SELECT COUNT(*) as count FROM object_storage_buckets o
+        LEFT JOIN projects p ON p.id = o.project_id
+        WHERE (o.created_at IS NULL OR SUBSTR(o.created_at, 1, 10) <= ?)
+          AND ${ofProjects.sql}
+      `).get(toDate, ...ofProjects.params);
+    } else {
       s3 = db.prepare(`
         SELECT COUNT(*) as count
         FROM (
