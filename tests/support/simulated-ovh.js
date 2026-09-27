@@ -19,8 +19,9 @@ const os = require('os');
 const path = require('path');
 const { ACCOUNT } = require('./accounts');
 
-// The credentials of the account of the tests, which the configuration gives by default
-const CREDENTIALS = { appKey: 'test', appSecret: 'test', consumerKey: 'test', endpoint: 'ovh-eu' };
+// The credentials of the account of the tests, which the configuration gives by default: as
+// before #113, without an endpoint, which the OVH client does without
+const CREDENTIALS = { appKey: 'test', appSecret: 'test', consumerKey: 'test' };
 
 // The routes of the account of the tests: route -> handler of the call's parameters,
 // returning a promise. Unknown routes answer 404, like the real API does.
@@ -34,25 +35,33 @@ const accounts = new Map();
 // route and the parameters
 const calls = [];
 
-// Whether a client's credentials are those of the account served: all four of them
-const sameCredentials = (a, b) => Object.keys(CREDENTIALS).every(key => a?.[key] === b[key]);
+// The credentials that each client was created with, in order
+const clientCredentials = [];
+
+// Whether a client's credentials are those of the account served: every one it was served
+// with, whatever else they hold, such as an endpoint or a host
+const sameCredentials = (credentials, served) =>
+  Object.keys(served).every(key => credentials?.[key] === served[key]);
 
 // What require('ovh') returns: a function of the credentials, which returns the client. The
 // calls of a client whose credentials are none of an account served get OVH's answer to an
 // invalid key.
-const ovh = (credentials) => ({
-  requestPromised: (method, route, params) => {
-    calls.push({ consumerKey: credentials?.consumerKey, method, route, params });
-    const served = accounts.get(credentials?.consumerKey);
-    if (!served || !sameCredentials(credentials, served.credentials)) {
-      return Promise.reject({ error: 403, message: 'This credential is not valid' });
-    }
-    const handler = served.routes.get(route);
-    return handler
-      ? handler(params)
-      : Promise.reject({ error: 404, message: `Not found: ${route}` });
-  },
-});
+const ovh = (credentials) => {
+  clientCredentials.push(credentials);
+  return {
+    requestPromised: (method, route, params) => {
+      calls.push({ consumerKey: credentials?.consumerKey, method, route, params });
+      const served = accounts.get(credentials?.consumerKey);
+      if (!served || !sameCredentials(credentials, served.credentials)) {
+        return Promise.reject({ error: 403, message: 'This credential is not valid' });
+      }
+      const handler = served.routes.get(route);
+      return handler
+        ? handler(params)
+        : Promise.reject({ error: 404, message: `Not found: ${route}` });
+    },
+  };
+};
 
 // The places where the import reads its configuration, in the order it reads them: the
 // config.json of the repository, then those of ~/my-ovh-bills, the legacy one last
@@ -185,6 +194,7 @@ function useThrowawayImport(prefix) {
     accounts.clear();
     accounts.set(CREDENTIALS.consumerKey, { credentials: CREDENTIALS, routes });
     calls.length = 0;
+    clientCredentials.length = 0;
     useDefaultConfig();
     emptyDatabase(loaded.db);
   });
@@ -198,6 +208,6 @@ function useThrowawayImport(prefix) {
 }
 
 module.exports = {
-  ovh, jsonfile, routes, calls, CREDENTIALS, CONFIG_FILES, ok, fail, me,
+  ovh, jsonfile, routes, calls, clientCredentials, CREDENTIALS, CONFIG_FILES, ok, fail, me,
   serveAccount, useConfig, useConfigFiles, useThrowawayImport,
 };

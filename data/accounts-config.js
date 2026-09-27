@@ -7,13 +7,17 @@
  *
  * A configuration file gives its accounts in one of three forms:
  * - accounts, an array of accounts, each with an optional name, unique among them, an
- *   optional budget, a positive integer, and its credentials;
+ *   optional budget, a positive integer, and its credentials, endpoint included;
  * - credentials, the credentials of a single account, which has no name, as before #113;
  * - the credentials at the top of the file, in the legacy flat form of credentials.json.
+ * The last two read as before: the OVH API client takes the API's host from an endpoint, or
+ * a host, or else uses the EU one.
  */
 
-// The credentials of an account, which the OVH API client takes
-const CREDENTIAL_KEYS = ['appKey', 'appSecret', 'consumerKey', 'endpoint'];
+// The keys of the credentials of the legacy forms, as the OVH API client requires them
+const KEYS = ['appKey', 'appSecret', 'consumerKey'];
+// Those of the accounts section, which names the endpoint of each account
+const ACCOUNT_KEYS = [...KEYS, 'endpoint'];
 
 /**
  * @typedef {object} ConfiguredAccount
@@ -21,8 +25,9 @@ const CREDENTIAL_KEYS = ['appKey', 'appSecret', 'consumerKey', 'endpoint'];
  *   such as accounts[1], or credentials for the single account of the other forms
  * @property {?string} name - Its name, null when it has none
  * @property {?number} budget - Its budget, null when it has none
- * @property {object} credentials - Its credentials section: appKey, appSecret, consumerKey
- *   and endpoint, and whatever else the OVH API client takes
+ * @property {object} credentials - Its credentials as they are given, for the OVH API
+ *   client: appKey, appSecret, consumerKey, an endpoint or a host, and whatever else the
+ *   client takes
  */
 
 /**
@@ -44,11 +49,11 @@ function readAccounts(config, source) {
     return readAccountList(config.accounts, source);
   }
   if (config.credentials !== undefined) {
-    return [unnamed(readCredentials(config.credentials, 'credentials', source))];
+    return [unnamed(readCredentials(config.credentials, 'credentials', source, KEYS))];
   }
   // The legacy flat form, which the whole file is the credentials of
-  if (CREDENTIAL_KEYS.some((key) => config[key] !== undefined)) {
-    return [unnamed(readCredentials(config, null, source))];
+  if (ACCOUNT_KEYS.some((key) => config[key] !== undefined)) {
+    return [unnamed(readCredentials(config, null, source, KEYS))];
   }
   return [];
 }
@@ -95,7 +100,8 @@ function readAccountList(list, source) {
       label: name === null ? place : JSON.stringify(name),
       name,
       budget: readBudget(entry.budget, `${place}.budget`, source),
-      credentials: readCredentials(entry.credentials, `${place}.credentials`, source),
+      credentials: readCredentials(entry.credentials, `${place}.credentials`, source,
+        ACCOUNT_KEYS),
     };
   });
 }
@@ -121,10 +127,10 @@ function readBudget(value, name, source) {
   return value;
 }
 
-// The credentials of an account: an object whose appKey, appSecret, consumerKey and endpoint
-// are non-empty strings. Its values are secrets: the errors say what they are, never what
-// they hold. `section` is the setting that holds them, null for the top of the file.
-function readCredentials(value, section, source) {
+// The credentials of an account: an object whose `keys` are non-empty strings, given to the
+// client as they are. Its values are secrets: the errors say what they are, never what they
+// hold. `section` is the setting that holds them, null for the top of the file.
+function readCredentials(value, section, source, keys) {
   if (value === undefined) {
     throw new Error(`${section} in ${source} is missing: it must be an object that holds `
       + 'appKey, appSecret, consumerKey and endpoint');
@@ -132,7 +138,7 @@ function readCredentials(value, section, source) {
   if (!isObject(value)) {
     throw new Error(`${section} in ${source} must be an object, not ${kindOf(value)}`);
   }
-  for (const key of CREDENTIAL_KEYS) {
+  for (const key of keys) {
     const name = section === null ? key : `${section}.${key}`;
     const credential = value[key];
     if (credential === undefined) {

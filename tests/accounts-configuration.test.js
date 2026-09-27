@@ -6,8 +6,8 @@
  */
 
 const {
-  routes, ok, calls, CREDENTIALS, CONFIG_FILES, serveAccount, useConfig, useConfigFiles,
-  useThrowawayImport,
+  routes, ok, calls, clientCredentials, CREDENTIALS, CONFIG_FILES, serveAccount, useConfig,
+  useConfigFiles, useThrowawayImport,
 } = require('./support/simulated-ovh');
 const { ACCOUNT } = require('./support/accounts');
 
@@ -108,20 +108,42 @@ describe('the accounts section', () => {
 });
 
 describe('a single account without a name', () => {
-  // As before the accounts section, which reads it as unnamed
+  // As before the accounts section, which reads it as unnamed. The account of the tests has
+  // no endpoint, which the OVH client does without, except in the accounts section.
   test.each([
     ['the credentials section', () => useConfig({ credentials: CREDENTIALS })],
     ['the credentials at the top of config.json, in the legacy form',
       () => useConfig({ ...CREDENTIALS })],
     ['the legacy credentials file', () => useConfig({ ...CREDENTIALS }, 'legacy')],
     ['an accounts section of one account without a name',
-      () => useConfig({ accounts: [{ credentials: CREDENTIALS }] })],
+      () => useConfig({ accounts: [{ credentials: { ...CREDENTIALS, endpoint: 'ovh-eu' } }] })],
   ])('is read from %s', async (_, configure) => {
     configure();
     serveNothing(routes);
 
     await importSeptember();
 
+    expect(recordedAccounts()).toEqual([[ACCOUNT.nic, null, null, 'success']]);
+  });
+
+  // As before: the client takes the API's host from an endpoint, or a host, or else the EU
+  // one. The legacy flat form gives it the whole file.
+  test.each([
+    ['a credentials section without an endpoint', { credentials: { ...CREDENTIALS } },
+      { ...CREDENTIALS }],
+    ['a credentials section with a host',
+      { credentials: { ...CREDENTIALS, host: 'ca.api.ovh.com' } },
+      { ...CREDENTIALS, host: 'ca.api.ovh.com' }],
+    ['the legacy flat form, with other settings',
+      { ...CREDENTIALS, endpoint: 'ovh-ca', dashboard: { budget: 50000 } },
+      { ...CREDENTIALS, endpoint: 'ovh-ca', dashboard: { budget: 50000 } }],
+  ])('is given to the OVH client as it is, from %s', async (_, config, credentials) => {
+    useConfig(config);
+    serveNothing(routes);
+
+    await importSeptember();
+
+    expect(clientCredentials).toEqual([credentials]);
     expect(recordedAccounts()).toEqual([[ACCOUNT.nic, null, null, 'success']]);
   });
 
@@ -200,8 +222,8 @@ describe('a configuration that the import refuses', () => {
       `accounts[0].credentials.consumerKey in ${FILE} must be a non-empty string, not a number`],
     ['a malformed credentials section', { credentials: { ...credentials, appSecret: null } },
       `credentials.appSecret in ${FILE} must be a non-empty string, not null`],
-    ['legacy credentials without an endpoint', withoutEndpoint,
-      `endpoint in ${FILE} is missing: it must be a non-empty string`],
+    ['legacy credentials without a consumer key', { appKey: 'app-lyon', appSecret: 'secret-lyon' },
+      `consumerKey in ${FILE} is missing: it must be a non-empty string`],
   ])('stops the import on %s, naming the setting and the file', async (_, config, message) => {
     useConfig(config);
 
