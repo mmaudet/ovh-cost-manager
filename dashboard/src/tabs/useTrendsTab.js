@@ -20,6 +20,11 @@ const useTrendsTab = ({ months, selectedMonth, selectedAccount, activeTab }) => 
   // The period ends on the month selected in the header, that month included, as the 12
   // months of the Web Cloud tab do (#66)
   const endMonth = selectedMonth?.value;
+  // The trends wait until the months list holds that month. It does not while the months of
+  // the account just selected load, nor when that account lacks the month, until the shell
+  // selects its latest month (#115): the period would then count no month, or end on a month
+  // the account lacks, and the tab would ask for trends it never shows (#120).
+  const holdsEndMonth = months.some((month) => month.value === endMonth);
 
   // The periods offered go up to the first one that covers the months of data up to it
   const maxMonths = monthsBetween(months[months.length - 1]?.value, endMonth);
@@ -32,14 +37,14 @@ const useTrendsTab = ({ months, selectedMonth, selectedAccount, activeTab }) => 
   const { data: monthlyTrend = [] } = useQuery(accountQuery(selectedAccount, {
     key: ['monthlyTrend', trendPeriod, endMonth],
     fetch: (account) => fetchMonthlyTrend(trendPeriod, endMonth, account),
-    enabled: !!endMonth,
+    enabled: holdsEndMonth,
   }));
 
   const { data: trendByCategory = { categories: [], data: [] } } = useQuery(
     accountQuery(selectedAccount, {
       key: ['monthlyTrendByCategory', trendPeriod, endMonth],
       fetch: (account) => fetchMonthlyTrendByCategory(trendPeriod, endMonth, account),
-      enabled: !!endMonth,
+      enabled: holdsEndMonth,
     }),
   );
   // Categories hidden from the by-category chart (toggled via the legend).
@@ -55,7 +60,7 @@ const useTrendsTab = ({ months, selectedMonth, selectedAccount, activeTab }) => 
   const { data: gpuTrend } = useQuery(accountQuery(selectedAccount, {
     key: ['gpuTrend', gpuTrendWindow?.from, gpuTrendWindow?.to],
     fetch: (account) => fetchGpuSummary(gpuTrendWindow.from, gpuTrendWindow.to, account),
-    enabled: !!gpuTrendWindow && activeTab === 'trends',
+    enabled: holdsEndMonth && activeTab === 'trends',
   }));
 
   return {

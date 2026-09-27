@@ -13,7 +13,7 @@ import { settle } from '../support/query-client.js';
 // hook requests and returns for the months list, the selected month, the active tab and the
 // account shown. "Today" is 15 September 2026 (see setup.js).
 
-const [september, august] = months;
+const [september, august, july] = months;
 // The account first billed in July 2025: 15 months of history
 const fifteenMonths = sinceJuly2025.months;
 const july2025 = fifteenMonths[fifteenMonths.length - 1];
@@ -153,6 +153,44 @@ describe('useTrendsTab', () => {
         ['gpuTrend', '2024-09-01', '2026-08-31'],
       ]);
     });
+
+  // As while the months list of the account just selected loads, or when that account lacks
+  // the month selected, until the shell selects its latest month (#115): the periods offered
+  // would count the months of no list, or would end on a month the account lacks (#120)
+  describe('months list without the selected month', () => {
+    it.each([
+      ['while it loads', []],
+      ['when it lacks it', [august, july]],
+    ])('asks for no trend %s', async (_, list) => {
+      const { result } = await renderTabHook(useTrendsTab,
+        shellProps({ months: list, selectedMonth: september, activeTab: 'trends' }));
+
+      expect(api.fetchMonthlyTrend).not.toHaveBeenCalled();
+      expect(api.fetchMonthlyTrendByCategory).not.toHaveBeenCalled();
+      expect(api.fetchGpuSummary).not.toHaveBeenCalled();
+      expect(result.current.monthlyTrend).toEqual([]);
+    });
+
+    it('asks for the trends over the period that the list offers, once it holds the month',
+      async () => {
+        const { rerender } = await renderTabHook(useTrendsTab,
+          shellProps({ months: [], selectedMonth: september, activeTab: 'trends' }),
+          billedSinceJuly2025);
+
+        await rerender(
+          shellProps({ months: fifteenMonths, selectedMonth: september, activeTab: 'trends' }),
+        );
+
+        // Over the 6 months that 15 billed months offer, not over the 3 of no month
+        expect(api.fetchMonthlyTrend).toHaveBeenCalledOnce();
+        expect(api.fetchMonthlyTrend).toHaveBeenCalledWith(6, '2026-09', allAccounts);
+        expect(api.fetchMonthlyTrendByCategory).toHaveBeenCalledOnce();
+        expect(api.fetchMonthlyTrendByCategory).toHaveBeenCalledWith(6, '2026-09', allAccounts);
+        expect(api.fetchGpuSummary).toHaveBeenCalledOnce();
+        expect(api.fetchGpuSummary)
+          .toHaveBeenCalledWith('2026-04-01', '2026-09-30', allAccounts);
+      });
+  });
 
   // The account shown in the header (#115): the shell passes its months list, and the hook
   // requests its trends (#120)

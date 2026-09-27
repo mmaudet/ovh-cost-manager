@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { screen, within } from '@testing-library/react';
 import { account } from './fixtures/account.js';
-import { lyonAccount, severalAccounts } from './fixtures/accounts.js';
+import { lyonAccount, removedAccount, severalAccounts } from './fixtures/accounts.js';
 import { sinceJuly2025 } from './fixtures/trends.js';
 import { api } from './support/api.js';
 import {
@@ -480,6 +480,22 @@ describe('Trends tab', () => {
         .toHaveBeenCalledWith(3, '2026-09', lyonAccount.id);
       expect(api.fetchGpuSummary)
         .toHaveBeenCalledWith('2026-07-01', '2026-09-30', lyonAccount.id);
+    });
+
+    // The month selected stays until the months list of the account loads, and says it lacks
+    // it: the header then selects the account's latest month, August (#115)
+    it('ask for no trend up to a month that the account selected lacks', async () => {
+      const { user } = await renderDashboard(severalAccounts);
+      await openTab(user, 'Tendances');
+
+      await selectAccount(user, 'zz3333-ovh (non configuré)');
+
+      expect(api.fetchMonthlyTrend).not.toHaveBeenCalledWith(3, '2026-09', removedAccount.id);
+      expect(api.fetchMonthlyTrendByCategory)
+        .not.toHaveBeenCalledWith(3, '2026-09', removedAccount.id);
+      expect(api.fetchGpuSummary)
+        .not.toHaveBeenCalledWith('2026-07-01', '2026-09-30', removedAccount.id);
+      expect(api.fetchMonthlyTrend).toHaveBeenCalledWith(3, '2026-08', removedAccount.id);
     });
   });
 
