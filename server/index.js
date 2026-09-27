@@ -570,20 +570,25 @@ function registerRoutes() {
     }
   });
 
-  // The month of the latest bill, YYYY-MM, or undefined when nothing was billed
-  const latestBilledMonth = () => db.bills.getLatestDate()?.slice(0, 7);
+  // The month of the latest bill of an account, as req.account holds it, or of any account
+  // for null (#120): YYYY-MM, or undefined when nothing was billed to it
+  const latestBilledMonth = (account) => db.bills.getMonths(account)[0];
 
   // The trend over the `months` months that end on the `end` month (YYYY-MM), that one
   // included: 6 months, and the month of the latest bill, by default. Each of them, at 0
-  // for a month without any bill, or none when none of them has a bill (#65).
-  app.get('/api/analysis/monthly-trend', (req, res) => {
+  // for a month without any bill, or none when none of them has a bill (#65). That of the
+  // account the request asks for, its latest bill included, or of every account without one
+  // (#120).
+  app.get('/api/analysis/monthly-trend', accountParameter, (req, res) => {
     try {
-      const { valid, error, from, to } = trendWindowFromQuery(req.query, latestBilledMonth());
+      const { valid, error, from, to } = trendWindowFromQuery(
+        req.query, latestBilledMonth(req.account),
+      );
       if (!valid) {
         return res.status(400).json({ error });
       }
 
-      const data = db.analysis.monthlyTrend(from, to);
+      const data = db.analysis.monthlyTrend(from, to, req.account);
 
       // Month names in French
       const monthNames = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Jun', 'Jul', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc'];
@@ -605,15 +610,18 @@ function registerRoutes() {
 
   // Monthly trend broken down by resource type, shaped for a multi-line chart:
   // { categories: [{key, label, color}], data: [{ yearMonth, <key>: total, ... }] }
-  // Over the same months as /api/analysis/monthly-trend, from the same parameters.
-  app.get('/api/analysis/monthly-trend-by-category', (req, res) => {
+  // Over the same months as /api/analysis/monthly-trend, from the same parameters, the
+  // account included (#120).
+  app.get('/api/analysis/monthly-trend-by-category', accountParameter, (req, res) => {
     try {
-      const { valid, error, from, to } = trendWindowFromQuery(req.query, latestBilledMonth());
+      const { valid, error, from, to } = trendWindowFromQuery(
+        req.query, latestBilledMonth(req.account),
+      );
       if (!valid) {
         return res.status(400).json({ error });
       }
 
-      const rows = db.analysis.monthlyTrendByResourceType(from, to);
+      const rows = db.analysis.monthlyTrendByResourceType(from, to, req.account);
 
       // Total per resource_type to order categories by spend.
       const totals = {};
@@ -1463,11 +1471,13 @@ function registerRoutes() {
   // GPU Cost Endpoints
   // ========================
 
-  app.get('/api/gpu/summary', (req, res) => {
+  // The GPU costs of the account the request asks for, and the GPU instances of its projects,
+  // or those of every account without one (#120)
+  app.get('/api/gpu/summary', accountParameter, (req, res) => {
     try {
       const { from, to } = req.query;
-      const gpuData = db.cloudDetails.getGpuSummary(from || null, to || null);
-      const gpuInstances = db.cloudDetails.getGpuInstances();
+      const gpuData = db.cloudDetails.getGpuSummary(from || null, to || null, req.account);
+      const gpuInstances = db.cloudDetails.getGpuInstances(req.account);
 
       const modelColors = {
         'NVIDIA L4': '#22c55e',
