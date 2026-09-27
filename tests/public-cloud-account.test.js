@@ -8,12 +8,8 @@
  * routes of one project, by its id, take no parameter.
  */
 
+const { LYON, PARIS, NEW_ACCOUNT, REFUSED, bill, project } = require('./support/accounts');
 const { startOcm } = require('./support/ocm-server');
-
-const LYON = 'xx1111-ovh';
-const PARIS = 'yy2222-ovh';
-// An account that an import recorded, but that has no project yet
-const NEW_ACCOUNT = 'zz3333-ovh';
 
 const PRODUCTION = 'project-production';
 const STAGING = 'project-staging';
@@ -21,13 +17,6 @@ const STAGING = 'project-staging';
 // account's
 const LEGACY = 'project-legacy';
 
-const project = (db, id, name, description, account) => db.projects.upsert({
-  id, name, description, status: 'ok', created_at: null, account,
-});
-const bill = (db, id, date, account) => db.bills.upsert({
-  id, date, price_without_tax: 0, price_with_tax: 0, tax: 0, currency: 'EUR',
-  pdf_url: null, html_url: null, account,
-});
 // A bill line of a Public Cloud project, whose id is the service it bills
 const line = (id, billId, projectId, description, price) => ({
   id, bill_id: billId, project_id: projectId, domain: projectId, description,
@@ -51,12 +40,13 @@ function seed(db) {
   db.accounts.upsert({ nic: LYON, currency: 'EUR', name: 'Lyon subsidiary' });
   db.accounts.upsert({ nic: PARIS, currency: 'EUR' });
   db.accounts.upsert({ nic: NEW_ACCOUNT, currency: 'EUR' });
-  project(db, PRODUCTION, 'Production', 'Customer-facing services', LYON);
-  project(db, STAGING, 'Staging', null, PARIS);
+  project(db, PRODUCTION, 'Production', LYON);
+  project(db, STAGING, 'Staging', PARIS);
   // The writers refuse such rows now: they are written as the database held them
   const sqlite = db.getDb();
   sqlite.prepare(
-    "INSERT INTO projects (id, name, status, account) VALUES (?, 'Legacy', 'ok', NULL)",
+    "INSERT INTO projects (id, name, description, status, account)"
+      + " VALUES (?, 'Legacy', 'Legacy', 'ok', NULL)",
   ).run(LEGACY);
   bill(db, 'FR1001', '2026-09-05', LYON);
   bill(db, 'FR2001', '2026-09-10', PARIS);
@@ -122,11 +112,6 @@ function seed(db) {
 // The dates of September, as the Public Cloud tab asks for its figures
 const SEPTEMBER = 'from=2026-09-01&to=2026-09-30';
 
-// What the server answers for a parameter it refuses
-const REFUSED = {
-  error: "Invalid 'account' parameter: expected the NIC handle of an account, or unknown",
-};
-
 let ocm;
 
 beforeAll(async () => {
@@ -137,13 +122,6 @@ afterAll(async () => {
   await ocm?.stop();
 });
 
-// The status and the JSON body of the answer to a path of the server, the one of the seeded
-// accounts unless told otherwise
-async function get(path, server = ocm) {
-  const res = await fetch(`${server.url}${path}`);
-  return { status: res.status, body: await res.json() };
-}
-
 describe('GET /api/projects', () => {
   // The projects of an answer, by name, as [id, account]
   const listed = ({ status, body }) => ({
@@ -151,66 +129,69 @@ describe('GET /api/projects', () => {
   });
 
   test('lists the projects of every account without the parameter, as before', async () => {
-    expect(listed(await get('/api/projects'))).toEqual({
+    expect(listed(await ocm.get('/api/projects'))).toEqual({
       status: 200, body: [[LEGACY, null], [PRODUCTION, LYON], [STAGING, PARIS]],
     });
   });
 
   test('lists the projects of the account whose NIC handle it gives', async () => {
-    expect(listed(await get(`/api/projects?account=${LYON}`)))
+    expect(listed(await ocm.get(`/api/projects?account=${LYON}`)))
       .toEqual({ status: 200, body: [[PRODUCTION, LYON]] });
-    expect(listed(await get(`/api/projects?account=${PARIS}`)))
+    expect(listed(await ocm.get(`/api/projects?account=${PARIS}`)))
       .toEqual({ status: 200, body: [[STAGING, PARIS]] });
   });
 
   test('lists the projects of the Unknown account, and none of an account without one',
     async () => {
-      expect(listed(await get('/api/projects?account=unknown')))
+      expect(listed(await ocm.get('/api/projects?account=unknown')))
         .toEqual({ status: 200, body: [[LEGACY, null]] });
-      expect(await get(`/api/projects?account=${NEW_ACCOUNT}`)).toEqual({ status: 200, body: [] });
+      expect(await ocm.get(`/api/projects?account=${NEW_ACCOUNT}`))
+        .toEqual({ status: 200, body: [] });
     });
 });
 
 describe('GET /api/projects/enriched', () => {
   // A project as the route lists it: with its instances, what it consumed in the month of the
-  // last import, and its account
-  const enriched = (id, name, description, account, instanceCount, consumed) => ({
-    id, name, description, status: 'ok', account,
+  // last import, and its account. The seeded ones are described by their name.
+  const enriched = (id, name, account, instanceCount, consumed) => ({
+    id, name, description: name, status: 'ok', account,
     instance_count: instanceCount, consumption_total: consumed,
     period_start: '2026-09-01', period_end: '2026-09-14',
   });
-  const production = enriched(PRODUCTION, 'Production', 'Customer-facing services', LYON, 2, 300);
-  const staging = enriched(STAGING, 'Staging', null, PARIS, 1, 50);
-  const legacy = enriched(LEGACY, 'Legacy', null, null, 1, 20);
+  const production = enriched(PRODUCTION, 'Production', LYON, 2, 300);
+  const staging = enriched(STAGING, 'Staging', PARIS, 1, 50);
+  const legacy = enriched(LEGACY, 'Legacy', null, 1, 20);
 
   test('lists the projects of every account without the parameter, as before, with their account',
     async () => {
       // Most consuming first
-      expect(await get('/api/projects/enriched')).toEqual({
+      expect(await ocm.get('/api/projects/enriched')).toEqual({
         status: 200, body: [production, staging, legacy],
       });
     });
 
   test('lists the projects of the account whose NIC handle it gives', async () => {
-    expect(await get(`/api/projects/enriched?account=${LYON}`))
+    expect(await ocm.get(`/api/projects/enriched?account=${LYON}`))
       .toEqual({ status: 200, body: [production] });
-    expect(await get(`/api/projects/enriched?account=${PARIS}`))
+    expect(await ocm.get(`/api/projects/enriched?account=${PARIS}`))
       .toEqual({ status: 200, body: [staging] });
   });
 
   test('lists the projects of the Unknown account: those without an account', async () => {
-    expect(await get('/api/projects/enriched?account=unknown'))
+    expect(await ocm.get('/api/projects/enriched?account=unknown'))
       .toEqual({ status: 200, body: [legacy] });
   });
 
   test('lists no project for an account recorded without one', async () => {
-    expect(await get(`/api/projects/enriched?account=${NEW_ACCOUNT}`))
+    expect(await ocm.get(`/api/projects/enriched?account=${NEW_ACCOUNT}`))
       .toEqual({ status: 200, body: [] });
   });
 });
 
 describe('GET /api/analysis/public-cloud-stats', () => {
-  const september = SEPTEMBER;
+  // The figures of September, of the account that the parameters name, if any
+  const stats = (parameters = '') =>
+    ocm.get(`/api/analysis/public-cloud-stats?${SEPTEMBER}${parameters}`);
   // The figures of the cards, as the route answers them: a count and a cost for each kind of
   // resource, a cost only for the instances. None by default.
   const figures = (counted) => ({
@@ -227,7 +208,7 @@ describe('GET /api/analysis/public-cloud-stats', () => {
   });
 
   test('counts the resources of every account without the parameter, as before', async () => {
-    expect(await get(`/api/analysis/public-cloud-stats?${september}`)).toEqual({
+    expect(await stats()).toEqual({
       status: 200,
       body: figures({
         kubernetes: { count: 1, total: 30 },
@@ -245,7 +226,7 @@ describe('GET /api/analysis/public-cloud-stats', () => {
   // The costs are those of the account's bills, the counts those of the resources of its
   // projects
   test('counts the resources of the account whose NIC handle it gives', async () => {
-    expect(await get(`/api/analysis/public-cloud-stats?${september}&account=${LYON}`)).toEqual({
+    expect(await stats(`&account=${LYON}`)).toEqual({
       status: 200,
       body: figures({
         instances: { total: 120 },
@@ -255,7 +236,7 @@ describe('GET /api/analysis/public-cloud-stats', () => {
         objectStorage: { count: 1, total: 14 },
       }),
     });
-    expect(await get(`/api/analysis/public-cloud-stats?${september}&account=${PARIS}`)).toEqual({
+    expect(await stats(`&account=${PARIS}`)).toEqual({
       status: 200,
       body: figures({
         kubernetes: { count: 1, total: 30 },
@@ -269,7 +250,7 @@ describe('GET /api/analysis/public-cloud-stats', () => {
 
   test('counts the resources of the Unknown account: of the bills and projects without one',
     async () => {
-      expect(await get(`/api/analysis/public-cloud-stats?${september}&account=unknown`)).toEqual({
+      expect(await stats('&account=unknown')).toEqual({
         status: 200,
         body: figures({
           instances: { total: 64 },
@@ -280,8 +261,7 @@ describe('GET /api/analysis/public-cloud-stats', () => {
     });
 
   test('counts nothing for an account recorded without a project', async () => {
-    expect(await get(`/api/analysis/public-cloud-stats?${september}&account=${NEW_ACCOUNT}`))
-      .toEqual({ status: 200, body: figures({}) });
+    expect(await stats(`&account=${NEW_ACCOUNT}`)).toEqual({ status: 200, body: figures({}) });
   });
 });
 
@@ -292,7 +272,7 @@ const ANALYTICS = 'project-analytics';
 const billedByParis = ({ inventory }) => (db) => {
   db.accounts.upsert({ nic: LYON, currency: 'EUR', name: 'Lyon subsidiary' });
   db.accounts.upsert({ nic: PARIS, currency: 'EUR' });
-  project(db, ANALYTICS, 'Analytics', null, LYON);
+  project(db, ANALYTICS, 'Analytics', LYON);
   bill(db, 'FR2101', '2026-09-10', PARIS);
   db.details.insertMany([
     line('FR2101-1', 'FR2101', ANALYTICS,
@@ -315,7 +295,7 @@ describe('a bucket of a project billed on the bills of another account', () => {
     const counts = [];
     for (const parameter of ['', `&account=${LYON}`, `&account=${PARIS}`]) {
       const path = `/api/analysis/public-cloud-stats?${SEPTEMBER}${parameter}`;
-      counts.push((await get(path, server)).body.objectStorage.count);
+      counts.push((await server.get(path)).body.objectStorage.count);
     }
     return counts;
   };
@@ -360,10 +340,10 @@ describe('an account the server does not know', () => {
     ['an empty value', 'account='],
     ['several values', `account=${LYON}&account=${PARIS}`],
   ])('is refused, naming the parameter: %s', async (_, parameter) => {
-    expect(await get(`/api/projects?${parameter}`)).toEqual({ status: 400, body: REFUSED });
-    expect(await get(`/api/projects/enriched?${parameter}`))
+    expect(await ocm.get(`/api/projects?${parameter}`)).toEqual({ status: 400, body: REFUSED });
+    expect(await ocm.get(`/api/projects/enriched?${parameter}`))
       .toEqual({ status: 400, body: REFUSED });
-    expect(await get(`/api/analysis/public-cloud-stats?${SEPTEMBER}&${parameter}`))
+    expect(await ocm.get(`/api/analysis/public-cloud-stats?${SEPTEMBER}&${parameter}`))
       .toEqual({ status: 400, body: REFUSED });
   });
 });
