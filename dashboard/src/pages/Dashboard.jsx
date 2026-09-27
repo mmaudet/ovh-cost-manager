@@ -110,11 +110,16 @@ export default function Dashboard() {
     fetch: fetchMonths,
   }));
 
-  // Fetch data for selected month
+  // Whether the months billed to the account shown hold the month selected: not while they
+  // load, nor when the user selected an account not billed that month, until the page selects
+  // its latest month (below)
+  const holdsSelectedMonth = months.some((m) => m.value === selectedMonth?.value);
+
+  // The figures of the month selected, once the account shown has it
   const { data: summary, isLoading: loadingSummary } = useQuery(accountQuery(selectedAccount, {
     key: ['summary', selectedMonth?.from, selectedMonth?.to],
     fetch: (account) => fetchSummary(selectedMonth.from, selectedMonth.to, account),
-    enabled: !!selectedMonth,
+    enabled: holdsSelectedMonth,
   }));
 
   // The month just before the selected one in the calendar, as the months list gives it:
@@ -216,7 +221,6 @@ export default function Dashboard() {
   // Select the latest month when the months list loads without the month selected: when the
   // page opens, as useCompareTab sets months A and B then, in the same commit, and when the
   // account selected was not billed that month (#115)
-  const holdsSelectedMonth = months.some((m) => m.value === selectedMonth?.value);
   useEffect(() => {
     if (months.length > 0 && !holdsSelectedMonth) {
       setSelectedMonth(months[0]);

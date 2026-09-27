@@ -174,6 +174,17 @@ describe('account selector', () => {
         expect(monthCost()).toEqual(costCard('200,00€', '+11,1 % vs mois précédent'));
       });
 
+    // The month selected stays until the account's months list loads, and says it lacks it
+    it('ask for no figures of the month selected that the account selected lacks', async () => {
+      const { user } = await renderDashboard(severalAccounts);
+
+      await selectAccount(user, 'zz3333-ovh (non configuré)');
+
+      expect(api.fetchSummary)
+        .not.toHaveBeenCalledWith('2026-09-01', '2026-09-30', removedAccount.id);
+      expect(api.fetchSummary).toHaveBeenCalledWith('2026-08-01', '2026-08-31', removedAccount.id);
+    });
+
     it('are those of all accounts again once they are selected', async () => {
       const { user } = await renderDashboard(severalAccounts);
       await selectAccount(user, 'Compte inconnu');
