@@ -61,8 +61,8 @@ const dropdownsShown = () => screen.getAllByRole('combobox').map((select) => tex
 
 // The account selector of the header (#115): the accounts the instance knows, all of them by
 // default. The month selector, the KPI cards of the month's figures and those of the current
-// month's consumption (#116) follow the account selected; the other cards and the tabs follow
-// it in the next tickets (#117 to #123).
+// month's consumption (#116) follow the account selected, and the forecast is compared with
+// its budget (#117); the tabs and the other cards follow it in their own tests.
 describe('account selector', () => {
   describe('in the header', () => {
     it.each([
@@ -205,6 +205,32 @@ describe('account selector', () => {
       await renderDashboard(withBudgets(800, { [lyonAccount.id]: 1000 }));
 
       expect(forecast()).toEqual(forecastAboveBudget('862,18€'));
+    });
+
+    // Its own, which its forecast goes over, and not the dashboard budget, which that of all
+    // accounts does not (#117)
+    it('flag the forecast of the account selected above its own budget', async () => {
+      const { user } = await renderDashboard(withBudgets(50000, { [lyonAccount.id]: 700 }));
+      expect(forecast()).toEqual(forecastCard('862,18€'));
+
+      await selectAccount(user, 'Lyon subsidiary');
+
+      expect(forecast()).toEqual(forecastAboveBudget('750,00€'));
+    });
+
+    // A dashboard budget of 100 €, which every forecast goes over: the page flagged them all
+    it('never compare the forecast of an account with the dashboard budget', async () => {
+      const { user } = await renderDashboard(withBudgets(100, { [lyonAccount.id]: 1000 }));
+      expect(forecast()).toEqual(forecastAboveBudget('862,18€'));
+
+      await selectAccount(user, 'Lyon subsidiary');
+
+      expect(forecast()).toEqual(forecastCard('750,00€'));
+
+      // Without a budget of its own
+      await selectAccount(user, 'yy2222-ovh');
+
+      expect(forecast()).toEqual(forecastCard('112,18€'));
     });
 
     // Its import stopped in August, before any consumption this month: the cards show none,

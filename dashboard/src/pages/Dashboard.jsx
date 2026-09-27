@@ -100,10 +100,9 @@ export default function Dashboard() {
 
   // The account the page shows, page-wide: null for all accounts, undefined until the page
   // knows it. The months list, the KPI cards of the month's figures and of the current month's
-  // consumption (#116), the Overview's figures (#118) and budget card (#117), the Compare tab
-  // and the Veeam backups (#119), the Web Cloud (#122) and Infrastructure (#123) tabs, and the
-  // services about to expire (#123) follow it; the month-end forecast is still compared with
-  // the dashboard budget.
+  // consumption (#116), the Overview's figures (#118), the budget that they are compared with
+  // (#117), the Compare tab and the Veeam backups (#119), the Web Cloud (#122) and
+  // Infrastructure (#123) tabs, and the services about to expire (#123) follow it.
   const { selectedAccount, selectAccount } = useSelectedAccount(accounts);
   // The Account column of the lists, which name the account of each row with all accounts
   // shown, when the page offers several (#121): null when they name none
@@ -304,9 +303,10 @@ export default function Dashboard() {
 
   // Calculations
   const total = summary?.total || 0;
-  // The budget that the budget card compares the figures shown with (#117): the dashboard
-  // budget for all accounts, or else the account's own, null when it has none. The user may
-  // change the dashboard budget only: config.json sets the accounts' own.
+  // The budget that the Overview's budget card and the month-end forecast compare the figures
+  // shown with (#117): the dashboard budget for all accounts, or else the account's own, null
+  // when it has none. The user may change the dashboard budget only: config.json sets the
+  // accounts' own.
   const budget = budgetOf(selectedAccount, dashboardBudget, configData?.accountBudgets);
   // The "vs previous month" variation, from the month before (#50), as the page shows it: its
   // text and its tone, as in the Compare and Trends tabs (#87). Null when it cannot be
@@ -632,7 +632,9 @@ export default function Dashboard() {
                   </div>
                 )}
                 <div className="text-sm text-gray-500 mt-1">
-                  {consumptionForecast.forecast_total > dashboardBudget
+                  {/* None for an account without a budget: JavaScript compares a number with
+                      null as with 0 */}
+                  {budget !== null && consumptionForecast.forecast_total > budget
                     ? <span className="text-red-500 font-medium">{`> ${t('budget')}!`}</span>
                     : consumptionForecast.days_elapsed
                       ? `${consumptionForecast.days_elapsed}/${consumptionForecast.days_in_month}`
