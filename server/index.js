@@ -10,7 +10,7 @@ const { spawn } = require('child_process');
 // Import database module from data workspace
 const db = require('../data/db');
 const { monthBounds } = require('../data/months');
-const { checkAccounts } = require('../data/accounts-config');
+const { readAccounts } = require('../data/accounts-config');
 
 // Import auth module
 const auth = require('./auth');
@@ -45,9 +45,10 @@ try {
   allowedOrigins = readAllowedOrigins(config, process.env, configPath || undefined);
   // IMPORT_ENABLED too, which the routes read later
   importsEnabled();
-  // The OVH accounts, checked as the import reads them (#113). The server never uses their
-  // keys: the accounts route names them as their last import recorded them.
-  checkAccounts(loaded.config, configPath || 'config.json');
+  // The OVH accounts, read only to check them, as the import reads them (#113): the server
+  // never uses their keys, and the accounts route names them as their last import recorded
+  // them
+  readAccounts(loaded.config, configPath || 'config.json');
 } catch (err) {
   console.error(`Failed to start server: ${err.message}`);
   process.exit(1);

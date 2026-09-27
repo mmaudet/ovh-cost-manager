@@ -1,9 +1,9 @@
 /**
- * The OVH accounts of config.json (#113), read as strictly as the server's other settings
- * (server/settings.js): a value that is not one they take stops the import and the server,
- * naming the setting and the file, rather than import a half-read list of accounts. The
- * import reads each account's credentials; the server only checks them, as it never calls
- * the OVH API.
+ * The OVH accounts of config.json (#113), read as strictly as the server's other settings,
+ * with the checks they share (data/strict-settings.js): a value that is not one they take
+ * stops the import and the server, naming the setting and the file, rather than import a
+ * half-read list of accounts. The import reads each account's credentials; the server only
+ * checks them, as it never calls the OVH API.
  *
  * A configuration file gives its accounts in one of three forms:
  * - accounts, an array of accounts, each with an optional name, unique among them, an
@@ -13,6 +13,8 @@
  * The last two read as before: the OVH API client takes the API's host from an endpoint, or
  * a host, or else uses the EU one.
  */
+
+const { parsePositiveInteger, readSection } = require('./strict-settings');
 
 // The keys of the credentials of the legacy forms, as the OVH API client requires them
 const KEYS = ['appKey', 'appSecret', 'consumerKey'];
@@ -31,7 +33,8 @@ const ACCOUNT_KEYS = [...KEYS, 'endpoint'];
  */
 
 /**
- * Reads the accounts that a configuration file gives.
+ * Reads the accounts that a configuration file gives. The server calls it only to check
+ * them.
  *
  * @param {object} config - The content of the file
  * @param {string} source - The file's path, which the errors name
@@ -55,25 +58,13 @@ function readAccounts(config, source) {
     return readAccountList(config.accounts, source);
   }
   if (config.credentials !== undefined) {
-    return [unnamed(readCredentials(config.credentials, 'credentials', source, KEYS))];
+    return [unnamed(readCredentials(config, 'credentials', 'credentials', source, KEYS))];
   }
   // The legacy flat form, which the whole file is the credentials of
   if (legacyKeys.length > 0) {
-    return [unnamed(readCredentials(config, null, source, KEYS))];
+    return [unnamed(readCredentials(config, null, null, source, KEYS))];
   }
   return [];
-}
-
-/**
- * Checks the accounts that a configuration file gives, for the server: it shows the names
- * that the import records, and never uses their keys.
- *
- * @param {object} config - The content of the file
- * @param {string} source - The file's path, which the errors name
- * @throws {Error} as readAccounts() does
- */
-function checkAccounts(config, source) {
-  readAccounts(config, source);
 }
 
 // The single account of the credentials section, or of the legacy flat form
@@ -91,11 +82,9 @@ function readAccountList(list, source) {
   }
   // The place of each name taken, by name
   const named = new Map();
-  return list.map((entry, index) => {
+  return list.map((_, index) => {
     const place = `accounts[${index}]`;
-    if (!isObject(entry)) {
-      throw new Error(`${place} in ${source} must be an object, not ${kindOf(entry)}`);
-    }
+    const entry = readSection(list, index, { name: `${place} in ${source}` });
     const name = readName(entry.name, `${place}.name`, source);
     if (name !== null && named.has(name)) {
       throw new Error(`${place}.name in ${source} must be unique among the accounts: `
@@ -105,8 +94,10 @@ function readAccountList(list, source) {
     return {
       label: name === null ? place : JSON.stringify(name),
       name,
-      budget: readBudget(entry.budget, `${place}.budget`, source),
-      credentials: readCredentials(entry.credentials, `${place}.credentials`, source,
+      budget: parsePositiveInteger(entry.budget, {
+        name: `${place}.budget in ${source}`, fromFile: true,
+      }) ?? null,
+      credentials: readCredentials(entry, 'credentials', `${place}.credentials`, source,
         ACCOUNT_KEYS),
     };
   });
@@ -123,42 +114,30 @@ function readName(value, name, source) {
   return value.trim();
 }
 
-// An optional budget: a positive integer, a JSON number
-function readBudget(value, name, source) {
-  if (value === undefined) return null;
-  if (typeof value !== 'number' || !Number.isSafeInteger(value) || value <= 0) {
-    throw new Error(`${name} in ${source} must be a positive integer (a JSON number), not `
-      + `${JSON.stringify(value)}`);
-  }
-  return value;
-}
-
-// The credentials of an account: an object whose `keys` are non-empty strings, given to the
-// client as they are. Its values are secrets: the errors say what they are, never what they
-// hold. `section` is the setting that holds them, null for the top of the file.
-function readCredentials(value, section, source, keys) {
-  if (value === undefined) {
-    throw new Error(`${section} in ${source} is missing: it must be an object that holds `
+// The credentials of an account, under `key` in `parent`, which `name` names, or, with a null
+// key, the whole of `parent`, in the legacy flat form: an object whose `keys` are non-empty
+// strings, which goes to the client as it is. Its values are secrets: the errors say what
+// they are, never what they hold.
+function readCredentials(parent, key, name, source, keys) {
+  if (key !== null && parent[key] === undefined) {
+    throw new Error(`${name} in ${source} is missing: it must be an object that holds `
       + 'appKey, appSecret, consumerKey and endpoint');
   }
-  if (!isObject(value)) {
-    throw new Error(`${section} in ${source} must be an object, not ${kindOf(value)}`);
-  }
-  for (const key of keys) {
-    const name = section === null ? key : `${section}.${key}`;
-    const credential = value[key];
+  const credentials = key === null
+    ? parent
+    : readSection(parent, key, { name: `${name} in ${source}` });
+  for (const credentialKey of keys) {
+    const setting = name === null ? credentialKey : `${name}.${credentialKey}`;
+    const credential = credentials[credentialKey];
     if (credential === undefined) {
-      throw new Error(`${name} in ${source} is missing: it must be a non-empty string`);
+      throw new Error(`${setting} in ${source} is missing: it must be a non-empty string`);
     }
     if (typeof credential !== 'string' || credential.trim() === '') {
-      throw new Error(`${name} in ${source} must be a non-empty string, not ${kindOf(credential)}`);
+      throw new Error(`${setting} in ${source} must be a non-empty string, not `
+        + `${kindOf(credential)}`);
     }
   }
-  return { ...value };
-}
-
-function isObject(value) {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
+  return { ...credentials };
 }
 
 // What a value is, for the errors, without its text: a string could be a key put in the
@@ -172,4 +151,4 @@ function kindOf(value) {
   return `a ${typeof value}`;
 }
 
-module.exports = { readAccounts, checkAccounts };
+module.exports = { readAccounts };
