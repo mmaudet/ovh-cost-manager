@@ -335,3 +335,36 @@ describe('the credit movements', () => {
     ]);
   });
 });
+
+// Serves on these routes the usage of a Public Cloud project over the month of `from`, up to
+// `to`: without any usage, which is enough for the month to be recorded
+function serveUsage(accountRoutes, projectId, from, to) {
+  accountRoutes.set(`/cloud/project/${projectId}/usage/current`, ok({
+    period: { from: `${from}T00:00:00+02:00`, to: `${to}T12:00:00+02:00` }, hourlyUsage: {},
+  }));
+}
+
+// The month of the current consumption that each account's import recorded, as [NIC handle
+// of the account, first day of the month]
+const recordedMonths = () => db.getDb().prepare(`
+  SELECT account, value FROM import_state WHERE key = 'consumption_month' ORDER BY account
+`).all().map(row => [row.account, row.value]);
+
+describe('the month of the current consumption', () => {
+  // OVH can be late to start the month for some projects
+  test('is recorded for each account, the latest being the current one', async () => {
+    const lyon = serveAccount(LYON);
+    const paris = serveAccount(PARIS);
+    serveProjects(lyon.routes, ['proj-lyon']);
+    serveProjects(paris.routes, ['proj-paris']);
+    for (const served of [lyon, paris]) serveBills(served.routes, []);
+    serveUsage(lyon.routes, 'proj-lyon', '2026-09-01', '2026-09-15');
+    serveUsage(paris.routes, 'proj-paris', '2026-08-01', '2026-08-31');
+    useAccounts({ served: lyon }, { served: paris });
+
+    await importSeptember({ includeCloudDetails: true });
+
+    expect(db.cloudDetails.getCurrentConsumptionMonth()).toBe('2026-09-01');
+    expect(recordedMonths()).toEqual([[LYON.nic, '2026-09-01'], [PARIS.nic, '2026-08-01']]);
+  });
+});

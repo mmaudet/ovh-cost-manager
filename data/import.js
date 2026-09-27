@@ -1028,9 +1028,10 @@ function usagePeriod(usage) {
 }
 
 // Imports the resources and the consumption of each Public Cloud project of the account,
-// through `ovh`, its OVH API client. `heartbeat()` keeps the lock of the run, if any, before
-// each project: an account can have many, and each takes many calls.
-async function importCloudDetails(ovh, projectIds, heartbeat = () => {}) {
+// through `ovh`, its OVH API client, and records the month of its current consumption for
+// the account, `nic`, its NIC handle (#114). `heartbeat()` keeps the lock of the run, if any,
+// before each project: an account can have many, and each takes many calls.
+async function importCloudDetails(ovh, projectIds, nic, heartbeat = () => {}) {
   console.log('\n--- Importing cloud project details ---');
 
   // The month of the current consumption: the latest that the usage of a project reports
@@ -1221,7 +1222,7 @@ async function importCloudDetails(ovh, projectIds, heartbeat = () => {}) {
   }
 
   // Read as the current consumption, even when no project used anything yet this month
-  if (consumptionMonth) db.cloudDetails.setCurrentConsumptionMonth(consumptionMonth);
+  if (consumptionMonth) db.cloudDetails.setCurrentConsumptionMonth(consumptionMonth, nic);
 }
 
 // The day the bills of an account start from, null for its first: in a differential import,
@@ -1348,7 +1349,7 @@ async function importAccount(ovh, nic, { params, importType, toDate, heartbeat }
       heartbeat();
     }
     if (params.includeCloudDetails) {
-      await importCloudDetails(ovh, Object.keys(projectMap), heartbeat);
+      await importCloudDetails(ovh, Object.keys(projectMap), nic, heartbeat);
     }
     return { imported };
   } catch (err) {

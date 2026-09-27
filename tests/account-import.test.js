@@ -405,4 +405,26 @@ describe('the first import after the upgrade', () => {
     expect(accountsOfRootTables()).toEqual(onlyTheAccount(ROOT_TABLES));
     expect(accountsOfChildTables()).toEqual(onlyTheAccount(Object.keys(CHILD_TABLES)));
   });
+
+  // Until the account-wide figures follow the account (#116), their readers read every row:
+  // with a single account, they give what they gave, but for the account of the rows
+  test('leaves what the readers of the account-wide figures give', async () => {
+    await storeRowsOfBefore();
+    routes.set('/cloud/project', ok([]));
+    routes.set('/me/bill', ok([]));
+    const withoutAccount = ({ account, ...row }) => row;
+    const read = () => ({
+      balance: withoutAccount(db.balance.getLatestBalance()),
+      credits: db.balance.getCreditMovements().map(withoutAccount),
+      snapshot: withoutAccount(db.consumption.getLatestSnapshot()),
+      history: db.consumption.getHistory().map(withoutAccount),
+      consumptionMonth: db.cloudDetails.getCurrentConsumptionMonth(),
+    });
+    const before = read();
+
+    await runImport({ diff: true });
+
+    expect(read()).toEqual(before);
+    expect(before.consumptionMonth).toBe('2026-09-01');
+  });
 });

@@ -199,6 +199,9 @@ function getDb() {
       'id', 'balance_name', 'amount', 'date', 'description', 'movement_type', 'imported_at',
       'account',
     ], () => outOfKey(db, 'credit_movements', 'account'));
+    // The import state kept by account (#114). What an import recorded before carries none.
+    rekeyTable(db, 'import_state', ['key', 'value', 'updated_at'],
+      () => outOfKey(db, 'import_state', 'account'));
   }
   return db;
 }
@@ -507,9 +510,11 @@ const accountsOps = {
   },
 
   /**
-   * Gives the account every row of ACCOUNT_TABLES that has none. The writers refuse a row
-   * without an account, so these are the rows stored before the upgrade: with a single
-   * account configured, they can only be its own.
+   * Gives the account every row of ACCOUNT_TABLES that has none, and the import state
+   * recorded without one. The writers refuse a row without an account, so these are the
+   * rows stored before the upgrade: with a single account configured, they can only be its
+   * own. A row whose key the account has since recorded, such as the month of its current
+   * consumption, keeps none.
    * @param {string} nic - The NIC handle of the account
    * @returns {number} How many rows it gave the account
    */
@@ -517,8 +522,8 @@ const accountsOps = {
     const db = getDb();
     const attribute = db.transaction(() => {
       let attributed = 0;
-      for (const table of ACCOUNT_TABLES) {
-        attributed += db.prepare(`UPDATE ${table} SET account = ? WHERE account IS NULL`)
+      for (const table of [...ACCOUNT_TABLES, 'import_state']) {
+        attributed += db.prepare(`UPDATE OR IGNORE ${table} SET account = ? WHERE account IS NULL`)
           .run(nic).changes;
       }
       return attributed;
@@ -1506,24 +1511,31 @@ function allocateSwiftArchive(db, rows, projectId, fromDate, toDate) {
 const cloudDetailOps = {
   // The first day of the month of the current consumption, which the readers show when no
   // month is asked for: the month that the last import of the consumption covered, even
-  // with no usage yet. The consumption of every month is kept (#54). Before any import
-  // records its month, the latest month stored; null when there is none.
+  // with no usage yet. The consumption of every month is kept (#54). Each account records
+  // its own (#114): the latest of them, until the readers follow the account (#116). Before
+  // any import records its month, the latest month stored; null when there is none.
   getCurrentConsumptionMonth: () => {
     const db = getDb();
     const recorded = db.prepare(
-      "SELECT value FROM import_state WHERE key = 'consumption_month'"
-    ).get();
-    if (recorded) return recorded.value;
+      "SELECT MAX(value) AS month FROM import_state WHERE key = 'consumption_month'"
+    ).get().month;
+    if (recorded) return recorded;
     return db.prepare('SELECT MAX(period_start) as month FROM project_consumption').get().month;
   },
 
-  setCurrentConsumptionMonth: (periodStart) => {
+  /**
+   * Records the month that an import of an account's project consumption covered.
+   * @param {string} periodStart - Its first day, YYYY-MM-01
+   * @param {string} account - The NIC handle of the account
+   */
+  setCurrentConsumptionMonth: (periodStart, account) => {
     const db = getDb();
     db.prepare(`
-      INSERT INTO import_state (key, value, updated_at)
-      VALUES ('consumption_month', ?, CURRENT_TIMESTAMP)
-      ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = CURRENT_TIMESTAMP
-    `).run(periodStart);
+      INSERT INTO import_state (key, value, updated_at, account)
+      VALUES ('consumption_month', @periodStart, CURRENT_TIMESTAMP, @account)
+      ON CONFLICT(key, account) DO UPDATE SET
+        value = excluded.value, updated_at = CURRENT_TIMESTAMP
+    `).run(requireAccount('import_state', { periodStart, account }));
   },
 
   insertConsumption: (entry) => {

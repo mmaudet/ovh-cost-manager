@@ -65,7 +65,7 @@ describe('a full import', () => {
   test('keeps the month of the current consumption', async () => {
     storeProject(PROJECT);
     storeConsumption(PROJECT, '2026-08', 30.5);
-    db.cloudDetails.setCurrentConsumptionMonth('2026-09-01');
+    db.cloudDetails.setCurrentConsumptionMonth('2026-09-01', ACCOUNT.nic);
     serveProjects(PROJECT);
 
     await importFull();
