@@ -91,9 +91,10 @@ NIC handle:
   Account column of the lists and CSV exports with all accounts shown, the budget the page
   compares with, and the scope the report names.
 
-A single-account installation sends the same requests, under the same query keys, and
-shows the same page as before the accounts: `dashboard/test/shell-queries.test.jsx` pins
-the keys, and the real-data comparison of `CONTRIBUTING.md` checks the page.
+A single-account installation sends the same requests as before the accounts, under the
+same query keys, plus `GET /api/accounts` under `['accounts']`, and shows the same page:
+`dashboard/test/shell-queries.test.jsx` pins the keys, and the real-data comparison of
+`CONTRIBUTING.md` checks the page.
 
 ### Configuration resolution
 
