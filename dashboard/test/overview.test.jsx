@@ -743,12 +743,11 @@ describe('Overview tab', () => {
     // The inventory's services about to expire, which the header counts too (#123): see
     // fixtures/infrastructure.js
     describe('services about to expire', () => {
-      // Those of every account, soonest first, each named by its account: its name, or else
-      // its NIC handle, and the Unknown account for a service that no account claimed
+      // Those of every configured account, soonest first, each named by its account: its
+      // name, or else its NIC handle. The server leaves out those of the Unknown account and of
+      // the account no longer configured, which no import refreshes.
       const everyAccountsExpiring = [
         'Expirations proches',
-        'Stockage', 'old-nas', 'Compte inconnu', 'Expiré depuis 5 jours',
-        'Serveurs dédiés', 'db-server', 'zz3333-ovh', 'Expire dans 2 jours',
         'Serveurs dédiés', 'backup-server', 'Lyon subsidiary', 'Expire dans 5 jours',
         'VPS', 'vps-0a1b2c3d.vps.ovh.net', 'Lyon subsidiary', 'Expire dans 25 jours',
         'VPS', 'staging-vps', 'yy2222-ovh', 'Expire dans 27 jours',
@@ -756,7 +755,7 @@ describe('Overview tab', () => {
 
       it('are those of the account selected, in the card and in the header', async () => {
         const { user } = await renderDashboard(severalAccounts);
-        expect(texts(headerBadge('Expirations proches'))).toEqual(['5', 'Expirations proches']);
+        expect(texts(headerBadge('Expirations proches'))).toEqual(['3', 'Expirations proches']);
 
         await selectAccount(user, 'Lyon subsidiary');
 
@@ -768,7 +767,8 @@ describe('Overview tab', () => {
         ]);
         expect(texts(headerBadge('Expirations proches'))).toEqual(['2', 'Expirations proches']);
 
-        // Whatever the month, as the inventory is what exists now
+        // Those that all accounts leave out, whatever the month, as the inventory is what
+        // exists now
         await selectAccount(user, 'Compte inconnu');
 
         expect(texts(expirationCard())).toEqual([
@@ -776,10 +776,16 @@ describe('Overview tab', () => {
         ]);
         expect(texts(headerBadge('Expirations proches'))).toEqual(['1', 'Expirations proches']);
 
+        await selectAccount(user, 'zz3333-ovh (non configuré)');
+
+        expect(texts(expirationCard())).toEqual([
+          'Expirations proches', 'Serveurs dédiés', 'db-server', 'Expire dans 2 jours',
+        ]);
+
         await selectAccount(user, 'Tous les comptes');
 
         expect(texts(expirationCard())).toEqual(everyAccountsExpiring);
-        expect(texts(headerBadge('Expirations proches'))).toEqual(['5', 'Expirations proches']);
+        expect(texts(headerBadge('Expirations proches'))).toEqual(['3', 'Expirations proches']);
       });
 
       it('name the account of each service when the page shows all accounts', async () => {
@@ -790,8 +796,51 @@ describe('Overview tab', () => {
         await selectLanguage(user, 'en');
 
         expect(texts(expirationCard('Expiring soon')).slice(0, 5)).toEqual([
-          'Expiring soon', 'Storage', 'old-nas', 'Unknown account', 'Expired 5 days ago',
+          'Expiring soon', 'Dedicated Servers', 'backup-server', 'Lyon subsidiary',
+          'Expires in 5 days',
         ]);
+      });
+
+      // Services that expired long ago, which no import refreshes, as those that the Unknown
+      // account kept from before the accounts: listed for all accounts, the five oldest filled
+      // the card, and the header counted them. The server leaves them out there.
+      it('leave the services that no import refreshes to their own account', async () => {
+        const stale = (id, name, date) => ({
+          id, display_name: name, type: 'storage', expiration_date: date, account: null,
+        });
+        const soon = {
+          id: 'ns3000001.ip-203-0-113.eu', display_name: 'backup-server',
+          type: 'dedicated_server', expiration_date: '2026-09-17', account: lyonAccount.nic,
+        };
+        const { user } = await renderDashboard({
+          ...severalAccounts,
+          expiringServices: [soon],
+          ofAccount: {
+            ...severalAccounts.ofAccount,
+            unknown: {
+              ...severalAccounts.ofAccount.unknown,
+              expiringServices: [
+                stale('netapp-0001', 'nas-1', '2025-01-31'),
+                stale('netapp-0002', 'nas-2', '2025-03-31'),
+                stale('netapp-0003', 'nas-3', '2025-06-30'),
+                stale('netapp-0004', 'nas-4', '2025-09-30'),
+                stale('netapp-0005', 'nas-5', '2025-12-31'),
+              ],
+            },
+          },
+        });
+
+        expect(texts(expirationCard())).toEqual([
+          'Expirations proches',
+          'Serveurs dédiés', 'backup-server', 'Lyon subsidiary', 'Expire dans 2 jours',
+        ]);
+        expect(texts(headerBadge('Expirations proches'))).toEqual(['1', 'Expirations proches']);
+
+        await selectAccount(user, 'Compte inconnu');
+
+        expect(texts(expirationCard()).filter((text) => text.startsWith('nas-')))
+          .toEqual(['nas-1', 'nas-2', 'nas-3', 'nas-4', 'nas-5']);
+        expect(texts(headerBadge('Expirations proches'))).toEqual(['5', 'Expirations proches']);
       });
 
       // As the page shows them before an instance could import several accounts
@@ -802,7 +851,7 @@ describe('Overview tab', () => {
         await renderDashboard({ ...severalAccounts, accounts });
 
         expect(texts(expirationCard())).toEqual(everyAccountsExpiring.filter((text) => ![
-          'Compte inconnu', 'zz3333-ovh', 'Lyon subsidiary', 'yy2222-ovh',
+          'Lyon subsidiary', 'yy2222-ovh',
         ].includes(text)));
       });
     });

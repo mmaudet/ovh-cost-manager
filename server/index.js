@@ -1163,7 +1163,8 @@ function registerRoutes() {
   });
 
   // How many services the inventories of the account the request asks for hold, and how many
-  // expire within 30 days: those of every account without one (#123)
+  // expire within 30 days, as the route of those lists them: those of every account without
+  // one (#123)
   app.get('/api/inventory/summary', accountParameter, (req, res) => {
     try {
       const summary = db.inventory.getSummary(req.account);
@@ -1179,8 +1180,9 @@ function registerRoutes() {
   });
 
   // The services about to expire, which the Overview lists and the header counts: those of
-  // the account the request asks for, or of every account without one, each with its account,
-  // null for the Unknown account (#123)
+  // the account the request asks for, or of every configured account without one, each with
+  // its account, null for the Unknown account (#123). The Unknown account's, and those of an
+  // account no longer configured, which no import refreshes, show with their own account.
   app.get('/api/inventory/expiring', accountParameter, (req, res) => {
     try {
       const days = parseInt(req.query.days) || 30;

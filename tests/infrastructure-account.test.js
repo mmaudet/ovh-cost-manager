@@ -35,11 +35,13 @@ const line = (id, billId, service, resourceType, description, price) => ({
 
 // Two accounts, one that an import recorded without any service, and the Unknown account,
 // null, whose services, bill and project the imports before the accounts stored first, and
-// that no account claimed since. Every NIC handle, name and identifier is made up.
+// that no account claimed since. The configuration of the last import lists the three
+// accounts. Every NIC handle, name and identifier is made up.
 function seed(db) {
   db.accounts.upsert({ nic: LYON, currency: 'EUR', name: 'Lyon subsidiary' });
   db.accounts.upsert({ nic: PARIS, currency: 'EUR' });
   db.accounts.upsert({ nic: NEW_ACCOUNT, currency: 'EUR' });
+  db.accounts.recordConfiguration([LYON, PARIS, NEW_ACCOUNT]);
   server(db, null, {
     id: 'ns3000004.ip-203-0-113.eu', name: 'legacy-server', expires: daysFromNow(10),
   });
@@ -234,18 +236,15 @@ describe('GET /api/inventory/expiring', () => {
 
   // Soonest first, those already expired first; on the same day, the servers, the VPS and
   // then the storage services, as before, and the services of one inventory by the NIC handle
-  // of their account, the Unknown account's last, whatever order they were stored in. The
-  // server that both accounts' APIs list comes once.
-  test('lists the services of every account without the parameter, each with its account',
-    async () => {
-      expect(await expiringOf('days=30')).toEqual({
-        status: 200,
-        body: [
-          lyonVps, oldNas, sharedServer, dbServer, appServer, legacyServer, stagingVps,
-          archivesNas,
-        ],
-      });
+  // of their account, whatever order they were stored in. The server that both accounts' APIs
+  // list comes once. The Unknown account's are left out: see below.
+  test('lists the services of the configured accounts without the parameter, each with its '
+    + 'account', async () => {
+    expect(await expiringOf('days=30')).toEqual({
+      status: 200,
+      body: [lyonVps, sharedServer, dbServer, appServer, stagingVps, archivesNas],
     });
+  });
 
   test('lists the services of the account whose NIC handle it gives', async () => {
     expect(await expiringOf(`days=30&account=${LYON}`)).toEqual({
@@ -291,8 +290,9 @@ describe('GET /api/inventory/summary', () => {
     `/api/inventory/summary${account === undefined ? '' : `?account=${account}`}`,
   );
 
+  // Among the services about to expire, those of the configured accounts, as they are listed
   test('counts the services of every account without the parameter', async () => {
-    expect(await summaryOf()).toEqual({ status: 200, body: summary(5, 3, 3, 3, 8) });
+    expect(await summaryOf()).toEqual({ status: 200, body: summary(5, 3, 3, 3, 6) });
   });
 
   test('counts the services of the account whose NIC handle it gives, or of the Unknown '
@@ -436,7 +436,11 @@ describe.each([
   beforeAll(async () => {
     single = await startOcm(() => ({}), {
       seed: (db) => {
-        if (account !== null) db.accounts.upsert({ nic: account, currency: 'EUR' });
+        // Its imports record it, and its configuration, which lists it
+        if (account !== null) {
+          db.accounts.upsert({ nic: account, currency: 'EUR' });
+          db.accounts.recordConfiguration([account]);
+        }
         server(db, account, {
           id: 'ns3000001.ip-203-0-113.eu', name: 'backup-server', expires: EXPIRED,
         });
@@ -500,6 +504,69 @@ describe.each([
         },
       ],
     });
+  });
+});
+
+// The services about to expire of every account are those of the accounts that the
+// configuration lists, once an import recorded them: no import refreshes the services of the
+// Unknown account, nor those of an account no longer configured, which would stay expired for
+// good, and take the place of those about to expire in the Overview's five. They still show
+// with their own account selected. Here five services of the Unknown account expired in 2025,
+// and a server of Paris, which config.json no longer lists, too.
+describe('services about to expire that no import refreshes', () => {
+  let stale;
+
+  beforeAll(async () => {
+    stale = await startOcm(() => ({}), {
+      seed: (db) => {
+        db.accounts.upsert({ nic: LYON, currency: 'EUR', name: 'Lyon subsidiary' });
+        db.accounts.upsert({ nic: PARIS, currency: 'EUR' });
+        db.accounts.recordConfiguration([LYON]);
+        server(db, LYON, {
+          id: 'ns3000001.ip-203-0-113.eu', name: 'backup-server', expires: daysFromNow(2),
+        });
+        server(db, PARIS, {
+          id: 'ns3000005.ip-198-51-100.eu', name: 'app-server', expires: '2025-10-15',
+        });
+        const legacy = [
+          [server, 'ns3000004.ip-203-0-113.eu', 'legacy-server', '2025-01-31'],
+          [server, 'ns3000006.ip-203-0-113.eu', 'mail-server', '2025-03-31'],
+          [vps, 'vps-2c3d4e5f.vps.ovh.net', 'legacy-vps', '2025-06-30'],
+          [vps, 'vps-6a7b8c9d.vps.ovh.net', 'old-vps', '2025-09-30'],
+          [storage, 'netapp-7a6b5c4d', 'old-nas', '2025-12-31'],
+        ];
+        for (const [write, id, name, expires] of legacy) write(db, null, { id, name, expires });
+      },
+    });
+  }, 30000);
+
+  afterAll(async () => {
+    await stale?.stop();
+  });
+
+  // The services about to expire of an answer, in its order, as [id, account]
+  const expiringOf = async (parameters = '') =>
+    listed(await stale.get(`/api/inventory/expiring?days=30${parameters}`));
+
+  test('are left out of those of every account', async () => {
+    expect(await expiringOf())
+      .toEqual({ status: 200, body: [['ns3000001.ip-203-0-113.eu', LYON]] });
+    expect((await stale.get('/api/inventory/summary')).body.expiring_soon).toBe(1);
+  });
+
+  test('show with their own account selected', async () => {
+    expect(await expiringOf(`&account=${UNKNOWN_ACCOUNT}`)).toEqual({
+      status: 200,
+      body: [
+        ['ns3000004.ip-203-0-113.eu', null],
+        ['ns3000006.ip-203-0-113.eu', null],
+        ['vps-2c3d4e5f.vps.ovh.net', null],
+        ['vps-6a7b8c9d.vps.ovh.net', null],
+        ['netapp-7a6b5c4d', null],
+      ],
+    });
+    expect(await expiringOf(`&account=${PARIS}`))
+      .toEqual({ status: 200, body: [['ns3000005.ip-198-51-100.eu', PARIS]] });
   });
 });
 

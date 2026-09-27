@@ -202,10 +202,10 @@ export const infrastructureOfSeveralAccounts = {
     inventoryServers: [billedServer, removedServer, legacyServer, deliveredServer],
     inventoryVps: [stagingVps, vps],
     inventoryStorage: [oldStorage, fileStorage],
-    // Soonest first, those already expired first
+    // Those of the configured accounts, soonest first: the server leaves out those of the
+    // Unknown account and of the account no longer configured, which no import refreshes, but
+    // for that account alone (#123)
     expiringServices: [
-      expiring('storage', oldStorage),
-      expiring('dedicated_server', removedServer),
       expiring('dedicated_server', billedServer),
       expiring('vps', vps),
       expiring('vps', stagingVps),

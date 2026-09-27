@@ -3,7 +3,9 @@ const { classifyWebCloud, WEB_CLOUD_FAMILIES } = require('./classify');
 const { monthsOfWindow } = require('./months');
 const ownership = require('./ownership');
 // The conditions of the queries that keep one account's rows (#115), or a list of ids
-const { UNKNOWN_ACCOUNT, accountCondition, idInList } = require('./sql-conditions');
+const {
+  UNKNOWN_ACCOUNT, accountCondition, configuredAccountsCondition, idInList,
+} = require('./sql-conditions');
 // What brings a database that an earlier version created to schema.sql's form
 const {
   addColumnIfNotExists, hasColumn, keyLacks, migrateWhenNeeded, rekeyTable,
@@ -1096,9 +1098,14 @@ const inventoryOps = {
    * soonest first: those already expired stay in it, first (#74). Services that expire on the
    * same day keep the order of the inventories: servers, VPS, then storage; and those of one
    * inventory come by account (see inventoryOrder(), #123).
+   *
+   * For every account, the services of the accounts that the configuration lists, once an
+   * import recorded them (see configuredAccountsCondition()): no import refreshes the services
+   * of the Unknown account, nor those of an account no longer configured, which would stay
+   * expired for good, ahead of those about to expire. They show with their own account.
    * @param {number} [daysAhead]
    * @param {?string} [account] - The account whose services to list (see accountCondition()):
-   *   every account's by default
+   *   every configured account's by default
    * @returns {object[]} Each service's id, display name, type, expiration date, and the NIC
    *   handle of its account, null for the Unknown account
    */
@@ -1107,7 +1114,9 @@ const inventoryOps = {
     const cutoff = new Date();
     cutoff.setDate(cutoff.getDate() + daysAhead);
     const cutoffStr = cutoff.toISOString().split('T')[0];
-    const ofAccount = accountCondition(account, 'account');
+    const ofAccount = account === null
+      ? configuredAccountsCondition('account')
+      : accountCondition(account, 'account');
     const expiringIn = (table, type) => db.prepare(`
       SELECT id, display_name, '${type}' as type, expiration_date, account FROM ${table}
       WHERE expiration_date IS NOT NULL AND expiration_date <= ? AND ${ofAccount.sql}

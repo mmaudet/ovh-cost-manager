@@ -29,6 +29,22 @@ function accountCondition(account, column) {
 }
 
 /**
+ * The condition that keeps the rows of the accounts that the configuration lists (#123), to
+ * join with AND to a WHERE clause, and its parameters: once an import recorded the accounts
+ * of its configuration, which the accounts table marks with their place in it, the rows of
+ * those accounts; until then, as in a database not imported since the upgrade, every row. The
+ * rows of the Unknown account, and of an account that config.json no longer lists, go: no
+ * import refreshes them.
+ * @param {string} column - The column of the query that holds the NIC handle of its rows'
+ *   account
+ * @returns {{ sql: string, params: string[] }}
+ */
+function configuredAccountsCondition(column) {
+  const configured = 'SELECT nic FROM accounts WHERE position IS NOT NULL';
+  return { sql: `(NOT EXISTS (${configured}) OR ${column} IN (${configured}))`, params: [] };
+}
+
+/**
  * The condition that a column's value is one of a list of ids, which the OVH API gives, to
  * join with AND to a WHERE clause, and its parameters. The ids compare as text, as the tables
  * store them: json_each() gives a number as an integer, which no text equals.
@@ -43,4 +59,6 @@ function idInList(column, ids) {
   };
 }
 
-module.exports = { UNKNOWN_ACCOUNT, accountCondition, idInList };
+module.exports = {
+  UNKNOWN_ACCOUNT, accountCondition, configuredAccountsCondition, idInList,
+};
