@@ -7,10 +7,8 @@
  * two accounts' bills is a service of each.
  */
 
+const { LYON, PARIS, NEW_ACCOUNT, REFUSED, bill } = require('./support/accounts');
 const { startOcm } = require('./support/ocm-server');
-
-const LYON = 'xx1111-ovh';
-const PARIS = 'yy2222-ovh';
 
 // A Web Cloud bill line, of no Public Cloud project. The wording gives its family.
 const line = (id, billId, service, description, price, resourceType) => ({
@@ -19,17 +17,13 @@ const line = (id, billId, service, description, price, resourceType) => ({
   service_type: 'Other', resource_type: resourceType,
 });
 
-const bill = (db, id, date, account) => db.bills.upsert({
-  id, date, price_without_tax: 0, price_with_tax: 0, tax: 0, currency: 'EUR',
-  pdf_url: null, html_url: null, account,
-});
-
-// Two accounts and the Unknown account. The domain example.net moved from Lyon to Paris: the
-// renewal of March is on a bill of Lyon, the transfer of June on a bill of Paris. Every NIC
-// handle, name, service and amount is made up.
+// Two accounts, one that an import recorded without any bill, and the Unknown account. The
+// domain example.net moved from Lyon to Paris: the renewal of March is on a bill of Lyon, the
+// transfer of June on a bill of Paris. Every NIC handle, name, service and amount is made up.
 function seed(db) {
   db.accounts.upsert({ nic: LYON, currency: 'EUR', name: 'Lyon subsidiary' });
   db.accounts.upsert({ nic: PARIS, currency: 'EUR' });
+  db.accounts.upsert({ nic: NEW_ACCOUNT, currency: 'EUR' });
   bill(db, 'FR1001', '2026-03-05', LYON);
   bill(db, 'FR1002', '2026-09-05', LYON);
   bill(db, 'FR2001', '2026-06-10', PARIS);
@@ -87,18 +81,11 @@ afterAll(async () => {
   await ocm?.stop();
 });
 
-// The status and the JSON body of the answer to a path of the server, the one of the seeded
-// accounts unless told otherwise
-async function get(path, server = ocm) {
-  const res = await fetch(`${server.url}${path}`);
-  return { status: res.status, body: await res.json() };
-}
-
 describe('GET /api/web-cloud/items', () => {
   // Most expensive first, then by name, as before
   test('lists the services of every account without the parameter, each with its account',
     async () => {
-      expect(await get(`/api/web-cloud/items?${YEAR}`)).toEqual({
+      expect(await ocm.get(`/api/web-cloud/items?${YEAR}`)).toEqual({
         status: 200,
         body: [LYON_CDN, PARIS_MAIL, LYON_NET, LYON_COM, PARIS_NET, UNCLAIMED_ZONE],
       });
@@ -106,7 +93,7 @@ describe('GET /api/web-cloud/items', () => {
 
   // Rather than one row of both accounts' costs, which no account paid
   test('lists a service billed on two accounts\' bills once for each, with its cost', async () => {
-    const { body } = await get(`/api/web-cloud/items?${YEAR}`);
+    const { body } = await ocm.get(`/api/web-cloud/items?${YEAR}`);
 
     expect(body.filter(({ name, category }) => name === 'example.net' && category === 'domain'))
       .toEqual([LYON_NET, PARIS_NET]);
@@ -114,20 +101,25 @@ describe('GET /api/web-cloud/items', () => {
 
   test('lists the services that the bills of the account whose NIC handle it gives billed',
     async () => {
-      expect(await get(`/api/web-cloud/items?${YEAR}&account=${LYON}`)).toEqual({
+      expect(await ocm.get(`/api/web-cloud/items?${YEAR}&account=${LYON}`)).toEqual({
         status: 200, body: [LYON_CDN, LYON_NET, LYON_COM],
       });
-      expect(await get(`/api/web-cloud/items?${YEAR}&account=${PARIS}`)).toEqual({
+      expect(await ocm.get(`/api/web-cloud/items?${YEAR}&account=${PARIS}`)).toEqual({
         status: 200, body: [PARIS_MAIL, PARIS_NET],
       });
     });
 
   test('lists the services of the Unknown account: those of the bills without an account',
     async () => {
-      expect(await get(`/api/web-cloud/items?${YEAR}&account=unknown`)).toEqual({
+      expect(await ocm.get(`/api/web-cloud/items?${YEAR}&account=unknown`)).toEqual({
         status: 200, body: [UNCLAIMED_ZONE],
       });
     });
+
+  test('lists no service for an account recorded without a bill', async () => {
+    expect(await ocm.get(`/api/web-cloud/items?${YEAR}&account=${NEW_ACCOUNT}`))
+      .toEqual({ status: 200, body: [] });
+  });
 });
 
 // The count and the cost of each family, as /api/web-cloud/summary gives them, and their total
@@ -144,7 +136,7 @@ const summary = ({ domain = [0, 0], dnsZone = [0, 0], hosting = [0, 0], email = 
 describe('GET /api/web-cloud/summary', () => {
   // The domain example.net counts once for each account that billed it, as it is listed
   test('counts and adds up the services of every account without the parameter', async () => {
-    expect(await get(`/api/web-cloud/summary?${YEAR}`)).toEqual({
+    expect(await ocm.get(`/api/web-cloud/summary?${YEAR}`)).toEqual({
       status: 200,
       body: summary({ domain: [3, 32.47], dnsZone: [1, 1.2], email: [1, 12], option: [1, 12] },
         57.67),
@@ -152,35 +144,36 @@ describe('GET /api/web-cloud/summary', () => {
   });
 
   test('counts and adds up the services of the account whose NIC handle it gives', async () => {
-    expect(await get(`/api/web-cloud/summary?${YEAR}&account=${LYON}`)).toEqual({
+    expect(await ocm.get(`/api/web-cloud/summary?${YEAR}&account=${LYON}`)).toEqual({
       status: 200, body: summary({ domain: [2, 22.48], option: [1, 12] }, 34.48),
     });
-    expect(await get(`/api/web-cloud/summary?${YEAR}&account=${PARIS}`)).toEqual({
+    expect(await ocm.get(`/api/web-cloud/summary?${YEAR}&account=${PARIS}`)).toEqual({
       status: 200, body: summary({ domain: [1, 9.99], email: [1, 12] }, 21.99),
     });
   });
 
   test('counts and adds up the services of the Unknown account', async () => {
-    expect(await get(`/api/web-cloud/summary?${YEAR}&account=unknown`)).toEqual({
+    expect(await ocm.get(`/api/web-cloud/summary?${YEAR}&account=unknown`)).toEqual({
       status: 200, body: summary({ dnsZone: [1, 1.2] }, 1.2),
     });
+  });
+
+  test('counts no service for an account recorded without a bill', async () => {
+    expect(await ocm.get(`/api/web-cloud/summary?${YEAR}&account=${NEW_ACCOUNT}`))
+      .toEqual({ status: 200, body: summary({}, 0) });
   });
 });
 
 // Rather than answer for all accounts, or for none, to a request that names an account
 describe('an account the server does not know', () => {
-  const REFUSED = {
-    error: "Invalid 'account' parameter: expected the NIC handle of an account, or unknown",
-  };
-
   test.each([
     ['a NIC handle that no import recorded', 'account=ww4444-ovh'],
     ['an empty value', 'account='],
     ['several values', `account=${LYON}&account=${PARIS}`],
   ])('is refused, naming the parameter: %s', async (_, parameter) => {
-    expect(await get(`/api/web-cloud/items?${YEAR}&${parameter}`))
+    expect(await ocm.get(`/api/web-cloud/items?${YEAR}&${parameter}`))
       .toEqual({ status: 400, body: REFUSED });
-    expect(await get(`/api/web-cloud/summary?${YEAR}&${parameter}`))
+    expect(await ocm.get(`/api/web-cloud/summary?${YEAR}&${parameter}`))
       .toEqual({ status: 400, body: REFUSED });
   });
 });
@@ -225,7 +218,7 @@ describe.each([
 
   test('lists each service once without the parameter, as before, with its account added',
     async () => {
-      expect(await get(`/api/web-cloud/items?${YEAR}`, single)).toEqual({
+      expect(await single.get(`/api/web-cloud/items?${YEAR}`)).toEqual({
         status: 200,
         body: [
           // The most recent wording
@@ -242,7 +235,7 @@ describe.each([
 
   // The summary has no account field: its answer is the one from before
   test('counts each service once without the parameter, as before', async () => {
-    expect(await get(`/api/web-cloud/summary?${YEAR}`, single)).toEqual({
+    expect(await single.get(`/api/web-cloud/summary?${YEAR}`)).toEqual({
       status: 200, body: summary({ domain: [2, 32.47], email: [1, 12] }, 44.47),
     });
   });
@@ -296,7 +289,7 @@ describe('services that cost the same', () => {
     items.map(({ name, category, account }) => [name, category, account]);
 
   test('lists them by the NIC handle of their account, the Unknown account last', async () => {
-    const { body } = await get(`/api/web-cloud/items?${YEAR}`, tied);
+    const { body } = await tied.get(`/api/web-cloud/items?${YEAR}`);
 
     expect(services(body)).toEqual([
       ['example.com', 'domain', FIRST],
@@ -308,7 +301,7 @@ describe('services that cost the same', () => {
   });
 
   test('keeps the order of the services of one account', async () => {
-    const { body } = await get(`/api/web-cloud/items?${YEAR}&account=${FIRST}`, tied);
+    const { body } = await tied.get(`/api/web-cloud/items?${YEAR}&account=${FIRST}`);
 
     expect(services(body)).toEqual([
       ['example.com', 'domain', FIRST],
