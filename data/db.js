@@ -809,9 +809,33 @@ const balanceOps = {
     return stmt.run(requireAccount('account_balance', balance));
   },
 
-  getLatestBalance: () => {
-    const db = getDb();
-    return db.prepare('SELECT * FROM account_balance ORDER BY id DESC LIMIT 1').get();
+  /**
+   * The balance of the account (see accountCondition()): its latest balance snapshot, or, for
+   * every account, by default, the sum of each account's latest, the Unknown account's
+   * included. Each account's import records its own (#114), and the accounts bill in one
+   * currency, so their balances add up (#116).
+   * @param {?string} [account]
+   * @returns {object|undefined} The balance: the snapshot_date of the latest snapshot that it
+   *   adds up, its debt_balance, credit_balance and deposit_total, and the currency of the
+   *   snapshot stored last; undefined when there is none
+   */
+  getBalance: (account = null) => {
+    const ofAccount = accountCondition(account, 'account');
+    const { snapshots, ...balance } = getDb().prepare(`
+      WITH latest AS (
+        SELECT * FROM account_balance
+        WHERE id IN (SELECT MAX(id) FROM account_balance WHERE ${ofAccount.sql} GROUP BY account)
+      )
+      SELECT
+        COUNT(*) as snapshots,
+        MAX(snapshot_date) as snapshot_date,
+        SUM(debt_balance) as debt_balance,
+        SUM(credit_balance) as credit_balance,
+        SUM(deposit_total) as deposit_total,
+        (SELECT currency FROM latest ORDER BY id DESC LIMIT 1) as currency
+      FROM latest
+    `).get(...ofAccount.params);
+    return snapshots === 0 ? undefined : balance;
   },
 
   insertCreditMovement: (movement) => {
@@ -823,9 +847,16 @@ const balanceOps = {
     return stmt.run(requireAccount('credit_movements', movement));
   },
 
-  getCreditMovements: () => {
-    const db = getDb();
-    return db.prepare('SELECT * FROM credit_movements ORDER BY date DESC').all();
+  /**
+   * @param {?string} [account] - The account whose credit movements to list (see
+   *   accountCondition()): every account's by default (#116)
+   * @returns {object[]} The movements, as their table holds them, the most recent first
+   */
+  getCreditMovements: (account = null) => {
+    const ofAccount = accountCondition(account, 'account');
+    return getDb().prepare(`
+      SELECT * FROM credit_movements WHERE ${ofAccount.sql} ORDER BY date DESC
+    `).all(...ofAccount.params);
   },
 
   updateBillPayment: (billId, paymentInfo) => {

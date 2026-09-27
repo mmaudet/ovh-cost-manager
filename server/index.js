@@ -1109,9 +1109,11 @@ function registerRoutes() {
   // Account Endpoints (Phase 2)
   // ========================
 
-  app.get('/api/account/balance', (req, res) => {
+  // The latest balance of the account the request asks for, or, without one, the sum of every
+  // account's latest (#116)
+  app.get('/api/account/balance', accountParameter, (req, res) => {
     try {
-      const balance = db.balance.getLatestBalance();
+      const balance = db.balance.getBalance(req.account);
       if (!balance) {
         return res.json({ debt_balance: 0, credit_balance: 0, deposit_total: 0, currency: 'EUR' });
       }
@@ -1128,18 +1130,22 @@ function registerRoutes() {
     }
   });
 
-  app.get('/api/account/credits', (req, res) => {
+  // The credit movements of the account the request asks for, or of every account without one
+  // (#116)
+  app.get('/api/account/credits', accountParameter, (req, res) => {
     try {
-      const movements = db.balance.getCreditMovements();
+      const movements = db.balance.getCreditMovements(req.account);
       res.json(movements);
     } catch (err) {
       res.status(500).json({ error: err.message });
     }
   });
 
-  app.get('/api/account/debts', (req, res) => {
+  // The debt of the balance of the account the request asks for, or of every account without
+  // one (#116)
+  app.get('/api/account/debts', accountParameter, (req, res) => {
     try {
-      const balance = db.balance.getLatestBalance();
+      const balance = db.balance.getBalance(req.account);
       res.json({
         debt_balance: Math.round((balance?.debt_balance || 0) * 100) / 100,
         currency: balance?.currency || 'EUR'

@@ -168,7 +168,7 @@ describe('a full import', () => {
     await importFull();
 
     expect({
-      balance: db.balance.getLatestBalance(),
+      balance: db.balance.getBalance(),
       credits: db.balance.getCreditMovements(),
       snapshot: db.consumption.getLatestSnapshot(),
       history: db.consumption.getHistory(),
