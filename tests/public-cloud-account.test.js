@@ -54,12 +54,13 @@ function seed(db) {
     "INSERT INTO bills (id, date, currency, account) VALUES ('FR0001', '2026-09-20', 'EUR', NULL)",
   ).run();
 
-  // The instances and the consumption of the month of the last import
+  // The instances and the consumption of the month of the last import, which each account's
+  // import records for it (#114)
   instance(db, 'instance-web-1', PRODUCTION, 'b3-8');
   instance(db, 'instance-web-2', PRODUCTION, 'b3-8');
   instance(db, 'instance-node-1', STAGING, 'b3-16');
   instance(db, 'instance-old-1', LEGACY, 'r3-32');
-  db.cloudDetails.setCurrentConsumptionMonth('2026-09-01');
+  for (const nic of [LYON, PARIS]) db.cloudDetails.setCurrentConsumptionMonth('2026-09-01', nic);
   consumption(db, PRODUCTION, 'instance-web-1', 200);
   consumption(db, PRODUCTION, 'instance-web-2', 100);
   consumption(db, STAGING, 'instance-node-1', 50);

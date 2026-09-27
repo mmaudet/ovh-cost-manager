@@ -3,7 +3,7 @@
  * the credit movements, the consumption and its forecast, and the consumption history. The
  * server runs in a child process over a database of one account as the version before #114
  * left it, which it migrates as it starts. Until these routes follow the account (#116),
- * they answer as that version did.
+ * they answer as that version did, but for the account that #121 gives each project.
  */
 
 const { startOcm } = require('./support/ocm-server');
@@ -193,9 +193,11 @@ test('the consumption and forecast routes read the projects of the month last im
         days_elapsed: 14,
         days_in_month: 30,
       },
+      // Each project names its account since #121
       '/api/projects/enriched': [{
-        id: PROJECT, name: 'Project 1', description: 'Project 1', status: 'ok', instance_count: 0,
-        consumption_total: 12.25, period_start: '2026-09-01', period_end: '2026-09-15',
+        id: PROJECT, name: 'Project 1', description: 'Project 1', status: 'ok', account: NIC,
+        instance_count: 0, consumption_total: 12.25, period_start: '2026-09-01',
+        period_end: '2026-09-15',
       }],
     });
   }, 30000);
@@ -230,8 +232,8 @@ test('the consumption routes read a month last imported that has no consumption 
         progress: 0,
       },
       '/api/projects/enriched': [{
-        id: PROJECT, name: 'Project 1', description: 'Project 1', status: 'ok', instance_count: 0,
-        consumption_total: 0, period_start: null, period_end: null,
+        id: PROJECT, name: 'Project 1', description: 'Project 1', status: 'ok', account: NIC,
+        instance_count: 0, consumption_total: 0, period_start: null, period_end: null,
       }],
     });
   }, 30000);
