@@ -297,7 +297,7 @@ export default function Dashboard() {
               }}
               className="cursor-pointer"
             >
-              <Logo className="h-40" />
+              <Logo className="h-14" />
             </button>
             <div>
               <div className="flex items-center gap-3">
