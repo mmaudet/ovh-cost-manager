@@ -483,15 +483,39 @@ or none when none of them has a bill.
 
 ### GPU & System
 
-| Endpoint                            | Description                        |
-| ----------------------------------- | ---------------------------------- |
-| `GET /api/gpu/summary?from=&to=`    | GPU costs by model, project, trend |
-| `GET /api/import/status`            | Import history and status          |
-| `GET /api/config`                   | Dashboard configuration            |
-| `GET /api/user`                     | Current authenticated user info    |
-| `GET /api/health`                   | Health check endpoint              |
-| `GET /api/export/bills?from=&to=`   | CSV export of bills                |
-| `GET /api/export/details?from=&to=` | CSV export of bill details         |
+| Endpoint                         | Description                        |
+| -------------------------------- | ---------------------------------- |
+| `GET /api/gpu/summary?from=&to=` | GPU costs by model, project, trend |
+| `GET /api/import/status`         | Import history and status          |
+| `GET /api/config`                | Dashboard configuration            |
+| `GET /api/user`                  | Current authenticated user info    |
+| `GET /api/health`                | Health check endpoint              |
+
+### CSV Exports
+
+| Endpoint                               | Description                                 |
+| -------------------------------------- | ------------------------------------------- |
+| `GET /api/export/bills?from=&to=`      | Bills                                       |
+| `GET /api/export/details?from=&to=`    | Bill lines                                  |
+| `GET /api/export/by-project?from=&to=` | Costs by project                            |
+| `GET /api/export/inventory`            | Dedicated servers, VPS and storage services |
+
+The exports are CSV files for a spreadsheet: `;`-separated, with decimal
+commas, in UTF-8 with a byte order mark. Each takes the optional `account`
+parameter, which keeps the rows of:
+
+- the account whose NIC handle it gives, one that `GET /api/accounts` lists,
+  such as `?account=xx1111-ovh`;
+- the Unknown account, with `unknown`: the data imported before OCM told
+  accounts apart, that no account claimed since;
+- every account, without it.
+
+Any other value answers 400. When the instance holds several accounts, that is
+when `GET /api/accounts` lists two at least, the Unknown account included, each
+file gains an `account` column, last, for a spreadsheet to pivot the rows by
+account: the NIC handle of each row's account, empty for the Unknown account.
+The costs by project then come once for each project and account that billed
+it. With a single account, the files are the same as before.
 
 ## Releases and Changelog
 
