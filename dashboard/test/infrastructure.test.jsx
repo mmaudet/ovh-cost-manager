@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { screen, within } from '@testing-library/react';
 import { account, everyResourceType } from './fixtures/account.js';
+import { removedAccount, severalAccounts } from './fixtures/accounts.js';
 import { api } from './support/api.js';
 import {
   BOM,
@@ -15,6 +16,7 @@ import {
   openTab,
   renderDashboard,
   rowsOf,
+  selectAccount,
   selectLanguage,
   selectMonth,
   settle,
@@ -99,8 +101,9 @@ describe('Infrastructure tab', () => {
       await user.click(cardOf('Serveurs dédiés'));
       await settle();
 
+      // For all accounts (null), as the instance knows a single one: the request names none
       expect(api.fetchResourceTypeDetails)
-        .toHaveBeenCalledWith('dedicated_server', '2026-09-01', '2026-09-30');
+        .toHaveBeenCalledWith('dedicated_server', '2026-09-01', '2026-09-30', null);
       expect(rowsOf(billLines())).toEqual([
         ['Service', 'Description', 'Montant'],
         ['ns3000001.ip-203-0-113.eu',
@@ -187,7 +190,7 @@ describe('Infrastructure tab', () => {
       await selectMonth(user, 'Août 2026');
 
       expect(api.fetchResourceTypeDetails)
-        .toHaveBeenCalledWith('backup', '2026-08-01', '2026-08-31');
+        .toHaveBeenCalledWith('backup', '2026-08-01', '2026-08-31', null);
       expect(texts(costsByResourceType())).toEqual([
         'Coûts par type de ressource', '(Août 2026)',
         'Dedicated Servers', '270,00€', '▼',
@@ -389,6 +392,94 @@ describe('Infrastructure tab', () => {
     const [file] = await downloadedFiles();
     expect(file.content.split('\n')[0]).toBe(
       `${BOM}"Name";"ID";"Datacenter";"CPU";"RAM (MB)";"OS";"State";"Expiration date";"Renewal"`,
+    );
+  });
+});
+
+// With several accounts in the instance (#123), see fixtures/accounts.js and
+// fixtures/infrastructure.js: the tab shows the inventory and the bill lines of the account
+// selected in the header, or those of every account, by default
+describe('Infrastructure tab with several accounts', () => {
+  // The panel of the servers, whose heading counts them
+  const serversHeading = () => screen.getByRole('heading', { name: /^Serveurs dédiés \(/ });
+
+  it('shows the inventory of the account selected, and of all accounts again', async () => {
+    const { user } = await renderDashboard(severalAccounts);
+    await openTab(user, 'Infrastructure');
+    expect(texts(serversHeading())[0]).toBe('Serveurs dédiés (4)');
+
+    await selectAccount(user, 'yy2222-ovh');
+
+    expect(texts(serversHeading())[0]).toBe('Serveurs dédiés (1)');
+    expect(rowsOf(within(serversPanel()).getByRole('table'))).toEqual([
+      serverRows[0],
+      ['ns3000002.ip-198-51-100.eu', 'gra3', 'AMD EPYC 4344P', '-', 'error', '-', '-'],
+    ]);
+    expect(rowsOf(within(inventoryPanel('VPS')).getByRole('table'))).toEqual([
+      ['ID', 'Modèle', 'Région', 'Spécifications', 'État', "Date d'expiration"],
+      ['staging-vps', 'vps-le-2-2-40', 'Region OpenStack: os-sbg5', '2 vCPU / 2,0 Go / 40 Go',
+        'running', '2026-10-12'],
+    ]);
+    // No storage service
+    expect(screen.queryByRole('heading', { name: 'Stockage' })).not.toBeInTheDocument();
+
+    await selectAccount(user, 'Tous les comptes');
+
+    expect(texts(serversHeading())[0]).toBe('Serveurs dédiés (4)');
+    expect(within(inventoryPanel('Stockage')).getAllByRole('row')).toHaveLength(3);
+  });
+
+  it("shows the Unknown account's inventory: what no account claimed", async () => {
+    const { user } = await renderDashboard(severalAccounts);
+    await openTab(user, 'Infrastructure');
+
+    await selectAccount(user, 'Compte inconnu');
+
+    expect(rowsOf(within(serversPanel()).getByRole('table'))).toEqual([
+      serverRows[0],
+      ['legacy-server', 'sbg3', 'Intel Xeon E3-1245v5', '32 Go', 'ok', '-', 'manual'],
+    ]);
+    expect(rowsOf(within(inventoryPanel('Stockage')).getByRole('table'))).toEqual([
+      ['ID', 'Type', 'Région', 'Taille', 'Shares', "Date d'expiration"],
+      ['old-nas', 'netapp', 'eu-west-gra', '512 Go', '3', '2026-09-10'],
+    ]);
+    expect(screen.queryByRole('heading', { name: 'VPS' })).not.toBeInTheDocument();
+  });
+
+  it('shows the bill lines of the account selected', async () => {
+    const { user } = await renderDashboard(severalAccounts);
+    await openTab(user, 'Infrastructure');
+    await selectAccount(user, 'yy2222-ovh');
+
+    await user.click(resourceType('Backup'));
+    await settle();
+
+    expect(api.fetchResourceTypeDetails)
+      .toHaveBeenCalledWith('backup', '2026-09-01', '2026-09-30', 'yy2222-ovh');
+    expect(rowsOf(billLines())).toEqual([
+      ['Service', 'Description', 'Montant'],
+      ['vm-app-1.example.com', 'Veeam Managed Backup - vm-app-1.example.com', '40,00€'],
+      ['vm-db-1.example.com', 'Veeam Managed Backup - vm-db-1.example.com', '30,00€'],
+      ['vm-files-1.example.com', 'Veeam Managed Backup - vm-files-1.example.com', '20,00€'],
+    ]);
+  });
+
+  // The month selected stays until the account's months list loads, and says it lacks it, as
+  // the header's summary and the other tabs wait for (#115, #120): the bill lines of that
+  // month would never show
+  it('asks for no bill lines of a month the account selected lacks', async () => {
+    const { user } = await renderDashboard(severalAccounts);
+    await openTab(user, 'Infrastructure');
+    await user.click(resourceType('Dedicated Servers'));
+    await settle();
+
+    await selectAccount(user, 'zz3333-ovh (non configuré)');
+
+    expect(api.fetchResourceTypeDetails).not.toHaveBeenCalledWith(
+      'dedicated_server', '2026-09-01', '2026-09-30', removedAccount.id,
+    );
+    expect(api.fetchResourceTypeDetails).toHaveBeenCalledWith(
+      'dedicated_server', '2026-08-01', '2026-08-31', removedAccount.id,
     );
   });
 });

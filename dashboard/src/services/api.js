@@ -131,19 +131,19 @@ export const fetchConsumptionForecast = async (account = null) => {
   return data;
 };
 
-// Phase 3: Inventory
-export const fetchInventoryServers = async () => {
-  const { data } = await api.get('/inventory/servers');
+// Phase 3: Inventory. The services of the account, each with its account (#123).
+export const fetchInventoryServers = async (account = null) => {
+  const { data } = await api.get('/inventory/servers', { params: accountParams(account) });
   return data;
 };
 
-export const fetchInventoryVps = async () => {
-  const { data } = await api.get('/inventory/vps');
+export const fetchInventoryVps = async (account = null) => {
+  const { data } = await api.get('/inventory/vps', { params: accountParams(account) });
   return data;
 };
 
-export const fetchInventoryStorage = async () => {
-  const { data } = await api.get('/inventory/storage');
+export const fetchInventoryStorage = async (account = null) => {
+  const { data } = await api.get('/inventory/storage', { params: accountParams(account) });
   return data;
 };
 
@@ -159,8 +159,11 @@ export const fetchByResourceType = async (from, to, account = null) => {
   return data;
 };
 
-export const fetchResourceTypeDetails = async (type, from, to) => {
-  const { data } = await api.get('/analysis/resource-type-details', { params: { type, from, to } });
+// The bill lines of a resource type billed to the account, by service (#123)
+export const fetchResourceTypeDetails = async (type, from, to, account = null) => {
+  const { data } = await api.get('/analysis/resource-type-details', {
+    params: { type, from, to, ...accountParams(account) },
+  });
   return data;
 };
 

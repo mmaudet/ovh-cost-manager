@@ -520,6 +520,27 @@ describe('Compare tab', () => {
       expect(rowTextsOf(comparisonTable(INFRASTRUCTURE))[1]).toEqual(dedicatedServers);
       expect(api.fetchInventoryServers).toHaveBeenCalledTimes(1);
     });
+
+    // With several accounts in the instance (#123): the servers of the inventory follow the
+    // account selected in the header, as on the Infrastructure tab. See fixtures/accounts.js.
+    it('list the dedicated servers of the account selected', async () => {
+      // The servers that the row of the dedicated servers lists: its texts between its label
+      // and the costs of months A and B, with the variation between them
+      const listedServers = () => rowTextsOf(comparisonTable(INFRASTRUCTURE))[1].slice(1, -3);
+      const { user } = await renderDashboard(severalAccounts);
+      await openTab(user, 'Comparaison');
+
+      await selectAccount(user, 'Lyon subsidiary');
+      await openComparison(user, INFRASTRUCTURE);
+
+      expect(api.fetchInventoryServers).toHaveBeenCalledWith(lyonAccount.id);
+      expect(listedServers()).toEqual(['backup-server']);
+
+      await selectAccount(user, 'yy2222-ovh');
+      await openComparison(user, INFRASTRUCTURE);
+
+      expect(listedServers()).toEqual(['ns3000002.ip-198-51-100.eu']);
+    });
   });
 
   describe('project consumption comparisons', () => {

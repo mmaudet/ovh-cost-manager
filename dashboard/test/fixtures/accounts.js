@@ -1,5 +1,6 @@
 import { account } from './account.js';
 import { months } from './calendar.js';
+import { infrastructureOfSeveralAccounts } from './infrastructure.js';
 import { publicCloudFigures } from './public-cloud.js';
 import { trendsOf } from './trends.js';
 import { webCloudOfSeveralAccounts } from './web-cloud.js';
@@ -13,8 +14,9 @@ import { webCloudOfSeveralAccounts } from './web-cloud.js';
 // account, and, since #124, when the last import of each that succeeded ended. What the page
 // asks for with an account, such as its months list, its summaries, its current consumption
 // (#116), the figures of the months that the Compare tab compares (#119), its Public Cloud
-// (#121) and its Web Cloud services (#122), is under `ofAccount`, by the id of the account
-// (see support/api.js). web-cloud.js gives the Web Cloud services for all accounts too.
+// (#121), its Web Cloud services (#122) and its inventory (#123), is under `ofAccount`, by
+// the id of the account (see support/api.js). web-cloud.js and infrastructure.js give the Web
+// Cloud services and the inventory for all accounts too.
 
 const [september, august, july] = months;
 // The Public Cloud projects of account.js
@@ -126,6 +128,7 @@ const consumptionOf = ({ current, forecast, progress }) => ({
 export const severalAccounts = {
   ...account,
   ...webCloudOfSeveralAccounts.all,
+  ...infrastructureOfSeveralAccounts.all,
   accounts: [lyonAccount, unnamedAccount, removedAccount, unknownAccount],
   projectsEnriched: [lyonProduction, unnamedStaging, unknownSandbox],
   // The projects of the breakdown by project and of the GPU costs, for all accounts, once for
@@ -198,6 +201,7 @@ export const severalAccounts = {
         }),
       },
       ...webCloudOfSeveralAccounts.ofAccount[lyonAccount.id],
+      ...infrastructureOfSeveralAccounts.ofAccount[lyonAccount.id],
     },
     [unnamedAccount.id]: {
       byService: {
@@ -252,6 +256,7 @@ export const severalAccounts = {
         }),
       },
       ...webCloudOfSeveralAccounts.ofAccount[unnamedAccount.id],
+      ...infrastructureOfSeveralAccounts.ofAccount[unnamedAccount.id],
     },
     [removedAccount.id]: {
       // Dedicated servers only
@@ -276,6 +281,7 @@ export const severalAccounts = {
         '2026-08': { dedicated_server: 200 },
       }),
       ...webCloudOfSeveralAccounts.ofAccount[removedAccount.id],
+      ...infrastructureOfSeveralAccounts.ofAccount[removedAccount.id],
     },
     [unknownAccount.id]: {
       byResourceType: { '2026-07': [dedicatedServers(90), domains(30)] },
@@ -293,6 +299,7 @@ export const severalAccounts = {
       // Never billed
       projectsEnriched: [unknownSandbox],
       ...webCloudOfSeveralAccounts.ofAccount[unknownAccount.id],
+      ...infrastructureOfSeveralAccounts.ofAccount[unknownAccount.id],
     },
   },
 };

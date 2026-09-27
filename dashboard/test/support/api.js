@@ -139,13 +139,19 @@ const answers = {
     entry('consumptionCurrent', emptyAnswers.consumptionCurrent)(ofAccount(data, account)),
   fetchConsumptionForecast: (data, account) =>
     entry('consumptionForecast', emptyAnswers.consumptionForecast)(ofAccount(data, account)),
-  fetchInventoryServers: entry('inventoryServers', emptyAnswers.list),
-  fetchInventoryVps: entry('inventoryVps', emptyAnswers.list),
-  fetchInventoryStorage: entry('inventoryStorage', emptyAnswers.list),
+  // The inventory follows the account the page selects (#123)
+  fetchInventoryServers: (data, account) =>
+    entry('inventoryServers', emptyAnswers.list)(ofAccount(data, account)),
+  fetchInventoryVps: (data, account) =>
+    entry('inventoryVps', emptyAnswers.list)(ofAccount(data, account)),
+  fetchInventoryStorage: (data, account) =>
+    entry('inventoryStorage', emptyAnswers.list)(ofAccount(data, account)),
   fetchExpiringServices: entry('expiringServices', emptyAnswers.list),
   fetchByResourceType: entryForPeriodOfAccount('byResourceType', emptyAnswers.list),
-  fetchResourceTypeDetails: (data, type, from, to) =>
-    data.resourceTypeDetails?.[type]?.[periodKey(from, to)] ?? emptyAnswers.list(),
+  // So do the bill lines of a resource type, by type and period (#123)
+  fetchResourceTypeDetails: (data, type, from, to, account) =>
+    ofAccount(data, account).resourceTypeDetails?.[type]?.[periodKey(from, to)]
+      ?? emptyAnswers.list(),
   fetchProjectConsumption: entryForProject('projectConsumption', emptyAnswers.list),
   fetchProjectInstances: entryForProject('projectInstances', emptyAnswers.list),
   fetchProjectVolumes: entryForProject('projectVolumes', emptyAnswers.list),
