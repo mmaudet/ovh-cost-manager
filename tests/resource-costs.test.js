@@ -59,8 +59,15 @@ afterAll(() => {
   else process.env.DATA_DIR = previousDataDir;
 });
 
+// The tables that the tests seed: the bills of the project, and its inventory. The rows that
+// reference a bill or the project go first.
+const SEEDED_TABLES = [
+  'bill_details', 'bills', 'cloud_instances', 'cloud_volumes', 'cloud_snapshots',
+  'object_storage_buckets', 'projects',
+];
+
 beforeEach(() => {
-  db.clearAll();
+  for (const table of SEEDED_TABLES) db.getDb().exec(`DELETE FROM ${table}`);
   db.projects.upsert({
     id: PROJECT, name: 'Project 1', description: null, status: 'ok', created_at: null,
     account: ACCOUNT.nic,

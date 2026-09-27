@@ -2263,11 +2263,8 @@ const webCloudOps = {
 module.exports = {
   getDb,
   closeDb,
-  // What a full import clears, of every account or of one (#114), on the database that
-  // getDb() opens
+  // What a full import of an account clears (#114), on the database that getDb() opens
 
-  /** @see ownership.clearAll */
-  clearAll: onDb(ownership.clearAll),
   /** @see ownership.clearAccount */
   clearAccount: onDb(ownership.clearAccount),
   transaction,

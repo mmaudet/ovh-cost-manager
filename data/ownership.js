@@ -294,10 +294,10 @@ function clearRefetched(database, { sql, params }) {
  * Clears the imported data of an account, for a full import of it: its bills and their
  * lines, its inventories, the resources of its projects, its balance and consumption
  * snapshots, its credit movements and its consumption history, which the import fetches
- * again. What it cannot fetch again is kept, as clearAll() keeps it: the consumption of each
- * of its projects, with the month of its last import and the projects it belongs to. Another
- * account's data, and the rows without an account, stay, with the projects of this account
- * whose lines are on another account's bills.
+ * again. What it cannot fetch again is kept: the consumption of each of its projects, which
+ * OVH gives for the current month only (#54), with the month of its last import and the
+ * projects it belongs to. Another account's data, and the rows without an account, stay,
+ * with the projects of this account whose lines are on another account's bills.
  * @param {object} database - The database
  * @param {string} nic - The NIC handle of the account
  */
@@ -305,21 +305,9 @@ function clearAccount(database, nic) {
   clearRefetched(database, { sql: 'account = ?', params: [nic] });
 }
 
-/**
- * Clears the imported data of every account and of the Unknown account, as clearAccount()
- * clears one account's, and the log of the imports: a database as a first full import finds
- * it, which the tests start from.
- * @param {object} database - The database
- */
-function clearAll(database) {
-  clearRefetched(database, { sql: '1 = 1', params: [] });
-  database.exec('DELETE FROM import_log');
-}
-
 module.exports = {
   UNKNOWN_ACCOUNT,
   ACCOUNT_TABLES,
-  LISTED_SERVICE_TABLES,
   idInList,
   keyLacks,
   rekeyTable,
@@ -332,5 +320,4 @@ module.exports = {
   deleteSnapshotsWithoutAccount,
   takeOverBilledRows,
   clearAccount,
-  clearAll,
 };
