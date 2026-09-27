@@ -1603,12 +1603,15 @@ const cloudDetailOps = {
    */
   getCurrentConsumptionMonth: (account = null) => {
     const db = getDb();
-    const recordedFor = (ofAccount) => db.prepare(`
-      SELECT MAX(value) AS month FROM import_state
-      WHERE key = 'consumption_month' AND ${ofAccount.sql}
-    `).get(...ofAccount.params).month;
-    const recorded = recordedFor(accountCondition(account, 'account'))
-      || recordedFor(accountCondition(null, 'account'));
+    // The latest month recorded for an account (see accountCondition())
+    const recordedFor = (whose) => {
+      const { sql, params } = accountCondition(whose, 'account');
+      return db.prepare(`
+        SELECT MAX(value) AS month FROM import_state WHERE key = 'consumption_month' AND ${sql}
+      `).get(...params).month;
+    };
+    // An account whose imports recorded none reads the latest of every account's
+    const recorded = recordedFor(account) || (account === null ? null : recordedFor(null));
     if (recorded) return recorded;
     const ofProjects = accountCondition(account, 'p.account');
     return db.prepare(`
@@ -2067,15 +2070,15 @@ const cloudDetailOps = {
   },
 
   /**
-   * What the Public Cloud projects of the account (see accountCondition()) consumed in the
-   * month of its current consumption (#116), or, by default, those of every account in the
-   * latest month of theirs (see getCurrentConsumptionMonth())
-   * @param {?string} [account]
+   * What the Public Cloud projects of an account consumed in the month of its current
+   * consumption (#116; see getCurrentConsumptionMonth())
+   * @param {string} account - The account (see accountCondition()): a NIC handle, or
+   *   UNKNOWN_ACCOUNT
    * @returns {{ period_start: ?string, period_end: ?string, total: ?number,
    *   project_count: number }} The period from the earliest start to the latest end of their
    *   consumption, its total, and the number of projects that it covers
    */
-  getConsumptionSummary: (account = null) => {
+  getConsumptionSummary: (account) => {
     const ofAccount = accountCondition(account, 'p.account');
     return getDb().prepare(`
       SELECT

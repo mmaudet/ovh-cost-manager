@@ -32,6 +32,12 @@ function latestTimeOf(times) {
   return written.reduce((latest, time) => (instantOf(time) > instantOf(latest) ? time : latest));
 }
 
+// The share of the month-end forecast that the consumption so far reaches, in percent: 0
+// without either
+const progressOf = (current, forecast) => (
+  current && forecast ? Math.round((current / forecast) * 100) : 0
+);
+
 // The days that a consumption covers, from its period, at least one, and the days of its
 // month, in the server's time zone: what the forecast extrapolates it over
 function daysOf(periodStart, periodEnd) {
@@ -101,7 +107,7 @@ function forecastOfAccount({ snapshot, cloud }, now) {
         forecast_total: forecastTotal,
         current_total: currentTotal,
         currency: 'EUR',
-        progress: Math.round((currentTotal / forecastTotal) * 100),
+        progress: progressOf(currentTotal, forecastTotal),
         source: 'cloud_projects',
         days_elapsed: daysElapsed,
         days_in_month: daysInMonth,
@@ -119,9 +125,7 @@ function forecastOfAccount({ snapshot, cloud }, now) {
       forecast_total: toCents(snapshotForecast),
       current_total: toCents(snapshotCurrent),
       currency: snapshot.currency,
-      progress: snapshotCurrent && snapshotForecast
-        ? Math.round((snapshotCurrent / snapshotForecast) * 100)
-        : 0,
+      progress: progressOf(snapshotCurrent, snapshotForecast),
     },
   };
 }
@@ -141,8 +145,9 @@ const sharedSourceOf = (answers) => (
   answers.every(({ source }) => source === answers[0].source) ? answers[0].source : undefined
 );
 
-// The latest of the times of figures, and the period that they cover together
-function commonOf(answers) {
+// The dates of a sum of figures: the latest of their times, and the period that they cover
+// together
+function datesOfSum(answers) {
   return {
     snapshot_date: latestTimeOf(answers.map(({ snapshot_date: time }) => time)),
     period_start: earliestOf(answers.map(({ period_start: start }) => start)),
@@ -158,7 +163,7 @@ function sumOfCurrent(figures) {
   const answers = figures.map(({ answer }) => answer);
   const source = sharedSourceOf(answers);
   return {
-    ...commonOf(answers),
+    ...datesOfSum(answers),
     current_total: toCents(sumOf(figures.map(({ total }) => total))),
     currency: answers[0].currency,
     ...(source && { source }),
@@ -174,19 +179,17 @@ function sumOfCurrent(figures) {
 // the projects of one account.
 function sumOfForecasts(figures) {
   const answers = figures.map(({ answer }) => answer);
-  const common = commonOf(answers);
+  const dates = datesOfSum(answers);
   const forecastTotal = toCents(sumOf(figures.map(({ forecast }) => forecast)));
   const currentTotal = toCents(sumOf(figures.map(({ current }) => current)));
   const extrapolated = sharedSourceOf(answers) === 'cloud_projects';
-  const days = extrapolated && daysOf(common.period_start, common.period_end);
+  const days = extrapolated && daysOf(dates.period_start, dates.period_end);
   return {
-    ...common,
+    ...dates,
     forecast_total: forecastTotal,
     current_total: currentTotal,
     currency: answers[0].currency,
-    progress: currentTotal && forecastTotal
-      ? Math.round((currentTotal / forecastTotal) * 100)
-      : 0,
+    progress: progressOf(currentTotal, forecastTotal),
     ...(extrapolated && {
       source: 'cloud_projects',
       days_elapsed: days.daysElapsed,
@@ -195,11 +198,12 @@ function sumOfForecasts(figures) {
   };
 }
 
-// The figure of the accounts: `empty` when none has one, the figure of the only one that has
-// one as it shows alone, or else the sum of those of the current month
-function ofAccounts(figures, empty, sum) {
+// Adds up the figures of the accounts in the current month, as a consumption route answers
+// them: `none` when no account has one, the only one as its account shows alone, or else
+// their `sum`
+function addUpCurrentMonth(figures, { none, sum }) {
   const counted = ofCurrentMonth(figures.filter(Boolean));
-  if (counted.length === 0) return empty;
+  if (counted.length === 0) return none;
   if (counted.length === 1) return counted[0].answer;
   return sum(counted);
 }
@@ -210,14 +214,16 @@ function ofAccounts(figures, empty, sum) {
  *   account's: its latest consumption snapshot, and what its projects consumed (see
  *   consumption.getCurrentByAccount() in data/db.js)
  * @param {Date} now - When the route answers, the time of a figure that it computes
- * @returns {object} What GET /api/consumption/current answers: `current_total`, and, unless
- *   no account has any, `snapshot_date`, `period_start`, `period_end` and `currency`; `source`,
- *   'me_consumption' or 'cloud_projects', with `details` or `project_count`, when the accounts
- *   share one
+ * @returns {object} What GET /api/consumption/current answers: `{ current_total: 0,
+ *   currency: 'EUR' }` when no account has any. One account's: `snapshot_date`,
+ *   `period_start`, `period_end`, `current_total`, `currency` and `source`, with
+ *   `details`, what OVH tells, for 'me_consumption', or `project_count` for
+ *   'cloud_projects'. Several accounts': the same but `details`, which stay one account's,
+ *   and with `source` only when they share one.
  */
 function currentConsumption(accounts, now) {
-  return ofAccounts(accounts.map((account) => currentOfAccount(account, now)),
-    { current_total: 0, currency: 'EUR' }, sumOfCurrent);
+  return addUpCurrentMonth(accounts.map((account) => currentOfAccount(account, now)),
+    { none: { current_total: 0, currency: 'EUR' }, sum: sumOfCurrent });
 }
 
 /**
@@ -227,14 +233,15 @@ function currentConsumption(accounts, now) {
  * @param {{ snapshot: (object|undefined), cloud: object }[]} accounts - As for
  *   currentConsumption()
  * @param {Date} now - When the route answers, the time of a forecast that it computes
- * @returns {object} What GET /api/consumption/forecast answers: `forecast_total`, and, unless
- *   no account has any, `snapshot_date`, `period_start`, `period_end`, `current_total`,
- *   `currency` and `progress`; with `source`, 'cloud_projects', `days_elapsed` and
- *   `days_in_month` when every account's is extrapolated from its projects
+ * @returns {object} What GET /api/consumption/forecast answers: `{ forecast_total: 0,
+ *   currency: 'EUR' }` when no account has any; else `snapshot_date`, `period_start`,
+ *   `period_end`, `forecast_total`, `current_total`, `currency` and `progress`, with
+ *   `source`, 'cloud_projects', `days_elapsed` and `days_in_month` when every account's is
+ *   extrapolated from its projects
  */
 function consumptionForecast(accounts, now) {
-  return ofAccounts(accounts.map((account) => forecastOfAccount(account, now)),
-    { forecast_total: 0, currency: 'EUR' }, sumOfForecasts);
+  return addUpCurrentMonth(accounts.map((account) => forecastOfAccount(account, now)),
+    { none: { forecast_total: 0, currency: 'EUR' }, sum: sumOfForecasts });
 }
 
 module.exports = { currentConsumption, consumptionForecast };

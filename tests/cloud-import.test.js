@@ -220,7 +220,7 @@ describe('project consumption import', () => {
     await importUsageAt('2026-08-31T22:30:00Z', undefined, oneInstance('b2-7', 30.5));
 
     expect(consumption('2026-08-01', '2026-08-31')).toEqual([['instance', 'b2-7', 30.5]]);
-    expect(db.cloudDetails.getConsumptionSummary())
+    expect(db.cloudDetails.getConsumptionSummary(ACCOUNT.nic))
       .toMatchObject({ period_start: '2026-08-01', period_end: '2026-08-31' });
   });
 
@@ -246,7 +246,7 @@ describe('project consumption import', () => {
     await importUsageOn('2026-08-28', 'b2-7', 30.5);
     await importUsageOn('2026-09-15', 'b2-15', 12.25);
 
-    expect(db.cloudDetails.getConsumptionSummary()).toEqual({
+    expect(db.cloudDetails.getConsumptionSummary(ACCOUNT.nic)).toEqual({
       period_start: '2026-09-01', period_end: '2026-09-15', total: 12.25, project_count: 1,
     });
   });
@@ -288,7 +288,7 @@ describe('project consumption import', () => {
     });
 
     test('sums no consumption in the consumption summary', () => {
-      expect(db.cloudDetails.getConsumptionSummary()).toEqual({
+      expect(db.cloudDetails.getConsumptionSummary(ACCOUNT.nic)).toEqual({
         period_start: null, period_end: null, total: null, project_count: 0,
       });
     });
