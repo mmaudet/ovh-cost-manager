@@ -102,11 +102,12 @@ describe('Account Balance (Phase 2)', () => {
   });
 });
 
+// Keyed by their account and their id (#114)
 describe('Credit Movements (Phase 2)', () => {
   test('inserts credit movements', () => {
     db.prepare(`
-      INSERT INTO credit_movements (id, balance_name, amount, date, description, movement_type)
-      VALUES ('mov_1', 'main', 100.00, '2025-01-15', 'Voucher applied', 'credit')
+      INSERT INTO credit_movements (id, balance_name, amount, date, description, movement_type, account)
+      VALUES ('mov_1', 'main', 100.00, '2025-01-15', 'Voucher applied', 'credit', 'xx1111-ovh')
     `).run();
 
     const row = db.prepare('SELECT * FROM credit_movements WHERE id = ?').get('mov_1');
@@ -117,8 +118,8 @@ describe('Credit Movements (Phase 2)', () => {
 
   test('upserts on conflict', () => {
     db.prepare(`
-      INSERT OR REPLACE INTO credit_movements (id, balance_name, amount, date, description, movement_type)
-      VALUES ('mov_1', 'main', 150.00, '2025-01-15', 'Voucher updated', 'credit')
+      INSERT OR REPLACE INTO credit_movements (id, balance_name, amount, date, description, movement_type, account)
+      VALUES ('mov_1', 'main', 150.00, '2025-01-15', 'Voucher updated', 'credit', 'xx1111-ovh')
     `).run();
 
     const row = db.prepare('SELECT * FROM credit_movements WHERE id = ?').get('mov_1');

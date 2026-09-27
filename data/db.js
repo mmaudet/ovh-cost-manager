@@ -126,6 +126,40 @@ function addColumnIfNotExists(database, table, column, type) {
 }
 
 /**
+ * Gives a table the key that schema.sql defines for it now, which SQLite cannot change in
+ * place (#114): its rows, with their rowids, go to the table as schema.sql creates it anew,
+ * with its indexes. In a transaction that takes the write lock first, and only if the table
+ * still has its former key then: the server and the import may open an old database
+ * together.
+ * @param {object} database - The database, as getDb() opens it
+ * @param {string} table - The table
+ * @param {string[]} columns - The columns of its rows, which both of its forms have
+ * @param {function(): boolean} hasFormerKey - Whether the table still has its former key
+ */
+function rekeyTable(database, table, columns, hasFormerKey) {
+  const rekey = database.transaction(() => {
+    if (!hasFormerKey()) return;
+    const former = `${table}_former_key`;
+    database.exec(`ALTER TABLE ${table} RENAME TO ${former}`);
+    // Its indexes follow it, under their names, which schema.sql creates those of the new
+    // table with
+    const indexes = database.prepare(`
+      SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = ? AND sql IS NOT NULL
+    `).all(former);
+    for (const { name } of indexes) database.exec(`DROP INDEX ${name}`);
+    database.exec(fs.readFileSync(SCHEMA_PATH, 'utf8'));
+    const list = columns.join(', ');
+    database.exec(`INSERT INTO ${table} (rowid, ${list}) SELECT rowid, ${list} FROM ${former}`);
+    database.exec(`DROP TABLE ${former}`);
+  });
+  rekey.immediate();
+}
+
+// Whether a column of a table is not part of its key, or does not exist
+const outOfKey = (database, table, column) => !database.pragma(`table_info(${table})`)
+  .some(({ name, pk }) => name === column && pk > 0);
+
+/**
  * Initialize and return database connection
  */
 function getDb() {
@@ -159,6 +193,12 @@ function getDb() {
     addColumnIfNotExists(db, 'accounts', 'budget', 'INTEGER');
     // What keeps the lock of a long import (#113)
     addColumnIfNotExists(db, 'import_log', 'heartbeat_at', 'DATETIME');
+    // The credit movements keyed by their account too (#114): their ids, which join the name
+    // of their balance and their number, can be those of another account's
+    rekeyTable(db, 'credit_movements', [
+      'id', 'balance_name', 'amount', 'date', 'description', 'movement_type', 'imported_at',
+      'account',
+    ], () => outOfKey(db, 'credit_movements', 'account'));
   }
   return db;
 }

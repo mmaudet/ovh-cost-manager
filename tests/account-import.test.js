@@ -6,6 +6,7 @@
 
 const { routes, ok, fail, me, useThrowawayImport } = require('./support/simulated-ovh');
 const { ACCOUNT, SQLITE_TIME } = require('./support/accounts');
+const { ROOT_TABLES, asBeforeAccounts } = require('./support/database-before');
 
 jest.mock('ovh', () => require('./support/simulated-ovh').ovh);
 jest.mock('jsonfile', () => require('./support/simulated-ovh').jsonfile);
@@ -154,12 +155,6 @@ const ALL_DATASETS = {
 // A period import of September, with none of the datasets that the bills do not give
 const importSeptember = () => runImport({ from: '2026-09-01', to: '2026-09-30' });
 
-// The tables that the OVH API feeds whose rows carry the NIC handle of their account
-const ROOT_TABLES = [
-  'bills', 'projects', 'dedicated_servers', 'vps_instances', 'storage_services',
-  'account_balance', 'consumption_snapshots', 'consumption_history', 'credit_movements',
-];
-
 // The accounts that the rows of a table carry, NULL for a row without any
 const accountsIn = (table) => db.getDb()
   .prepare(`SELECT DISTINCT account FROM ${table} ORDER BY account`)
@@ -205,11 +200,7 @@ const onlyTheAccount = (tables) => byTable(tables, () => [ACCOUNT.nic]);
 // account, and it has no accounts table. The next getDb() migrates it, as the server or the
 // import that starts after the upgrade does.
 function downgradeDatabase() {
-  const database = db.getDb();
-  for (const table of ROOT_TABLES) {
-    database.exec(`ALTER TABLE ${table} DROP COLUMN account`);
-  }
-  database.exec('DROP TABLE accounts');
+  asBeforeAccounts(db.getDb());
   db.closeDb();
 }
 

@@ -5,6 +5,7 @@
  */
 
 const { ok, serveAccount, useConfig, useThrowawayImport } = require('./support/simulated-ovh');
+const { asBefore114 } = require('./support/database-before');
 
 jest.mock('ovh', () => require('./support/simulated-ovh').ovh);
 jest.mock('jsonfile', () => require('./support/simulated-ovh').jsonfile);
@@ -265,6 +266,72 @@ describe('the consumption history', () => {
 
     expect(storedHistory()).toEqual([
       [LYON.nic, '2026-08-01', 110], [PARIS.nic, '2026-07-01', 200],
+    ]);
+  });
+});
+
+// Serves on these routes an account's balance: no debt, no deposit, and these credit
+// balances, by name, each with its movements as [number, amount]
+function serveBalance(accountRoutes, balances) {
+  const amount = (value) => ({ value, currencyCode: 'EUR' });
+  accountRoutes.set('/me/debtAccount', ok({ todoAmount: amount(0) }));
+  accountRoutes.set('/me/deposit', ok([]));
+  accountRoutes.set('/me/credit/balance', ok(Object.keys(balances)));
+  for (const [name, movements] of Object.entries(balances)) {
+    const total = movements.reduce((sum, [, value]) => sum + value, 0);
+    accountRoutes.set(`/me/credit/balance/${name}`, ok({ amount: amount(total) }));
+    accountRoutes.set(`/me/credit/balance/${name}/movement`, ok(movements.map(([id]) => id)));
+    for (const [id, value] of movements) {
+      accountRoutes.set(`/me/credit/balance/${name}/movement/${id}`, ok({
+        amount: amount(value), creationDate: '2026-09-01T00:00:00+02:00',
+        description: `Movement ${id}`, type: 'VOUCHER',
+      }));
+    }
+  }
+}
+
+// The credit movements stored, as [NIC handle of their account, id, amount]
+const storedMovements = () => db.getDb().prepare(`
+  SELECT account, id, amount FROM credit_movements ORDER BY account, id
+`).all().map(row => [row.account, row.id, row.amount]);
+
+describe('the credit movements', () => {
+  // Their ids join the name of their balance and their number, which two accounts can share
+  test('of two accounts are kept apart, even with the same ids', async () => {
+    const lyon = serveAccount(LYON);
+    const paris = serveAccount(PARIS);
+    for (const served of [lyon, paris]) {
+      serveProjects(served.routes);
+      serveBills(served.routes, []);
+    }
+    serveBalance(lyon.routes, { PREPAID_ACCOUNT: [[1, 50]] });
+    serveBalance(paris.routes, { PREPAID_ACCOUNT: [[1, 20]] });
+    useAccounts({ served: lyon }, { served: paris });
+
+    await importSeptember({ includeAccount: true });
+
+    expect(storedMovements()).toEqual([
+      [LYON.nic, 'PREPAID_ACCOUNT_1', 50], [PARIS.nic, 'PREPAID_ACCOUNT_1', 20],
+    ]);
+  });
+
+  // Keyed by their id alone before #114
+  test('stored before the upgrade are kept, and replaced when imported again', async () => {
+    const lyon = serveAccount(LYON);
+    serveProjects(lyon.routes);
+    serveBills(lyon.routes, []);
+    serveBalance(lyon.routes, { PREPAID_ACCOUNT: [[1, 50], [2, -20]] });
+    useAccounts({ served: lyon });
+    await importSeptember({ includeAccount: true });
+    asBefore114(db.getDb());
+    db.closeDb();
+    // Since then, OVH has corrected the second one
+    serveBalance(lyon.routes, { PREPAID_ACCOUNT: [[1, 50], [2, -25]] });
+
+    await importSeptember({ includeAccount: true });
+
+    expect(storedMovements()).toEqual([
+      [LYON.nic, 'PREPAID_ACCOUNT_1', 50], [LYON.nic, 'PREPAID_ACCOUNT_2', -25],
     ]);
   });
 });

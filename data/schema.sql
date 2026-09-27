@@ -131,16 +131,18 @@ CREATE TABLE IF NOT EXISTS account_balance (
   account TEXT                   -- NIC handle of its account
 );
 
--- Credit movements
+-- Credit movements, keyed by their account and their id: two accounts can have the same ids
+-- (#114)
 CREATE TABLE IF NOT EXISTS credit_movements (
-  id TEXT PRIMARY KEY,
+  id TEXT,                       -- balanceName_movementId
   balance_name TEXT NOT NULL,
   amount REAL,
   date DATETIME,
   description TEXT,
   movement_type TEXT,
   imported_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-  account TEXT                   -- NIC handle of its account
+  account TEXT,                  -- NIC handle of its account
+  PRIMARY KEY (account, id)
 );
 
 CREATE INDEX IF NOT EXISTS idx_credit_movements_date ON credit_movements(date);
