@@ -14,7 +14,50 @@ sections were written afterwards from the git history.
 
 ## 3.0.0 - 2026-09-27
 
-<!-- Upgrade notes and highlights of this release, if any. -->
+OVH Cost Manager now imports several OVH accounts into one instance (#106).
+The dashboard's header gains an account selector. Every tab, card, list,
+export and report then shows one account, or all of them with an Account
+column in the lists. Each account can have its own budget, and the footer
+tells when each account was last synchronised. A single-account installation
+keeps its configuration, and its dashboard looks the same. The version is
+major because the first start migrates the database for good, and the
+configuration and the API gain the account.
+
+### Upgrade notes
+
+Read [Upgrading to several accounts](https://github.com/mmaudet/ovh-cost-manager/blob/v3.0.0/docs/deployment.md#upgrading-to-several-accounts)
+in the deployment guide before upgrading. In short:
+
+- **Back up the database first.** The first start of 3.0.0 adds an account
+  column to the tables. Going back to 2.4.x with a database that 3.0.0 has
+  migrated is not supported.
+- **Every key needs `GET /me`.** Each import reads the account it imports
+  from `GET /me`, which `/me/*` does not cover. A key without that right fails
+  every import, with a message that names it: request a new consumer key with
+  the README's command.
+- **The first import after the upgrade gives the existing data its account.**
+  There is nothing to run by hand. The container runs it at its next periodic
+  import (`IMPORT_INTERVAL`); the dashboard's resync button runs it at once.
+  Until then, the dashboard looks as before.
+- **Upgrade with the one account you had, then add the others.** With a
+  single account in `config.json`, that account gets all the existing data.
+  Data that no configured account claims shows as the Unknown account
+  ("Compte inconnu") in the selector, and stays until an account claims it:
+  no import deletes it.
+- **To add accounts**, replace the `credentials` section of `config.json`
+  with an `accounts` list, as `config.accounts.example.json` does.
+  - Each entry takes an optional `name` and `budget`.
+  - Each entry's `credentials` now need an `endpoint`, such as `ovh-eu`.
+    Without one, the server stops at start and names the setting.
+  - All accounts must bill in one currency.
+- **API.** Every route that lists or adds up data takes an optional `account`
+  parameter: a NIC handle, or `unknown` for the Unknown account.
+  - Without it, a route answers for all accounts, so a single-account
+    installation gets the same answers, except for an `account` field that
+    some rows gain.
+  - With several accounts, the CSV exports gain a last `account` column.
+  - `GET /api/accounts` is new: it lists the accounts with their last import
+    and budget.
 
 ### New features
 * feat: record the account of every imported row by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/126

@@ -31,9 +31,9 @@ This guide covers Docker deployment options for OVH Cost Manager (OCM), includin
 
 ## Upgrading to several accounts
 
-<!-- At release, keep this heading as it is, as the README links to its anchor, and name the version in the text below it. -->
+<!-- Keep this heading as it is: the README and the 3.0.0 release notes link to its anchor. -->
 
-This release lets one instance import several OVH accounts (see [Several OVH Accounts](#several-ovh-accounts)). An installation of one account keeps its `config.json`, provided its key has the right below, and its dashboard looks the same. Before upgrading, check these points:
+Version 3.0.0 lets one instance import several OVH accounts (see [Several OVH Accounts](#several-ovh-accounts)). An installation of one account keeps its `config.json`, provided its key has the right below, and its dashboard looks the same. Before upgrading, check these points:
 
 - **Every key needs `GET /me`.** Each import now reads from `GET /me` which account it imports, and `/me/*` does not cover it. A key created with the [README](../README.md#2-generate-consumer-key)'s command has this right. A key granted only `/me/*` and `/cloud/*` fails every import, with a message that names the missing right: request a new consumer key with the README's command, and replace the old one in `config.json`.
 - **The first import after the upgrade gives the existing data its account, on its own**: there is nothing to run by hand. When the server starts, it adds an account column to the tables of the database, where the rows stored until then have none. Until the first import, the dashboard shows the data as before, without an account selector. The container runs that import at its next periodic import, up to `IMPORT_INTERVAL` later, 24 hours by default; the dashboard's resync button, or `docker exec ovh-cost-manager node data/import.js --diff --all`, runs it at once. With a single account in `config.json`, that account gets all the data: [The data stored before the upgrade](#the-data-stored-before-the-upgrade) gives the rules.
