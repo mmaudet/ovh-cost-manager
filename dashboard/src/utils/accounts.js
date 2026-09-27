@@ -66,20 +66,15 @@ export function accountColumnOf(accounts, selectedAccount, t) {
  * installation's page offers no account to select, and its report names none.
  * @param {object[]|undefined} accounts - The accounts of the instance (accountsOf()),
  *   undefined while their list loads
- * @param {?string|undefined} selectedAccount - The account shown (useSelectedAccount())
+ * @param {?string|undefined} selectedAccount - The account shown (useSelectedAccount()):
+ *   null for all accounts, or else, once the accounts load, the id of one that they list
  * @param {function(string): string} t
- * @returns {?string} Null when the page offers no account to select, or does not know yet
- *   the account it shows
+ * @returns {?string} Null when the page offers no account to select
  */
 export function scopeLabel(accounts, selectedAccount, t) {
-  if (accounts === undefined || !offersAccounts(accounts) || selectedAccount === undefined) {
-    return null;
-  }
+  if (accounts === undefined || !offersAccounts(accounts)) return null;
   if (selectedAccount === null) return t('allAccounts');
-  const account = accounts.find(({ id }) => id === selectedAccount);
-  // The page shows only an account that the route lists: its NIC handle otherwise, as the
-  // Account column names such an account, rather than fail
-  return account ? accountLabel(account, t) : selectedAccount;
+  return accountLabel(accounts.find(({ id }) => id === selectedAccount), t);
 }
 
 // Whether the key and the request of a query name the account shown: not for all accounts,

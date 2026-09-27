@@ -21,7 +21,6 @@ describe('scopeLabel', () => {
     ['while the accounts load', undefined, null],
     ['without any account', [], null],
     ['with a single account', accountsOf([lyonAccount]), null],
-    ['while the page does not know the account shown yet', accounts, undefined],
   ])('is none %s', (_, accountList, selectedAccount) => {
     expect(scopeLabel(accountList, selectedAccount, inFrench)).toBeNull();
   });
@@ -43,9 +42,4 @@ describe('scopeLabel', () => {
       expect(scopeLabel(accounts, id, inFrench)).toBe(french);
       expect(scopeLabel(accounts, id, inEnglish)).toBe(english);
     });
-
-  // Rather than fail: the page shows only an account that the route lists
-  it('is the NIC handle of an account that the accounts route does not list', () => {
-    expect(scopeLabel(accounts, 'ww4444-ovh', inFrench)).toBe('ww4444-ovh');
-  });
 });
