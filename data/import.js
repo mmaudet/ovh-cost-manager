@@ -1048,10 +1048,15 @@ function usagePeriod(usage) {
   return { start: month.from, end: to && to < month.to ? to : month.to };
 }
 
-// Imports the resources and the consumption of each Public Cloud project of the account,
-// through `ovh`, its OVH API client, and records the month of its current consumption for
-// the account, `nic`, its NIC handle (#114). `heartbeat()` keeps the lock of the run, if any,
-// before each project: an account can have many, and each takes many calls.
+/**
+ * Imports the resources and the consumption of each Public Cloud project of the account, and
+ * records the month of its current consumption for the account (#114).
+ * @param {object} ovh - The OVH API client of the account
+ * @param {string[]} projectIds - Its projects, which its API lists
+ * @param {string} nic - The NIC handle of the account
+ * @param {function()} [heartbeat] - Keeps the lock of the run, if any, before each project:
+ *   an account can have many, and each takes many calls
+ */
 async function importCloudDetails(ovh, projectIds, nic, heartbeat = () => {}) {
   console.log('\n--- Importing cloud project details ---');
 
