@@ -235,6 +235,33 @@ export default function Dashboard() {
     }
   }, [months, holdsSelectedMonth]);
 
+  // The browser gives a printed page's PDF the page's title, which names what the page shows
+  // after its own while the browser prints it, from the PDF export or from its own print
+  // command, as the Markdown report's title does (#124). The browser tells the page before
+  // and after it prints, whatever becomes of the print. A single-account page, which names
+  // no account, keeps its title.
+  useEffect(() => {
+    if (!scope) return undefined;
+    // The page's own title while the browser prints, null otherwise
+    let pageTitle = null;
+    const nameScope = () => {
+      if (pageTitle === null) pageTitle = document.title;
+      document.title = `${pageTitle} - ${scope}`;
+    };
+    const restoreTitle = () => {
+      if (pageTitle === null) return;
+      document.title = pageTitle;
+      pageTitle = null;
+    };
+    window.addEventListener('beforeprint', nameScope);
+    window.addEventListener('afterprint', restoreTitle);
+    return () => {
+      restoreTitle();
+      window.removeEventListener('beforeprint', nameScope);
+      window.removeEventListener('afterprint', restoreTitle);
+    };
+  }, [scope]);
+
   const queryClient = useQueryClient();
 
   // Once the latest import has finished, refresh every query built from
@@ -429,13 +456,8 @@ export default function Dashboard() {
                         a.click();
                         URL.revokeObjectURL(url);
                       } else if (format === 'pdf') {
-                        // The browser gives the PDF the title of the page, which names what
-                        // the page shows while it prints, as the Markdown report's title does
-                        // (#124). print() returns once the print dialog is closed.
-                        const pageTitle = document.title;
-                        if (scope) document.title = `${pageTitle} - ${scope}`;
+                        // Under a title that names what the page shows (see above, #124)
                         window.print();
-                        document.title = pageTitle;
                       }
                       e.target.value = '';
                     }}

@@ -1089,13 +1089,17 @@ describe('dashboard shell', () => {
       afterEach(() => {
         document.title = '';
       });
-      // The title of the page each time it printed, as the browser prints it before
-      // window.print() returns
+      // The browser prints as it does from window.print() or from its own print command: it
+      // tells the page before and after, and prints the page, whose title it gives the PDF
+      const printPage = (titles) => {
+        window.dispatchEvent(new Event('beforeprint'));
+        titles.push(document.title);
+        window.dispatchEvent(new Event('afterprint'));
+      };
+      // The title of the page each time the export printed it
       const printedTitles = () => {
         const titles = [];
-        vi.spyOn(window, 'print').mockImplementation(() => {
-          titles.push(document.title);
-        });
+        vi.spyOn(window, 'print').mockImplementation(() => printPage(titles));
         return titles;
       };
 
@@ -1144,6 +1148,38 @@ describe('dashboard shell', () => {
         ]);
         expect(document.title).toBe(PAGE_TITLE);
       });
+
+      // As the user may print the page with the browser's own command, rather than with the
+      // export: the title names the accounts shown while the browser prints, once, and is the
+      // page's own again once it has printed
+      it("names the accounts shown while the browser's own print command prints the page",
+        async () => {
+          const { user } = await renderDashboard(severalAccounts);
+          await selectAccount(user, 'Lyon subsidiary');
+          const titles = [];
+
+          printPage(titles);
+          window.dispatchEvent(new Event('beforeprint'));
+          window.dispatchEvent(new Event('beforeprint'));
+          titles.push(document.title);
+          window.dispatchEvent(new Event('afterprint'));
+
+          expect(titles).toEqual([
+            'OVH Cost Manager - Lyon subsidiary', 'OVH Cost Manager - Lyon subsidiary',
+          ]);
+          expect(document.title).toBe(PAGE_TITLE);
+        });
+
+      // Nor does the page of a single-account installation name any account then
+      it('prints under its own title with a single account, from any print command',
+        async () => {
+          await renderDashboard({ ...severalAccounts, accounts: [lyonAccount] });
+          const titles = [];
+
+          printPage(titles);
+
+          expect(titles).toEqual([PAGE_TITLE]);
+        });
     });
   });
 
