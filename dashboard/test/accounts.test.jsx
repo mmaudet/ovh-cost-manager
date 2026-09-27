@@ -46,6 +46,15 @@ const consumptionCard = (amount, projects) => [
 const forecastCard = (amount) => [
   'Prévision fin de mois', 'Septembre 2026', amount, '14/30 jours',
 ];
+// The same when the forecast goes over the budget that the page compares it with (#117)
+const forecastAboveBudget = (amount) => [
+  'Prévision fin de mois', 'Septembre 2026', amount, '> Budget!',
+];
+// The accounts, with the dashboard budget, and the budgets of the accounts' own, by id, that
+// the configuration route gives (#117)
+const withBudgets = (budget, accountBudgets) => ({
+  ...severalAccounts, config: { ...severalAccounts.config, budget, accountBudgets },
+});
 
 // The dropdowns of the page, in their order, each as the option it shows
 const dropdownsShown = () => screen.getAllByRole('combobox').map((select) => texts(select)[0]);
@@ -189,6 +198,14 @@ describe('account selector', () => {
         expect(consumption()).toEqual(consumptionCard('402,35€', 2));
         expect(forecast()).toEqual(forecastCard('862,18€'));
       });
+
+    // The dashboard budget, which the forecast of all accounts goes over, and not that of the
+    // Lyon subsidiary, which it does not (#117)
+    it('flag the forecast of all accounts above the dashboard budget', async () => {
+      await renderDashboard(withBudgets(800, { [lyonAccount.id]: 1000 }));
+
+      expect(forecast()).toEqual(forecastAboveBudget('862,18€'));
+    });
 
     // Its import stopped in August, before any consumption this month: the cards show none,
     // rather than the consumption of all accounts, with the card of its resources of August

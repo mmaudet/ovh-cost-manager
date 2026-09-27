@@ -129,6 +129,9 @@ export const severalAccounts = {
   ...account,
   ...webCloudOfSeveralAccounts.all,
   ...infrastructureOfSeveralAccounts.all,
+  // The dashboard budget of account.js, and the budget of the Lyon subsidiary, the only
+  // account with one of its own, as the configuration route gives them (#117)
+  config: { ...account.config, accountBudgets: { [lyonAccount.id]: 1000 } },
   accounts: [lyonAccount, unnamedAccount, removedAccount, unknownAccount],
   projectsEnriched: [lyonProduction, unnamedStaging, unknownSandbox],
   // The projects of the breakdown by project and of the GPU costs, for all accounts, once for

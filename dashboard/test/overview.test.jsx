@@ -660,6 +660,39 @@ describe('Overview tab', () => {
       expect(api.fetchGpuProjectsByAccount).not.toHaveBeenCalled();
     });
 
+    // The budget card compares the figures of the tab with a budget (#117): those of all
+    // accounts with the dashboard budget, config.json's, which the user may change on the
+    // page, whatever the budgets of the accounts
+    describe('budget', () => {
+      // 1 250.40 / 50 000
+      const dashboardBudgetCard = [
+        'Consommation du budget', '3 % utilisé', 'Consommé: 1 250,40€', 'Budget:', '€',
+      ];
+
+      it('compares the figures of all accounts with the dashboard budget', async () => {
+        await renderDashboard(severalAccounts);
+
+        expect(texts(budget())).toEqual(dashboardBudgetCard);
+        expect(budgetInput()).toHaveValue(50000);
+      });
+
+      // Its page shows all accounts, and stays as it was: even when config.json gives its
+      // account a budget, here one that the account's figures and forecast go over
+      it('compares the figures of a single-account installation with the dashboard budget',
+        async () => {
+          await renderDashboard({
+            ...severalAccounts,
+            accounts: [lyonAccount],
+            config: { ...severalAccounts.config, accountBudgets: { [lyonAccount.id]: 100 } },
+          });
+
+          expect(texts(budget())).toEqual(dashboardBudgetCard);
+          expect(budgetInput()).toHaveValue(50000);
+          expect(texts(forecastCard()))
+            .toEqual(['Prévision fin de mois', 'Septembre 2026', '862,18€', '14/30 jours']);
+        });
+    });
+
     // The costs by resource type and the GPU costs of the month that the shell loads for the
     // tab feed other cards and tabs too, which follow the account with them: those of the
     // Public Cloud tab's cards are its own tests' (public-cloud.test.jsx)
