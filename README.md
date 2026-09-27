@@ -438,7 +438,7 @@ Before going to production, go through the [production checklist](docs/deploymen
 | --------------------------------------------------------- | --------------------------------------------- |
 | `GET /api/months`                                         | Available months for selection                |
 | `GET /api/summary?from=&to=`                              | Summary with totals                           |
-| `GET /api/bills?from=&to=`                                | List bills in date range                      |
+| `GET /api/bills?from=&to=&account=`                       | List bills in date range                      |
 | `GET /api/analysis/by-project?from=&to=`                  | Costs grouped by project                      |
 | `GET /api/analysis/by-service?from=&to=`                  | Costs grouped by service type                 |
 | `GET /api/analysis/by-resource-type?from=&to=`            | Costs grouped by resource type                |

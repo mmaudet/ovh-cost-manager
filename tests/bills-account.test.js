@@ -4,9 +4,18 @@
  * database that the test seeds. Over a database of one account, they answer as they always
  * did, whether its rows carry the account or, stored before the accounts (#112), none, as the
  * Unknown account's (see CONTEXT.md).
+ *
+ * The bills take the account parameter, as the other data routes do (#115, see
+ * account-parameter.test.js): a NIC handle that the accounts table records keeps that
+ * account's bills, the reserved value `unknown` the bills without an account (the Unknown
+ * account), and no parameter every account's, as before. Any other value is refused. The
+ * parameter leaves out the other accounts' bills, and nothing else: those it keeps come whole,
+ * in the order that every account's come in.
  */
 
-const { LYON, SQLITE_TIME } = require('./support/accounts');
+const {
+  LYON, PARIS, NEW_ACCOUNT, UNKNOWN_ACCOUNT, REFUSED, SQLITE_TIME, bill,
+} = require('./support/accounts');
 const { asBeforeAccounts } = require('./support/database-before');
 const { startOcm } = require('./support/ocm-server');
 
@@ -50,6 +59,23 @@ function seedOneAccount(db) {
     line('FR1003-1', 'FR1003', 300),
     line('FR1004-1', 'FR1004', 40),
   ]);
+}
+
+// Two accounts and the Unknown account, whose bills were stored before OCM told accounts
+// apart, and an account recorded without a bill. Each billed on 5 September, Lyon twice:
+// FR1003 was stored first, then Paris's bill, then FR1001. Every NIC handle, name and amount is
+// made up.
+function seedAccounts(db) {
+  db.accounts.upsert({ nic: LYON, currency: 'EUR', name: 'Lyon subsidiary' });
+  db.accounts.upsert({ nic: PARIS, currency: 'EUR' });
+  db.accounts.upsert({ nic: NEW_ACCOUNT, currency: 'EUR' });
+  bill(db, 'FR0001', '2026-09-05', null);
+  bill(db, 'FR0002', '2026-06-20', null);
+  bill(db, 'FR1003', '2026-09-05', LYON);
+  bill(db, 'FR2001', '2026-09-05', PARIS);
+  bill(db, 'FR1001', '2026-09-05', LYON);
+  bill(db, 'FR1002', '2026-08-05', LYON);
+  bill(db, 'FR2002', '2026-07-10', PARIS);
 }
 
 // The ids of the bills that the bills route lists, in its order
@@ -134,6 +160,77 @@ describe.each([
       expect(await ocm.get('/api/analysis/daily-trend?from=2026-07-01')).toEqual({
         status: 400, body: { error: 'from and to parameters are required' },
       });
+    });
+  });
+});
+
+describe('a database of several accounts', () => {
+  let ocm;
+
+  beforeAll(async () => {
+    ocm = await startOcm(() => ({}), { seed: seedAccounts });
+  }, 30000);
+
+  afterAll(async () => {
+    await ocm?.stop();
+  });
+
+  describe('GET /api/bills', () => {
+    const billsOf = async (parameters) => ids(await ocm.get(`/api/bills?${parameters}`));
+
+    test('lists the bills of every account without the parameter, as before', async () => {
+      expect(await billsOf('')).toEqual({
+        status: 200,
+        ids: ['FR1001', 'FR2001', 'FR1003', 'FR0001', 'FR1002', 'FR2002', 'FR0002'],
+      });
+    });
+
+    test('lists the bills of the account whose NIC handle it gives', async () => {
+      expect(await billsOf(`account=${LYON}`))
+        .toEqual({ status: 200, ids: ['FR1001', 'FR1003', 'FR1002'] });
+      expect(await billsOf(`account=${PARIS}`))
+        .toEqual({ status: 200, ids: ['FR2001', 'FR2002'] });
+    });
+
+    test('lists the bills of the Unknown account: those without an account', async () => {
+      expect(await billsOf(`account=${UNKNOWN_ACCOUNT}`))
+        .toEqual({ status: 200, ids: ['FR0001', 'FR0002'] });
+    });
+
+    test('lists no bill for an account recorded without a bill', async () => {
+      expect(await billsOf(`account=${NEW_ACCOUNT}`)).toEqual({ status: 200, ids: [] });
+    });
+
+    test('lists the bills of the account between the dates it gives, or from or up to one',
+      async () => {
+        expect(await billsOf(`from=2026-09-01&to=2026-09-30&account=${LYON}`))
+          .toEqual({ status: 200, ids: ['FR1001', 'FR1003'] });
+        expect(await billsOf(`from=2026-07-01&account=${UNKNOWN_ACCOUNT}`))
+          .toEqual({ status: 200, ids: ['FR0001'] });
+        expect(await billsOf(`to=2026-08-31&account=${PARIS}`))
+          .toEqual({ status: 200, ids: ['FR2002'] });
+      });
+
+    test('lists the bills of an account whole, in the order of those of every account',
+      async () => {
+        const { body: everyAccount } = await ocm.get('/api/bills');
+
+        for (const [account, nic] of [[LYON, LYON], [PARIS, PARIS], [UNKNOWN_ACCOUNT, null]]) {
+          expect(await ocm.get(`/api/bills?account=${account}`)).toEqual({
+            status: 200, body: everyAccount.filter((listed) => listed.account === nic),
+          });
+        }
+      });
+  });
+
+  // Rather than answer for all accounts, or for none, to a request that names an account
+  describe('an account the server does not know', () => {
+    test.each([
+      ['a NIC handle that no import recorded', 'account=ww4444-ovh'],
+      ['an empty value', 'account='],
+      ['several values', `account=${LYON}&account=${PARIS}`],
+    ])('is refused, naming the parameter: %s', async (_, parameter) => {
+      expect(await ocm.get(`/api/bills?${parameter}`)).toEqual({ status: 400, body: REFUSED });
     });
   });
 });
