@@ -802,4 +802,28 @@ describe('the rows stored before the accounts, with several accounts configured'
       credit_movements: ['PREPAID_ACCOUNT_1'],
     });
   });
+
+  // It clears the accounts that it imports, not the Unknown account
+  test('are kept by a full import, but for those that an account claims', async () => {
+    const { paris } = serveLyonAndParis();
+    storeDataOf(PARIS.nic, 'P');
+    forgetAccounts();
+    const history = allIdsIn('consumption_history');
+    serveBills(paris.routes, [['FR-P0', '2026-08-01']]);
+
+    await runImport({ full: true });
+
+    expect(accountsOf('bills')).toEqual([['FR-P0', PARIS.nic]]);
+    expect(idsWithoutAccount()).toEqual({
+      bills: [],
+      projects: ['proj-P-idle', 'proj-P-used'],
+      dedicated_servers: ['ns-P'],
+      vps_instances: ['vps-P'],
+      storage_services: ['netapp-P'],
+      account_balance: [],
+      consumption_snapshots: [],
+      consumption_history: history,
+      credit_movements: ['PREPAID_ACCOUNT_1'],
+    });
+  });
 });
