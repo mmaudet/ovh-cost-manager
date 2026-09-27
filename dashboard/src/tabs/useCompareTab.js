@@ -1,21 +1,33 @@
 // The Compare tab's state and data queries, in a hook that the dashboard shell calls on
 // every render: see docs/adr/0001-tab-state-lives-in-the-dashboard-shell.md
-//
-// The tab compares two months of the account shown in the header, selectedAccount: null for
-// all accounts, undefined while the page does not know it yet, which the queries wait for
-// (#119). Months A and B are months of the months list, that account's (#115), which its
-// dropdowns list. They get their defaults when the list first loads: the shell then selects
-// the latest month, in the same commit. They get them again when the list of an account
-// selected since lacks either of them.
 
 import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   fetchSummary, fetchByProject, fetchByService, fetchByResourceType, fetchBackupStats,
+  fetchProjectsByAccount,
 } from '../services/api.js';
 import { accountQuery } from '../utils/accounts.js';
 
-const useCompareTab = ({ months, activeTab, selectedAccount }) => {
+/**
+ * The state and data queries of the Compare tab, which compares two months of the account
+ * shown in the header (#119). Months A and B are months of the months list, that account's
+ * (#115), which the tab's dropdowns list. They get their defaults when the list first loads:
+ * the shell then selects the latest month, in the same commit. They get them again when the
+ * list of an account selected since lacks either of them.
+ * @param {object} shell - What the dashboard shell passes on, on every render
+ * @param {object[]} shell.months - The months billed to the account shown, the latest first
+ * @param {string} shell.activeTab - The tab open: the queries run on the Compare tab only
+ * @param {?string|undefined} shell.selectedAccount - The account shown (useSelectedAccount()):
+ *   null for all accounts, undefined while the page does not know it, which the queries wait
+ *   for
+ * @param {?{ label: string, nameOf: function(?string): string }} shell.accountColumn - The
+ *   Account column of the lists (accountColumnOf()), null when they name no account: while
+ *   it shows, the comparison by project names the account of each project
+ * @returns {object} Months A and B and their setters, the sort order of the comparison by
+ *   project and its handler, and the figures of both months, which the tab shows
+ */
+const useCompareTab = ({ months, activeTab, selectedAccount, accountColumn }) => {
   const [compareMonthA, setCompareMonthA] = useState(null);
   const [compareMonthB, setCompareMonthB] = useState(null);
   const [compareSort, setCompareSort] = useState({ column: 'totalA', direction: 'desc' });
@@ -71,12 +83,20 @@ const useCompareTab = ({ months, activeTab, selectedAccount }) => {
     figureOf('byService', compareMonthB, holdsMonthB, fetchByService),
   );
 
-  const { data: byProjectA = [] } = useQuery(
-    figureOf('byProject', compareMonthA, holdsMonthA, fetchByProject),
-  );
-  const { data: byProjectB = [] } = useQuery(
-    figureOf('byProject', compareMonthB, holdsMonthB, fetchByProject),
-  );
+  // The projects of month A or B: once each, for the account shown, or, while the comparison
+  // names the account of each project, with all accounts shown, once for each account that
+  // billed them, with that account (#119). Those are the Overview's projects by account,
+  // under the same key (#118): its query and this one share a month's answer.
+  const projectsOf = (month, holdsMonth) => (accountColumn
+    ? {
+      queryKey: ['projectsByAccount', month?.from, month?.to],
+      queryFn: () => fetchProjectsByAccount(month.from, month.to),
+      enabled: holdsMonth && activeTab === 'compare',
+    }
+    : figureOf('byProject', month, holdsMonth, fetchByProject));
+
+  const { data: byProjectA = [] } = useQuery(projectsOf(compareMonthA, holdsMonthA));
+  const { data: byProjectB = [] } = useQuery(projectsOf(compareMonthB, holdsMonthB));
 
   // What the infrastructure, backup and Private Cloud comparisons show (#32): the costs of
   // each resource type, under the key of those the page loads for its selected month, and

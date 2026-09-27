@@ -7,7 +7,6 @@ import {
 import { api } from './support/api.js';
 import { captureFileDownloads } from './support/downloads.js';
 import {
-  accordionOf,
   cardOf,
   cardRowOf,
   cloudProjectRow,
@@ -605,27 +604,18 @@ describe('Overview tab', () => {
         ]);
       });
 
-    // What names no account lists each project once, at what every account paid for it
-    it('keeps a project billed to two accounts once in the Markdown report and on Compare',
-      async () => {
-        const { user } = await renderDashboard(stagingMoved);
-        const downloadedFiles = captureFileDownloads();
+    // What names no account lists each project once, at what every account paid for it. The
+    // Compare tab names the account of each project too (#119, compare.test.jsx).
+    it('keeps a project billed to two accounts once in the Markdown report', async () => {
+      const { user } = await renderDashboard(stagingMoved);
+      const downloadedFiles = captureFileDownloads();
 
-        await user.selectOptions(screen.getByDisplayValue('Choisir...'), 'Markdown');
+      await user.selectOptions(screen.getByDisplayValue('Choisir...'), 'Markdown');
 
-        const [report] = await downloadedFiles();
-        expect(report.content.split('\n').filter((line) => line.startsWith('| Staging')))
-          .toEqual(['| Staging | 220,00€ |']);
-
-        await openTab(user, 'Comparaison');
-
-        const projectComparison = screen.getByRole('button', { name: /^Comparaison par projet/ });
-        expect(rowsOf(within(accordionOf(projectComparison)).getByRole('table'))).toEqual([
-          ['Projet○', 'Août 2026▼', 'Septembre 2026○', 'Variation○'],
-          ['Production', '512,00€', '610,40€', '+19,2 %'],
-          ['Staging', '190,00€', '220,00€', '+15,8 %'],
-        ]);
-      });
+      const [report] = await downloadedFiles();
+      expect(report.content.split('\n').filter((line) => line.startsWith('| Staging')))
+        .toEqual(['| Staging | 220,00€ |']);
+    });
 
     // Only the lists that name the account of each project ask for their projects by account
     it('asks for its projects by account only while its lists name the account of each',

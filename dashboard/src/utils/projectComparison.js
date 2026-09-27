@@ -11,20 +11,45 @@ import { variationPercent } from './variation.js';
 // projects the server cannot name, all "Unknown", stay apart. The server gives every project
 // its id; a project without one is known by its name. The projects of month A come first, in
 // their order, then those billed in month B only, in theirs.
+//
+// With all accounts shown, the comparison names the account of each project (#119): the
+// server then lists each project once for each account that billed it, with that account's
+// NIC handle, null for the Unknown account (#118). Two such projects are the same when they
+// have the same account too, and each row keeps that account: a project moved from an
+// account to another has a row for each. Projects that name no account pair by id alone.
 
-// What makes a project of month A and one of month B the same: its id, or its name without one
-const identity = ({ projectId, projectName }) => (
-  projectId != null ? `id ${projectId}` : `name ${projectName}`
-);
+// What makes a project of month A and one of month B the same: its id, or its name without
+// one, and its account when it names one
+const identity = ({ projectId, projectName, account }) => JSON.stringify([
+  projectId != null ? `id ${projectId}` : `name ${projectName}`,
+  account ?? null,
+]);
 
 // The row of a project, as month A lists it, or as month B does when month A does not
 const row = (projectA, projectB) => {
-  const { projectId, projectName } = projectA ?? projectB;
+  const project = projectA ?? projectB;
+  const { projectId, projectName } = project;
   const totalA = projectA?.total ?? 0;
   const totalB = projectB?.total ?? 0;
-  return { projectId, projectName, totalA, totalB, variation: variationPercent(totalA, totalB) };
+  return {
+    projectId,
+    projectName,
+    ...('account' in project ? { account: project.account } : {}),
+    totalA,
+    totalB,
+    variation: variationPercent(totalA, totalB),
+  };
 };
 
+/**
+ * The rows of the project comparison of the Compare tab (see above).
+ * @param {object[]} projectsA - The projects of month A, as /api/analysis/by-project lists
+ *   them: once each, or once for each account that billed them, with that account
+ * @param {object[]} projectsB - Those of month B, listed the same way
+ * @returns {{ projectId: ?string, projectName: string, account: (?string|undefined),
+ *   totalA: number, totalB: number, variation: ?number }[]} A row for each project, and
+ *   account when the projects name theirs
+ */
 const projectComparisonRows = (projectsA, projectsB) => {
   const unpairedB = [...projectsB];
   const rowsOfMonthA = projectsA.map((projectA) => {

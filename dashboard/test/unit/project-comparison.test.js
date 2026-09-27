@@ -127,4 +127,54 @@ describe('projectComparisonRows', () => {
     expect(monthA).toEqual([production(400)]);
     expect(monthB).toEqual([production(500), sandbox(120)]);
   });
+
+  // As /api/analysis/by-project lists them for the lists that name the account of each
+  // project, with all accounts shown (#118, #119): each project once for each account that
+  // billed it, with that account's NIC handle, null for the Unknown account
+  describe('that name the account of each', () => {
+    const ofAccount = (row, account) => ({ ...row, account });
+    // The rows, each as [id, account, cost in month A, cost in month B, variation]
+    const rowsByAccount = (monthA, monthB) => projectComparisonRows(monthA, monthB)
+      .map(({ projectId, account, totalA, totalB, variation }) => (
+        [projectId, account, totalA, totalB, variation]
+      ));
+
+    // Staging, moved from Lyon to Paris in month B: its cost of each account is a row apart
+    it('pairs the projects of months A and B by their id and their account', () => {
+      expect(rowsByAccount(
+        [ofAccount(production(400), 'xx1111-ovh'), ofAccount(staging(200), 'xx1111-ovh')],
+        [
+          ofAccount(production(500), 'xx1111-ovh'), ofAccount(staging(150), 'yy2222-ovh'),
+          ofAccount(staging(30), 'xx1111-ovh'),
+        ],
+      )).toEqual([
+        ['project-production', 'xx1111-ovh', 400, 500, 25],
+        ['project-staging', 'xx1111-ovh', 200, 30, -85],
+        ['project-staging', 'yy2222-ovh', 0, 150, null],
+      ]);
+    });
+
+    it('keeps the account of each row, null for the Unknown account', () => {
+      expect(projectComparisonRows(
+        [ofAccount(sandbox(80), null)],
+        [ofAccount(sandbox(100), null), ofAccount(sandbox(20), 'yy2222-ovh')],
+      )).toEqual([
+        {
+          projectId: 'project-sandbox', projectName: 'Sandbox', account: null,
+          totalA: 80, totalB: 100, variation: 25,
+        },
+        {
+          projectId: 'project-sandbox', projectName: 'Sandbox', account: 'yy2222-ovh',
+          totalA: 0, totalB: 20, variation: null,
+        },
+      ]);
+    });
+
+    // As before the accounts: nothing says which account billed them
+    it('gives no account to the rows of projects that name none', () => {
+      const [row] = projectComparisonRows([production(400)], [production(500)]);
+
+      expect(row).not.toHaveProperty('account');
+    });
+  });
 });

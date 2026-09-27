@@ -233,7 +233,15 @@ export const fetchPublicCloudStats = async (from, to, account = null) => {
   return data;
 };
 
-// Backup stats (Veeam) of the account (#119)
+/**
+ * Backup stats (Veeam) of a month, for the Compare and Backup tabs (#119)
+ * @param {string} from - The first day of the month, 'YYYY-MM-DD'
+ * @param {string} to - Its last day
+ * @param {?string} [account] - The account whose backups to ask for, as the functions above
+ *   take it: null for all accounts
+ * @returns {Promise<{ vms: object, enterprise: object }>} The number and cost of the Veeam
+ *   VMs and of the Enterprise licences
+ */
 export const fetchBackupStats = async (from, to, account = null) => {
   const { data } = await api.get('/analysis/backup-stats', {
     params: { from, to, ...accountParams(account) },

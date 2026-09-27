@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { act } from '@testing-library/react';
+import { translations } from '../../src/i18n/translations.js';
 import { useCompareTab } from '../../src/tabs/useCompareTab.js';
+import { accountColumnOf, accountsOf } from '../../src/utils/accounts.js';
 import { months } from '../fixtures/calendar.js';
 import {
   lyonAccount, removedAccount, severalAccounts, unknownAccount,
@@ -12,12 +14,14 @@ import { settle } from '../support/query-client.js';
 // The state and data queries of the Compare tab, as the dashboard shell sees them: what the
 // hook requests and returns for the months list, the active tab and the account shown. The
 // shell holds the account, which the header selects (#115): null for all accounts, undefined
-// while the page does not know it yet. The months list is that account's.
+// while the page does not know it yet. The months list is that account's. And the shell
+// passes on the Account column of the lists (accountColumnOf()), null when they name no
+// account, as with a single account.
 
 const [september, august, july] = months;
 // What the shell passes on the render where the months list arrives, all accounts shown: it
 // selects its own month in that commit, as months A and B get their defaults
-const monthsArrive = { months, selectedAccount: null };
+const monthsArrive = { months, selectedAccount: null, accountColumn: null };
 const onCompare = { ...monthsArrive, activeTab: 'compare' };
 
 // Months A and B, as [A, B]
@@ -300,6 +304,59 @@ describe('useCompareTab', () => {
     // The answers stay
     expect(result.current.compareDataA.total).toBe(980);
     expect(result.current.compareDataB.total).toBe(1042);
+  });
+
+  // Several accounts in the instance (#119), all of them shown, where the comparison by
+  // project names the account of each project: see fixtures/accounts.js
+  describe('projects of the Account column', () => {
+    const withAccountColumn = {
+      ...onCompare,
+      accountColumn: accountColumnOf(
+        accountsOf(severalAccounts.accounts), null, (key) => translations.fr[key],
+      ),
+    };
+
+    it('are requested for months A and B by account, under the keys of the Overview\'s',
+      async () => {
+        const { result, keysOf } = await renderTabHook(useCompareTab, withAccountColumn,
+          severalAccounts);
+
+        for (const { from, to } of [august, september]) {
+          expect(api.fetchProjectsByAccount).toHaveBeenCalledWith(from, to);
+        }
+        expect(api.fetchByProject).not.toHaveBeenCalled();
+        // Each project once for each account that billed it, with that account
+        expect(result.current.byProjectA).toEqual(severalAccounts.projectsByAccount['2026-08']);
+        expect(result.current.byProjectB).toEqual(severalAccounts.projectsByAccount['2026-09']);
+        // For all accounts, which the column shows: their keys name none
+        expect(keysOf('projectsByAccount')).toEqual([
+          ['projectsByAccount', undefined, undefined],
+          ['projectsByAccount', '2026-08-01', '2026-08-31'],
+          ['projectsByAccount', '2026-09-01', '2026-09-30'],
+        ]);
+        expect(keysOf('byProject')).toEqual([]);
+      });
+
+    it('are the projects once each without the column', async () => {
+      const { result, rerender } = await renderTabHook(useCompareTab, withAccountColumn,
+        severalAccounts);
+
+      await rerender({ ...onCompare, selectedAccount: lyonAccount.id });
+
+      expect(api.fetchByProject).toHaveBeenCalledWith('2026-08-01', '2026-08-31', lyonAccount.id);
+      expect(projects(result.current.byProjectA)).toEqual([['Production', 512]]);
+      expect(result.current.byProjectA[0]).not.toHaveProperty('account');
+    });
+
+    // As the other figures of the tab: on the tab only, and for a month of the months list
+    it('wait for the tab, and for months A and B', async () => {
+      const { queryClient } = await renderTabHook(useCompareTab,
+        { ...withAccountColumn, months: [], activeTab: 'overview' }, severalAccounts);
+
+      expect(api.fetchProjectsByAccount).not.toHaveBeenCalled();
+      expect(queryClient.getQueryState(['projectsByAccount', undefined, undefined]))
+        .toMatchObject(WAITING);
+    });
   });
 
   // Several accounts in the instance (#119): see fixtures/accounts.js

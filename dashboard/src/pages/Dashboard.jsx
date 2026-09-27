@@ -200,7 +200,7 @@ export default function Dashboard() {
 
   const overviewTab = useOverviewTab({ selectedMonth, holdsSelectedMonth, accountColumn });
 
-  const compareTab = useCompareTab({ months, activeTab, selectedAccount });
+  const compareTab = useCompareTab({ months, activeTab, selectedAccount, accountColumn });
 
   const trendsTab = useTrendsTab({
     months, selectedMonth, holdsSelectedMonth, selectedAccount, activeTab,
@@ -694,7 +694,7 @@ export default function Dashboard() {
         {activeTab === 'compare' && (
           <CompareTab
             {...compareTab} language={language} t={t} fmt={fmt}
-            months={months} inventoryServers={inventoryServers}
+            months={months} inventoryServers={inventoryServers} accountColumn={accountColumn}
           />
         )}
 

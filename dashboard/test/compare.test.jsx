@@ -1,7 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import { screen, within } from '@testing-library/react';
 import { account, everyResourceType, threeBilledProjects } from './fixtures/account.js';
-import { lyonAccount, removedAccount, severalAccounts } from './fixtures/accounts.js';
+import {
+  lyonAccount, removedAccount, severalAccounts, unknownAccount, unnamedAccount,
+} from './fixtures/accounts.js';
 import { months } from './fixtures/calendar.js';
 import { api } from './support/api.js';
 import {
@@ -960,6 +962,132 @@ describe('Compare tab', () => {
         expect(rowsOf(comparisonTable(PROJECTS)))
           .toEqual([['Projet○', 'Juillet 2026▼', 'Août 2026○', 'Variation○']]);
         expect(screen.queryAllByRole('button', { name: /\(Projet\)/ })).toEqual([]);
+      });
+    });
+
+    // With all accounts shown, the comparison by project names the account of each project:
+    // its name, or else its NIC handle, as the accounts route lists it (#119)
+    describe('Account column', () => {
+      const projectRows = () => rowsOf(comparisonTable(PROJECTS));
+      // Without the column, as with a single account
+      const WITHOUT_ACCOUNT = [
+        ['Projet○', 'Août 2026▼', 'Septembre 2026○', 'Variation○'],
+        ['Production', '512,00€', '610,40€', '+19,2 %'],
+        ['Staging', '190,00€', '220,00€', '+15,8 %'],
+      ];
+      // Staging, moved from Lyon to yy2222-ovh during September: once for each account that
+      // billed it, as the server lists the projects by account (#118)
+      const [production] = severalAccounts.projectsByAccount['2026-09'];
+      const staging = (total, { nic }) => ({
+        projectId: 'project-staging', projectName: 'Staging', total, detailsCount: 4, account: nic,
+      });
+      const stagingMoved = {
+        ...severalAccounts,
+        projectsByAccount: {
+          ...severalAccounts.projectsByAccount,
+          '2026-09': [production, staging(170, unnamedAccount), staging(50, lyonAccount)],
+        },
+      };
+
+      it('names the account of each project with all accounts shown', async () => {
+        const { user } = await renderDashboard(severalAccounts);
+
+        await openTab(user, 'Comparaison');
+
+        expect(projectRows()).toEqual([
+          ['Projet○', 'Compte', 'Août 2026▼', 'Septembre 2026○', 'Variation○'],
+          ['Production', 'Lyon subsidiary', '512,00€', '610,40€', '+19,2 %'],
+          ['Staging', 'yy2222-ovh', '190,00€', '220,00€', '+15,8 %'],
+        ]);
+        // The projects of months A and B by account, rather than once each
+        for (const { from, to } of [months[1], months[0]]) {
+          expect(api.fetchProjectsByAccount).toHaveBeenCalledWith(from, to);
+        }
+        expect(api.fetchByProject).not.toHaveBeenCalledWith('2026-08-01', '2026-08-31', null);
+      });
+
+      // Each row compares what one account paid for the project in months A and B
+      it('compares a project billed to two accounts once for each, its consumption once',
+        async () => {
+          const { user } = await renderDashboard(stagingMoved);
+
+          await openTab(user, 'Comparaison');
+
+          // (170 - 190) / 190
+          expect(projectRows()).toEqual([
+            ['Projet○', 'Compte', 'Août 2026▼', 'Septembre 2026○', 'Variation○'],
+            ['Production', 'Lyon subsidiary', '512,00€', '610,40€', '+19,2 %'],
+            ['Staging', 'yy2222-ovh', '190,00€', '170,00€', '-10,5 %'],
+            ['Staging', 'Lyon subsidiary', '0,00€', '50,00€', '—'],
+          ]);
+          // What a project consumed is its own, whatever account billed it
+          expect(projectComparisons()).toEqual(['Production (Projet)', 'Staging (Projet)']);
+
+          // Least expensive in month B first: in the order of their first rows
+          await sortTable(user, comparisonTable(PROJECTS), /^Septembre 2026/);
+          await sortTable(user, comparisonTable(PROJECTS), /^Septembre 2026/);
+
+          expect(firstColumnOf(comparisonTable(PROJECTS)))
+            .toEqual(['Staging', 'Staging', 'Production']);
+          expect(projectComparisons()).toEqual(['Staging (Projet)', 'Production (Projet)']);
+        });
+
+      it('names no account once one is selected, and names them again with all accounts',
+        async () => {
+          const { user } = await renderDashboard(severalAccounts);
+          await openTab(user, 'Comparaison');
+
+          await selectAccount(user, 'Lyon subsidiary');
+
+          expect(headerOf(comparisonTable(PROJECTS)))
+            .toEqual(['Projet○', 'Août 2026▼', 'Septembre 2026○', 'Variation○']);
+
+          await selectAccount(user, 'Tous les comptes');
+
+          expect(headerOf(comparisonTable(PROJECTS)))
+            .toEqual(['Projet○', 'Compte', 'Août 2026▼', 'Septembre 2026○', 'Variation○']);
+        });
+
+      // As the page shows it before an instance could import several accounts, whatever the
+      // rows say of their account
+      it.each([
+        ['a single account', [lyonAccount]],
+        ['no account, as before the first import since the upgrade', []],
+      ])('names no account with %s', async (_, accounts) => {
+        const { user } = await renderDashboard({ ...stagingMoved, accounts });
+
+        await openTab(user, 'Comparaison');
+
+        expect(projectRows()).toEqual(WITHOUT_ACCOUNT);
+        expect(api.fetchProjectsByAccount).not.toHaveBeenCalled();
+      });
+
+      it('names the Unknown account, in the language of the page', async () => {
+        // A project that no account claimed since its bills were imported
+        const legacy = {
+          projectId: 'project-legacy', projectName: 'Legacy', total: 20, detailsCount: 1,
+          account: null,
+        };
+        const { user } = await renderDashboard({
+          ...severalAccounts,
+          accounts: [lyonAccount, unknownAccount],
+          projectsByAccount: {
+            ...severalAccounts.projectsByAccount,
+            '2026-09': [production, legacy],
+          },
+        });
+        await openTab(user, 'Comparaison');
+
+        expect(projectRows()[3]).toEqual(['Legacy', 'Compte inconnu', '0,00€', '20,00€', '—']);
+
+        await selectLanguage(user, 'en');
+
+        expect(rowsOf(comparisonTable(/^Comparison by project/))).toEqual([
+          ['Project○', 'Account', 'August 2026▼', 'September 2026○', 'Variation○'],
+          ['Production', 'Lyon subsidiary', '512.00€', '610.40€', '+19.2%'],
+          ['Staging', 'yy2222-ovh', '190.00€', '0.00€', '-100.0%'],
+          ['Legacy', 'Unknown account', '0.00€', '20.00€', '—'],
+        ]);
       });
     });
   });
