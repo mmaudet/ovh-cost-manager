@@ -34,9 +34,8 @@ const lastImport = {
 };
 
 export const account = {
-  // Imports enabled on the server, as by default (#51). The dashboard budget, and no budget of
-  // the account's own, which the credentials section of config.json gives none (#117).
-  config: { budget: 50000, accountBudgets: {}, currency: 'EUR', importEnabled: true },
+  // Imports enabled on the server, as by default (#51)
+  config: { budget: 50000, currency: 'EUR', importEnabled: true },
   // Authentication disabled
   user: { id: null, name: 'Anonymous', email: null, authEnabled: false },
   // The only account of the instance, as the accounts route lists it since #113, before

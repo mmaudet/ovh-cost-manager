@@ -50,10 +50,14 @@ const forecastCard = (amount) => [
 const forecastAboveBudget = (amount) => [
   'Prévision fin de mois', 'Septembre 2026', amount, '> Budget!',
 ];
-// The accounts, with the dashboard budget, and the budgets of the accounts' own, by id, that
-// the configuration route gives (#117)
-const withBudgets = (budget, accountBudgets) => ({
-  ...severalAccounts, config: { ...severalAccounts.config, budget, accountBudgets },
+// The accounts, with the dashboard budget that the configuration route gives, and the Lyon
+// subsidiary with the budget of its own that the accounts route gives (#117)
+const withBudgets = (dashboardBudget, lyonBudget) => ({
+  ...severalAccounts,
+  config: { ...severalAccounts.config, budget: dashboardBudget },
+  accounts: [
+    { ...lyonAccount, budget: lyonBudget }, unnamedAccount, removedAccount, unknownAccount,
+  ],
 });
 
 // The dropdowns of the page, in their order, each as the option it shows
@@ -202,7 +206,7 @@ describe('account selector', () => {
     // The dashboard budget, which the forecast of all accounts goes over, and not that of the
     // Lyon subsidiary, which it does not (#117)
     it('flag the forecast of all accounts above the dashboard budget', async () => {
-      await renderDashboard(withBudgets(800, { [lyonAccount.id]: 1000 }));
+      await renderDashboard(withBudgets(800, 1000));
 
       expect(forecast()).toEqual(forecastAboveBudget('862,18€'));
     });
@@ -210,7 +214,7 @@ describe('account selector', () => {
     // Its own, which its forecast goes over, and not the dashboard budget, which that of all
     // accounts does not (#117)
     it('flag the forecast of the account selected above its own budget', async () => {
-      const { user } = await renderDashboard(withBudgets(50000, { [lyonAccount.id]: 700 }));
+      const { user } = await renderDashboard(withBudgets(50000, 700));
       expect(forecast()).toEqual(forecastCard('862,18€'));
 
       await selectAccount(user, 'Lyon subsidiary');
@@ -220,7 +224,7 @@ describe('account selector', () => {
 
     // A dashboard budget of 100 €, which every forecast goes over: the page flagged them all
     it('never compare the forecast of an account with the dashboard budget', async () => {
-      const { user } = await renderDashboard(withBudgets(100, { [lyonAccount.id]: 1000 }));
+      const { user } = await renderDashboard(withBudgets(100, 1000));
       expect(forecast()).toEqual(forecastAboveBudget('862,18€'));
 
       await selectAccount(user, 'Lyon subsidiary');

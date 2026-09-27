@@ -883,8 +883,9 @@ describe('dashboard shell', () => {
       user: { id: 'jdoe', name: 'Jane Doe', email: 'jane.doe@example.com', authEnabled: false },
     };
     // What the server says once the import is over: a late bill line raised
-    // the cost of September. The user and the budget changed meanwhile, but
-    // they are not imported data: the page keeps them.
+    // the cost of September. The user and the dashboard budget changed
+    // meanwhile, but they are not imported data: the page keeps them. An
+    // account's budget is, which the page reloads with the accounts (#117).
     const afterImport = {
       ...signedIn,
       importStatus: importStatus(finished),
@@ -1027,6 +1028,34 @@ describe('dashboard shell', () => {
         'zz3333-ovh (non configuré) — Dernière sync: 31/08/2026 06:01:00',
       ]);
     });
+
+    // An account's budget is imported data, as its name, which the accounts route gives (#117):
+    // once the import that records it is over, the page compares the account with it, without
+    // a reload. Here the first budget of the Lyon subsidiary, below its forecast of 750 €.
+    it('compares an account with the budget that an import records, once it is over',
+      async () => {
+        fakeTimers();
+        const lyonWithBudget = (budget) => [
+          { ...lyonAccount, budget }, unnamedAccount, removedAccount, unknownAccount,
+        ];
+        const { user } = await renderDashboard({
+          ...severalAccounts, accounts: lyonWithBudget(null), importStatus: importStatus(running),
+        });
+
+        serve({
+          ...severalAccounts, accounts: lyonWithBudget(700), importStatus: importStatus(finished),
+        });
+        await passTime(30000);
+        await selectAccount(user, 'Lyon subsidiary');
+
+        // 890.40 / 700
+        expect(texts(cardOf('Consommation du budget'))).toEqual([
+          'Consommation du budget', '127 % utilisé', 'Consommé: 890,40€',
+          'Budget:', '700,00€',
+        ]);
+        expect(texts(cardOf('Prévision fin de mois')))
+          .toEqual(['Prévision fin de mois', 'Septembre 2026', '750,00€', '> Budget!']);
+      });
 
     it('shows the dashboard once the first import ever is over, even before the refresh (#51)',
       async () => {

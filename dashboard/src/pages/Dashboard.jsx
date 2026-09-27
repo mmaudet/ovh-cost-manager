@@ -281,7 +281,8 @@ export default function Dashboard() {
   const queryClient = useQueryClient();
 
   // Once the latest import has finished, refresh every query built from
-  // imported data (all of them but config, user and the import status).
+  // imported data (all of them but config, user and the import status): the
+  // accounts among them, with the budget that each one's import records (#117).
   // The latest import: undefined until the import status loads, null when there was none
   const latestImport = importStatus ? (importStatus.latest ?? null) : undefined;
   const previousImport = useRef(latestImport);
@@ -305,8 +306,10 @@ export default function Dashboard() {
   const total = summary?.total || 0;
   // The budget that the Overview's budget card and the month-end forecast compare the figures
   // shown with (#117), and whether the user may change it: the dashboard budget for all
-  // accounts, or else the account's own, which config.json sets, null when it has none
-  const budget = budgetOf(selectedAccount, dashboardBudget, configData?.accountBudgets);
+  // accounts, or else the account's own, which config.json sets, null when it has none. The
+  // accounts route gives it, as the account's last import recorded it: the page reloads it
+  // with the accounts once an import is over.
+  const budget = budgetOf(accounts, selectedAccount, dashboardBudget);
   // The "vs previous month" variation, from the month before (#50), as the page shows it: its
   // text and its tone, as in the Compare and Trends tabs (#87). Null when it cannot be
   // computed, as there (#65): from a month before at 0 € or less, or without a bill, so at

@@ -688,8 +688,7 @@ describe('Overview tab', () => {
         async () => {
           await renderDashboard({
             ...severalAccounts,
-            accounts: [lyonAccount],
-            config: { ...severalAccounts.config, accountBudgets: { [lyonAccount.id]: 100 } },
+            accounts: [{ ...lyonAccount, budget: 100 }],
           });
 
           expect(texts(budget())).toEqual(dashboardBudgetCard);
