@@ -625,7 +625,7 @@ export default function Dashboard() {
         {activeTab === 'inventory' && (
           <PublicCloudTab
             {...publicCloudTab} language={language} t={t} fmt={fmt} locale={locale}
-            selectedMonth={selectedMonth} selectedProject={selectedProject}
+            selectedMonth={selectedMonth}
             setSelectedProject={setSelectedProject} byResourceType={byResourceType}
             gpuSummary={gpuSummary} accountColumn={accountColumn}
           />
@@ -710,8 +710,7 @@ export default function Dashboard() {
 
       <PublicCloudTabModals
         {...publicCloudTab} language={language} t={t} fmt={fmt} locale={locale}
-        selectedMonth={selectedMonth} selectedProject={selectedProject}
-        accountColumn={accountColumn}
+        selectedMonth={selectedMonth} accountColumn={accountColumn}
       />
 
       <InfrastructureTabModals {...infrastructureTab} language={language} t={t} />

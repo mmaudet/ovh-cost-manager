@@ -705,6 +705,35 @@ describe('Public Cloud tab', () => {
       expect(detailHeadings()).toEqual([]);
     });
 
+    // The project stays selected across account switches (#56), open only while the account
+    // shown lists it: here the Unknown account, whose only month is July
+    it('closes the open project under an account that lacks it, and asks nothing of it',
+      async () => {
+        const { user } = await renderDashboard(severalAccounts);
+        await openTab(user, 'Public Cloud');
+        await openProject(user, 'Production');
+        const detailRequests = [
+          api.fetchProjectConsumption, api.fetchProjectQuotas, api.fetchProjectInstances,
+          api.fetchProjectInstanceTotal, api.fetchProjectBuckets, api.fetchProjectVolumes,
+          api.fetchProjectSnapshots, api.fetchProjectSavingsPlans,
+        ];
+        detailRequests.forEach((request) => request.mockClear());
+
+        await selectAccount(user, 'Compte inconnu');
+
+        expect(texts(cloudProjectRow('Sandbox'))).toContain('▼');
+        expect(detailHeadings()).toEqual([]);
+        detailRequests.forEach((request) => expect(request).not.toHaveBeenCalled());
+
+        await selectAccount(user, 'Tous les comptes');
+
+        // Open again, on July, which all accounts have too
+        expect(texts(cloudProjectRow('Production'))).toContain('▲');
+        expect(api.fetchProjectInstances)
+          .toHaveBeenCalledWith('project-production', '2026-07-01', '2026-07-31');
+        expect(detailHeadings()[1]).toEqual(['Instances (0)']);
+      });
+
     describe('account column', () => {
       const projectsTable = () => within(cloudProjects()).getByRole('table');
       const WITHOUT_ACCOUNT = ['Nom', 'État', 'Instances', 'Consommation en cours'];

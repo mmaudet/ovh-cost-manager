@@ -42,7 +42,9 @@ What stays open depends on how the user moves around the page (#56):
 - the Overview's link to the Infrastructure tab opens its summary, with no resource type
   open;
 - the Overview's other links open their target, a project on the Public Cloud tab or the
-  Web Cloud tab, and keep the rest.
+  Web Cloud tab, and keep the rest;
+- the account selector keeps the open project open while the account shown lists it: with
+  an account that does not, no project is open, until one that lists it is shown (#121).
 
 A tab module may also export pieces that the shell renders in place, outside the tab, so
 that the page's markup stays as it is: the Trends period selector (`TrendsPeriodSelector`),
