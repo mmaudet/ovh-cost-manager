@@ -38,6 +38,22 @@ const ACCOUNT_TABLES = [
   'account_balance', 'consumption_snapshots', 'consumption_history', 'credit_movements',
 ];
 
+/**
+ * Checks that a row that a writer of ACCOUNT_TABLES stores carries the NIC handle of its
+ * account. Written without it, a row would lose the account it has, as the upserts
+ * overwrite it, and the next import would give the row to whichever account it reads.
+ * @param {string} table - The table written, which the error names
+ * @param {object} row - The row, whose `account` is the NIC handle of its account
+ * @returns {object} The row
+ * @throws {Error} When the row has no account
+ */
+function requireAccount(table, row) {
+  if (typeof row.account !== 'string' || row.account === '') {
+    throw new Error(`Cannot write a row of ${table} without the NIC handle of its account`);
+  }
+  return row;
+}
+
 let db = null;
 
 /**
@@ -105,7 +121,7 @@ const projectOps = {
         updated_at = CURRENT_TIMESTAMP,
         account = @account
     `);
-    return stmt.run({ account: null, ...project });
+    return stmt.run(requireAccount('projects', project));
   },
 
   getAll: () => {
@@ -137,7 +153,7 @@ const billOps = {
         imported_at = CURRENT_TIMESTAMP,
         account = @account
     `);
-    return stmt.run({ account: null, ...bill });
+    return stmt.run(requireAccount('bills', bill));
   },
 
   getAll: (fromDate, toDate) => {
@@ -504,7 +520,7 @@ const consumptionOps = {
       INSERT INTO consumption_snapshots (snapshot_date, period_start, period_end, current_total, forecast_total, currency, raw_data, account)
       VALUES (CURRENT_TIMESTAMP, @period_start, @period_end, @current_total, @forecast_total, @currency, @raw_data, @account)
     `);
-    return stmt.run({ account: null, ...snapshot });
+    return stmt.run(requireAccount('consumption_snapshots', snapshot));
   },
 
   getLatestSnapshot: () => {
@@ -518,7 +534,7 @@ const consumptionOps = {
       INSERT INTO consumption_history (period_start, period_end, service_type, total, currency, raw_data, imported_at, account)
       VALUES (@period_start, @period_end, @service_type, @total, @currency, @raw_data, CURRENT_TIMESTAMP, @account)
     `);
-    return stmt.run({ account: null, ...entry });
+    return stmt.run(requireAccount('consumption_history', entry));
   },
 
   getHistory: (fromDate, toDate) => {
@@ -547,7 +563,7 @@ const balanceOps = {
       INSERT INTO account_balance (snapshot_date, debt_balance, credit_balance, deposit_total, currency, account)
       VALUES (CURRENT_TIMESTAMP, @debt_balance, @credit_balance, @deposit_total, @currency, @account)
     `);
-    return stmt.run({ account: null, ...balance });
+    return stmt.run(requireAccount('account_balance', balance));
   },
 
   getLatestBalance: () => {
@@ -561,7 +577,7 @@ const balanceOps = {
       INSERT OR REPLACE INTO credit_movements (id, balance_name, amount, date, description, movement_type, imported_at, account)
       VALUES (@id, @balance_name, @amount, @date, @description, @movement_type, CURRENT_TIMESTAMP, @account)
     `);
-    return stmt.run({ account: null, ...movement });
+    return stmt.run(requireAccount('credit_movements', movement));
   },
 
   getCreditMovements: () => {
@@ -610,7 +626,7 @@ const inventoryOps = {
         expiration_date = @expiration_date, renewal_type = @renewal_type, imported_at = CURRENT_TIMESTAMP,
         account = @account
     `);
-    return stmt.run({ account: null, ...server });
+    return stmt.run(requireAccount('dedicated_servers', server));
   },
 
   getAllServers: () => {
@@ -630,7 +646,7 @@ const inventoryOps = {
         expiration_date = @expiration_date, renewal_type = @renewal_type, ip_addresses = @ip_addresses, imported_at = CURRENT_TIMESTAMP,
         account = @account
     `);
-    return stmt.run({ account: null, ...vps });
+    return stmt.run(requireAccount('vps_instances', vps));
   },
 
   getAllVps: () => {
@@ -650,7 +666,7 @@ const inventoryOps = {
         expiration_date = @expiration_date, imported_at = CURRENT_TIMESTAMP,
         account = @account
     `);
-    return stmt.run({ account: null, ...storage });
+    return stmt.run(requireAccount('storage_services', storage));
   },
 
   getAllStorage: () => {

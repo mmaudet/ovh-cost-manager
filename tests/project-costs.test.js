@@ -7,6 +7,7 @@
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
+const { ACCOUNT } = require('./support/accounts');
 
 describe('costs by project', () => {
   let db;
@@ -21,11 +22,11 @@ describe('costs by project', () => {
 
   const bill = (id, date) => db.bills.upsert({
     id, date, price_without_tax: 0, price_with_tax: 0, tax: 0, currency: 'EUR',
-    pdf_url: null, html_url: null,
+    pdf_url: null, html_url: null, account: ACCOUNT.nic,
   });
 
   const project = (id, name) => db.projects.upsert({
-    id, name, description: name, status: 'ok', created_at: null,
+    id, name, description: name, status: 'ok', created_at: null, account: ACCOUNT.nic,
   });
 
   // A row of the costs by project

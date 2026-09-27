@@ -5,6 +5,7 @@
  */
 
 const { routes, ok, fail, useThrowawayImport } = require('./support/simulated-ovh');
+const { ACCOUNT } = require('./support/accounts');
 
 jest.mock('ovh', () => require('./support/simulated-ovh').ovh);
 jest.mock('jsonfile', () => require('./support/simulated-ovh').jsonfile);
@@ -30,9 +31,10 @@ function serveVps() {
   }));
 }
 
-// Retry delays run on fake timers, so a rate-limited call costs no real time
+// The inventories of the account of the tests. Retry delays run on fake timers, so a
+// rate-limited call costs no real time.
 async function importInventory() {
-  const done = importer.importInventory({});
+  const done = importer.importInventory({}, ACCOUNT.nic);
   await jest.runAllTimersAsync();
   await done;
 }
@@ -128,15 +130,17 @@ describe('services that OVH no longer lists', () => {
   const storeServer = (id) => db.inventory.upsertServer({
     id, display_name: id, reverse: '', datacenter: 'rbx8', os: '', state: 'ok', cpu: '',
     ram_size: 0, disk_info: '[]', bandwidth: 0, expiration_date: '2026-03-01', renewal_type: '',
+    account: ACCOUNT.nic,
   });
   const storeVps = (id) => db.inventory.upsertVps({
     id, display_name: id, model: '', zone: '', state: 'running', os: '', vcpus: 2,
     ram_mb: 2048, disk_gb: 40, expiration_date: '2026-03-01', renewal_type: '',
-    ip_addresses: '[]',
+    ip_addresses: '[]', account: ACCOUNT.nic,
   });
   const storeStorage = (id, serviceType = 'netapp') => db.inventory.upsertStorage({
     id, service_type: serviceType, display_name: id, region: 'eu-west-gra',
     total_size_gb: 1024, used_size_gb: 0, share_count: 0, expiration_date: '2026-03-01',
+    account: ACCOUNT.nic,
   });
 
   // What an earlier import stored: a service of each kind that OVH still lists, and one that

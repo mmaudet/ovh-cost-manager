@@ -7,6 +7,7 @@
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
+const { ACCOUNT } = require('./support/accounts');
 
 describe('costs by resource type', () => {
   let db;
@@ -14,7 +15,7 @@ describe('costs by resource type', () => {
 
   const bill = (id, date) => db.bills.upsert({
     id, date, price_without_tax: 0, price_with_tax: 0, tax: 0, currency: 'EUR',
-    pdf_url: null, html_url: null,
+    pdf_url: null, html_url: null, account: ACCOUNT.nic,
   });
 
   // A bill line of a service, with its resource type, null for none

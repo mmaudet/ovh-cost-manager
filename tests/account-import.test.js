@@ -292,6 +292,58 @@ describe('an import', () => {
   });
 });
 
+describe('a writer of a table that the OVH API feeds', () => {
+  // A row of each of these tables, as the import writes it, but without its account
+  const writeWithoutAccount = {
+    bills: () => db.bills.upsert({
+      id: 'FR1', date: '2026-09-01', price_without_tax: 30, price_with_tax: 36, tax: 6,
+      currency: 'EUR', pdf_url: null, html_url: null,
+    }),
+    projects: () => db.projects.upsert({
+      id: PROJECT, name: 'Project 1', description: null, status: 'ok', created_at: null,
+    }),
+    dedicated_servers: () => db.inventory.upsertServer({
+      id: 'ns3000001.ip-203-0-113.eu', display_name: 'ns3000001', reverse: '', datacenter: 'rbx8',
+      os: '', state: 'ok', cpu: '', ram_size: 0, disk_info: '[]', bandwidth: 0,
+      expiration_date: null, renewal_type: '',
+    }),
+    vps_instances: () => db.inventory.upsertVps({
+      id: 'vps-0a1b2c3d.vps.ovh.net', display_name: 'vps-0a1b2c3d', model: '', zone: '',
+      state: 'running', os: '', vcpus: 2, ram_mb: 2048, disk_gb: 40, expiration_date: null,
+      renewal_type: '', ip_addresses: '[]',
+    }),
+    storage_services: () => db.inventory.upsertStorage({
+      id: 'netapp-8c9d0e1f', service_type: 'netapp', display_name: 'netapp-8c9d0e1f',
+      region: 'eu-west-gra', total_size_gb: 1024, used_size_gb: 0, share_count: 0,
+      expiration_date: null,
+    }),
+    account_balance: () => db.balance.insertBalance({
+      debt_balance: 0, credit_balance: 50, deposit_total: 0, currency: 'EUR',
+    }),
+    consumption_snapshots: () => db.consumption.insertSnapshot({
+      period_start: '2026-09-01', period_end: '2026-09-15', current_total: 100,
+      forecast_total: 200, currency: 'EUR', raw_data: '{}',
+    }),
+    consumption_history: () => db.consumption.insertHistory({
+      period_start: '2026-08-01', period_end: '2026-08-31', service_type: 'consumption',
+      total: 190, currency: 'EUR', raw_data: '{}',
+    }),
+    credit_movements: () => db.balance.insertCreditMovement({
+      id: 'VOUCHER_1', balance_name: 'VOUCHER', amount: 50, date: '2026-09-01',
+      description: 'Voucher', movement_type: 'VOUCHER',
+    }),
+  };
+
+  // Stored without it, a row would lose the account it has, and the next import would give
+  // it to the account that import reads, whichever account it belongs to
+  test.each(ROOT_TABLES)('refuses a row of %s without an account, naming the table',
+    (table) => {
+      expect(writeWithoutAccount[table])
+        .toThrow(`Cannot write a row of ${table} without the NIC handle of its account`);
+      expect(accountsIn(table)).toEqual([]);
+    });
+});
+
 describe('an API key that is not granted GET /me', () => {
   // OVH's answer to a call that the key's rights do not cover
   const notGranted = fail(403, 'This call has not been granted');

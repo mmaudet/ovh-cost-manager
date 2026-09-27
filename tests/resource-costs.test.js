@@ -7,6 +7,7 @@
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
+const { ACCOUNT } = require('./support/accounts');
 
 const PROJECT = 'proj-1';
 const FROM = '2026-03-01';
@@ -22,7 +23,7 @@ function seedBillLine(description, totalPrice, date = '2026-03-01') {
   const billId = `FR-${date}`;
   db.bills.upsert({
     id: billId, date, price_without_tax: 0, price_with_tax: 0, tax: 0,
-    currency: 'EUR', pdf_url: null, html_url: null
+    currency: 'EUR', pdf_url: null, html_url: null, account: ACCOUNT.nic
   });
   db.details.insert({
     id: `${billId}_${++lineCount}`, bill_id: billId, project_id: PROJECT, domain: PROJECT,
@@ -60,7 +61,10 @@ afterAll(() => {
 
 beforeEach(() => {
   db.clearAll();
-  db.projects.upsert({ id: PROJECT, name: 'Project 1', description: null, status: 'ok', created_at: null });
+  db.projects.upsert({
+    id: PROJECT, name: 'Project 1', description: null, status: 'ok', created_at: null,
+    account: ACCOUNT.nic,
+  });
 });
 
 describe('allocateProRata', () => {

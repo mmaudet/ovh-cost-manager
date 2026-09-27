@@ -5,6 +5,7 @@
  */
 
 const { routes, ok, fail, useThrowawayImport } = require('./support/simulated-ovh');
+const { ACCOUNT } = require('./support/accounts');
 
 jest.mock('ovh', () => require('./support/simulated-ovh').ovh);
 jest.mock('jsonfile', () => require('./support/simulated-ovh').jsonfile);
@@ -53,7 +54,10 @@ const storedBuckets = () =>
     .sort();
 
 beforeEach(() => {
-  db.projects.upsert({ id: PROJECT, name: 'Project 1', description: null, status: 'ok', created_at: null });
+  db.projects.upsert({
+    id: PROJECT, name: 'Project 1', description: null, status: 'ok', created_at: null,
+    account: ACCOUNT.nic,
+  });
   serveProject();
 });
 
@@ -168,7 +172,7 @@ describe('project consumption import', () => {
   function billGpuInstances() {
     db.bills.upsert({
       id: 'FR1', date: '2026-09-01', price_without_tax: 100, price_with_tax: 120, tax: 20,
-      currency: 'EUR', pdf_url: null, html_url: null,
+      currency: 'EUR', pdf_url: null, html_url: null, account: ACCOUNT.nic,
     });
     db.details.insert({
       id: 'FR1_1', bill_id: 'FR1', project_id: PROJECT, domain: PROJECT,
@@ -303,6 +307,7 @@ describe('project consumption import', () => {
     jest.setSystemTime(new Date('2026-09-01T10:00:00Z'));
     db.projects.upsert({
       id: 'proj-2', name: 'Project 2', description: null, status: 'ok', created_at: null,
+      account: ACCOUNT.nic,
     });
     routes.set(`${BASE}/usage/current`, ok({
       period: { from: '2026-09-01T00:00:00+02:00', to: '2026-09-01T12:00:00+02:00' },

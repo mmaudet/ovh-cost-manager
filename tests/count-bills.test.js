@@ -8,6 +8,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { spawnSync } = require('child_process');
+const { ACCOUNT } = require('./support/accounts');
 
 const countScript = path.join(__dirname, '..', 'data', 'count-bills.js');
 
@@ -23,7 +24,7 @@ function createDatabase(dataDir, billIds) {
     for (const id of billIds) {
       db.bills.upsert({
         id, date: '2026-09-01', price_without_tax: 10, price_with_tax: 12, tax: 2,
-        currency: 'EUR', pdf_url: null, html_url: null,
+        currency: 'EUR', pdf_url: null, html_url: null, account: ACCOUNT.nic,
       });
     }
     db.closeDb();
