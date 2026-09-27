@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { screen, within } from '@testing-library/react';
 import { account, threeBilledProjects } from './fixtures/account.js';
+import { lyonAccount, removedAccount, severalAccounts } from './fixtures/accounts.js';
 import { api } from './support/api.js';
 import {
   cardOf,
@@ -12,6 +13,7 @@ import {
   openTab,
   renderDashboard,
   rowsOf,
+  selectAccount,
   selectLanguage,
   selectMonth,
   settle,
@@ -19,7 +21,8 @@ import {
   texts,
 } from './support/render.jsx';
 
-// What the Overview shows of the selected month, as the page requests it
+// What the Overview shows of the selected month, as the page requests it: for the account
+// selected in the header, the last argument, null for all accounts (#118)
 const figuresOfTheMonth = [
   api.fetchByService,
   api.fetchByProject,
@@ -84,7 +87,7 @@ describe('Overview tab', () => {
     await renderDashboard();
 
     for (const fetchFigures of figuresOfTheMonth) {
-      expect(fetchFigures).toHaveBeenCalledWith('2026-09-01', '2026-09-30');
+      expect(fetchFigures).toHaveBeenCalledWith('2026-09-01', '2026-09-30', null);
     }
     expect(api.fetchExpiringServices).toHaveBeenCalledWith(30);
     // The budget
@@ -98,7 +101,7 @@ describe('Overview tab', () => {
     await selectMonth(user, 'Juillet 2026');
 
     for (const fetchFigures of figuresOfTheMonth) {
-      expect(fetchFigures).toHaveBeenCalledWith('2026-07-01', '2026-07-31');
+      expect(fetchFigures).toHaveBeenCalledWith('2026-07-01', '2026-07-31', null);
     }
   });
 
@@ -445,5 +448,115 @@ describe('Overview tab', () => {
         'VPS', 'legacy-vps', 'Expired 5 days ago',
         'Dedicated Servers', 'ns3000003.ip-203-0-113.eu', 'Expires in 2 days',
       ]);
+  });
+
+  // An instance of several accounts (#118): the tab shows the figures of the account selected
+  // in the header, or those of all accounts. The budget and the services about to expire
+  // follow it in their own tickets (#117, #123).
+  describe('with several accounts', () => {
+    // The breakdown by project and the GPU costs of September, of all accounts
+    const projectsOfOneAccount = [
+      ['Projet○', 'Montant▼', '%'],
+      ['Production', '610,40€', '73,5 %'],
+      ['Staging', '220,00€', '26,5 %'],
+      ['Total Cloud', '830,40€', '100 %'],
+    ];
+    const gpuCostsOfOneAccount = [
+      'Coûts GPU', '420,50€', '(50,6 % du cloud)',
+      'Par modèle GPU', 'NVIDIA L4', '420,50€',
+      'Par projet', 'Projet', 'Types GPU', 'Montant',
+      'Production', 'l4-90', '420,50€', '100,0 %',
+      'Total GPU', '420,50€',
+    ];
+
+    it('loads its figures for the account selected, of a month the account was billed',
+      async () => {
+        const { user } = await renderDashboard(severalAccounts);
+
+        await selectAccount(user, 'Lyon subsidiary');
+
+        for (const fetchFigures of figuresOfTheMonth) {
+          expect(fetchFigures).toHaveBeenCalledWith('2026-09-01', '2026-09-30', lyonAccount.id);
+        }
+
+        // Not billed in September: the page moves to its latest month, without asking for
+        // September's figures of that account
+        await selectAccount(user, 'zz3333-ovh (non configuré)');
+
+        for (const fetchFigures of figuresOfTheMonth) {
+          expect(fetchFigures)
+            .not.toHaveBeenCalledWith('2026-09-01', '2026-09-30', removedAccount.id);
+          expect(fetchFigures)
+            .toHaveBeenCalledWith('2026-08-01', '2026-08-31', removedAccount.id);
+        }
+      });
+
+    it('shows the figures of all accounts by default', async () => {
+      await renderDashboard(severalAccounts);
+
+      expect(texts(serviceTypes())).toEqual([
+        'Répartition par service',
+        'Compute', '800,40€',
+        'Storage', '250,00€',
+        'Other', '200,00€',
+      ]);
+      expect(texts(resourceTypes()).slice(0, 11)).toEqual([
+        'Répartition par type de ressource',
+        'Public Cloud', '830,40€',
+        'Dedicated Servers', '270,00€',
+        'Backup', '90,00€',
+        'Domains', '35,00€',
+        'Licenses', '25,00€',
+      ]);
+      expect(texts(gpuCosts())).toEqual(gpuCostsOfOneAccount);
+      expect(projectRows()).toEqual(projectsOfOneAccount);
+    });
+
+    // Every figure is the account's: the Overview listed every account's projects, and read
+    // the share of each in the Cloud total of the account selected, 100,0 % for Production
+    it('shows the figures of the account selected alone', async () => {
+      const { user } = await renderDashboard(severalAccounts);
+
+      await selectAccount(user, 'Lyon subsidiary');
+
+      expect(texts(serviceTypes())).toEqual([
+        'Répartition par service',
+        'Compute', '580,40€',
+        'Other', '160,00€',
+        'Storage', '150,00€',
+      ]);
+      expect(texts(resourceTypes()).slice(0, 7)).toEqual([
+        'Répartition par type de ressource',
+        'Public Cloud', '610,40€',
+        'Dedicated Servers', '270,00€',
+        'Domains', '10,00€',
+      ]);
+      // 420.50 / 610.40, the account's Cloud total
+      expect(texts(gpuCosts())).toEqual([
+        'Coûts GPU', '420,50€', '(68,9 % du cloud)',
+        'Par modèle GPU', 'NVIDIA L4', '420,50€',
+        'Par projet', 'Projet', 'Types GPU', 'Montant',
+        'Production', 'l4-90', '420,50€', '100,0 %',
+        'Total GPU', '420,50€',
+      ]);
+      expect(projectRows()).toEqual([
+        ['Projet○', 'Montant▼', '%'],
+        ['Production', '610,40€', '100,0 %'],
+        ['Total Cloud', '610,40€', '100 %'],
+      ]);
+    });
+
+    it('leaves out the GPU costs of an account that has none', async () => {
+      const { user } = await renderDashboard(severalAccounts);
+
+      await selectAccount(user, 'yy2222-ovh');
+
+      expect(screen.queryByText('Coûts GPU')).not.toBeInTheDocument();
+      expect(projectRows()).toEqual([
+        ['Projet○', 'Montant▼', '%'],
+        ['Staging', '220,00€', '100,0 %'],
+        ['Total Cloud', '220,00€', '100 %'],
+      ]);
+    });
   });
 });

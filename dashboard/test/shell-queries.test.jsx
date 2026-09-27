@@ -114,9 +114,10 @@ describe('query keys', () => {
 
       await selectAccount(user, 'Lyon subsidiary');
 
-      // The months list and the summaries of the KPI cards, on September, and the queries of
-      // the Trends (#120), Public Cloud (#121) and Web Cloud (#122) tabs: the other queries
-      // follow the account in the next tickets (#116 to #123)
+      // The months list and the summaries of the KPI cards, on September, the figures of the
+      // month that the Overview shows (#118), and the queries of the Trends (#120), Public
+      // Cloud (#121) and Web Cloud (#122) tabs: the other queries follow the account in the
+      // next tickets (#116 to #123)
       expect(sorted(allKeys().filter((key) => key.includes(lyonAccount.id)))).toEqual(sorted([
         ['months', 'xx1111-ovh'],
         ['summary', '2026-09-01', '2026-09-30', 'xx1111-ovh'],
@@ -124,6 +125,10 @@ describe('query keys', () => {
         // while that list loaded, there was no month before to ask for
         ['summary', undefined, undefined, 'xx1111-ovh'],
         ['summary', '2026-08-01', '2026-08-31', 'xx1111-ovh'],
+        ['byService', '2026-09-01', '2026-09-30', 'xx1111-ovh'],
+        ['byProject', '2026-09-01', '2026-09-30', 'xx1111-ovh'],
+        ['byResourceType', '2026-09-01', '2026-09-30', 'xx1111-ovh'],
+        ['gpuSummary', '2026-09-01', '2026-09-30', 'xx1111-ovh'],
         // Over the 3 months up to September that its months allow, and the GPU trend over
         // them, which only runs on the tab
         ['monthlyTrend', 3, '2026-09', 'xx1111-ovh'],

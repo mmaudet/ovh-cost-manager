@@ -2,8 +2,9 @@
 // docs/adr/0001-tab-state-lives-in-the-dashboard-shell.md
 //
 // The tab queries nothing of its own: the KPI cards, the header, the Markdown report or
-// other tabs read what it shows as well, so the shell requests it at page start and passes
-// it on. The budget stays in the shell too, since the month-end forecast card reads it.
+// other tabs read what it shows as well, so the shell requests it at page start, for the
+// account selected in the header (#118), and passes it on. So the hook needs no account. The
+// budget stays in the shell too, since the month-end forecast card reads it.
 
 import { useState } from 'react';
 

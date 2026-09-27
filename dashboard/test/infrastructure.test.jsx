@@ -44,7 +44,7 @@ const serverRows = [
 describe('Infrastructure tab', () => {
   it('loads the inventory when the tab opens, the resource types with the page', async () => {
     const { user } = await renderDashboard();
-    expect(api.fetchByResourceType).toHaveBeenCalledWith('2026-09-01', '2026-09-30');
+    expect(api.fetchByResourceType).toHaveBeenCalledWith('2026-09-01', '2026-09-30', null);
     expect(api.fetchInventoryServers).not.toHaveBeenCalled();
     expect(api.fetchInventoryVps).not.toHaveBeenCalled();
     expect(api.fetchInventoryStorage).not.toHaveBeenCalled();

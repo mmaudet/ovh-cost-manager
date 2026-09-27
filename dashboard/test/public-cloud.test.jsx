@@ -109,7 +109,7 @@ describe('Public Cloud tab', () => {
     expect(api.fetchProjectsEnriched).not.toHaveBeenCalled();
     expect(api.fetchPublicCloudStats).not.toHaveBeenCalled();
     // The GPU costs of the month load with the page, for the Overview
-    expect(api.fetchGpuSummary).toHaveBeenCalledWith('2026-09-01', '2026-09-30');
+    expect(api.fetchGpuSummary).toHaveBeenCalledWith('2026-09-01', '2026-09-30', null);
 
     await openTab(user, 'Public Cloud');
 

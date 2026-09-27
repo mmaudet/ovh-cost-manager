@@ -75,13 +75,72 @@ const lyonProduction = { ...production, account: lyonAccount.nic };
 const unnamedStaging = { ...staging, account: unnamedAccount.nic };
 const unknownSandbox = { ...sandbox, account: null };
 
+// The projects of account.js, and the account that billed them: as the breakdown by project
+// and the GPU costs list them since #118, each project with the account of its bills
+const accountOfProject = {
+  'project-production': lyonAccount.nic,
+  'project-staging': unnamedAccount.nic,
+};
+// The entries of a key of a dataset, keyed by period, each changed by a function
+const mapPeriods = (entries, change) => Object.fromEntries(
+  Object.entries(entries).map(([period, entry]) => [period, change(entry)]),
+);
+// The costs by project of account.js, for all accounts, and for one
+const projectsOfAllAccounts = mapPeriods(account.byProject, (projects) => projects.map(
+  (project) => ({ ...project, account: accountOfProject[project.projectId] }),
+));
+const projectsOf = ({ nic }) => mapPeriods(projectsOfAllAccounts, (projects) => projects.filter(
+  (project) => project.account === nic,
+));
+// The GPU costs of account.js, all of Production: for all accounts, and for Lyon
+const gpuCostsOfAllAccounts = mapPeriods(account.gpuSummary, (gpu) => ({
+  ...gpu,
+  byProject: gpu.byProject.map(
+    (project) => ({ ...project, account: accountOfProject[project.project_id] }),
+  ),
+}));
+
+// The costs of September by service type and by resource type of the accounts billed that
+// month, which add up to those of account.js
+const service = (name, value, color, detailsCount) => ({ name, value, color, detailsCount });
+const resourceType = (name, type, color, value, detailsCount, serviceCount) => ({
+  name, resource_type: type, color, value, detailsCount, serviceCount,
+});
+const publicCloud = (value, detailsCount) =>
+  resourceType('Public Cloud', 'cloud_project', '#3b82f6', value, detailsCount, 1);
+const domains = (value) => resourceType('Domains', 'domain', '#8b5cf6', value, 2, 1);
+
 export const severalAccounts = {
   ...account,
   ...webCloudOfSeveralAccounts.all,
   accounts: [lyonAccount, unnamedAccount, removedAccount, unknownAccount],
   projectsEnriched: [lyonProduction, unnamedStaging, unknownSandbox],
+  byProject: projectsOfAllAccounts,
+  gpuSummary: gpuCostsOfAllAccounts,
   ofAccount: {
     [lyonAccount.id]: {
+      byService: {
+        '2026-09': [
+          service('Compute', 580.4, '#3b82f6', 15),
+          service('Other', 160, '#6b7280', 8),
+          service('Storage', 150, '#10b981', 6),
+        ],
+      },
+      byProject: projectsOf(lyonAccount),
+      byResourceType: {
+        '2026-09': [
+          publicCloud(610.4, 30),
+          resourceType('Dedicated Servers', 'dedicated_server', '#ef4444', 270, 1, 1),
+          domains(10),
+        ],
+      },
+      // Its Production project has all the GPU costs of every account: those of the months
+      // of the Overview, and of the Trends tab's 3 months up to September (#120)
+      gpuSummary: {
+        '2026-09': gpuCostsOfAllAccounts['2026-09'],
+        '2026-08': gpuCostsOfAllAccounts['2026-08'],
+        '2026-07/2026-09': gpuCostsOfAllAccounts['2026-07/2026-09'],
+      },
       months: [september, august, july],
       summary: {
         '2026-09': summaryOf(september, {
@@ -103,8 +162,6 @@ export const severalAccounts = {
         '2026-08': { cloud_project: 512, dedicated_server: 70, domain: 30 },
         '2026-09': { cloud_project: 610.4, dedicated_server: 270, license: 10 },
       }),
-      // Its Production project has all the GPU costs of every account
-      gpuSummary: { '2026-07/2026-09': account.gpuSummary['2026-07/2026-09'] },
       projectsEnriched: [lyonProduction],
       // Its Cloud total of September: every figure of all accounts but those of Staging
       publicCloudStats: {
@@ -119,6 +176,23 @@ export const severalAccounts = {
       ...webCloudOfSeveralAccounts.ofAccount[lyonAccount.id],
     },
     [unnamedAccount.id]: {
+      byService: {
+        '2026-09': [
+          service('Compute', 220, '#3b82f6', 6),
+          service('Storage', 100, '#10b981', 3),
+          service('Other', 40, '#6b7280', 3),
+        ],
+      },
+      byProject: projectsOf(unnamedAccount),
+      byResourceType: {
+        '2026-09': [
+          publicCloud(220, 11),
+          resourceType('Backup', 'backup', '#059669', 90, 3, 3),
+          domains(25),
+          resourceType('Licenses', 'license', '#0891b2', 25, 1, 1),
+        ],
+      },
+      // No GPU
       months: [september, august],
       summary: {
         '2026-09': summaryOf(september, {
