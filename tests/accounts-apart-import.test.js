@@ -1030,6 +1030,28 @@ describe('the rows stored before the accounts, whose bills one account claims', 
       expect(accountsOf('projects')).toEqual([['proj-P-idle', PARIS], ['proj-P-used', PARIS]]);
     });
 
+  // Paris's API lists its older bill in a later run only: until then, nothing tells that the
+  // database was Paris's, and Paris stores its movement again, which OVH dates otherwise than
+  // the copy stored then. That copy is Paris's own, once the rule gives Paris the rest.
+  test('leave no copy of a row that the account has stored itself since', async () => {
+    const { lyon, paris } = serveLyonAndParis();
+    storeBase();
+    storeBill('FR-P-old', '2026-01-01', PARIS);
+    forgetAccounts();
+    serveBills(lyon.routes, []);
+    serveBills(paris.routes, [['FR-P0', '2026-08-01']]);
+    serveBalance(paris.routes, { PREPAID_ACCOUNT: [[1, 50, '2026-09-02T00:00:00+02:00']] });
+    useAccounts({ served: lyon }, { served: paris });
+    await importAsTheCron();
+    serveBills(paris.routes, [['FR-P-old', '2026-01-01'], ['FR-P0', '2026-08-01']]);
+
+    await importAsTheCron();
+
+    expect(db.balance.getCreditMovements().map(movement => [movement.account, movement.id]))
+      .toEqual([[PARIS, 'PREPAID_ACCOUNT_1']]);
+    expect(idsWithoutAccount()).toEqual(Object.fromEntries(ROOT_TABLES.map(t => [t, []])));
+  });
+
   // Neither was its account: the spec's default
   test('stay without an account when two accounts claim them', async () => {
     const { lyon, paris } = serveLyonAndParis();

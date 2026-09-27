@@ -68,17 +68,24 @@ const REFETCHED_TABLES = ACCOUNT_TABLES.filter(table => !['bills', 'projects'].i
 /**
  * Gives the account every row of ACCOUNT_TABLES that has none, and the import state recorded
  * without one. The writers refuse a row without an account, so these are the rows stored
- * before the accounts: in a database that was the account's alone, they can only be its own.
- * A row whose key the account has since recorded, such as the month of its current
- * consumption, keeps none.
+ * before the accounts: in a database that was the account's alone, which a rule of ADR 0002
+ * has established, they can only be its own. A row whose key the account has since stored
+ * itself, such as a credit movement that its import fetched again, or the month of its
+ * current consumption, is its own older copy: it is deleted, rather than left to the Unknown
+ * account as a copy.
  * @param {object} database - The database
  * @param {string} nic - The NIC handle of the account
- * @returns {number} How many rows it gave the account
+ * @returns {number} How many rows it gave the account, without the copies it deleted
  */
 function attributeRowsWithoutAccount(database, nic) {
-  const give = (table, rows) => database.prepare(`
-    UPDATE OR IGNORE ${table} SET account = ? WHERE ${rows.sql}
-  `).run(nic, ...rows.params).changes;
+  const give = (table, rows) => {
+    const given = database.prepare(`
+      UPDATE OR IGNORE ${table} SET account = ? WHERE ${rows.sql}
+    `).run(nic, ...rows.params).changes;
+    // Those left share their key with a row that the account holds: its own older copies
+    database.prepare(`DELETE FROM ${table} WHERE ${rows.sql}`).run(...rows.params);
+    return given;
+  };
   const attribute = database.transaction(() => ACCOUNT_TABLES.reduce(
     (attributed, table) => attributed + give(table, WITHOUT_ACCOUNT),
     give('import_state', ACCOUNT_STATE_WITHOUT_ACCOUNT),
