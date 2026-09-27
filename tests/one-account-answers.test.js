@@ -312,20 +312,23 @@ describe.each([
       });
     }, 30000);
 
-  // OVH may give an account several entries for one period: each is listed, the latest
-  // stored first, and a period that ends earlier after those that end later
+  // OVH may give an account several entries for one period, of several service types or of
+  // one: each is listed, the latest stored first, and a period that ends earlier after those
+  // that end later
   test('the consumption history lists each entry that OVH gives for a period', async () => {
     const answers = await answersOf((db) => {
       historyEntry(db, NIC, ['2026-07-01', '2026-07-31'], 'consumption', 175.5);
       historyEntry(db, NIC, AUGUST, 'instance', 150);
       historyEntry(db, NIC, ['2026-08-01', '2026-08-14'], 'storage', 12.5);
       historyEntry(db, NIC, AUGUST, 'storage', 40.25);
+      historyEntry(db, NIC, AUGUST, 'instance', 7.5);
     }, ['/api/consumption/usage-history'], before);
 
     const entry = (from, to, serviceType, total) => ({
       period_start: from, period_end: to, total, currency: 'EUR', service_type: serviceType,
     });
     expect(answers['/api/consumption/usage-history']).toEqual([
+      entry('2026-08-01', '2026-08-31', 'instance', 7.5),
       entry('2026-08-01', '2026-08-31', 'storage', 40.25),
       entry('2026-08-01', '2026-08-31', 'instance', 150),
       entry('2026-08-01', '2026-08-14', 'storage', 12.5),

@@ -812,15 +812,16 @@ const consumptionOps = {
   /**
    * The consumption history of the account (see accountCondition()), or of every account by
    * default, the Unknown account's included, the latest period first (#116). The entries of
-   * the accounts for a period add up, as the accounts bill in one currency: the first of each
-   * account's with the first of the others', the second with the second. OVH may give an
-   * account several entries for a period: they thus stay apart, the latest stored first, as
-   * they were before the accounts.
+   * the accounts for a period add up, as the accounts bill in one currency, like with like:
+   * the first of a service type of each account with the first of that type of the others',
+   * the second with the second. OVH may give an account several entries for a period, of
+   * several types or of one: they thus stay apart, as they were before the accounts. Those of
+   * a period come the latest stored first.
    * @param {string} [fromDate] - With toDate, the first day of the earliest period to give
    * @param {string} [toDate] - With fromDate, the last day of the latest period to give
    * @param {?string} [account]
-   * @returns {object[]} Each entry's period_start and period_end, its service_type, null for
-   *   entries of several service types added up, its total and its currency
+   * @returns {object[]} Each entry's period_start and period_end, its service_type, its total
+   *   and its currency
    */
   getHistory: (fromDate, toDate, account = null) => {
     const ofAccount = accountCondition(account, 'account');
@@ -831,22 +832,17 @@ const consumptionOps = {
       params.push(fromDate, toDate);
     }
     return getDb().prepare(`
-      SELECT
-        period_start,
-        period_end,
-        CASE WHEN COUNT(service_type) = COUNT(*) AND COUNT(DISTINCT service_type) = 1
-          THEN MIN(service_type) END as service_type,
-        SUM(total) as total,
+      SELECT period_start, period_end, service_type, SUM(total) as total,
         MIN(currency) as currency
       FROM (
         SELECT *, ROW_NUMBER() OVER (
-          PARTITION BY account, period_start, period_end ORDER BY id
+          PARTITION BY account, period_start, period_end, service_type ORDER BY id
         ) as nth
         FROM consumption_history
         WHERE ${conditions.join(' AND ')}
       )
-      GROUP BY period_start, period_end, nth
-      ORDER BY period_start DESC, period_end DESC, nth DESC
+      GROUP BY period_start, period_end, service_type, nth
+      ORDER BY period_start DESC, period_end DESC, MAX(id) DESC
     `).all(...params);
   },
 

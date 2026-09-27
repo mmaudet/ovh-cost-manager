@@ -64,14 +64,17 @@ function seed(db) {
   movement(db, PARIS, { id: 'VOUCHER_1', amount: 30, date: '2026-08-15T10:00:00+02:00' });
   movement(db, null, { id: 'PREPAID_1', amount: 10, date: '2026-06-01T10:00:00+02:00' });
 
+  // OVH may give an account several entries for a period: one for each service type, or
+  // several of a type
   historyEntry(db, null, JUNE, 'consumption', 80);
-  // Of another service type than Lyon's July
   historyEntry(db, null, JULY, 'cloud', 20);
-  historyEntry(db, LYON, JULY, 'consumption', 175.5);
+  historyEntry(db, LYON, JULY, 'instance', 150);
+  historyEntry(db, LYON, JULY, 'storage', 40);
   historyEntry(db, LYON, AUGUST, 'consumption', 190.25);
+  historyEntry(db, PARIS, JULY, 'storage', 12);
+  historyEntry(db, PARIS, JULY, 'instance', 60);
   historyEntry(db, PARIS, AUGUST, 'consumption', 60);
-  // A second entry of Paris's for August, as OVH may give an account several for a period
-  historyEntry(db, PARIS, AUGUST, 'storage', 12);
+  historyEntry(db, PARIS, AUGUST, 'consumption', 5);
 
   snapshot(db, LYON, ['2026-09-01', '2026-09-10'],
     { current: 60, forecast: 180, takenAt: '2026-09-10 04:02:00' });
@@ -329,37 +332,41 @@ describe('GET /api/consumption/usage-history', () => {
   });
   const history = (parameters = '') => ocm.get(`/api/consumption/usage-history${parameters}`);
 
-  // The first entry of each account for a period adds up with the first of the others, the
-  // second with the second: a period's entries of one account stay apart, as before
-  test('adds up the entries of every account for each period without the parameter',
+  // The first entry of a service type of each account for a period adds up with the first of
+  // that type of the others, the second with the second: the entries of one account stay
+  // apart, as before. Those of a period, the latest stored first.
+  const allAccounts = [
+    // Paris's second of August alone, and its first with Lyon's
+    entry(AUGUST, 'consumption', 5),
+    entry(AUGUST, 'consumption', 250.25),
+    // Lyon's and Paris's instances, and their storage
+    entry(JULY, 'instance', 210),
+    entry(JULY, 'storage', 52),
+    // A type that the Unknown account's entry alone has
+    entry(JULY, 'cloud', 20),
+    entry(JUNE, 'consumption', 80),
+  ];
+
+  test('adds up the entries of each service type of every account without the parameter',
     async () => {
-      expect(await history()).toEqual({
-        status: 200,
-        body: [
-          entry(AUGUST, 'storage', 12),
-          entry(AUGUST, 'consumption', 250.25),
-          // Entries of two service types, which their sum does not name
-          entry(JULY, null, 195.5),
-          entry(JUNE, 'consumption', 80),
-        ],
-      });
+      expect(await history()).toEqual({ status: 200, body: allAccounts });
     });
 
-  test('adds up the entries of the period between two dates', async () => {
-    expect(await history('?from=2026-07-01&to=2026-08-31')).toEqual({
-      status: 200,
-      body: [
-        entry(AUGUST, 'storage', 12),
-        entry(AUGUST, 'consumption', 250.25),
-        entry(JULY, null, 195.5),
-      ],
-    });
+  test('adds up the entries of the periods between two dates', async () => {
+    expect(await history('?from=2026-07-01&to=2026-08-31'))
+      .toEqual({ status: 200, body: allAccounts.slice(0, -1) });
   });
 
   test.each([
-    [LYON, [entry(AUGUST, 'consumption', 190.25), entry(JULY, 'consumption', 175.5)]],
-    // Its two entries for August, the latest stored first
-    [PARIS, [entry(AUGUST, 'storage', 12), entry(AUGUST, 'consumption', 60)]],
+    [LYON, [
+      entry(AUGUST, 'consumption', 190.25), entry(JULY, 'storage', 40),
+      entry(JULY, 'instance', 150),
+    ]],
+    // Its two entries of one type for August, the latest stored first
+    [PARIS, [
+      entry(AUGUST, 'consumption', 5), entry(AUGUST, 'consumption', 60),
+      entry(JULY, 'instance', 60), entry(JULY, 'storage', 12),
+    ]],
     [UNKNOWN_ACCOUNT, [entry(JULY, 'cloud', 20), entry(JUNE, 'consumption', 80)]],
     [NEW_ACCOUNT, []],
   ])('gives the entries of the account %s only', async (account, entries) => {
