@@ -23,13 +23,24 @@ api.interceptors.response.use(
   }
 );
 
-export const fetchMonths = async () => {
-  const { data } = await api.get('/months');
+// The accounts of the instance (#112), as the account selector offers them (#115)
+export const fetchAccounts = async () => {
+  const { data } = await api.get('/accounts');
   return data;
 };
 
-export const fetchSummary = async (from, to) => {
-  const { data } = await api.get('/summary', { params: { from, to } });
+// The parameters of a request that follows the account selected: its id, the NIC handle of
+// an account or `unknown` for the Unknown account, or none for all accounts (#115)
+const withAccountParam = (params, account) => (account ? { ...params, account } : params);
+
+// The months billed to the account, to any account when it is null
+export const fetchMonths = async (account = null) => {
+  const { data } = await api.get('/months', { params: withAccountParam({}, account) });
+  return data;
+};
+
+export const fetchSummary = async (from, to, account = null) => {
+  const { data } = await api.get('/summary', { params: withAccountParam({ from, to }, account) });
   return data;
 };
 

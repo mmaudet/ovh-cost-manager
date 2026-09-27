@@ -75,11 +75,20 @@ const entryForPeriod = (key, empty) => (data, from, to) =>
 const entryForProject = (key, empty) => (data, projectId, from, to) =>
   data[key]?.[projectId]?.[periodKey(from, to)] ?? empty();
 
+// The dataset that answers a request (#115): the dataset itself when the
+// request names no account, for all accounts, or else what it holds for that
+// account under `ofAccount`, by its id; nothing for an account it does not hold
+// (see fixtures/accounts.js).
+const ofAccount = (data, account) => (account ? data.ofAccount?.[account] ?? {} : data);
+
 // Every function of src/services/api.js, with how it answers:
 // (dataset, ...arguments of the call) => answer
 const answers = {
-  fetchMonths: entry('months', emptyAnswers.list),
-  fetchSummary: entryForPeriod('summary', emptyAnswers.summary),
+  fetchAccounts: entry('accounts', emptyAnswers.list),
+  // The months list and the summaries follow the account the page selects
+  fetchMonths: (data, account) => entry('months', emptyAnswers.list)(ofAccount(data, account)),
+  fetchSummary: (data, from, to, account) =>
+    entryForPeriod('summary', emptyAnswers.summary)(ofAccount(data, account), from, to),
   fetchProjectsEnriched: entry('projectsEnriched', emptyAnswers.list),
   fetchByProject: entryForPeriod('byProject', emptyAnswers.list),
   fetchByService: entryForPeriod('byService', emptyAnswers.list),

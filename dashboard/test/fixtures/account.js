@@ -38,6 +38,14 @@ export const account = {
   config: { budget: 50000, currency: 'EUR', importEnabled: true },
   // Authentication disabled
   user: { id: null, name: 'Anonymous', email: null, authEnabled: false },
+  // The only account of the instance, as the accounts route lists it since #113, before
+  // #114 adds its id and whether it is configured: the page offers no account to select
+  accounts: [{
+    nic: 'xx1111-ovh',
+    name: 'xx1111-ovh',
+    currency: 'EUR',
+    lastImport: { at: '2026-09-14 04:02:30', status: 'success', error: null },
+  }],
   months,
 
   // Imported yesterday, after a failed attempt the day before; the first,

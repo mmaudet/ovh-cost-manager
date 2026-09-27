@@ -7,7 +7,7 @@
 
 import { StrictMode } from 'react';
 import { vi } from 'vitest';
-import { render, screen, within } from '@testing-library/react';
+import { cleanup, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { LanguageProvider } from '../../src/hooks/useLanguage.jsx';
@@ -54,6 +54,13 @@ export async function renderDashboard(data = account) {
   );
   await settle();
   return { user: userOf(from, user), allKeys: () => keysIn(queryClient) };
+}
+
+// Closes the page and opens it again, as a later visit does: the browser keeps
+// what the page stored, the language and the account selected
+export async function reopenDashboard(data = account) {
+  cleanup();
+  return renderDashboard(data);
 }
 
 // Waits until the page has received every answer it asked for, including the
@@ -113,6 +120,29 @@ export async function selectMonth(user, label) {
 
 export async function selectLanguage(user, code) {
   await user.selectOptions(dropdown('EN'), code);
+  await settle();
+}
+
+// The month selector of the header, found by what it offers rather than by one month, since
+// the months it lists are those of the account selected (#115): the only dropdown whose
+// options are all months. The Compare tab has two such dropdowns, and no month selector.
+export function monthSelector() {
+  const found = screen.getAllByRole('combobox').filter((select) =>
+    optionsOf(select).every((option) => /^\p{L}+ \d{4}$/u.test(option)));
+  if (found.length !== 1) {
+    throw new Error(`${found.length} dropdowns offer months only`);
+  }
+  return found[0];
+}
+
+// The account selector of the header (#115), by its name: null when the page offers no
+// account to select
+export function accountSelector() {
+  return screen.queryByRole('combobox', { name: /^(Compte|Account)$/ });
+}
+
+export async function selectAccount(user, label) {
+  await user.selectOptions(accountSelector(), label);
   await settle();
 }
 

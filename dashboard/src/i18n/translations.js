@@ -8,6 +8,11 @@ export const translations = {
     markdown: 'Markdown',
     pdf: 'PDF',
     logout: 'Se déconnecter',
+    // Account selector (#115)
+    account: 'Compte',
+    allAccounts: 'Tous les comptes',
+    unknownAccount: 'Compte inconnu',
+    notConfigured: 'non configuré',
     period: 'Période',
     months3: '3 mois',
     months6: '6 mois',
@@ -193,6 +198,11 @@ export const translations = {
     markdown: 'Markdown',
     pdf: 'PDF',
     logout: 'Log out',
+    // Account selector (#115)
+    account: 'Account',
+    allAccounts: 'All accounts',
+    unknownAccount: 'Unknown account',
+    notConfigured: 'not configured',
     period: 'Period',
     months3: '3 months',
     months6: '6 months',

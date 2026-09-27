@@ -1,15 +1,18 @@
 import { useState, useEffect, useRef } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  fetchMonths, fetchSummary, fetchByProject, fetchByService,
+  fetchAccounts, fetchMonths, fetchSummary, fetchByProject, fetchByService,
   fetchImportStatus, fetchConfig, fetchUser,
   fetchConsumptionCurrent, fetchConsumptionForecast,
   fetchExpiringServices,
   fetchByResourceType, fetchGpuSummary,
 } from '../services/api';
 import { useLanguage } from '../hooks/useLanguage.jsx';
+import { useSelectedAccount } from '../hooks/useSelectedAccount.js';
 import Logo from '../components/Logo';
+import { AccountSelector } from '../components/AccountSelector.jsx';
 import { ResyncButton } from '../components/ResyncButton.jsx';
+import { accountsOf, withAccount } from '../utils/accounts.js';
 import { formatCurrency, formatMonthLabel, yearMonthOf } from '../utils/format.js';
 import { parseSqliteDate } from '../utils/sqliteDate.js';
 import { generateMarkdownReport } from '../utils/markdownReport.js';
@@ -88,30 +91,45 @@ export default function Dashboard() {
     queryFn: fetchUser
   });
 
-  // Fetch available months
+  // The accounts of the instance, which the header offers to select when it knows two at
+  // least (#115): undefined while their list loads, none when it cannot load
+  const { data: accountList, isError: accountsFailed } = useQuery({
+    queryKey: ['accounts'],
+    queryFn: fetchAccounts,
+  });
+  const accounts = accountList ? accountsOf(accountList) : (accountsFailed ? [] : undefined);
+
+  // The account the page shows, page-wide: null for all accounts. The months list and the
+  // KPI cards of the month's figures follow it; the other cards and the tabs follow it in the
+  // next tickets (#116 to #123).
+  const { selectedAccount, accountKnown, selectAccount } = useSelectedAccount(accounts);
+
+  // The months billed to the account shown, once the page knows it
   const { data: months = [], isSuccess: monthsLoaded } = useQuery({
-    queryKey: ['months'],
-    queryFn: fetchMonths
+    queryKey: withAccount(['months'], selectedAccount),
+    queryFn: () => fetchMonths(selectedAccount),
+    enabled: accountKnown,
   });
 
   // Fetch data for selected month
   const { data: summary, isLoading: loadingSummary } = useQuery({
-    queryKey: ['summary', selectedMonth?.from, selectedMonth?.to],
-    queryFn: () => fetchSummary(selectedMonth.from, selectedMonth.to),
+    queryKey: withAccount(['summary', selectedMonth?.from, selectedMonth?.to], selectedAccount),
+    queryFn: () => fetchSummary(selectedMonth.from, selectedMonth.to, selectedAccount),
     enabled: !!selectedMonth
   });
 
   // The month just before the selected one in the calendar, as the months list gives it:
   // none when nothing was billed that month, as before the first billed month. The "vs
   // previous month" KPI compares the selected month with its summary (#50), under the key of
-  // the Compare tab's month A when they are the same month. Month A defaults to the second
-  // latest billed month (months[1]): the month before the latest, unless that one had no bill.
+  // the Compare tab's month A when they are the same month, for all accounts. Month A
+  // defaults to the second latest billed month (months[1]): the month before the latest,
+  // unless that one had no bill.
   const previousMonth = selectedMonth
     ? months.find((m) => m.from === shiftMonths(selectedMonth.from, -1))
     : undefined;
   const { data: previousSummary, isLoading: loadingPreviousSummary } = useQuery({
-    queryKey: ['summary', previousMonth?.from, previousMonth?.to],
-    queryFn: () => fetchSummary(previousMonth.from, previousMonth.to),
+    queryKey: withAccount(['summary', previousMonth?.from, previousMonth?.to], selectedAccount),
+    queryFn: () => fetchSummary(previousMonth.from, previousMonth.to, selectedAccount),
     enabled: !!previousMonth,
   });
 
@@ -194,13 +212,15 @@ export default function Dashboard() {
     }
   }, [configData]);
 
-  // Set the default month when data loads: the latest one. useCompareTab sets months A
-  // and B on the same condition, in the same commit
+  // Select the latest month when the months list loads without the month selected: when the
+  // page opens, as useCompareTab sets months A and B then, in the same commit, and when the
+  // account selected was not billed that month (#115)
+  const holdsSelectedMonth = months.some((m) => m.value === selectedMonth?.value);
   useEffect(() => {
-    if (months.length > 0 && !selectedMonth) {
+    if (months.length > 0 && !holdsSelectedMonth) {
       setSelectedMonth(months[0]);
     }
-  }, [months, selectedMonth]);
+  }, [months, holdsSelectedMonth]);
 
   const queryClient = useQueryClient();
 
@@ -237,21 +257,26 @@ export default function Dashboard() {
 
   // Nothing billed yet, as on a new account or before its first import (#51): with no month
   // to select, there is no dashboard to show. Say so, rather than load forever, and offer the
-  // resync of the header when the server runs imports.
+  // resync of the header when the server runs imports. For an account selected, whose first
+  // import may have failed, the account selector stays, to select another (#115).
   if (monthsLoaded && months.length === 0) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 p-4 flex">
         <div className="m-auto max-w-md text-center space-y-4">
           <h2 className="text-2xl font-bold text-gray-900">{t('noDataYet')}</h2>
           <p className="text-gray-500">{t('noDataYetHint')}</p>
+          <AccountSelector
+            accounts={accounts} selectedAccount={selectedAccount} onSelect={selectAccount} t={t}
+          />
           {importsEnabled && <ResyncButton t={t} />}
         </div>
       </div>
     );
   }
 
-  // Loading state, until the KPI cards have both months they compare (#50)
-  if (!selectedMonth || loadingSummary || loadingPreviousSummary) {
+  // Loading state, until the months list of the account shown holds the selected month, as
+  // while it loads for another account, and the KPI cards have both months they compare (#50)
+  if (!holdsSelectedMonth || loadingSummary || loadingPreviousSummary) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 flex items-center justify-center">
         <div className="text-center">
@@ -345,6 +370,11 @@ export default function Dashboard() {
                 )}
               </div>
             )}
+            {/* The account the page shows, on every tab, when the instance knows two at
+                least (#115) */}
+            <AccountSelector
+              accounts={accounts} selectedAccount={selectedAccount} onSelect={selectAccount} t={t}
+            />
             {activeTab !== 'compare' && (
               <>
                 <select
