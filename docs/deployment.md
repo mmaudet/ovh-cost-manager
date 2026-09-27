@@ -5,8 +5,10 @@ This guide covers Docker deployment options for OVH Cost Manager (OCM), includin
 ## Table of Contents
 
 - [Prerequisites](#prerequisites)
+- [Upgrading to several accounts](#upgrading-to-several-accounts)
 - [Upgrading to 2.4.1](#upgrading-to-241)
 - [Simple Deployment (without SSO)](#simple-deployment-without-sso)
+- [Several OVH Accounts](#several-ovh-accounts)
 - [SSO Deployment (with LemonLDAP-NG)](#sso-deployment-with-lemonldap-ng)
   - [How OCM Signs Users In](#how-ocm-signs-users-in)
 - [Header-Based Authentication (without OIDC)](#header-based-authentication-without-oidc)
@@ -22,8 +24,34 @@ This guide covers Docker deployment options for OVH Cost Manager (OCM), includin
 
 - Docker >= 20.10
 - Docker Compose >= 2.0
-- OVH API credentials (see main [README](../README.md#configuration))
+- OVH API credentials, for each OVH account to import (see main [README](../README.md#configuration))
 - For SSO: two host names that resolve to the Docker host, `ocm.<domain>` and `auth.<domain>`, where `<domain>` is the `SSO_DOMAIN` of the [SSO deployment](#sso-deployment-with-lemonldap-ng), and users for LemonLDAP-NG to authenticate, for example from a directory or an external SAML or OIDC identity provider
+
+---
+
+## Upgrading to several accounts
+
+This release lets one instance import several OVH accounts (see [Several OVH Accounts](#several-ovh-accounts)). An installation of one account keeps its `config.json`, provided its key has the right below, and its dashboard looks the same. Before upgrading, check these points:
+
+- **Every key needs `GET /me`.** Each import now reads from `GET /me` which account it imports, and `/me/*` does not cover it. A key created with the [README](../README.md#2-generate-consumer-key)'s command has this right. A key granted only `/me/*` and `/cloud/*` fails every import, with a message that names the missing right: request a new consumer key with the README's command, and replace the old one in `config.json`.
+- **The first import after the upgrade gives the existing data its account, on its own**: there is nothing to run by hand. When the server starts, it adds an account column to the tables of the database, where the rows stored until then have none. Until the first import, the dashboard shows the data as before, without an account selector. The container runs that import at its next periodic import, up to `IMPORT_INTERVAL` later, 24 hours by default; the dashboard's resync button, or `docker exec ovh-cost-manager node data/import.js --diff --all`, runs it at once. With a single account in `config.json`, that account gets all the data: [The data stored before the upgrade](#the-data-stored-before-the-upgrade) gives the rules.
+- **To add a second account**, request a consumer key for it (see [API rights](#api-rights)). Then replace the `credentials` section of `config.json` with an `accounts` section, which lists the current account and the new one, each with its own keys, as [config.accounts.example.json](../config.accounts.example.json) does. Restart the container (`docker restart ovh-cost-manager`), so that the server checks the section. The next import, a differential one, imports the new account's whole history: no full import is needed. Add the account only once the first import after the upgrade has run with the current account alone: that account then gets all the existing data. With several accounts, it would get what its API still lists, and the rest only once it has claimed every bill stored before the upgrade.
+- **The Unknown account** holds the data stored before the upgrade that no account claimed. The account selector lists it as "Unknown account" ("Compte inconnu"). It goes away once an import has given all its data an account, as when `config.json` lists the account it belongs to, with a key granted `GET /me`: that account's import claims what its API lists, by the rules below. Otherwise it stays: no import deletes its data.
+- **The API routes take an `account` parameter**: the NIC handle of an account, or `unknown` for the Unknown account (see the [README](../README.md#api-endpoints)). Without it, they answer for all accounts, as before, so that an existing integration keeps working: a single-account installation gets the same answers, but for an `account` field that the rows of some routes gain. `GET /api/accounts` is new: it lists the accounts, with their last import and budget. Until the first import after the upgrade, it lists the Unknown account alone, which holds every row until then.
+
+### The data stored before the upgrade
+
+The rows imported before the upgrade have no account. The first import after it gives them one, by these rules (see [ADR 0002](adr/0002-every-account-lives-in-one-database.md)):
+
+- **A single account in `config.json`**, in a database that has never known another, gets them all.
+- **With several accounts**, each claims the rows that its API lists, as the run imports them: its bills, from its whole bill list; its Public Cloud projects, with their resources and consumption; its dedicated servers, VPS and storage services, when the run imports the inventory; and its credit movements, when the run imports the balance, each only if its API gives that very movement, with the same id, date and amount, as two accounts' movements can share an id. The container's imports import everything by default (`IMPORT_FLAGS=--all`).
+- **The database was one account's**: once no bill is left without an account, and every bill claimed went to one account, that account gets every other row without an account, such as the consumption history and the credit movements. Its import then replaces them, rather than adds them twice. This is the usual case, as OCM imported a single account before the upgrade.
+- **The balance and consumption snapshots** without an account are deleted: each account's import records its own.
+- **What no account claims stays**, as the Unknown account's.
+
+A run whose `config.json` lists several entries marks the database for good, even when an entry's `GET /me` fails, as its rows without an account may be any of those accounts'. From then on, a single account in `config.json` no longer gets them all: it claims its own, by the rules of several accounts.
+
+A known limit: only bills tell that the database was one account's. With several accounts in `config.json`, a database that holds no bill, such as one that holds a consumption history alone, cannot tell whose its rows are: they stay the Unknown account's, and once an account imports the same months again, the view of all accounts counts them twice. Upgrading with a single account first avoids it.
 
 ---
 
@@ -58,6 +86,8 @@ cp config.example.json config.json
 nano config.json
 ```
 
+For several OVH accounts, list them in an `accounts` section instead of `credentials` (see [Several OVH Accounts](#several-ovh-accounts)).
+
 ### 2. Start the container
 
 ```bash
@@ -80,6 +110,8 @@ docker exec ovh-cost-manager node data/import.js --from 2025-01-01 --to 2025-12-
 # Differential import (new data since last import)
 docker exec ovh-cost-manager node data/import.js --diff
 ```
+
+With several accounts, each import imports every one of them (see [Importing several accounts](#importing-several-accounts)).
 
 ### 4. Access the dashboard
 
@@ -165,6 +197,108 @@ Create a `.env` file to override defaults:
 ```bash
 OCM_PORT=8080
 ```
+
+---
+
+## Several OVH Accounts
+
+One OCM instance can import several OVH accounts, such as one per subsidiary, into one database. The dashboard shows all of them by default, and an account selector in its header narrows every tab down to one. The import knows each account by its NIC handle, such as `xx1111-ovh`, which it reads from `GET /me`: renaming or reordering the accounts in `config.json` never detaches their data.
+
+### Configuring the accounts
+
+List the accounts in an `accounts` section of `config.json`, in place of the `credentials` section, as [config.accounts.example.json](../config.accounts.example.json) does:
+
+```json
+{
+  "accounts": [
+    {
+      "name": "Filiale Lyon",
+      "budget": 30000,
+      "credentials": {
+        "appKey": "LYON_APP_KEY",
+        "appSecret": "LYON_APP_SECRET",
+        "consumerKey": "LYON_CONSUMER_KEY",
+        "endpoint": "ovh-eu"
+      }
+    },
+    {
+      "name": "Filiale Paris",
+      "credentials": {
+        "appKey": "PARIS_APP_KEY",
+        "appSecret": "PARIS_APP_SECRET",
+        "consumerKey": "PARIS_CONSUMER_KEY",
+        "endpoint": "ovh-eu"
+      }
+    }
+  ],
+  "dashboard": {
+    "budget": 50000
+  }
+}
+```
+
+Each entry has:
+
+- `name`, optional: how the dashboard names the account, unique among the accounts. Without it, the dashboard shows the account's NIC handle.
+- `budget`, optional: the account's own budget, a positive integer, as a JSON number (see [Budgets](#budgets)).
+- `credentials`, required: the account's `appKey`, `appSecret`, `consumerKey` and `endpoint`, such as `ovh-eu`.
+
+The single `credentials` section, and the legacy flat form of `credentials.json`, still work: they give one account, without a name or a budget, and `endpoint` stays optional there. `accounts` cannot be set with either of them. The import and the server check the section as strictly as the other settings: a value of the wrong type, a duplicate name or an empty list stops them, with an error that names the setting and the file. The server only checks the keys, and never uses them.
+
+The accounts have no environment variables: their keys stay in `config.json`, which both compose files mount read-only. The dashboard shows the name and the budget that each account's last import recorded: a change in `config.json` shows at the account's next import. Restart the container after editing the section (`docker restart ovh-cost-manager`), so that the server checks it.
+
+### API rights
+
+Each account needs a consumer key of its own: request it with the [README](../README.md#2-generate-consumer-key)'s command, and open its `validationUrl` as that account. Every key needs `GET /me`, besides `/me/*` and `/cloud/*`: before it writes anything, the import reads from `GET /me` the account that the key gives access to, and the currency it bills in. `/me/*` does not cover `GET /me`. An account whose key lacks it fails its import, with a message that names the missing right. The other paths of the README's command give the infrastructure inventory.
+
+Two entries whose keys lead to the same account fail the whole run before it imports anything, and its message names both: list each account once.
+
+### One currency
+
+The dashboard adds up the accounts' amounts, so every account must bill in the same currency: that of the first account of `config.json`, or, when its `GET /me` fails, of the first one that answers. An account that bills in another currency fails its import, and the message names it and both currencies; the other accounts are imported. A single account is never checked, whatever its currency.
+
+### Importing several accounts
+
+Each import, the container's periodic imports and the dashboard's resync button included, imports every account of `config.json`, one after the other, under one entry of the import history:
+
+- **A differential import** starts each account from its own latest bill: an account added to `config.json` gets its whole history at the next import, without a full import. With `--since`, every account starts from that day.
+- **An account that fails**, for an invalid key, a key without `GET /me` or another currency, does not stop the others. The run then ends `partial`, and its message names each account that failed, with why; or `failed`, when every account did. The dashboard's import history shows `partial` as a warning, with the message over the status, and the footer flags the account (see [In the dashboard](#in-the-dashboard)).
+- **`--account <NIC handle>`** limits a run to one account of `config.json`, to retry or backfill it alone. The run still reads every account's `GET /me`, to check the currencies and that no two entries are the same account.
+- **`--full`** clears and reimports each account that it can import. An account that it cannot import keeps its data, which the run's message says, and so do the accounts no longer configured and the Unknown account. Each project's consumption of past months stays, as before, as OVH cannot give it again. With `--account`, `--full` clears and reimports that account only.
+
+```bash
+# Import one account alone, from its latest bill
+docker exec ovh-cost-manager node data/import.js --diff --all --account xx1111-ovh
+
+# Clear and reimport one account alone
+docker exec ovh-cost-manager node data/import.js --full --all --account xx1111-ovh
+```
+
+Each account uses its own keys, and the accounts are imported one after the other: a run takes longer with each account.
+
+### In the dashboard
+
+- **The account selector** shows in the header, next to the month selector, once the instance knows two accounts, the Unknown account and the accounts no longer configured included. It lists "All accounts" first, then each account by its name, or else its NIC handle. The browser remembers the choice, as it does the language.
+- **Every tab follows the selected account**: Overview, Compare, Trends, Public Cloud, Web Cloud, Infrastructure and Backup, with the header's cards, the month's consumption and forecast, and the services about to expire. The month selector offers the months billed to that account.
+- **With all accounts shown**, the figures add up the accounts, and the lists and their CSV exports gain an Account column. There, a project or a service billed to two accounts is one row per account.
+- **The footer** gives each account's last successful synchronisation, and flags an account whose last import failed, with when; the error shows over it. A banner names each configured account without a successful synchronisation for more than 30 days.
+- **The Markdown and PDF report** names what it covers in its title, after the month: the account, or "All accounts". The Markdown file of one account ends with its NIC handle, such as `ovh-report-2026-08-xx1111-ovh.md`, or with `unknown` for the Unknown account.
+
+With a single account, the page is as before: no selector, no Account column, and the same footer and report.
+
+### Budgets
+
+- **With all accounts shown**, the budget card compares their total with the dashboard budget, `dashboard.budget`, which the user can change for the visit, as before.
+- **With one account selected**, it compares that account's figures with the account's own `budget`, shown read-only, and the forecast card's budget warning uses that budget too. An account without a budget, such as the Unknown account, has no budget card, and its forecast is never flagged.
+- **With a single account**, there is no selector, so the page always compares with the dashboard budget: that account's own `budget` is recorded, but not used. It applies once the selector shows, as when the Unknown account is listed too.
+
+### Removed accounts
+
+An account removed from `config.json` keeps its data, with the name and the budget that its last import recorded. It is no longer imported, and `--full` never clears it. Once an import has recorded the new configuration, the selector lists it as "(not configured)", "(non configuré)" in French. Its figures stay in the view of all accounts, and the footer keeps its line, but the banner no longer names it.
+
+The imports refresh only the configured accounts' services. So, once an import has recorded the configured accounts, the services about to expire of all accounts, which the header's badge counts and the Overview's card lists, leave out those of the removed accounts and of the Unknown account: no import updates them, and they would stay expired for good. They still show with their account selected.
+
+No command deletes an account's data.
 
 ---
 
@@ -597,6 +731,12 @@ docker-compose -f docker-compose.sso.yml logs -f
 2. `/api` and `/auth` answer 503, with `OIDC: discovery of ... failed: ...` in the log: OCM cannot discover the provider, for instance while LemonLDAP-NG is still starting, and retries (see [OIDC settings](#oidc-settings)).
 3. An error on the portal, or `Sign-in failed, please sign in again.` with `OIDC callback: sign-in refused: ...` in the log, which gives the provider's reason: the relying party does not match OCM's settings (see [2. Register OCM in LemonLDAP-NG](#2-register-ocm-in-lemonldap-ng)).
 4. `Sign-in failed, please sign in again.` with `OIDC callback: no valid sign-in cookie for its state` in the log: the browser did not send its sign-in cookie back, because the sign-in took more than 10 minutes, did not start on the host of `OIDC_BASE_URL`, or got a `Secure` cookie on a plain HTTP page, as `COOKIE_SECURE=true` (or `auth.session.secure: true`) gives there. Keep `COOKIE_SECURE` at `auto` on an HTTP stack (see [OIDC settings](#oidc-settings)).
+
+**An account is not imported:** the import's output, in the container's log (`docker logs ovh-cost-manager`), and the message over the run's status in the dashboard's import history name each account that failed, and why:
+- `The API key lacks the right GET /me`: request a consumer key granted `GET /me` for that account (see [API rights](#api-rights)).
+- `The account bills in …, not in …`: the account bills in another currency than the first account of `config.json` (see [One currency](#one-currency)).
+- `… are the same account`: two entries lead to the same account, and the run imported none: list each account once.
+- `No account configured in … has the NIC handle …`: `--account` names an account that `config.json` does not list, or one whose `GET /me` failed.
 
 **SAML errors:**
 - Verify clock synchronization between containers and IdP
