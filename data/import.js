@@ -19,6 +19,11 @@ const util = require('util');
 const Jsonfile = require('jsonfile');
 const db = require('./db');
 const { readAccounts } = require('./accounts-config');
+const { errorStatus, describeError } = require('./ovh-errors');
+const {
+  reasonOf, joinWithAnd, describeAccount, throwIfSameAccount, markOtherCurrencies, findAccount,
+  failureMessage,
+} = require('./account-attempts');
 const { classifyService, classifyResourceTypeFromDomain } = require('./classify');
 const { monthBounds } = require('./months');
 
@@ -92,22 +97,6 @@ function chunkArray(array, size) {
     chunks.push(array.slice(i, i + size));
   }
   return chunks;
-}
-
-// The HTTP status of a failed call: the ovh client puts it in `error`, other clients in
-// `statusCode`. Undefined when the call rejected with anything else, even with nothing.
-function errorStatus(err) {
-  return err?.statusCode ?? err?.error;
-}
-
-// Why a call failed, whatever it rejected with: the ovh client rejects with a plain object,
-// { error: HTTP status, message }, other code with an Error or a string
-function describeError(err) {
-  if (err === null || typeof err !== 'object') return String(err);
-  const reason = [errorStatus(err), err.message]
-    .filter(part => part !== undefined && part !== null && part !== '')
-    .join(' ');
-  return reason || util.inspect(err, { breakLength: Infinity });
 }
 
 // Retry a single async operation with exponential backoff
@@ -234,97 +223,31 @@ async function readAccount(ovh) {
 
 // --- The accounts of a run ---
 
-// Why an account, or a run, failed: the message of its error, or else the error described
-function reasonOf(err) {
-  return err?.message || describeError(err);
-}
-
-// 'a', 'a and b', 'a, b and c'
-function joinWithAnd(items) {
-  return items.length > 1 ? `${items.slice(0, -1).join(', ')} and ${items.at(-1)}` : items[0];
-}
-
-// An account of the run as the messages name it: its entry of the configuration, by its name
-// or its place, and its NIC handle once GET /me has named it
-function describeAccount(account) {
-  return account.nic ? `${account.entry.label} (${account.nic})` : account.entry.label;
-}
-
 /**
- * Reads the account of each configured entry through GET /me, one after the other, each with
- * a client of its own credentials. Nothing is written yet: two entries of one account must
- * fail the run before it imports anything.
+ * Attempts the account of each entry of the configuration: reads, one after the other, the
+ * account that GET /me names, each through a client of its own credentials. Nothing is
+ * written yet: two entries of one account must fail the run before it imports anything.
  * @param {object[]} entries - The accounts of the configuration, in its order
- * @returns {Promise<object[]>} An account for each entry, in their order: its entry, and its
- *   NIC handle, currency and client, or else the error that fails it
+ * @param {boolean} several - Whether the configuration has several accounts, which the log
+ *   names each of
+ * @returns {Promise<AccountAttempt[]>} An attempt for each entry, in their order, as
+ *   data/account-attempts.js describes them
  */
-async function readEveryAccount(entries) {
-  const accounts = [];
+async function readEveryAccount(entries, several) {
+  const attempts = [];
   for (const entry of entries) {
     try {
       const client = createClient(entry.credentials);
       const { nic, currency } = await readAccount(client);
-      accounts.push({ entry, nic, currency, client });
-      console.log(entries.length > 1 ? `Account ${entry.label}: ${nic}` : `Account: ${nic}`);
+      attempts.push({ entry, nic, currency, client });
+      console.log(several ? `Account ${entry.label}: ${nic}` : `Account: ${nic}`);
     } catch (err) {
-      accounts.push({ entry, error: err });
+      attempts.push({ entry, error: err });
       // A single account's error ends the run's output
-      if (entries.length > 1) console.error(`Account ${entry.label}: ${reasonOf(err)}`);
+      if (several) console.error(`Account ${entry.label}: ${reasonOf(err)}`);
     }
   }
-  return accounts;
-}
-
-// Two entries whose credentials lead to one account would import it twice, and the run
-// could not tell which name or budget is its own: it fails before importing anything,
-// naming them
-function failOnSameAccount(accounts, source) {
-  const labelsByNic = new Map();
-  for (const account of accounts.filter(({ nic }) => nic)) {
-    labelsByNic.set(account.nic, [...(labelsByNic.get(account.nic) || []), account.entry.label]);
-  }
-  const repeated = [...labelsByNic].filter(([, labels]) => labels.length > 1);
-  if (repeated.length > 0) {
-    throw new Error(repeated.map(([nic, labels]) =>
-      `${joinWithAnd(labels)} in ${source} are the same account, ${nic}: list each account once`,
-    ).join('; '));
-  }
-}
-
-// The totals add up the amounts of the accounts: with several accounts configured, an
-// account that bills in another currency than the first configured account fails. When that
-// one cannot be read, the first that can gives the currency of the run.
-function failOtherCurrencies(accounts) {
-  const named = accounts.filter(({ nic }) => nic);
-  const reference = named[0];
-  if (!reference) return;
-  const which = reference === accounts[0]
-    ? 'the first configured account'
-    : 'the first configured account that could be read';
-  for (const account of named.filter(({ currency }) => currency !== reference.currency)) {
-    account.error = new Error(`The account bills in ${account.currency}, not in `
-      + `${reference.currency} as ${describeAccount(reference)}, ${which}: every account must `
-      + 'bill in the same currency');
-  }
-}
-
-// The account of this NIC handle, which --account limits the run to. When none has it, it
-// may be one whose GET /me failed: the error names them, with their errors.
-function findAccount(accounts, nic, source) {
-  const account = accounts.find(candidate => candidate.nic === nic);
-  if (account) return account;
-  const unread = accounts.filter(candidate => !candidate.nic)
-    .map(candidate => `${candidate.entry.label}: ${reasonOf(candidate.error)}`);
-  throw new Error(`No account configured in ${source} has the NIC handle ${nic}`
-    + (unread.length > 0 ? `, unless it is one that could not be read: ${unread.join('; ')}` : ''));
-}
-
-// Why a run ended failed or partial: the error of its account, when it has a single one, or
-// else each account that failed, with its error
-function failureMessage(accounts, failed) {
-  if (accounts.length === 1) return reasonOf(failed[0].error);
-  const each = failed.map(account => `${describeAccount(account)}: ${reasonOf(account.error)}`);
-  return `${failed.length} of ${accounts.length} accounts failed: ${each.join('; ')}`;
+  return attempts;
 }
 
 // Fetch all cloud projects
@@ -1498,13 +1421,13 @@ async function runImport(params) {
   try {
     // Before any write or clear: an account that cannot name itself must leave the data as
     // it is, since nothing could tell whose rows it would write
-    const read = await readEveryAccount(configuration.accounts);
-    failOnSameAccount(read, configuration.source);
-    if (several) failOtherCurrencies(read);
-    // The accounts of the run, each with the error that fails it, if any
+    const attempts = await readEveryAccount(configuration.accounts, several);
+    throwIfSameAccount(attempts, configuration.source);
+    if (several) markOtherCurrencies(attempts);
+    // The attempts that the run imports: every account, or the one that --account names
     const accounts = params.account
-      ? [findAccount(read, params.account, configuration.source)]
-      : read;
+      ? [findAccount(attempts, params.account, configuration.source)]
+      : attempts;
 
     // Each account named is recorded, with the name and budget of its entry, and the
     // failure of one that bills in another currency
@@ -1555,10 +1478,10 @@ async function runImport(params) {
 
     const failed = accounts.filter(({ error }) => error);
     if (failed.length === accounts.length) {
-      throw new Error(failureMessage(accounts, failed));
+      throw new Error(failureMessage(accounts, several));
     }
     if (failed.length > 0) {
-      const message = failureMessage(accounts, failed);
+      const message = failureMessage(accounts, several);
       db.importLog.partial(importId, stats, message);
       printSummary('IMPORT PARTIAL', stats);
       console.error(message);

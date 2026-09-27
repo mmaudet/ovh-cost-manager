@@ -366,6 +366,26 @@ describe('an import limited to one account (--account)', () => {
     expect(process.exit).not.toHaveBeenCalled();
   });
 
+  // The configuration has several accounts, whatever the run imports of them: their currency
+  // is checked, and the messages name each account
+  test('names the account in the error of the run when it fails', async () => {
+    const lyon = serveAccount(LYON);
+    const montreal = serveAccount(MONTREAL);
+    serveBills(lyon.routes, []);
+    serveBills(montreal.routes, [['CA-M1', '2026-09-01']]);
+    useAccounts({ served: lyon, name: 'Lyon' }, { served: montreal });
+
+    await importSeptember({ account: MONTREAL.nic });
+
+    expect(runs()).toEqual([[
+      'failed',
+      '1 of 1 account failed: accounts[1] (zz3333-ovh): The account bills in CAD, not in EUR '
+        + 'as "Lyon" (xx1111-ovh), the first configured account: every account must bill in '
+        + 'the same currency',
+    ]]);
+    expect(storedBills()).toEqual([]);
+  });
+
   // Either it is not configured, or it is the account that could not be read
   test('fails when no account read has that NIC handle, naming those it could not read',
     async () => {
