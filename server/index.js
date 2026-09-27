@@ -19,6 +19,7 @@ const { createOriginCheckMiddleware, readAllowedOrigins } = require('./cors');
 const { createHostCheckMiddleware } = require('./hosts');
 const { importsEnabled } = require('./imports');
 const { trendWindowFromQuery } = require('./months');
+const { consumptionForecast, currentConsumption } = require('./consumption');
 const { readConfigFile } = require('./config-file');
 const { buildRateLimitConfig } = require('./rate-limit-config');
 const { isHealthCheck } = require('./auth/health');
@@ -998,91 +999,21 @@ function registerRoutes() {
   // Consumption Endpoints (Phase 1)
   // ========================
 
-  app.get('/api/consumption/current', (req, res) => {
+  // The current month's consumption so far of the account the request asks for, or, without
+  // one, the sum of the accounts' (#116): see server/consumption.js
+  app.get('/api/consumption/current', accountParameter, (req, res) => {
     try {
-      const snapshot = db.consumption.getLatestSnapshot();
-      // If /me/consumption data is 0, use actual cloud project consumption instead
-      const snapshotTotal = snapshot?.current_total || 0;
-      if (snapshotTotal === 0) {
-        const cloudSummary = db.cloudDetails.getConsumptionSummary();
-        if (cloudSummary && cloudSummary.total > 0) {
-          return res.json({
-            snapshot_date: snapshot?.snapshot_date || new Date().toISOString(),
-            period_start: cloudSummary.period_start,
-            period_end: cloudSummary.period_end,
-            current_total: Math.round(cloudSummary.total * 100) / 100,
-            source: 'cloud_projects',
-            project_count: cloudSummary.project_count,
-            currency: 'EUR'
-          });
-        }
-      }
-      if (!snapshot) {
-        return res.json({ current_total: 0, currency: 'EUR' });
-      }
-      const details = snapshot.raw_data ? JSON.parse(snapshot.raw_data) : null;
-      res.json({
-        snapshot_date: snapshot.snapshot_date,
-        period_start: snapshot.period_start,
-        period_end: snapshot.period_end,
-        current_total: Math.round(snapshotTotal * 100) / 100,
-        currency: snapshot.currency,
-        source: 'me_consumption',
-        details
-      });
+      res.json(currentConsumption(db.consumption.getCurrentByAccount(req.account), new Date()));
     } catch (err) {
       res.status(500).json({ error: err.message });
     }
   });
 
-  app.get('/api/consumption/forecast', (req, res) => {
+  // The current month's month-end forecast of the account the request asks for, or, without
+  // one, the sum of the accounts' (#116): see server/consumption.js
+  app.get('/api/consumption/forecast', accountParameter, (req, res) => {
     try {
-      const snapshot = db.consumption.getLatestSnapshot();
-      const snapshotForecast = snapshot?.forecast_total || 0;
-      const snapshotCurrent = snapshot?.current_total || 0;
-
-      // If /me/consumption forecast is 0, compute forecast from cloud project consumption
-      if (snapshotForecast === 0 && snapshotCurrent === 0) {
-        const cloudSummary = db.cloudDetails.getConsumptionSummary();
-        if (cloudSummary && cloudSummary.total > 0) {
-          const periodStart = new Date(cloudSummary.period_start);
-          const periodEnd = new Date(cloudSummary.period_end);
-          const daysElapsed = Math.max(1, Math.ceil((periodEnd - periodStart) / (1000 * 60 * 60 * 24)));
-          // Forecast to end of month
-          const lastDayOfMonth = new Date(periodStart.getFullYear(), periodStart.getMonth() + 1, 0).getDate();
-          const dailyAvg = cloudSummary.total / daysElapsed;
-          const forecastTotal = Math.round(dailyAvg * lastDayOfMonth * 100) / 100;
-          const currentTotal = Math.round(cloudSummary.total * 100) / 100;
-          const progress = Math.round((currentTotal / forecastTotal) * 100);
-
-          return res.json({
-            snapshot_date: new Date().toISOString(),
-            period_start: cloudSummary.period_start,
-            period_end: cloudSummary.period_end,
-            forecast_total: forecastTotal,
-            current_total: currentTotal,
-            currency: 'EUR',
-            progress,
-            source: 'cloud_projects',
-            days_elapsed: daysElapsed,
-            days_in_month: lastDayOfMonth
-          });
-        }
-      }
-      if (!snapshot) {
-        return res.json({ forecast_total: 0, currency: 'EUR' });
-      }
-      res.json({
-        snapshot_date: snapshot.snapshot_date,
-        period_start: snapshot.period_start,
-        period_end: snapshot.period_end,
-        forecast_total: Math.round(snapshotForecast * 100) / 100,
-        current_total: Math.round(snapshotCurrent * 100) / 100,
-        currency: snapshot.currency,
-        progress: snapshotCurrent && snapshotForecast
-          ? Math.round((snapshotCurrent / snapshotForecast) * 100)
-          : 0
-      });
+      res.json(consumptionForecast(db.consumption.getCurrentByAccount(req.account), new Date()));
     } catch (err) {
       res.status(500).json({ error: err.message });
     }

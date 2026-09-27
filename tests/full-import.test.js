@@ -170,8 +170,9 @@ describe('a full import', () => {
     expect({
       balance: db.balance.getBalance(),
       credits: db.balance.getCreditMovements(),
-      snapshot: db.consumption.getLatestSnapshot(),
+      // Neither a consumption snapshot nor the consumption of a project tells any
+      current: db.consumption.getCurrentByAccount(),
       history: db.consumption.getHistory(),
-    }).toEqual({ balance: undefined, credits: [], snapshot: undefined, history: [] });
+    }).toEqual({ balance: undefined, credits: [], current: [], history: [] });
   });
 });

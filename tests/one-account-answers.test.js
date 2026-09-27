@@ -4,8 +4,9 @@
  * server runs in a child process over a database of one account as an earlier version left
  * it, which it migrates as it starts: the version before #114, whose rows carry the account,
  * or a version before the accounts (#112), whose rows carry none and are the Unknown
- * account's. Until these routes follow the account (#116), they answer as that version did,
- * but for the account that #121 gives each project.
+ * account's. Without the account parameter, these routes add up the accounts' figures (#116):
+ * those of the one account, which they answer as that version did, but for the account that
+ * #121 gives each project.
  */
 
 const { startOcm } = require('./support/ocm-server');
