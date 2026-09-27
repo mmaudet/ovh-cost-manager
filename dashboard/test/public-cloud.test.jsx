@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { screen, within } from '@testing-library/react';
 import { account } from './fixtures/account.js';
+import { lyonAccount, removedAccount, severalAccounts } from './fixtures/accounts.js';
 import { api } from './support/api.js';
 import {
   BOM,
@@ -18,6 +19,7 @@ import {
   renderDashboard,
   rowTextsOf,
   rowsOf,
+  selectAccount,
   selectLanguage,
   selectMonth,
   settle,
@@ -111,8 +113,9 @@ describe('Public Cloud tab', () => {
 
     await openTab(user, 'Public Cloud');
 
-    expect(api.fetchProjectsEnriched).toHaveBeenCalled();
-    expect(api.fetchPublicCloudStats).toHaveBeenCalledWith('2026-09-01', '2026-09-30');
+    // For all accounts
+    expect(api.fetchProjectsEnriched).toHaveBeenCalledWith(null);
+    expect(api.fetchPublicCloudStats).toHaveBeenCalledWith('2026-09-01', '2026-09-30', null);
     // The resources of a project wait until the user opens it
     expect(api.fetchProjectConsumption).not.toHaveBeenCalled();
     expect(api.fetchProjectInstances).not.toHaveBeenCalled();
@@ -602,5 +605,257 @@ describe('Public Cloud tab', () => {
 
     // The month in the language of the page, not in the French of the API (#33)
     expect(within(screen.getByRole('dialog')).getByText('September 2026')).toBeInTheDocument();
+  });
+
+  // Several accounts in the instance, all of them shown by default, or the one the header
+  // selects (#121): see fixtures/accounts.js
+  describe('with several accounts', () => {
+    // The figures of the tab's own queries, one card each, as the user reads them. The Cloud
+    // projects and GPU instances cards read the costs by resource type and the GPU costs that
+    // the shell loads for the Overview too, which follow the account with it (#118).
+    const figuresOfTheTab = () => [...figures().children]
+      .map((card) => texts(card))
+      .filter(([label]) => !['Projets Cloud', 'Instances GPU'].includes(label))
+      .flat();
+    const projectRows = () => rowTextsOf(within(cloudProjects()).getByRole('table')).slice(1);
+    const openOnAccount = async (label) => {
+      const { user } = await renderDashboard(severalAccounts);
+      await openTab(user, 'Public Cloud');
+      await selectAccount(user, label);
+      return { user };
+    };
+
+    it('shows the projects and figures of all accounts by default', async () => {
+      const { user } = await renderDashboard(severalAccounts);
+
+      await openTab(user, 'Public Cloud');
+
+      expect(figuresOfTheTab()).toEqual([
+        'Instances', '5', '718,90€',
+        'Kubernetes', '0',
+        'Stockage Objet', '3', '25,00€',
+        'Volumes', '3', '12,50€',
+        'Snapshots', '2', '6,00€',
+        'Savings plans', '2', '28,00€',
+        'Registre', '1', '40,00€',
+      ]);
+      expect(projectRows().map(([name]) => name)).toEqual(['Production', 'Staging', 'Sandbox']);
+    });
+
+    it('shows the projects and figures of the account selected', async () => {
+      const { user } = await openOnAccount('Lyon subsidiary');
+
+      expect(figuresOfTheTab()).toEqual([
+        'Instances', '5', '538,90€',
+        'Kubernetes', '0',
+        'Stockage Objet', '3', '25,00€',
+        'Volumes', '3', '12,50€',
+        'Snapshots', '2', '6,00€',
+        'Savings plans', '2', '28,00€',
+        'Registre', '0',
+      ]);
+      expect(projectRows()).toEqual([
+        ['Production', 'Customer-facing services', 'ok', '5', '350,00€', '▼'],
+      ]);
+
+      await selectAccount(user, 'yy2222-ovh');
+
+      expect(figuresOfTheTab()).toEqual([
+        'Instances', '0', '180,00€',
+        'Kubernetes', '0',
+        'Stockage Objet', '0',
+        'Volumes', '0',
+        'Snapshots', '0',
+        'Savings plans', '0',
+        'Registre', '1', '40,00€',
+      ]);
+      expect(projectRows()).toEqual([['Staging', 'ok', '0', '52,35€', '▼']]);
+    });
+
+    it('shows the projects of the Unknown account', async () => {
+      await openOnAccount('Compte inconnu');
+
+      expect(projectRows()).toEqual([['Sandbox', 'ok', '0', '-', '▼']]);
+      // Nothing billed in July, its only month
+      expect(figuresOfTheTab()).toEqual([
+        'Instances', '0', 'Kubernetes', '0', 'Stockage Objet', '0', 'Volumes', '0',
+        'Snapshots', '0', 'Savings plans', '0', 'Registre', '0',
+      ]);
+    });
+
+    // A project belongs to one account: its detail shows under its row, which the list of
+    // another account leaves out
+    it('shows the detail of a project of the account selected only', async () => {
+      const { user } = await openOnAccount('Lyon subsidiary');
+
+      await openProject(user, 'Production');
+
+      expect(detailHeadings()).toEqual([
+        ['Consommation par ressource'],
+        ['Instances (5)', '538,90€', 'Tout afficher', 'CSV'],
+        ['Buckets (4)', '25,00€', 'Tout afficher', 'CSV'],
+        ['Volumes (4)', '12,50€', 'Tout afficher', 'CSV'],
+        ['Snapshots (2)', '6,00€', 'Tout afficher', 'CSV'],
+        ['Savings plans (2)', '28,00€', 'Tout afficher', 'CSV'],
+        ['Quotas par région'],
+      ]);
+
+      await selectAccount(user, 'yy2222-ovh');
+
+      expect(detailHeadings()).toEqual([]);
+    });
+
+    // The month selected stays until the months list of the account loads, and says it lacks
+    // it: the header then selects the account's latest month, August (#115, #120)
+    it('asks for no figures of a month that the account selected lacks', async () => {
+      const { user } = await renderDashboard(severalAccounts);
+      await openTab(user, 'Public Cloud');
+
+      await selectAccount(user, 'zz3333-ovh (non configuré)');
+
+      expect(api.fetchPublicCloudStats)
+        .not.toHaveBeenCalledWith('2026-09-01', '2026-09-30', removedAccount.id);
+      expect(api.fetchPublicCloudStats)
+        .toHaveBeenCalledWith('2026-08-01', '2026-08-31', removedAccount.id);
+    });
+
+    // The project stays selected across account switches (#56), open only while the account
+    // shown lists it: here the Unknown account, whose only month is July
+    it('closes the open project under an account that lacks it, and asks nothing of it',
+      async () => {
+        const { user } = await renderDashboard(severalAccounts);
+        await openTab(user, 'Public Cloud');
+        await openProject(user, 'Production');
+        const detailRequests = [
+          api.fetchProjectConsumption, api.fetchProjectQuotas, api.fetchProjectInstances,
+          api.fetchProjectInstanceTotal, api.fetchProjectBuckets, api.fetchProjectVolumes,
+          api.fetchProjectSnapshots, api.fetchProjectSavingsPlans,
+        ];
+        detailRequests.forEach((request) => request.mockClear());
+
+        await selectAccount(user, 'Compte inconnu');
+
+        expect(texts(cloudProjectRow('Sandbox'))).toContain('▼');
+        expect(detailHeadings()).toEqual([]);
+        detailRequests.forEach((request) => expect(request).not.toHaveBeenCalled());
+
+        await selectAccount(user, 'Tous les comptes');
+
+        // Open again, on July, which all accounts have too
+        expect(texts(cloudProjectRow('Production'))).toContain('▲');
+        expect(api.fetchProjectInstances)
+          .toHaveBeenCalledWith('project-production', '2026-07-01', '2026-07-31');
+        expect(detailHeadings()[1]).toEqual(['Instances (0)']);
+      });
+
+    describe('account column', () => {
+      const projectsTable = () => within(cloudProjects()).getByRole('table');
+      const WITHOUT_ACCOUNT = ['Nom', 'État', 'Instances', 'Consommation en cours'];
+
+      it('names the account of each project when all accounts are shown', async () => {
+        const { user } = await renderDashboard(severalAccounts);
+
+        await openTab(user, 'Public Cloud');
+
+        // Its name, or else its NIC handle, and the Unknown account for a project without one
+        expect(rowTextsOf(projectsTable())).toEqual([
+          ['Nom', 'Compte', 'État', 'Instances', 'Consommation en cours'],
+          ['Production', 'Customer-facing services', 'Lyon subsidiary', 'ok', '5', '350,00€',
+            '▼'],
+          ['Staging', 'yy2222-ovh', 'ok', '0', '52,35€', '▼'],
+          ['Sandbox', 'Compte inconnu', 'ok', '0', '-', '▼'],
+        ]);
+
+        await selectLanguage(user, 'en');
+
+        expect(rowTextsOf(projectsTable())[0])
+          .toEqual(['Name', 'Account', 'State', 'Instances', 'Current consumption']);
+        expect(rowTextsOf(projectsTable())[3])
+          .toEqual(['Sandbox', 'Unknown account', 'ok', '0', '-', '▼']);
+      });
+
+      it('names no account once one is selected, and names them again with all accounts',
+        async () => {
+          const { user } = await openOnAccount('Lyon subsidiary');
+
+          expect(rowTextsOf(projectsTable())[0]).toEqual(WITHOUT_ACCOUNT);
+
+          await selectAccount(user, 'Tous les comptes');
+
+          expect(rowTextsOf(projectsTable())[0]).toEqual([
+            'Nom', 'Compte', 'État', 'Instances', 'Consommation en cours',
+          ]);
+        });
+
+      // As before several accounts: an installation with a single account, or one before its
+      // first import since the upgrade, whose accounts route lists none
+      it.each([
+        ['no account', []],
+        ['a single account', [lyonAccount]],
+      ])('names no account with %s', async (_, accounts) => {
+        const { user } = await renderDashboard({ ...severalAccounts, accounts });
+
+        await openTab(user, 'Public Cloud');
+
+        expect(rowTextsOf(projectsTable())[0]).toEqual(WITHOUT_ACCOUNT);
+      });
+    });
+
+    // The CSV files of the resources of the open project, which leave the page and the
+    // project's row: a project's resources belong to its account
+    describe('CSV files of the resources of a project', () => {
+      // The second cell of each line of a CSV file, its header first
+      const secondCells = (file) => file.content.slice(BOM.length).split('\n')
+        .map((line) => line.split(';')[1]);
+
+      it.each([
+        ['Instances', 6],
+        ['Buckets', 4],
+        ['Volumes', 4],
+        ['Snapshots', 2],
+        ['Savings plans', 2],
+      ])('name its account after the name of each of its %s, from the panel and the modal',
+        async (kind, count) => {
+          const { user } = await renderDashboard(severalAccounts);
+          await openTab(user, 'Public Cloud');
+          await openProject(user, 'Production');
+
+          const [fromPanel, fromModal] =
+            await downloadFromPanelAndModal(user, resourcePanel(kind));
+
+          expect(fromModal).toEqual(fromPanel);
+          expect(secondCells(fromPanel))
+            .toEqual(['"Compte"', ...Array(count).fill('"Lyon subsidiary"')]);
+        });
+
+      it('name an account without a name by its NIC handle, in the language of the page',
+        async () => {
+          const { user } = await renderDashboard(severalAccounts);
+          await selectLanguage(user, 'en');
+          await openTab(user, 'Public Cloud');
+          await openProject(user, 'Staging');
+          const downloadedFiles = captureFileDownloads();
+
+          await user.click(resourceButton('Instances', 'CSV'));
+
+          const [file] = await downloadedFiles();
+          expect(file.content.slice(BOM.length).split('\n')).toEqual([
+            '"Name";"Account";"Flavor";"Region";"State";"Cost (EUR)";"Estimated";'
+              + '"Monthly billing";"Created at";"ID"',
+            '"Unallocated (deleted instances)";"yy2222-ovh";"";;;180;0;;;',
+          ]);
+        });
+
+      it('name no account once one is selected', async () => {
+        const { user } = await openOnAccount('Lyon subsidiary');
+        await openProject(user, 'Production');
+
+        const [fromPanel, fromModal] =
+          await downloadFromPanelAndModal(user, resourcePanel('Volumes'));
+
+        expect(fromModal).toEqual(fromPanel);
+        expect(secondCells(fromPanel)[0]).toBe('"Type"');
+      });
+    });
   });
 });

@@ -31,6 +31,30 @@ export function accountLabel(account, t) {
   return account.configured ? account.name : `${account.name} (${t('notConfigured')})`;
 }
 
+/**
+ * The Account column of the lists, which names the account of each row (#110): when the page
+ * offers accounts to select, and shows all of them. A single-account installation keeps its
+ * lists as they were.
+ * @param {object[]|undefined} accounts - The accounts of the instance (accountsOf()),
+ *   undefined while their list loads
+ * @param {?string|undefined} selectedAccount - The account shown (useSelectedAccount())
+ * @param {function(string): string} t
+ * @returns {?{ label: string, nameOf: function(?string): string }} Null when the lists show
+ *   no Account column. Else its label, and what it shows for the account of a row, from the
+ *   NIC handle that the routes give: the account's name, or else its NIC handle, and the
+ *   Unknown account for null, a row without an account.
+ */
+export function accountColumnOf(accounts, selectedAccount, t) {
+  if (accounts === undefined || !offersAccounts(accounts) || selectedAccount !== null) {
+    return null;
+  }
+  const nameOf = (nic) => {
+    if (nic === null) return t('unknownAccount');
+    return accounts.find(({ id }) => id === nic)?.name ?? nic;
+  };
+  return { label: t('account'), nameOf };
+}
+
 // Whether the key and the request of a query name the account shown: not for all accounts,
 // null, which the page asks for as it did before several accounts. A query that a tab shares
 // with the shell thus keeps sharing its key for all accounts (ADR 0001).

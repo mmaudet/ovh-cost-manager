@@ -10,15 +10,19 @@ const PRODUCTION = 'project-production';
 const STAGING = 'project-staging';
 const SANDBOX = 'project-sandbox';
 
-// Most consuming first, as the server sorts them
+// The NIC handle of the synthetic account (see account.js)
+const ACCOUNT = 'xx1111-ovh';
+
+// Most consuming first, as the server sorts them, each with the NIC handle of
+// its account (#121)
 const projects = [
   { id: PRODUCTION, name: 'Production', description: 'Customer-facing services', status: 'ok',
-    instance_count: 5, consumption_total: 350,
+    account: ACCOUNT, instance_count: 5, consumption_total: 350,
     period_start: '2026-09-01', period_end: '2026-09-15' },
-  { id: STAGING, name: 'Staging', description: null, status: 'ok',
+  { id: STAGING, name: 'Staging', description: null, status: 'ok', account: ACCOUNT,
     instance_count: 0, consumption_total: 52.35,
     period_start: '2026-09-01', period_end: '2026-09-15' },
-  { id: SANDBOX, name: 'Sandbox', description: null, status: 'ok',
+  { id: SANDBOX, name: 'Sandbox', description: null, status: 'ok', account: ACCOUNT,
     instance_count: 0, consumption_total: 0, period_start: null, period_end: null },
 ];
 
@@ -169,8 +173,16 @@ const quota = (id, project_id, region, cores, instances) => ({
   snapshot_date: '2026-09-14 04:01:30',
 });
 
-const publicCloudStats = (fields) => ({
+// The figures of the Public Cloud cards, as /api/analysis/public-cloud-stats
+// answers them: those given, and nothing billed or counted for the others
+export const publicCloudFigures = (fields) => ({
   kubernetes: { count: 0, total: 0 },
+  instances: { total: 0 },
+  volumes: { count: 0, total: 0 },
+  snapshots: { count: 0, total: 0 },
+  savingsPlans: { count: 0, total: 0 },
+  objectStorage: { count: 0, total: 0 },
+  registry: { count: 0, total: 0 },
   aiml: { count: 0, total: 0 },
   loadBalancers: { count: 0, total: 0 },
   ...fields,
@@ -182,7 +194,7 @@ export const publicCloud = {
   // Read from the bills of the month; the counts of buckets, volumes and
   // snapshots from the inventory, of what existed by the end of the month
   publicCloudStats: {
-    '2026-09': publicCloudStats({
+    '2026-09': publicCloudFigures({
       instances: { total: 718.9 },
       volumes: { count: 3, total: 12.5 },
       snapshots: { count: 2, total: 6 },
@@ -190,7 +202,7 @@ export const publicCloud = {
       objectStorage: { count: 3, total: 25 },
       registry: { count: 1, total: 40 },
     }),
-    '2026-08': publicCloudStats({
+    '2026-08': publicCloudFigures({
       instances: { total: 590.6 },
       volumes: { count: 3, total: 12.5 },
       snapshots: { count: 2, total: 6 },

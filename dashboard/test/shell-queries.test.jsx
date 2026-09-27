@@ -114,9 +114,9 @@ describe('query keys', () => {
 
       await selectAccount(user, 'Lyon subsidiary');
 
-      // The months list and the summaries of the KPI cards, on September, and the Trends
-      // tab's queries (#120): the other queries follow the account in the next tickets (#116
-      // to #123)
+      // The months list and the summaries of the KPI cards, on September, and the queries of
+      // the Trends (#120) and Public Cloud (#121) tabs: the other queries follow the account
+      // in the next tickets (#116 to #123)
       expect(sorted(allKeys().filter((key) => key.includes(lyonAccount.id)))).toEqual(sorted([
         ['months', 'xx1111-ovh'],
         ['summary', '2026-09-01', '2026-09-30', 'xx1111-ovh'],
@@ -129,6 +129,10 @@ describe('query keys', () => {
         ['monthlyTrend', 3, '2026-09', 'xx1111-ovh'],
         ['monthlyTrendByCategory', 3, '2026-09', 'xx1111-ovh'],
         ['gpuTrend', '2026-07-01', '2026-09-30', 'xx1111-ovh'],
+        // The Public Cloud tab's projects and figures of the month (#121), which wait for the
+        // tab. The resources of a project follow the project, which belongs to one account.
+        ['projectsEnriched', 'xx1111-ovh'],
+        ['publicCloudStats', '2026-09-01', '2026-09-30', 'xx1111-ovh'],
       ]));
     });
 });

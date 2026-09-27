@@ -368,42 +368,21 @@ function registerRoutes() {
   // Projects Endpoints
   // ========================
 
-  app.get('/api/projects', (req, res) => {
+  // The projects of the account the request asks for, or of every account without one (#121)
+  app.get('/api/projects', accountParameter, (req, res) => {
     try {
-      const projects = db.projects.getAll();
+      const projects = db.projects.getAll(req.account);
       res.json(projects);
     } catch (err) {
       res.status(500).json({ error: err.message });
     }
   });
 
-  app.get('/api/projects/enriched', (req, res) => {
+  // The projects of the account the request asks for, or of every account without one, with
+  // their instances, their current consumption and their account (#121)
+  app.get('/api/projects/enriched', accountParameter, (req, res) => {
     try {
-      const database = db.getDb();
-      // The current consumption: that of the month of the last import, which keeps the
-      // other months (#54)
-      const projects = database.prepare(`
-      SELECT
-        p.id, p.name, p.description, p.status,
-        COALESCE(ci.instance_count, 0) as instance_count,
-        COALESCE(pc.consumption_total, 0) as consumption_total,
-        pc.period_start, pc.period_end
-      FROM projects p
-      LEFT JOIN (
-        SELECT project_id, COUNT(*) as instance_count
-        FROM cloud_instances
-        GROUP BY project_id
-      ) ci ON ci.project_id = p.id
-      LEFT JOIN (
-        SELECT project_id, SUM(total_price) as consumption_total,
-               MIN(period_start) as period_start, MAX(period_end) as period_end
-        FROM project_consumption
-        WHERE period_start = ?
-        GROUP BY project_id
-      ) pc ON pc.project_id = p.id
-      ORDER BY consumption_total DESC
-    `).all(db.cloudDetails.getCurrentConsumptionMonth());
-      res.json(projects);
+      res.json(db.projects.getEnriched(req.account));
     } catch (err) {
       res.status(500).json({ error: err.message });
     }
@@ -1242,12 +1221,14 @@ function registerRoutes() {
     }
   });
 
-  app.get('/api/analysis/public-cloud-stats', (req, res) => {
+  // The figures of the Public Cloud cards: those of the account the request asks for, or of
+  // every account without one (#121)
+  app.get('/api/analysis/public-cloud-stats', accountParameter, (req, res) => {
     try {
       const { from, to } = req.query;
       const validation = validateDateRange(from, to);
       if (!validation.valid) return res.status(400).json({ error: validation.error });
-      const data = db.inventory.getPublicCloudStats(from, to);
+      const data = db.inventory.getPublicCloudStats(from, to, req.account);
       res.json(data);
     } catch (err) {
       res.status(500).json({ error: err.message });
