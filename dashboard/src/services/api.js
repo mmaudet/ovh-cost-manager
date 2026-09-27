@@ -59,9 +59,11 @@ export const fetchByProject = async (from, to, account = null) => {
   return data;
 };
 
-// The Overview's lists of projects that name the account of each, for all accounts (#118):
-// each project once for each account whose bills billed it, with that account, rather than
-// once. The costs by project, and the GPU costs by project.
+// The lists of projects that name the account of each, for all accounts: each project once
+// for each account whose bills billed it, with that account, rather than once. The costs by
+// project, which the Overview's breakdown by project (#118) and the Compare tab's comparison
+// by project (#119) show, and the GPU costs by project, which the Overview shows. The tabs
+// ask for them through tabs/projectsByAccountQueries.js.
 export const fetchProjectsByAccount = async (from, to) => {
   const { data } = await api.get('/analysis/by-project', {
     params: { from, to, byAccount: true },
@@ -233,8 +235,18 @@ export const fetchPublicCloudStats = async (from, to, account = null) => {
   return data;
 };
 
-// Backup stats (Veeam)
-export const fetchBackupStats = async (from, to) => {
-  const { data } = await api.get('/analysis/backup-stats', { params: { from, to } });
+/**
+ * Backup stats (Veeam) of a month, for the Compare and Backup tabs (#119)
+ * @param {string} from - The first day of the month, 'YYYY-MM-DD'
+ * @param {string} to - Its last day
+ * @param {?string} [account] - The account whose backups to ask for, as the functions above
+ *   take it: null for all accounts
+ * @returns {Promise<{ vms: object, enterprise: object }>} The number and cost of the Veeam
+ *   VMs and of the Enterprise licences
+ */
+export const fetchBackupStats = async (from, to, account = null) => {
+  const { data } = await api.get('/analysis/backup-stats', {
+    params: { from, to, ...accountParams(account) },
+  });
   return data;
 };

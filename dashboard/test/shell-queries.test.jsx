@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { lyonAccount, severalAccounts } from './fixtures/accounts.js';
-import { renderDashboard, selectAccount } from './support/render.jsx';
+import { openTab, renderDashboard, selectAccount } from './support/render.jsx';
 
 // The keys the page caches the answers of its queries under. Each period keeps its own
 // answers, and the end of an import invalidates them by the name of their query (see
@@ -112,6 +112,28 @@ describe('query keys', () => {
     ]));
   });
 
+  // With all accounts shown, the lists name the account of each project (#118): the Overview
+  // asks for the projects of the month selected by account, and the Compare tab for those of
+  // months A and B (#119), under keys that name no account, as their requests do not. Month
+  // B, September, shares the Overview's key.
+  it('caches the projects by account of the Overview and of Compare under shared keys',
+    async () => {
+      const { user, allKeys } = await renderDashboard(severalAccounts);
+
+      await openTab(user, 'Comparaison');
+
+      const byAccount = ['projectsByAccount', 'gpuProjectsByAccount'];
+      expect(sorted(allKeys().filter(([name]) => byAccount.includes(name)))).toEqual(sorted([
+        ['projectsByAccount', undefined, undefined],
+        ['projectsByAccount', '2026-09-01', '2026-09-30'],
+        ['projectsByAccount', '2026-08-01', '2026-08-31'],
+        ['gpuProjectsByAccount', undefined, undefined],
+        ['gpuProjectsByAccount', '2026-09-01', '2026-09-30'],
+      ]));
+      // Rather than the projects of month A once each
+      expect(allKeys()).not.toContainEqual(['byProject', '2026-08-01', '2026-08-31']);
+    });
+
   // A request for one account names it, and so does the key of its answers, after the key's
   // other parts: each account keeps its own answers (#115)
   it('caches the queries that follow the account selected under keys that name it',
@@ -121,9 +143,10 @@ describe('query keys', () => {
       await selectAccount(user, 'Lyon subsidiary');
 
       // The months list and the summaries of the KPI cards, on September, the figures of the
-      // month that the Overview shows (#118), and the queries of the Trends (#120), Public
-      // Cloud (#121) and Web Cloud (#122) tabs: the other queries follow the account in the
-      // next tickets (#116 to #123)
+      // month that the Overview shows (#118), and the queries of the Compare (#119), Trends
+      // (#120), Public Cloud (#121) and Web Cloud (#122) tabs, and the Backup tab's Veeam
+      // backups (#119): the other queries follow the account in the next tickets (#116 to
+      // #123)
       expect(sorted(allKeys().filter((key) => key.includes(lyonAccount.id)))).toEqual(sorted([
         ['months', 'xx1111-ovh'],
         ['summary', '2026-09-01', '2026-09-30', 'xx1111-ovh'],
@@ -135,6 +158,14 @@ describe('query keys', () => {
         ['byProject', '2026-09-01', '2026-09-30', 'xx1111-ovh'],
         ['byResourceType', '2026-09-01', '2026-09-30', 'xx1111-ovh'],
         ['gpuSummary', '2026-09-01', '2026-09-30', 'xx1111-ovh'],
+        // The Compare tab's, which wait for the tab: month A, August, whose summary shares the
+        // key of the shell's month before, and month B, September, which shares the shell's
+        // keys, and that of the Backup tab's Veeam backups
+        ['byService', '2026-08-01', '2026-08-31', 'xx1111-ovh'],
+        ['byProject', '2026-08-01', '2026-08-31', 'xx1111-ovh'],
+        ['byResourceType', '2026-08-01', '2026-08-31', 'xx1111-ovh'],
+        ['backupStats', '2026-08-01', '2026-08-31', 'xx1111-ovh'],
+        ['backupStats', '2026-09-01', '2026-09-30', 'xx1111-ovh'],
         // Over the 3 months up to September that its months allow, and the GPU trend over
         // them, which only runs on the tab
         ['monthlyTrend', 3, '2026-09', 'xx1111-ovh'],

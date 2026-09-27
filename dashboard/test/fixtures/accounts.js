@@ -11,9 +11,10 @@ import { webCloudOfSeveralAccounts } from './web-cloud.js';
 // The accounts route lists them as it does since #114: with their id, the value of the
 // account parameter, whether config.json still lists them, and which one is the Unknown
 // account, and, since #124, when the last import of each that succeeded ended. What the page
-// asks for with an account, such as its months list, its summaries, its Public Cloud (#121)
-// and its Web Cloud services (#122), is under `ofAccount`, by the id of the account (see
-// support/api.js). web-cloud.js gives the Web Cloud services for all accounts too.
+// asks for with an account, such as its months list, its summaries, the figures of the months
+// that the Compare tab compares (#119), its Public Cloud (#121) and its Web Cloud services
+// (#122), is under `ofAccount`, by the id of the account (see support/api.js). web-cloud.js
+// gives the Web Cloud services for all accounts too.
 
 const [september, august, july] = months;
 // The Public Cloud projects of account.js
@@ -97,8 +98,9 @@ const withAccounts = (projects, idOf) => projects.map(
   (project) => ({ ...project, account: accountOfProject[idOf(project)] }),
 );
 
-// The costs of September by service type and by resource type of the accounts billed that
-// month, which add up to those of account.js
+// The costs by service type and by resource type of the accounts billed in a month, which add
+// up to those of account.js: September's, and those of August and July that the Compare tab
+// compares (#119)
 const service = (name, value, color, detailsCount) => ({ name, value, color, detailsCount });
 const resourceType = (name, type, color, value, detailsCount, serviceCount) => ({
   name, resource_type: type, color, value, detailsCount, serviceCount,
@@ -106,6 +108,8 @@ const resourceType = (name, type, color, value, detailsCount, serviceCount) => (
 const publicCloud = (value, detailsCount) =>
   resourceType('Public Cloud', 'cloud_project', '#3b82f6', value, detailsCount, 1);
 const domains = (value) => resourceType('Domains', 'domain', '#8b5cf6', value, 2, 1);
+const dedicatedServers = (value) =>
+  resourceType('Dedicated Servers', 'dedicated_server', '#ef4444', value, 1, 1);
 
 export const severalAccounts = {
   ...account,
@@ -127,15 +131,19 @@ export const severalAccounts = {
           service('Other', 160, '#6b7280', 8),
           service('Storage', 150, '#10b981', 6),
         ],
+        '2026-08': [
+          service('Compute', 450, '#3b82f6', 14),
+          service('Storage', 102, '#10b981', 5),
+          service('Other', 60, '#6b7280', 4),
+        ],
       },
       byProject: projectsOf(lyonAccount),
       byResourceType: {
-        '2026-09': [
-          publicCloud(610.4, 30),
-          resourceType('Dedicated Servers', 'dedicated_server', '#ef4444', 270, 1, 1),
-          domains(10),
-        ],
+        '2026-09': [publicCloud(610.4, 30), dedicatedServers(270), domains(10)],
+        '2026-08': [publicCloud(512, 26), dedicatedServers(70), domains(30)],
+        '2026-07': [publicCloud(680, 23)],
       },
+      // No Veeam backup
       // Its Production project has all the GPU costs of every account: those of the months
       // of the Overview, and of the Trends tab's 3 months up to September (#120)
       gpuSummary: {
@@ -184,6 +192,11 @@ export const severalAccounts = {
           service('Storage', 100, '#10b981', 3),
           service('Other', 40, '#6b7280', 3),
         ],
+        '2026-08': [
+          service('Compute', 140, '#3b82f6', 4),
+          service('Storage', 60, '#10b981', 2),
+          service('Other', 30, '#6b7280', 3),
+        ],
       },
       byProject: projectsOf(unnamedAccount),
       byResourceType: {
@@ -193,7 +206,10 @@ export const severalAccounts = {
           domains(25),
           resourceType('Licenses', 'license', '#0891b2', 25, 1, 1),
         ],
+        '2026-08': [publicCloud(190, 9), resourceType('Backup', 'backup', '#059669', 40, 2, 2)],
       },
+      // Every Veeam backup of account.js
+      backupStats: account.backupStats,
       // No GPU
       months: [september, august],
       summary: {
@@ -222,6 +238,11 @@ export const severalAccounts = {
       ...webCloudOfSeveralAccounts.ofAccount[unnamedAccount.id],
     },
     [removedAccount.id]: {
+      // Dedicated servers only
+      byResourceType: {
+        '2026-08': [dedicatedServers(200)],
+        '2026-07': [dedicatedServers(180)],
+      },
       months: [august, july],
       summary: {
         '2026-08': summaryOf(august, {
@@ -241,6 +262,7 @@ export const severalAccounts = {
       ...webCloudOfSeveralAccounts.ofAccount[removedAccount.id],
     },
     [unknownAccount.id]: {
+      byResourceType: { '2026-07': [dedicatedServers(90), domains(30)] },
       months: [july],
       summary: {
         '2026-07': summaryOf(july, {

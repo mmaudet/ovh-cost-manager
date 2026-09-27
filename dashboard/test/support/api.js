@@ -157,7 +157,8 @@ const answers = {
   // The GPU costs of a period, of the account the page selects (#120)
   fetchGpuSummary: entryForPeriodOfAccount('gpuSummary', emptyAnswers.gpuSummary),
   fetchPublicCloudStats: entryForPeriodOfAccount('publicCloudStats', emptyAnswers.publicCloudStats),
-  fetchBackupStats: entryForPeriod('backupStats', emptyAnswers.backupStats),
+  // And the Veeam backups of a month, which the Compare and Backup tabs show (#119)
+  fetchBackupStats: entryForPeriodOfAccount('backupStats', emptyAnswers.backupStats),
 };
 
 // One mock per function: what setup.js hands over to the page

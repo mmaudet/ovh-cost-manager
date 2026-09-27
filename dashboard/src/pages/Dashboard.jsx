@@ -20,6 +20,7 @@ import {
 import { formatCurrency, formatMonthLabel, yearMonthOf } from '../utils/format.js';
 import { parseSqliteDate } from '../utils/sqliteDate.js';
 import { generateMarkdownReport, reportFileName } from '../utils/markdownReport.js';
+import { holdsMonth } from '../utils/months.js';
 import { shiftMonths } from '../utils/monthWindow.js';
 import { variationDisplay, variationPercent } from '../utils/variation.js';
 import { useWebCloudTab } from '../tabs/useWebCloudTab.js';
@@ -97,8 +98,8 @@ export default function Dashboard() {
 
   // The account the page shows, page-wide: null for all accounts, undefined until the page
   // knows it. The months list, the KPI cards of the month's figures, the Overview's figures
-  // (#118) and the Web Cloud tab follow it; the other cards and tabs follow it in the next
-  // tickets (#116 to #123).
+  // (#118), the Compare tab and the Veeam backups (#119) and the Web Cloud tab follow it; the
+  // other cards and tabs follow it in the next tickets (#116 to #123).
   const { selectedAccount, selectAccount } = useSelectedAccount(accounts);
   // The Account column of the lists, which name the account of each row with all accounts
   // shown, when the page offers several (#121): null when they name none
@@ -117,7 +118,7 @@ export default function Dashboard() {
   // load, nor when the user selected an account not billed that month, until the page selects
   // its latest month (below). The queries of that month wait until they do: the tab hooks get
   // it from here, rather than check it again (#120).
-  const holdsSelectedMonth = months.some((m) => m.value === selectedMonth?.value);
+  const holdsSelectedMonth = holdsMonth(months, selectedMonth);
 
   // The figures of the month selected, once the account shown has it
   const { data: summary, isLoading: loadingSummary } = useQuery(accountQuery(selectedAccount, {
@@ -200,7 +201,7 @@ export default function Dashboard() {
 
   const overviewTab = useOverviewTab({ selectedMonth, holdsSelectedMonth, accountColumn });
 
-  const compareTab = useCompareTab({ months, selectedMonth, activeTab });
+  const compareTab = useCompareTab({ months, activeTab, selectedAccount, accountColumn });
 
   const trendsTab = useTrendsTab({
     months, selectedMonth, holdsSelectedMonth, selectedAccount, activeTab,
@@ -221,7 +222,9 @@ export default function Dashboard() {
   // loads them on either tab (#35)
   const { inventoryServers } = infrastructureTab;
 
-  const backupTab = useBackupTab({ selectedMonth, activeTab });
+  const backupTab = useBackupTab({
+    selectedMonth, holdsSelectedMonth, activeTab, selectedAccount,
+  });
 
   // Update budget when config loads
   useEffect(() => {
@@ -232,7 +235,9 @@ export default function Dashboard() {
 
   // Select the latest month when the months list loads without the month selected: when the
   // page opens, as useCompareTab sets months A and B then, in the same commit, and when the
-  // account selected was not billed that month (#115)
+  // account selected was not billed that month (#115). useCompareTab sets months A and B
+  // again when the list of the account selected lacks one of them, or when they are the same
+  // month (#119).
   useEffect(() => {
     if (months.length > 0 && !holdsSelectedMonth) {
       setSelectedMonth(months[0]);
@@ -691,7 +696,7 @@ export default function Dashboard() {
         {activeTab === 'compare' && (
           <CompareTab
             {...compareTab} language={language} t={t} fmt={fmt}
-            months={months} inventoryServers={inventoryServers}
+            months={months} inventoryServers={inventoryServers} accountColumn={accountColumn}
           />
         )}
 

@@ -6,7 +6,7 @@ import { SortIcon } from '../components/SortIcon.jsx';
 import ProjectProductComparison from '../components/ProjectProductComparison.jsx';
 import { Variation } from '../components/Variation.jsx';
 import { formatMonthLabel } from '../utils/format.js';
-import { projectComparisonRows } from '../utils/projectComparison.js';
+import { firstRowOfEachProject, projectComparisonRows } from '../utils/projectComparison.js';
 
 // The cost of a resource type in a month, from its costs by resource type (#32)
 const costOfType = (byResourceType, type) => (
@@ -23,19 +23,24 @@ const backupsOf = (backupStats, kind) => ({
 // The Compare tab, which the shell renders while it is active: what useCompareTab() returns,
 // with the shell's language, translations (t), amount format (fmt) and months list, and the
 // dedicated servers of the inventory, which the Infrastructure hook loads, on its own tab
-// and on this one (#35).
+// and on this one (#35). The months and their figures are those of the account selected in
+// the header (#119). The comparison by project names the account of each project in the
+// Account column of the shell (accountColumn), when it shows one: it then compares the
+// projects by account that the hook requests, a project billed to several accounts once for
+// each.
 const CompareTab = ({
   compareMonthA, setCompareMonthA, compareMonthB, setCompareMonthB,
   compareSort, handleCompareSort,
   compareDataA, compareDataB, byServiceA, byServiceB, byProjectA, byProjectB,
   byResourceTypeA, byResourceTypeB, backupStatsA, backupStatsB,
-  language, t, fmt, months, inventoryServers,
+  language, t, fmt, months, inventoryServers, accountColumn,
 }) => {
   // Months A and B as the page names them, in its language (#33)
   const monthALabel = formatMonthLabel(compareMonthA?.value, language);
   const monthBLabel = formatMonthLabel(compareMonthB?.value, language);
 
-  // Merge and sort comparison data: the projects of months A and B, paired by id (#55)
+  // Merge and sort comparison data: the projects of months A and B, paired by id (#55), and
+  // by account in the Account column (#119)
   const getSortedCompareProjects = () => {
     const merged = projectComparisonRows(byProjectA, byProjectB);
     return merged.sort((a, b) => {
@@ -58,6 +63,11 @@ const CompareTab = ({
       return 0;
     });
   };
+
+  const compareProjects = getSortedCompareProjects();
+  // The projects whose consumption the tab compares, once each, in the order of their first
+  // rows: in the Account column, a project billed to several accounts has a row for each (#119)
+  const consumptionProjects = firstRowOfEachProject(compareProjects);
 
   // Comparison chart data
   const comparisonChartData = byServiceA.map((s) => {
@@ -191,6 +201,9 @@ const CompareTab = ({
               >
                 {t('project')}<SortIcon column="name" current={compareSort} />
               </th>
+              {accountColumn && (
+                <th className="p-3 font-medium">{accountColumn.label}</th>
+              )}
               <th
                 className="p-3 font-medium text-right cursor-pointer hover:bg-gray-100 select-none"
                 onClick={() => handleCompareSort('totalA')}
@@ -212,9 +225,16 @@ const CompareTab = ({
             </tr>
           </thead>
           <tbody>
-            {getSortedCompareProjects().map((p) => (
-              <tr key={p.projectId} className="border-b hover:bg-gray-50 transition-colors">
+            {compareProjects.map((p) => (
+              <tr
+                // A project billed to several accounts has a row for each (#119)
+                key={accountColumn ? `${p.projectId} ${p.account}` : p.projectId}
+                className="border-b hover:bg-gray-50 transition-colors"
+              >
                 <td className="p-3 font-medium">{p.projectName}</td>
+                {accountColumn && (
+                  <td className="p-3 text-gray-600">{accountColumn.nameOf(p.account)}</td>
+                )}
                 <td className="p-3 text-right font-medium">{fmt(p.totalA)}€</td>
                 <td className="p-3 text-right text-gray-500">{fmt(p.totalB)}€</td>
                 <td className="p-3 text-right">
@@ -324,7 +344,7 @@ const CompareTab = ({
         </table>
       </Accordion>
       {/* One accordion per Public Cloud project: detailed comparison of products/services */}
-      {getSortedCompareProjects().map((proj) => (
+      {consumptionProjects.map((proj) => (
         <Accordion key={proj.projectId} title={`${proj.projectName} (${t('project')})`}>
           <ProjectProductComparison
             projectId={proj.projectId} monthA={compareMonthA} monthB={compareMonthB}

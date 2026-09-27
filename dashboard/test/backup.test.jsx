@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { screen, within } from '@testing-library/react';
 import { account } from './fixtures/account.js';
+import { removedAccount, severalAccounts } from './fixtures/accounts.js';
 import { api, holdBack } from './support/api.js';
 import {
   cardOf,
@@ -8,6 +9,7 @@ import {
   openTab,
   renderDashboard,
   rowsOf,
+  selectAccount,
   selectLanguage,
   selectMonth,
   settle,
@@ -25,7 +27,8 @@ describe('Backup tab', () => {
 
     await openTab(user, 'Backup');
 
-    expect(api.fetchBackupStats).toHaveBeenCalledWith('2026-09-01', '2026-09-30');
+    // For all accounts
+    expect(api.fetchBackupStats).toHaveBeenCalledWith('2026-09-01', '2026-09-30', null);
   });
 
   it('shows the backup costs of the selected month', async () => {
@@ -197,5 +200,57 @@ describe('Backup tab', () => {
       ['Veeam Enterprise License', '1', '25.00€'],
       ['Total', '4', '115.00€'],
     ]);
+  });
+
+  // Several accounts in the instance (#119): the Veeam backups are those of the account
+  // selected in the header, as on the Compare tab, whose query of a month shares their key
+  // (ADR 0001). See fixtures/accounts.js.
+  describe('with several accounts', () => {
+    it('shows the Veeam backups of the account selected, and of all accounts again',
+      async () => {
+        const { user } = await renderDashboard(severalAccounts);
+        await openTab(user, 'Backup');
+
+        // Every Veeam backup of the instance: 115 / 360, its cost of September
+        await selectAccount(user, 'yy2222-ovh');
+
+        expect(texts(backupCards())).toEqual([
+          'Coût total backup', '115,00€',
+          'VMs Veeam', '3', '90,00€',
+          'Licences Veeam Enterprise', '1', '25,00€',
+          '% du coût total', '31,9 %',
+        ]);
+
+        await selectAccount(user, 'Lyon subsidiary');
+
+        expect(texts(backupCards())).toEqual([
+          'Coût total backup', '0,00€',
+          'VMs Veeam', '0',
+          'Licences Veeam Enterprise', '0',
+          '% du coût total', '0,0 %',
+        ]);
+        expect(within(resourcesPanel()).getByText(
+          'Aucun service de backup trouvé pour cette période',
+        )).toBeInTheDocument();
+
+        // 115 / 1 250.40
+        await selectAccount(user, 'Tous les comptes');
+
+        expect(texts(cardOf('% du coût total'))).toEqual(['% du coût total', '9,2 %']);
+      });
+
+    // The month selected stays until the months list of the account loads, and says it lacks
+    // it: the header then selects the account's latest month, August (#115)
+    it('asks for no Veeam backups of a month that the account selected lacks', async () => {
+      const { user } = await renderDashboard(severalAccounts);
+      await openTab(user, 'Backup');
+
+      await selectAccount(user, 'zz3333-ovh (non configuré)');
+
+      expect(api.fetchBackupStats)
+        .not.toHaveBeenCalledWith('2026-09-01', '2026-09-30', removedAccount.id);
+      expect(api.fetchBackupStats)
+        .toHaveBeenCalledWith('2026-08-01', '2026-08-31', removedAccount.id);
+    });
   });
 });

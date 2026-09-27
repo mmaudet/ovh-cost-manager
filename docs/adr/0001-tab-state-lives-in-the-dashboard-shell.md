@@ -29,11 +29,13 @@ month B is the latest month, the selected one: its summary, costs by resource ty
 Veeam backups share their keys (`summary`, `byResourceType`, `backupStats`). Month A is the
 second latest billed month (`months[1]`): when it is the month just before the latest one,
 as it is unless nothing was billed that month, its summary shares its key with the shell's
-month before. The Compare hook owns the months it picks, and a shared key only means a
-shared cache, not a shared owner. A query that follows the account selected in the header
-carries that account in its key, after the other parts, and none when all accounts are
-shown, as its request names the account or not (#115): two queries share a key only for
-the same account, or both for all accounts.
+month before. While the lists show the Account column, with all accounts shown, the Compare
+hook asks for the projects of its months by account, under the key of the Overview hook's
+projects by account (`projectsByAccount`, #119). The Compare hook owns the months it picks,
+and a shared key only means a shared cache, not a shared owner. A query that follows the
+account selected in the header carries that account in its key, after the other parts, and
+none when all accounts are shown, as its request names the account or not (#115): two
+queries share a key only for the same account, or both for all accounts.
 
 What stays open depends on how the user moves around the page (#56):
 
@@ -44,7 +46,11 @@ What stays open depends on how the user moves around the page (#56):
 - the Overview's other links open their target, a project on the Public Cloud tab or the
   Web Cloud tab, and keep the rest;
 - the account selector keeps the open project open while the account shown lists it: with
-  an account that does not, no project is open, until one that lists it is shown (#121).
+  an account that does not, no project is open, until one that lists it is shown (#121);
+- it keeps the months that the Compare tab compares while the account shown was billed in
+  both and they are two months: with an account that lacks either, or after one billed in
+  a single month, the tab compares the months it opens on for that account, its second
+  latest billed month and its latest one (#119). The user may pick one month for both.
 
 A tab module may also export pieces that the shell renders in place, outside the tab, so
 that the page's markup stays as it is: the Trends period selector (`TrendsPeriodSelector`),

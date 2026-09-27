@@ -1206,10 +1206,12 @@ const inventoryOps = {
     };
   },
 
-  // Backup stats (Veeam etc)
-  getBackupStats: (fromDate, toDate) => {
+  // Backup stats (Veeam etc), on the bills of the account (see accountCondition()), every
+  // account's by default: those of the Compare tab's months and of the Backup tab (#119)
+  getBackupStats: (fromDate, toDate, account = null) => {
     const db = getDb();
-    
+    const ofAccount = accountCondition(account, 'b.account');
+
     // Count Veeam backup VMs
     const vms = db.prepare(`
       SELECT COUNT(DISTINCT domain) as count, ROUND(SUM(total_price), 2) as total
@@ -1217,7 +1219,8 @@ const inventoryOps = {
       JOIN bills b ON d.bill_id = b.id
       WHERE b.date >= ? AND b.date <= ?
         AND resource_type = 'backup'
-    `).get(fromDate, toDate);
+        AND ${ofAccount.sql}
+    `).get(fromDate, toDate, ...ofAccount.params);
 
     // Veeam Enterprise licenses (from descriptions)
     const enterprise = db.prepare(`
@@ -1226,7 +1229,8 @@ const inventoryOps = {
       JOIN bills b ON d.bill_id = b.id
       WHERE b.date >= ? AND b.date <= ?
         AND (LOWER(description) LIKE '%veeam%' AND LOWER(description) LIKE '%enterprise%')
-    `).get(fromDate, toDate);
+        AND ${ofAccount.sql}
+    `).get(fromDate, toDate, ...ofAccount.params);
 
     return {
       vms: { count: vms?.count || 0, total: vms?.total || 0 },

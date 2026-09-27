@@ -1283,12 +1283,14 @@ function registerRoutes() {
     }
   });
 
-  app.get('/api/analysis/backup-stats', (req, res) => {
+  // The Veeam backups of a month: those of the account the request asks for, or of every
+  // account without one (#119), as the Compare and Backup tabs show them
+  app.get('/api/analysis/backup-stats', accountParameter, (req, res) => {
     try {
       const { from, to } = req.query;
       const validation = validateDateRange(from, to);
       if (!validation.valid) return res.status(400).json({ error: validation.error });
-      const data = db.inventory.getBackupStats(from, to);
+      const data = db.inventory.getBackupStats(from, to, req.account);
       res.json(data);
     } catch (err) {
       res.status(500).json({ error: err.message });
