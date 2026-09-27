@@ -76,6 +76,20 @@ function accountCondition(account, column) {
   return { sql: `${column} = ?`, params: [account] };
 }
 
+/**
+ * The order of the costs of projects, those of the breakdown by project and of the GPU costs,
+ * whose `total` it sorts (#118): most expensive first; projects that cost the same by id, the
+ * last first, as SQLite gave them before the queries told accounts apart; and the rows of a
+ * project billed to several accounts by NIC handle, the Unknown account's last, as the Web
+ * Cloud services (#122).
+ * @param {string} projectColumn - The column of the query that holds the id of the project
+ * @param {string} accountColumn - The column that holds the NIC handle of the rows' account
+ * @returns {string} What ORDER BY takes
+ */
+function projectOrder(projectColumn, accountColumn) {
+  return `total DESC, ${projectColumn} DESC, ${accountColumn} IS NULL, ${accountColumn}`;
+}
+
 let db = null;
 
 /**
@@ -503,7 +517,7 @@ const analysisOps = {
   // or null for the Unknown account, as a bill line belongs to the account of its bill (ADR
   // 0002). A project billed to several accounts, such as one moved from an account to
   // another, has a row for each (#118): every account's rows are then those that each
-  // account's alone would give.
+  // account's alone would give. In the order of projectOrder().
   byProject: (fromDate, toDate, account = null) => {
     const db = getDb();
     const ofAccount = accountCondition(account, 'b.account');
@@ -521,7 +535,7 @@ const analysisOps = {
         AND d.project_id IS NOT NULL
         AND ${ofAccount.sql}
       GROUP BY d.project_id, b.account
-      ORDER BY total DESC
+      ORDER BY ${projectOrder('d.project_id', 'b.account')}
     `).all(fromDate, toDate, ...ofAccount.params);
   },
 
@@ -1935,7 +1949,7 @@ const cloudDetailOps = {
       LEFT JOIN projects p ON bd.domain = p.id
       WHERE ${where}
       GROUP BY bd.domain, b.account
-      ORDER BY total DESC
+      ORDER BY ${projectOrder('bd.domain', 'b.account')}
     `).all(...args);
 
     // Get GPU flavors per project from project_consumption (current month detail)
