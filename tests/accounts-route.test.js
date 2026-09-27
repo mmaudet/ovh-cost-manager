@@ -8,10 +8,12 @@ const { startOcm } = require('./support/ocm-server');
 const { SQLITE_TIME } = require('./support/accounts');
 
 const NIC = 'xx1111-ovh';
+const OTHER_NIC = 'yy2222-ovh';
 
-// The accounts that the server lists, over a database that `seed` writes to, if given
-async function listAccounts(seed) {
-  const ocm = await startOcm(() => ({}), { seed });
+// The accounts that the server lists, over a database that `seed` writes to, if given, with
+// this config.json, if given
+async function listAccounts(seed, config) {
+  const ocm = await startOcm(() => ({}), { seed, config });
   try {
     const res = await fetch(`${ocm.url}/api/accounts`);
     expect(res.status).toBe(200);
@@ -58,6 +60,54 @@ test('gives why the last import of the account failed', async () => {
     at: expect.stringMatching(SQLITE_TIME), status: 'failed', error: 'Internal server error',
   }]);
 }, 30000);
+
+// Each account named as the entry of config.json that its last import read names it (#113)
+test('lists every account recorded, by its name, or else its NIC handle', async () => {
+  const accounts = await listAccounts((db) => {
+    db.accounts.upsert({ nic: NIC, currency: 'EUR', name: 'Lyon subsidiary', budget: 20000 });
+    db.accounts.recordImport(NIC, { status: 'success' });
+    db.accounts.upsert({ nic: OTHER_NIC, currency: 'EUR' });
+    db.accounts.recordImport(OTHER_NIC, { status: 'failed', error: 'Internal server error' });
+  });
+
+  expect(accounts).toEqual([
+    {
+      nic: NIC,
+      name: 'Lyon subsidiary',
+      currency: 'EUR',
+      lastImport: { at: expect.stringMatching(SQLITE_TIME), status: 'success', error: null },
+    },
+    {
+      nic: OTHER_NIC,
+      name: OTHER_NIC,
+      currency: 'EUR',
+      lastImport: {
+        at: expect.stringMatching(SQLITE_TIME), status: 'failed', error: 'Internal server error',
+      },
+    },
+  ]);
+}, 30000);
+
+// Only an import can tell which account an entry's credentials lead to: a rename shows once
+// the account is imported again, and an entry never imported is not listed
+test('names the accounts as their last import recorded them, not as config.json does now',
+  async () => {
+    const credentials = (key) => ({
+      appKey: `app-${key}`, appSecret: `secret-${key}`, consumerKey: `consumer-${key}`,
+      endpoint: 'ovh-eu',
+    });
+    const accounts = await listAccounts((db) => {
+      db.accounts.upsert({ nic: NIC, currency: 'EUR', name: 'Lyon' });
+      db.accounts.recordImport(NIC, { status: 'success' });
+    }, {
+      accounts: [
+        { name: 'Lyon subsidiary', credentials: credentials('lyon') },
+        { name: 'Paris', credentials: credentials('paris') },
+      ],
+    });
+
+    expect(accounts.map(account => [account.nic, account.name])).toEqual([[NIC, 'Lyon']]);
+  }, 30000);
 
 // As every other API route, behind the Host and CORS checks and rate limiting too
 test('answers only a signed-in user when authentication is required', async () => {

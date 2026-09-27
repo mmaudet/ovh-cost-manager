@@ -95,6 +95,12 @@ function getDb() {
     for (const table of ACCOUNT_TABLES) {
       addColumnIfNotExists(db, table, 'account', 'TEXT');
     }
+    // The name and budget of each account's entry in config.json (#113), which the next
+    // import of the account records
+    addColumnIfNotExists(db, 'accounts', 'name', 'TEXT');
+    addColumnIfNotExists(db, 'accounts', 'budget', 'INTEGER');
+    // What keeps the lock of a long import (#113)
+    addColumnIfNotExists(db, 'import_log', 'heartbeat_at', 'DATETIME');
   }
   return db;
 }
@@ -183,9 +189,16 @@ const billOps = {
     return db.prepare('SELECT * FROM bills WHERE id = ?').get(id);
   },
 
-  getLatestDate: () => {
+  /**
+   * @param {?string} [account] - The NIC handle of an account, whose bills alone count
+   * @returns {?string} The date of the latest bill stored, of the account when one is given;
+   *   null when there is none
+   */
+  getLatestDate: (account = null) => {
     const db = getDb();
-    const result = db.prepare('SELECT MAX(date) as latest FROM bills').get();
+    const result = account === null
+      ? db.prepare('SELECT MAX(date) as latest FROM bills').get()
+      : db.prepare('SELECT MAX(date) as latest FROM bills WHERE account = ?').get(account);
     return result?.latest;
   },
 
@@ -236,6 +249,22 @@ const detailOps = {
   }
 };
 
+// Ends the import log entry of an import that imported its accounts, or some of them: what
+// they imported, its status, 'success' or 'partial', and the error that names the accounts
+// that failed, null when none did
+function endImport(id, stats, status, errorMessage) {
+  return getDb().prepare(`
+    UPDATE import_log SET
+      completed_at = CURRENT_TIMESTAMP,
+      bills_imported = ?,
+      details_imported = ?,
+      projects_imported = ?,
+      status = ?,
+      error_message = ?
+    WHERE id = ?
+  `).run(stats.bills, stats.details, stats.projects, status, errorMessage, id);
+}
+
 // Import log operations
 const importLogOps = {
   start: (type, fromDate, toDate) => {
@@ -248,19 +277,7 @@ const importLogOps = {
     return result.lastInsertRowid;
   },
 
-  complete: (id, stats) => {
-    const db = getDb();
-    const stmt = db.prepare(`
-      UPDATE import_log SET
-        completed_at = CURRENT_TIMESTAMP,
-        bills_imported = ?,
-        details_imported = ?,
-        projects_imported = ?,
-        status = 'success'
-      WHERE id = ?
-    `);
-    return stmt.run(stats.bills, stats.details, stats.projects, id);
-  },
+  complete: (id, stats) => endImport(id, stats, 'success', null),
 
   fail: (id, errorMessage) => {
     const db = getDb();
@@ -274,6 +291,9 @@ const importLogOps = {
     return stmt.run(errorMessage, id);
   },
 
+  // Ends an import that some of its accounts failed, and the others imported (#113)
+  partial: (id, stats, errorMessage) => endImport(id, stats, 'partial', errorMessage),
+
   getLatest: () => {
     const db = getDb();
     return db.prepare('SELECT * FROM import_log ORDER BY id DESC LIMIT 1').get();
@@ -284,17 +304,25 @@ const importLogOps = {
     return db.prepare('SELECT * FROM import_log ORDER BY id DESC').all();
   },
 
+  // Records that the running import is alive, which keeps its lock: a run over several
+  // accounts, or over an account's whole history, can take longer than 30 minutes (#113)
+  heartbeat: (id) => {
+    const db = getDb();
+    return db.prepare('UPDATE import_log SET heartbeat_at = CURRENT_TIMESTAMP WHERE id = ?')
+      .run(id);
+  },
+
   // An import is in progress when the latest entry is still 'running' and
-  // started less than 30 minutes ago (an older one is a crashed run).
-  // started_at is a UTC CURRENT_TIMESTAMP without timezone, so its age is
-  // computed in SQL against 'now', which is UTC too.
+  // started, or last showed it is alive, less than 30 minutes ago (an older
+  // one is a crashed run). The times are UTC CURRENT_TIMESTAMPs without
+  // timezone, so their age is computed in SQL against 'now', which is UTC too.
   isRunning: () => {
     const db = getDb();
     const running = db.prepare(`
       SELECT 1 FROM import_log
       WHERE id = (SELECT MAX(id) FROM import_log)
         AND status = 'running'
-        AND datetime(started_at) > datetime('now', '-30 minutes')
+        AND datetime(COALESCE(heartbeat_at, started_at)) > datetime('now', '-30 minutes')
     `).get();
     return Boolean(running);
   }
@@ -303,17 +331,21 @@ const importLogOps = {
 // The OVH accounts that the imports read, by the NIC handle that GET /me names (#112)
 const accountsOps = {
   /**
-   * Records an account that an import reads, or updates the currency of one it knows.
+   * Records an account that an import reads, or updates one it knows: its currency, and the
+   * name and budget of its entry in config.json, which only an import can match with the
+   * account (#113). A rename in config.json thus shows once the account is imported again.
    * @param {object} account - As GET /me names it
    * @param {string} account.nic - Its NIC handle
    * @param {?string} account.currency - The code of the currency it bills in, such as EUR
+   * @param {?string} [account.name] - The name of its entry, null when it has none
+   * @param {?number} [account.budget] - The budget of its entry, null when it has none
    */
-  upsert: ({ nic, currency }) => {
+  upsert: ({ nic, currency, name = null, budget = null }) => {
     const db = getDb();
     return db.prepare(`
-      INSERT INTO accounts (nic, currency) VALUES (@nic, @currency)
-      ON CONFLICT(nic) DO UPDATE SET currency = @currency
-    `).run({ nic, currency });
+      INSERT INTO accounts (nic, currency, name, budget) VALUES (@nic, @currency, @name, @budget)
+      ON CONFLICT(nic) DO UPDATE SET currency = @currency, name = @name, budget = @budget
+    `).run({ nic, currency, name, budget });
   },
 
   /**
@@ -353,6 +385,18 @@ const accountsOps = {
         last_import_error = ?
       WHERE nic = ?
     `).run(status, error, nic);
+  },
+
+  /**
+   * @param {string} name - The name of an entry of config.json
+   * @returns {object|undefined} The account that an import last recorded with that name, as
+   *   the accounts table holds it: the account that the entry last led to
+   */
+  getByName: (name) => {
+    const db = getDb();
+    return db.prepare(`
+      SELECT * FROM accounts WHERE name = ? ORDER BY last_import_at DESC LIMIT 1
+    `).get(name);
   },
 
   /**

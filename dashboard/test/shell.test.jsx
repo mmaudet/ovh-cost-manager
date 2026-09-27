@@ -11,6 +11,7 @@ import {
   emptyState,
   fakeTimers,
   headerBadge,
+  importStatusesOf,
   loadingScreen,
   openTab,
   optionsOf,
@@ -476,6 +477,61 @@ describe('dashboard shell', () => {
         ['15/09/2026 11:55:00', 'période', 'en cours', '0'],
         ['15/09/2026 10:20:00', 'complet', 'partiel', '5'],
       ]);
+    });
+
+    // A run over several accounts that some of them failed (#113): a warning, not an error
+    it.each([
+      ['fr', 'Historique des imports',
+        [['partiel', 'warning'], ['échoué', 'error'], ['réussi', 'success']]],
+      ['en', 'Import history',
+        [['partial', 'warning'], ['failed', 'error'], ['success', 'success']]],
+    ])('shows a partial import as a warning (%s)', async (language, summary, statuses) => {
+      // The language the page remembers from an earlier visit
+      localStorage.setItem('ovh-dashboard-language', language);
+      const partial = {
+        ...account.importStatus.latest,
+        id: 4,
+        started_at: '2026-09-15 04:00:00',
+        completed_at: '2026-09-15 04:03:00',
+        status: 'partial',
+        error_message: '1 of 2 accounts failed: accounts[1]: This credential is not valid',
+      };
+      const { user } = await renderDashboard({
+        ...account,
+        importStatus: {
+          latest: partial,
+          running: false,
+          history: [partial, ...account.importStatus.history.slice(1)],
+        },
+      });
+
+      await user.click(screen.getByText(summary));
+
+      expect(importStatusesOf(within(disclosure(summary)).getByRole('table')))
+        .toEqual(statuses);
+    });
+
+    // The error of a run names the accounts that failed, and says when a full import cleared
+    // nothing (#113)
+    it('tells why an import failed or ended partial, over its status', async () => {
+      const reason = '1 of 2 accounts failed: accounts[1]: This credential is not valid';
+      const partial = {
+        ...account.importStatus.latest, id: 4, status: 'partial', error_message: reason,
+      };
+      const { user } = await renderDashboard({
+        ...account,
+        importStatus: {
+          latest: partial,
+          running: false,
+          history: [partial, ...account.importStatus.history.slice(1)],
+        },
+      });
+
+      await user.click(screen.getByText('Historique des imports'));
+
+      expect(within(importHistory()).getByTitle(reason)).toHaveTextContent('partiel');
+      expect(within(importHistory()).getByTitle('OVH API unreachable'))
+        .toHaveTextContent('échoué');
     });
 
     it('says when nothing was ever imported', async () => {

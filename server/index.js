@@ -10,6 +10,7 @@ const { spawn } = require('child_process');
 // Import database module from data workspace
 const db = require('../data/db');
 const { monthBounds } = require('../data/months');
+const { readAccounts } = require('../data/accounts-config');
 
 // Import auth module
 const auth = require('./auth');
@@ -44,6 +45,10 @@ try {
   allowedOrigins = readAllowedOrigins(config, process.env, configPath || undefined);
   // IMPORT_ENABLED too, which the routes read later
   importsEnabled();
+  // The OVH accounts, read only to check them, as the import reads them (#113): the server
+  // never uses their keys, and the accounts route names them as their last import recorded
+  // them
+  readAccounts(loaded.config, configPath || 'config.json');
 } catch (err) {
   console.error(`Failed to start server: ${err.message}`);
   process.exit(1);
@@ -737,13 +742,15 @@ function registerRoutes() {
 
   // The accounts that the imports recorded, for tools and the dashboard to present them and
   // tell whether their data is fresh (#112). Empty until the first import after the upgrade.
-  // The name is the NIC handle until names can be configured (#113); lastImport is null
-  // until an import of the account has ended.
+  // The name is the one that the account's entry of config.json had at its last import, as
+  // only an import can tell which account an entry's credentials lead to, or else its NIC
+  // handle (#113): an entry never imported is not listed. lastImport is null until an import
+  // of the account has ended.
   app.get('/api/accounts', (req, res) => {
     try {
       const accounts = db.accounts.getAll().map(account => ({
         nic: account.nic,
-        name: account.nic,
+        name: account.name ?? account.nic,
         currency: account.currency,
         lastImport: account.last_import_at === null ? null : {
           at: account.last_import_at,

@@ -30,18 +30,24 @@ import { CompareTab } from '../tabs/CompareTab.jsx';
 import { useOverviewTab } from '../tabs/useOverviewTab.js';
 import { OverviewTab } from '../tabs/OverviewTab.jsx';
 
-// Translation keys for the import_log type and status values
+// Translation keys for the import_log type values
 const IMPORT_TYPE_KEYS = {
   full: 'importTypeFull',
   period: 'importTypePeriod',
   differential: 'importTypeDifferential'
 };
-const IMPORT_STATUS_KEYS = {
-  running: 'importStatusRunning',
-  success: 'importStatusSuccess',
-  failed: 'importStatusFailed',
-  partial: 'importStatusPartial'
+// How the import history shows each import_log status: its translation key, and its colour.
+// A partial import, one that some accounts failed and the others imported (#113), is a
+// warning.
+const IMPORT_STATUSES = {
+  running: { key: 'importStatusRunning', tone: 'text-blue-600' },
+  success: { key: 'importStatusSuccess', tone: 'text-green-600' },
+  partial: { key: 'importStatusPartial', tone: 'text-amber-600' },
+  failed: { key: 'importStatusFailed', tone: 'text-red-600' }
 };
+// A status that the page does not know shows as it is, as an error
+const importStatusOf = (status) =>
+  IMPORT_STATUSES[status] || { key: status, tone: IMPORT_STATUSES.failed.tone };
 
 // The colours of each tone of the "vs previous month" variation: red when the cost grows,
 // green when it shrinks, grey when the variation rounds to 0 (#87)
@@ -637,12 +643,13 @@ export default function Dashboard() {
                       </td>
                       <td className="py-1 px-2 text-gray-600">{t(IMPORT_TYPE_KEYS[h.type] || h.type)}</td>
                       <td className="py-1 px-2">
-                        <span className={
-                          h.status === 'success' ? 'text-green-600'
-                          : h.status === 'running' ? 'text-blue-600'
-                          : 'text-red-600'
-                        }>
-                          {t(IMPORT_STATUS_KEYS[h.status] || h.status)}
+                        {/* Why it failed or ended partial, which names the accounts that
+                            failed (#113) */}
+                        <span
+                          className={importStatusOf(h.status).tone}
+                          title={h.error_message || undefined}
+                        >
+                          {t(importStatusOf(h.status).key)}
                         </span>
                       </td>
                       <td className="py-1 px-2 text-right text-gray-600">{h.bills_imported ?? '-'}</td>

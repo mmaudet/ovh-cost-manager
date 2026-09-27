@@ -263,12 +263,15 @@ describe('an import', () => {
     await importSeptember();
 
     const accounts = db.accounts.getAll();
+    // The legacy credentials give it no name and no budget (#113)
     expect(accounts).toEqual([{
       nic: 'yy2222-ovh',
       currency: 'CAD',
       last_import_at: expect.stringMatching(SQLITE_TIME),
       last_import_status: 'success',
       last_import_error: null,
+      name: null,
+      budget: null,
     }]);
     // It ended during the import
     const ended = accounts[0].last_import_at;
@@ -288,6 +291,8 @@ describe('an import', () => {
       last_import_at: expect.stringMatching(SQLITE_TIME),
       last_import_status: 'failed',
       last_import_error: 'Internal server error',
+      name: null,
+      budget: null,
     }]);
   });
 });

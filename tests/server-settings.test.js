@@ -42,6 +42,46 @@ test('logs the proxies it trusts at startup, with rate limiting off too', async 
   }
 }, 30000);
 
+// The accounts of config.json (#113), which the server checks as the import reads them,
+// though it never uses their keys. Invented credentials.
+const credentials = {
+  appKey: 'app-lyon', appSecret: 'secret-lyon', consumerKey: 'consumer-lyon', endpoint: 'ovh-eu',
+};
+
+test('refuses a malformed accounts section, naming the setting and the file', async () => {
+  const { code, output } = await runOcmUntilExit({}, {
+    config: { accounts: [{ name: 'Lyon', budget: '20000', credentials }] },
+  });
+  expect(code).toBe(1);
+  expect(output).toMatch(new RegExp('accounts\\[0\\]\\.budget in .*config\\.json must be a '
+    + 'positive integer \\(a JSON number\\), not "20000"'));
+}, 20000);
+
+// It would be ambiguous which accounts the import imports
+test('refuses the credentials and the accounts sections together', async () => {
+  const { code, output } = await runOcmUntilExit({}, {
+    config: { credentials, accounts: [{ credentials }] },
+  });
+  expect(code).toBe(1);
+  expect(output).toMatch(/credentials and accounts in .*config\.json cannot both be set/);
+}, 20000);
+
+test('starts with an accounts section', async () => {
+  const ocm = await startOcm(() => ({}), {
+    config: {
+      accounts: [
+        { name: 'Lyon', budget: 20000, credentials },
+        { credentials: { ...credentials, consumerKey: 'consumer-paris' } },
+      ],
+    },
+  });
+  try {
+    expect((await fetch(`${ocm.url}/api/accounts`)).status).toBe(200);
+  } finally {
+    await ocm.stop();
+  }
+}, 30000);
+
 test('refuses an IMPORT_ENABLED other than true or false', async () => {
   const { code, output } = await runOcmUntilExit({ IMPORT_ENABLED: 'no' });
   expect(code).toBe(1);

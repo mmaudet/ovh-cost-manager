@@ -9,7 +9,9 @@ CREATE TABLE IF NOT EXISTS accounts (
   currency TEXT,                 -- The currency the account bills in
   last_import_at DATETIME,       -- When its last import ended, NULL until one has
   last_import_status TEXT,       -- 'success', 'failed'
-  last_import_error TEXT         -- Why its last import failed
+  last_import_error TEXT,        -- Why its last import failed
+  name TEXT,                     -- The name of its entry in config.json at its last import
+  budget INTEGER                 -- The budget of that entry
 );
 
 -- Cloud Projects
@@ -64,7 +66,8 @@ CREATE TABLE IF NOT EXISTS import_log (
   details_imported INTEGER DEFAULT 0,
   projects_imported INTEGER DEFAULT 0,
   status TEXT DEFAULT 'running', -- 'running', 'success', 'failed', 'partial'
-  error_message TEXT
+  error_message TEXT,
+  heartbeat_at DATETIME          -- When the running import last showed that it is alive
 );
 
 -- Indexes for performance

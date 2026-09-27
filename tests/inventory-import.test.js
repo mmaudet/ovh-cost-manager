@@ -4,7 +4,7 @@
  * longer lists them.
  */
 
-const { routes, ok, fail, useThrowawayImport } = require('./support/simulated-ovh');
+const { client, routes, ok, fail, useThrowawayImport } = require('./support/simulated-ovh');
 const { ACCOUNT } = require('./support/accounts');
 
 jest.mock('ovh', () => require('./support/simulated-ovh').ovh);
@@ -34,7 +34,7 @@ function serveVps() {
 // The inventories of the account of the tests. Retry delays run on fake timers, so a
 // rate-limited call costs no real time.
 async function importInventory() {
-  const done = importer.importInventory({}, ACCOUNT.nic);
+  const done = importer.importInventory(client, {}, ACCOUNT.nic);
   await jest.runAllTimersAsync();
   await done;
 }

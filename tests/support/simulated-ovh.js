@@ -1,12 +1,17 @@
 /**
  * A simulated OVH API and a throwaway database, for the tests of data/import.js. A test
- * file hands the simulated client to the import through its jest.mock factories, which
- * require this module:
+ * file hands the simulated client, and the configuration files, to the import through its
+ * jest.mock factories, which require this module:
  *
  *   jest.mock('ovh', () => require('./support/simulated-ovh').ovh);
  *   jest.mock('jsonfile', () => require('./support/simulated-ovh').jsonfile);
  *
  * then calls useThrowawayImport() once, and serves the routes of each test.
+ *
+ * The API serves several accounts, told apart by the credentials that each client is
+ * created with, as the real API tells them apart by their keys: the account of the tests
+ * (ACCOUNT, in ./accounts.js), whose credentials the configuration gives by default and
+ * whose routes are `routes`, and those that serveAccount() adds.
  */
 
 const fs = require('fs');
@@ -14,22 +19,105 @@ const os = require('os');
 const path = require('path');
 const { ACCOUNT } = require('./accounts');
 
-// The routes served: route -> handler returning a promise. Unknown routes answer 404, like
-// the real API does.
+// The credentials of the account of the tests, which the configuration gives by default: as
+// before #113, without an endpoint, which the OVH client does without
+const CREDENTIALS = { appKey: 'test', appSecret: 'test', consumerKey: 'test' };
+
+// The routes of the account of the tests: route -> handler of the call's parameters,
+// returning a promise. Unknown routes answer 404, like the real API does.
 const routes = new Map();
 
-// What require('ovh') returns: a function of the credentials, which returns the client
-const ovh = () => ({
-  requestPromised: (method, route) => {
-    const handler = routes.get(route);
-    return handler ? handler() : Promise.reject({ error: 404, message: `Not found: ${route}` });
-  },
-});
+// Every account served, by the consumer key of its credentials: its credentials and its
+// routes
+const accounts = new Map();
 
-// Never read the real credentials of the machine running the tests
-const jsonfile = {
-  readFileSync: () => ({ appKey: 'test', appSecret: 'test', consumerKey: 'test' }),
+// The calls that the clients made, in order: the consumer key of the client, the method, the
+// route and the parameters
+const calls = [];
+
+// The credentials that each client was created with, in order
+const clientCredentials = [];
+
+// Whether a client's credentials are those of the account served: every one it was served
+// with, whatever else they hold, such as an endpoint or a host
+const sameCredentials = (credentials, served) =>
+  Object.keys(served).every(key => credentials?.[key] === served[key]);
+
+// What require('ovh') returns: a function of the credentials, which returns the client. The
+// calls of a client whose credentials are none of an account served get OVH's answer to an
+// invalid key.
+const ovh = (credentials) => {
+  clientCredentials.push(credentials);
+  return {
+    requestPromised: (method, route, params) => {
+      calls.push({ consumerKey: credentials?.consumerKey, method, route, params });
+      const served = accounts.get(credentials?.consumerKey);
+      if (!served || !sameCredentials(credentials, served.credentials)) {
+        return Promise.reject({ error: 403, message: 'This credential is not valid' });
+      }
+      const handler = served.routes.get(route);
+      return handler
+        ? handler(params)
+        : Promise.reject({ error: 404, message: `Not found: ${route}` });
+    },
+  };
 };
+
+// The client of the account of the tests, as the import creates it from the configuration by
+// default: for the tests that run a phase of the import on its own
+const client = ovh(CREDENTIALS);
+
+// The places where the import reads its configuration, in the order it reads them: the
+// config.json of the repository, then those of ~/my-ovh-bills, the legacy one last
+const CONFIG_FILES = {
+  project: path.resolve(__dirname, '..', '..', 'config.json'),
+  home: path.join(os.homedir(), 'my-ovh-bills', 'config.json'),
+  legacy: path.join(os.homedir(), 'my-ovh-bills', 'credentials.json'),
+};
+
+// The configuration files that exist, by path: their content, or the error that reading them
+// throws. Never the real ones of the machine running the tests.
+const configFiles = new Map();
+
+const jsonfile = {
+  readFileSync: (file) => {
+    if (!configFiles.has(file)) {
+      throw Object.assign(new Error(`ENOENT: no such file or directory, open '${file}'`),
+        { code: 'ENOENT' });
+    }
+    const content = configFiles.get(file);
+    if (content instanceof Error) throw content;
+    // A copy, which the import may change as it likes
+    return structuredClone(content);
+  },
+};
+
+/**
+ * Makes this the only configuration file.
+ * @param {object|Error} content - Its content, or the error that reading it throws
+ * @param {string} [place] - Where it is, a key of CONFIG_FILES: the config.json of the
+ *   repository by default
+ */
+function useConfig(content, place = 'project') {
+  useConfigFiles({ [place]: content });
+}
+
+/**
+ * Makes these the only configuration files.
+ * @param {Object<string, object|Error>} contents - The content of each file, or the error
+ *   that reading it throws, by its place, a key of CONFIG_FILES
+ */
+function useConfigFiles(contents) {
+  configFiles.clear();
+  for (const [place, content] of Object.entries(contents)) {
+    configFiles.set(CONFIG_FILES[place], content);
+  }
+}
+
+// The configuration by default: the credentials of the account of the tests alone, in the
+// legacy flat form, as before #113. From the start, for what reads it as it loads.
+const useDefaultConfig = () => useConfig({ ...CREDENTIALS });
+useDefaultConfig();
 
 // Handlers: an answer, or an error as the ovh client rejects with it
 const ok = (value) => () => Promise.resolve(value);
@@ -37,6 +125,25 @@ const fail = (error, message) => () => Promise.reject({ error, message });
 
 // What GET /me answers for an account, its fields that the import reads
 const me = ({ nic, currency }) => ok({ nichandle: nic, currency: { code: currency } });
+
+/**
+ * Serves an account besides the account of the tests, GET /me naming it, and no other
+ * route.
+ * @param {{nic: string, currency: string}} account - The account, as GET /me names it
+ * @param {string} [key] - What tells its credentials apart from the others', its NIC handle
+ *   by default: two keys of one account are two credentials that lead to it
+ * @returns {{routes: Map, credentials: object}} Its routes, as `routes` holds those of the
+ *   account of the tests, and the credentials that the configuration gives for it
+ */
+function serveAccount(account, key = account.nic) {
+  const credentials = {
+    appKey: `app-${key}`, appSecret: `secret-${key}`, consumerKey: `consumer-${key}`,
+    endpoint: 'ovh-eu',
+  };
+  const served = { credentials, routes: new Map([['/me', me(account)]]) };
+  accounts.set(credentials.consumerKey, served);
+  return served;
+}
 
 // Every table emptied, those that a full import keeps included
 function emptyDatabase(db) {
@@ -53,9 +160,10 @@ function emptyDatabase(db) {
 /**
  * Loads data/db.js and data/import.js on a throwaway database for the tests of the calling
  * file. Each test starts with GET /me served for the account of the tests (ACCOUNT, in
- * ./accounts.js), and no other route, an empty database, a silent console, fake timers, on
- * which the retry delays cost no real time, and a process.exit that only records its code,
- * as an import that fails exits.
+ * ./accounts.js), and no other route or account, a configuration that gives the credentials
+ * of that account alone, in the legacy flat form, no call recorded, an empty database, a
+ * silent console, fake timers, on which the retry delays cost no real time, and a
+ * process.exit that only records its code, as an import that fails exits.
  * @param {string} prefix - The prefix of the throwaway directory
  * @returns {{db: object, importer: object}} Both set before the first test runs
  */
@@ -87,6 +195,11 @@ function useThrowawayImport(prefix) {
     jest.spyOn(process, 'exit').mockImplementation(() => {});
     routes.clear();
     routes.set('/me', me(ACCOUNT));
+    accounts.clear();
+    accounts.set(CREDENTIALS.consumerKey, { credentials: CREDENTIALS, routes });
+    calls.length = 0;
+    clientCredentials.length = 0;
+    useDefaultConfig();
     emptyDatabase(loaded.db);
   });
 
@@ -98,4 +211,7 @@ function useThrowawayImport(prefix) {
   return loaded;
 }
 
-module.exports = { ovh, jsonfile, routes, ok, fail, me, useThrowawayImport };
+module.exports = {
+  ovh, jsonfile, client, routes, calls, clientCredentials, CREDENTIALS, CONFIG_FILES, ok, fail,
+  me, serveAccount, useConfig, useConfigFiles, useThrowawayImport,
+};
