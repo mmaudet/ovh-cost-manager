@@ -1799,21 +1799,22 @@ const cloudDetailOps = {
         ELSE 'GPU'
       END`;
 
-    let dateFilter = '';
-    const params = {};
-    if (from) { dateFilter += ' AND b.date >= @from'; params.from = from; }
-    if (to) { dateFilter += ' AND b.date <= @to'; params.to = to; }
-    // The account's parameters are positional: they come before the named dates
+    // The GPU lines of the bills of the account (see accountCondition()), between the dates
+    // when they are given: the condition of every query below, and its arguments
     const ofAccount = accountCondition(account, 'b.account');
+    const conditions = [GPU_DESC_WHERE, ofAccount.sql];
+    const args = [...ofAccount.params];
+    if (from) { conditions.push('b.date >= ?'); args.push(from); }
+    if (to) { conditions.push('b.date <= ?'); args.push(to); }
+    const where = conditions.join(' AND ');
 
     // Total GPU cost from bills
     const total = db.prepare(`
       SELECT SUM(bd.total_price) as total, COUNT(DISTINCT bd.domain) as project_count
       FROM bill_details bd
       JOIN bills b ON bd.bill_id = b.id
-      WHERE ${GPU_DESC_WHERE} ${dateFilter}
-        AND ${ofAccount.sql}
-    `).get(...ofAccount.params, params);
+      WHERE ${where}
+    `).get(...args);
 
     // By GPU model from bills
     const byModel = db.prepare(`
@@ -1823,11 +1824,10 @@ const cloudDetailOps = {
         COUNT(*) as count
       FROM bill_details bd
       JOIN bills b ON bd.bill_id = b.id
-      WHERE ${GPU_DESC_WHERE} ${dateFilter}
-        AND ${ofAccount.sql}
+      WHERE ${where}
       GROUP BY gpu_model
       ORDER BY total DESC
-    `).all(...ofAccount.params, params);
+    `).all(...args);
 
     // By project from bills
     const byProject = db.prepare(`
@@ -1838,11 +1838,10 @@ const cloudDetailOps = {
       FROM bill_details bd
       JOIN bills b ON bd.bill_id = b.id
       LEFT JOIN projects p ON bd.domain = p.id
-      WHERE ${GPU_DESC_WHERE} ${dateFilter}
-        AND ${ofAccount.sql}
+      WHERE ${where}
       GROUP BY bd.domain
       ORDER BY total DESC
-    `).all(...ofAccount.params, params);
+    `).all(...args);
 
     // Get GPU flavors per project from project_consumption (current month detail)
     const projectFlavors = db.prepare(`
@@ -1870,11 +1869,10 @@ const cloudDetailOps = {
         SUM(bd.total_price) as total
       FROM bill_details bd
       JOIN bills b ON bd.bill_id = b.id
-      WHERE ${GPU_DESC_WHERE} ${dateFilter}
-        AND ${ofAccount.sql}
+      WHERE ${where}
       GROUP BY month
       ORDER BY month
-    `).all(...ofAccount.params, params);
+    `).all(...args);
 
     return {
       total: total?.total || 0,
