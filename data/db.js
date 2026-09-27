@@ -594,13 +594,17 @@ const accountsOps = {
   },
 
   /**
-   * @returns {object[]} Every account recorded, as the accounts table holds it: those that
-   *   the configuration of the last run lists, in its order, then the others by NIC handle
+   * @returns {object[]} Every account recorded: those that the configuration of the last run
+   *   lists, in its order, then the others by NIC handle. Each gives the accounts table's
+   *   nic, currency, last_import_at, last_import_status, last_import_error, name and budget,
+   *   and `configured`, whether that configuration lists it.
    */
-  getAll: () => {
-    const db = getDb();
-    return db.prepare('SELECT * FROM accounts ORDER BY position IS NULL, position, nic').all();
-  }
+  getAll: () => getDb().prepare(`
+    SELECT nic, currency, last_import_at, last_import_status, last_import_error, name, budget,
+      position IS NOT NULL AS configured
+    FROM accounts
+    ORDER BY position IS NULL, position, nic
+  `).all().map(account => ({ ...account, configured: account.configured === 1 }))
 };
 
 // Analysis queries

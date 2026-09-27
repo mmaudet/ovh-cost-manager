@@ -782,7 +782,7 @@ function registerRoutes() {
         nic: account.nic,
         name: account.name ?? account.nic,
         currency: account.currency,
-        configured: account.position !== null,
+        configured: account.configured,
         unknown: false,
         lastImport: account.last_import_at === null ? null : {
           at: account.last_import_at,

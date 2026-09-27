@@ -254,8 +254,8 @@ describe('an import', () => {
     await importSeptember();
 
     const accounts = db.accounts.getAll();
-    // The legacy credentials give it no name and no budget (#113), and the first place in the
-    // configuration (#114)
+    // The legacy credentials give it no name and no budget (#113), and it is configured
+    // (#114)
     expect(accounts).toEqual([{
       nic: 'yy2222-ovh',
       currency: 'CAD',
@@ -264,8 +264,7 @@ describe('an import', () => {
       last_import_error: null,
       name: null,
       budget: null,
-      position: 0,
-      claimed_bills: 0,
+      configured: true,
     }]);
     // It ended during the import
     const ended = accounts[0].last_import_at;
@@ -287,8 +286,7 @@ describe('an import', () => {
       last_import_error: 'Internal server error',
       name: null,
       budget: null,
-      position: 0,
-      claimed_bills: 0,
+      configured: true,
     }]);
   });
 });
