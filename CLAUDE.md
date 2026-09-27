@@ -73,14 +73,16 @@ NIC handle:
   without one was stored before the accounts: the Unknown account's. A query that can keep
   one account's rows takes an `account` argument, `null` for all accounts,
   `UNKNOWN_ACCOUNT` or a NIC handle, and joins `accountCondition()` to its WHERE clause.
-- **API.** A data route takes the optional `account` parameter through the
-  `accountParameter` middleware (`server/account-parameter.js`), into `req.account`: a NIC
-  handle that the `accounts` table records, `unknown`, or none for all accounts; anything
-  else gets a 400. Without it, a route answers as before the accounts, and the account-wide
-  figures (consumption, forecast, balance, consumption history) add up the accounts.
-  `byAccount=true` opts a list of projects or services into one row per account.
-  `GET /api/accounts` lists the recorded accounts, then the Unknown account while rows
-  without an account remain.
+- **API.** Every route that lists or adds up data takes the optional `account` parameter
+  through the `accountParameter` middleware (`server/account-parameter.js`), into
+  `req.account`: a NIC handle that the `accounts` table records, `unknown`, or none for all
+  accounts; anything else gets a 400. The routes of one bill or one project need none, as
+  that bill or project belongs to one account. Without it, a route answers as before the
+  accounts, and the account-wide figures (consumption, forecast, balance, consumption
+  history) add up the accounts. `byAccount=true` opts a list of projects or services into
+  one row per account, and the CSV exports gain a last `account` column once
+  `/api/accounts` lists two entries (`sendCsv()`). `GET /api/accounts` lists the recorded
+  accounts, then the Unknown account while rows without an account remain.
 - **Dashboard.** The shell holds the selected account (`useSelectedAccount()`, remembered
   in the browser, per ADR 0001) and passes `selectedAccount` to the tab hooks: `null` for
   all accounts, the default, or the `id` that `/api/accounts` gives. A query that follows

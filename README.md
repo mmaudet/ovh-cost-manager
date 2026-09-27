@@ -485,13 +485,13 @@ Before going to production, go through the [production checklist](docs/deploymen
 
 ## API Endpoints
 
-For an instance of [several accounts](#several-ovh-accounts), the routes of the Billing & Analysis, Consumption & Account and Inventory tables below, and `/api/gpu/summary`, `/api/analysis/monthly-trend-by-category`, `/api/web-cloud/summary` and `/api/web-cloud/items`, take an optional `account` parameter:
+For an instance of [several accounts](#several-ovh-accounts), every route that lists or adds up data takes an optional `account` parameter, `/api/bills`, `/api/analysis/daily-trend` and the four [CSV exports](#csv-exports) included:
 
 - the NIC handle of an account that `GET /api/accounts` lists, such as `?account=xx1111-ovh`;
 - `unknown`, for the Unknown account: the data stored before the upgrade that no account claimed;
 - none, for all accounts, as before.
 
-Any other value gets a 400. `/api/bills`, `/api/analysis/daily-trend` and the routes of one project, `/api/projects/:id/...`, do not take it: they answer for all accounts, or for that project. Without the parameter, the account-wide figures (the month's consumption, its forecast, the balance and the consumption history) add up the accounts. The rows that belong to an account, such as projects, services and credit movements, name it in an `account` field: its NIC handle, or `null` for the Unknown account. `byAccount=true` on `/api/analysis/by-project`, `/api/analysis/resource-type-details` and `/api/gpu/summary` gives a project or a service billed to several accounts once for each account, with its account.
+Any other value gets a 400. The routes of one bill or one project, such as `/api/bills/:id` or `/api/projects/:id/instances`, need no parameter, as that bill or project belongs to one account. Without the parameter, the account-wide figures (the month's consumption, its forecast, the balance and the consumption history) add up the accounts. The rows that belong to an account, such as projects, services and credit movements, name it in an `account` field: its NIC handle, or `null` for the Unknown account. With several accounts, the CSV exports gain a last `account` column. `byAccount=true` on `/api/analysis/by-project`, `/api/analysis/resource-type-details` and `/api/gpu/summary` gives a project or a service billed to several accounts once for each account, with its account.
 
 ### Accounts
 
