@@ -438,14 +438,14 @@ Before going to production, go through the [production checklist](docs/deploymen
 | --------------------------------------------------------- | --------------------------------------------- |
 | `GET /api/months`                                         | Available months for selection                |
 | `GET /api/summary?from=&to=`                              | Summary with totals                           |
-| `GET /api/bills?from=&to=`                                | List bills in date range                      |
+| `GET /api/bills?from=&to=&account=`                       | List bills in date range                      |
 | `GET /api/analysis/by-project?from=&to=`                  | Costs grouped by project                      |
 | `GET /api/analysis/by-service?from=&to=`                  | Costs grouped by service type                 |
 | `GET /api/analysis/by-resource-type?from=&to=`            | Costs grouped by resource type                |
 | `GET /api/analysis/resource-type-details?type=&from=&to=` | Detail for a specific resource type           |
 | `GET /api/analysis/public-cloud-stats?from=&to=`          | Public Cloud stats (K8s, S3, Registry)        |
 | `GET /api/analysis/backup-stats?from=&to=`                | Backup stats (Veeam VMs, Enterprise licenses) |
-| `GET /api/analysis/daily-trend?from=&to=`                 | Daily cost trend                              |
+| `GET /api/analysis/daily-trend?from=&to=&account=`        | Daily cost trend                              |
 | `GET /api/analysis/monthly-trend?months=6&end=YYYY-MM`    | Monthly cost trend, `months` ending on `end`  |
 
 The monthly trend covers `months` calendar months, from 1 to 240, 6 by
