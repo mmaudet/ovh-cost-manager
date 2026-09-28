@@ -4,7 +4,7 @@ const {
   instanceLineCondition, readInstanceLine, readVolumeLine,
 } = require('./public-cloud-lines');
 const { tieFootprint } = require('./carbon-ties');
-const { CARD_PRODUCTS, publicCloudProductOf } = require('./public-cloud-products');
+const { productFigures } = require('./public-cloud-products');
 const { monthsOfWindow, shiftMonth } = require('./months');
 const ownership = require('./ownership');
 // The conditions of the queries that keep one account's rows (#115), or a list of ids
@@ -1268,8 +1268,9 @@ const inventoryOps = {
    * The figures of the Public Cloud cards over a period, for the account (see
    * accountCondition()), every account's by default (#121). Each bill line of a Public Cloud
    * project counts in one card, that of its product (data/public-cloud-products.js), and the
-   * products without a card of their own in the other services, which name them: the cards
-   * add up to the cloud total of the period, which adds up the lines of the projects (#145).
+   * products without a card of their own in the other services, which name them. With the
+   * Public Cloud credit that the bills used, they add up to the cloud total of the period,
+   * which adds up the lines of the projects (#145).
    * The counts of volumes, snapshots and buckets are those of the inventory of its projects,
    * as a project's resources belong to its account (ADR 0002), but for the buckets of an
    * inventory that holds none (below); the other counts, those of the bill lines.
@@ -1283,35 +1284,15 @@ const inventoryOps = {
     const ofBills = accountCondition(account, 'b.account');
     const ofProjects = accountCondition(account, 'p.account');
 
-    // The bill lines of the projects, by product: their cost, the services and the
-    // descriptions that bill them
-    const byProduct = new Map();
-    const lines = db.prepare(`
+    // The bill lines of the projects, by product
+    const { figuresOf, others, credits } = productFigures(db.prepare(`
       SELECT d.description, d.domain, d.total_price
       FROM bill_details d
       JOIN bills b ON d.bill_id = b.id
       WHERE b.date >= ? AND b.date <= ?
         AND d.project_id IS NOT NULL
         AND ${ofBills.sql}
-    `).all(fromDate, toDate, ...ofBills.params);
-    for (const line of lines) {
-      const product = publicCloudProductOf(line.description);
-      if (!byProduct.has(product)) {
-        byProduct.set(product, { total: 0, services: new Set(), descriptions: new Set() });
-      }
-      const figures = byProduct.get(product);
-      figures.total += line.total_price || 0;
-      figures.services.add(line.domain);
-      figures.descriptions.add(line.description);
-    }
-    const totalOf = (product) => Math.round((byProduct.get(product)?.total || 0) * 100) / 100;
-    const servicesOf = (product) => byProduct.get(product)?.services.size || 0;
-    // The products without a card of their own that cost anything, the most expensive first
-    const others = [...byProduct.keys()]
-      .filter((product) => !CARD_PRODUCTS.includes(product))
-      .map((product) => ({ product, total: totalOf(product) }))
-      .filter(({ total }) => total !== 0)
-      .sort((a, b) => b.total - a.total || a.product.localeCompare(b.product));
+    `).all(fromDate, toDate, ...ofBills.params));
 
     // Count object storage buckets from the imported inventory (buckets that exist
     // right now, including the ones that cost nothing over the period): those of the
@@ -1367,22 +1348,21 @@ const inventoryOps = {
         AND ${ofProjects.sql}
     `).get(toDate, ...ofProjects.params);
 
+    const card = (product, count) => ({ count, total: figuresOf(product).total });
     return {
-      kubernetes: { count: servicesOf('kubernetes'), total: totalOf('kubernetes') },
-      instances: { total: totalOf('instances') },
-      volumes: { count: volumeCount?.count || 0, total: totalOf('volumes') },
-      snapshots: { count: snapshotCount?.count || 0, total: totalOf('snapshots') },
-      savingsPlans: {
-        count: byProduct.get('savingsPlans')?.descriptions.size || 0, total: totalOf('savingsPlans'),
-      },
-      objectStorage: { count: s3?.count || 0, total: totalOf('objectStorage') },
-      registry: { count: servicesOf('registry'), total: totalOf('registry') },
-      other: {
-        total: Math.round(others.reduce((sum, { total }) => sum + total, 0) * 100) / 100,
-        products: others,
-      },
-      aiml: { count: servicesOf('ai'), total: totalOf('ai') },
-      loadBalancers: { count: servicesOf('loadBalancers'), total: totalOf('loadBalancers') },
+      kubernetes: card('kubernetes', figuresOf('kubernetes').services),
+      instances: { total: figuresOf('instances').total },
+      volumes: card('volumes', volumeCount?.count || 0),
+      snapshots: card('snapshots', snapshotCount?.count || 0),
+      savingsPlans: card('savingsPlans', figuresOf('savingsPlans').descriptions),
+      objectStorage: card('objectStorage', s3?.count || 0),
+      registry: card('registry', figuresOf('registry').services),
+      other: others,
+      // The credit that the bills used, which pays for no product: with the cards, it adds up
+      // to the cloud total
+      credits: { total: credits },
+      aiml: card('ai', figuresOf('ai').services),
+      loadBalancers: card('loadBalancers', figuresOf('loadBalancers').services),
     };
   },
 
@@ -2055,6 +2035,27 @@ const cloudDetailOps = {
     }
 
     return snapshots.sort((a, b) => b.total - a.total || (a.name || '').localeCompare(b.name || ''));
+  },
+
+  /**
+   * The products of a Public Cloud project over a period that its detail shows no section of
+   * its own for, such as its registry, its databases or its load balancers, each with its
+   * cost, the most expensive first, and the Public Cloud credit that its bills used (#145).
+   * The detail lists the instances, buckets, volumes, snapshots and savings plans itself.
+   * @param {string} projectId
+   * @param {string} fromDate
+   * @param {string} toDate
+   * @returns {{total: number, products: {product: string, total: number}[], credits: number}}
+   */
+  getOtherServicesByProject: (projectId, fromDate, toDate) => {
+    const { others, credits } = productFigures(getDb().prepare(`
+      SELECT d.description, d.domain, d.total_price
+      FROM bill_details d
+      JOIN bills b ON d.bill_id = b.id
+      WHERE d.project_id = ? AND b.date >= ? AND b.date <= ?
+    `).all(projectId, fromDate, toDate),
+    ['instances', 'objectStorage', 'volumes', 'snapshots', 'savingsPlans']);
+    return { ...others, credits };
   },
 
   /**

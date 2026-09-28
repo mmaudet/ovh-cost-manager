@@ -1511,6 +1511,19 @@ function registerRoutes() {
     }
   });
 
+  // The products of a project over a period that its detail shows no section of its own for,
+  // its registry among them, with their cost, and the credit that its bills used (#145)
+  app.get('/api/projects/:id/other-services', (req, res) => {
+    try {
+      const { from, to } = req.query;
+      const validation = validateDateRange(from, to);
+      if (!validation.valid) return res.status(400).json({ error: validation.error });
+      res.json(db.cloudDetails.getOtherServicesByProject(req.params.id, from, to));
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   app.get('/api/projects/:id/volumes', (req, res) => {
     try {
       const { from, to } = req.query;

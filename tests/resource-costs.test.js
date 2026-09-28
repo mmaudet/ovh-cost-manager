@@ -282,17 +282,20 @@ describe('Public Cloud cards', () => {
       ['Utilisation du credit cloud', -5],
     ];
     const CLOUD_TOTAL = LINES.reduce((sum, [, price]) => sum + price, 0);
-    const CARDS = ['instances', 'kubernetes', 'objectStorage', 'volumes', 'snapshots', 'savingsPlans', 'registry', 'other'];
+    const CARDS = [
+      'instances', 'kubernetes', 'objectStorage', 'volumes', 'snapshots', 'savingsPlans',
+      'registry', 'other',
+    ];
 
     beforeEach(() => {
       for (const [description, price] of LINES) seedBillLine(description, price);
     });
 
-    test('the cards add up to the cloud total of the month', () => {
+    test('the cards and the credit add up to the cloud total of the month', () => {
       const stats = db.inventory.getPublicCloudStats(FROM, TO);
 
       const cards = CARDS.reduce((sum, card) => sum + stats[card].total, 0);
-      expect(cards).toBeCloseTo(CLOUD_TOTAL, 2);
+      expect(cards + stats.credits.total).toBeCloseTo(CLOUD_TOTAL, 2);
       expect(db.analysis.summary(FROM, TO).cloud_total).toBeCloseTo(CLOUD_TOTAL, 2);
     });
 
@@ -300,7 +303,8 @@ describe('Public Cloud cards', () => {
       expect(db.inventory.getPublicCloudStats(FROM, TO).instances.total).toBe(155);
     });
 
-    test('the object storage card counts the Swift lines, the bandwidth and every bucket, whatever its name', () => {
+    // Whatever the buckets' names: that of a registry, here
+    test('the object storage card counts the Swift lines, the bandwidth and every bucket', () => {
       const stats = db.inventory.getPublicCloudStats(FROM, TO);
 
       expect(stats.objectStorage.total).toBe(15.5);
@@ -309,7 +313,7 @@ describe('Public Cloud cards', () => {
 
     test('the other services card names what the other cards leave, the largest first', () => {
       expect(db.inventory.getPublicCloudStats(FROM, TO).other).toEqual({
-        total: 50.5,
+        total: 55.5,
         products: [
           { product: 'databases', total: 30 },
           { product: 'loadBalancers', total: 12 },
@@ -318,8 +322,31 @@ describe('Public Cloud cards', () => {
           { product: 'floatingIps', total: 2 },
           { product: 'other', total: 1 },
           { product: 'ai', total: 0.5 },
-          { product: 'credits', total: -5 },
         ],
+      });
+    });
+
+    // A credit pays for no product: it would lower the other services, or make them negative
+    test('the credit that the bills used stays apart', () => {
+      expect(db.inventory.getPublicCloudStats(FROM, TO).credits).toEqual({ total: -5 });
+    });
+
+    // The detail lists the project's instances, buckets, volumes, snapshots and savings plans
+    test("a project's detail names its other services, the registry included", () => {
+      expect(db.cloudDetails.getOtherServicesByProject(PROJECT, FROM, TO)).toEqual({
+        total: 107.5,
+        products: [
+          { product: 'registry', total: 40 },
+          { product: 'databases', total: 30 },
+          { product: 'kubernetes', total: 12 },
+          { product: 'loadBalancers', total: 12 },
+          { product: 'volumeBackups', total: 7 },
+          { product: 'gateways', total: 3 },
+          { product: 'floatingIps', total: 2 },
+          { product: 'other', total: 1 },
+          { product: 'ai', total: 0.5 },
+        ],
+        credits: -5,
       });
     });
   });

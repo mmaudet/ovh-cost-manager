@@ -35,6 +35,16 @@ _Avoid_: service category
 The resources that exist now according to the OVH API (instances, buckets, volumes,
 servers…), as opposed to what the bill lines say was paid for.
 
+**Public Cloud product**:
+The OVHcloud product that a bill line of a Public Cloud project pays for (instances, object
+storage, volumes, databases, load balancers…), read from its description when the server reads
+the bills: each line has one, but for the Public Cloud credit that a bill uses, which pays for
+none. The Public Cloud tab gives the products with a card of their own a card each, and
+gathers the others in its other services: with the credit, the cards add up to the month's
+cloud total.
+_Avoid_: card (a product's figure), category, cloud resource kind (what a project's current
+consumption is split by)
+
 **Cloud resource kind**:
 What a resource of a Public Cloud project is (instance, volume…), the dimension its
 consumption is split by.
