@@ -1,5 +1,6 @@
 const Database = require('better-sqlite3');
 const { classifyWebCloud, WEB_CLOUD_FAMILIES } = require('./classify');
+const { readInstanceLine } = require('./instance-lines');
 const { monthsOfWindow } = require('./months');
 const ownership = require('./ownership');
 // The conditions of the queries that keep one account's rows (#115), or a list of ids
@@ -1546,30 +1547,30 @@ function computeInstanceCosts(db, projectId, fromDate, toDate) {
   const known = new Set(instances.map(i => i.id));
 
   for (const line of lines) {
+    const read = readInstanceLine(line.description);
+
     // Monthly fee or its prorata: charged to the instance named by its id
-    const monthly = line.description.match(/\(id ([0-9a-f-]{36})/i);
-    if (monthly) {
-      if (known.has(monthly[1])) add(monthly[1], line.price, false);
+    if (read?.instanceId) {
+      if (known.has(read.instanceId)) add(read.instanceId, line.price, false);
       else unmatched += line.price;
       continue;
     }
 
     // "Consommation à l'heure pour les instances <flavor> [<region>]"
-    const rest = line.description.replace(/^Consommation à l.heure pour les instances\s*/i, '').trim();
-    if (!rest) { unmatched += line.price; continue; }
+    if (!read || read.monthly || !read.flavor) { unmatched += line.price; continue; }
 
-    const tokens = rest.split(/\s+/);
     const candidates = [];
-    if (tokens.length > 1) {
-      const region = tokens[tokens.length - 1].toLowerCase();
-      const flavor = normalizeFlavor(tokens.slice(0, -1).join('-'));
+    if (read.region) {
+      const region = read.region.toLowerCase();
+      const flavor = normalizeFlavor(read.flavor);
       candidates.push(...hourly.filter(i =>
         (i.region || '').toLowerCase() === region &&
         (normalizeFlavor(i.plan_code) === flavor || normalizeFlavor(i.flavor) === flavor)
       ));
     }
+    // Or the last word was part of the flavor, which the line names without a region
     if (!candidates.length) {
-      const flavor = normalizeFlavor(rest.replace(/\s+/g, '-'));
+      const flavor = normalizeFlavor(read.region ? `${read.flavor}-${read.region}` : read.flavor);
       candidates.push(...hourly.filter(i =>
         normalizeFlavor(i.plan_code) === flavor || normalizeFlavor(i.flavor) === flavor
       ));
