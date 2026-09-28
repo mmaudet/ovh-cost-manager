@@ -126,8 +126,10 @@ test('names the accounts without a carbon footprint, in their order', async () =
 // The footprint of the 12 months that end on a month (#154): each month by emission source,
 // location-based, and none for a month without one, rather than zero
 test('gives the carbon footprint of the 12 months that end on a month', async () => {
-  // A month without a footprint
-  const none = (month) => ({ month, footprint: null });
+  // A month without a footprint, nor a covered share (#157); and one with a footprint, whose
+  // share is none either, as the seed bills nothing
+  const none = (month) => ({ month, footprint: null, coveredShare: null });
+  const month = (yearMonth, footprint) => ({ month: yearMonth, footprint, coveredShare: null });
   const empty = ['2025-09', '2025-10', '2025-11', '2025-12', '2026-01', '2026-02', '2026-03',
     '2026-04', '2026-05'].map(none);
   await withOcm(async (ocm) => {
@@ -136,25 +138,16 @@ test('gives the carbon footprint of the 12 months that end on a month', async ()
       status: 200,
       body: [
         ...empty,
-        {
-          month: '2026-06',
-          footprint: { manufacturing: 1, electricity: 1, operations: 1, total: 3 },
-        },
+        month('2026-06', { manufacturing: 1, electricity: 1, operations: 1, total: 3 }),
         none('2026-07'),
-        {
-          month: '2026-08',
-          footprint: { manufacturing: 3.5, electricity: 6.5, operations: 9.5, total: 19.5 },
-        },
+        month('2026-08', { manufacturing: 3.5, electricity: 6.5, operations: 9.5, total: 19.5 }),
       ],
     });
     // One account
     expect((await ocm.get(`/api/carbon/trend?end=2026-08&account=${LYON}`)).body.slice(-3))
       .toEqual([
         none('2026-06'), none('2026-07'),
-        {
-          month: '2026-08',
-          footprint: { manufacturing: 1.5, electricity: 2.5, operations: 3.5, total: 7.5 },
-        },
+        month('2026-08', { manufacturing: 1.5, electricity: 2.5, operations: 3.5, total: 7.5 }),
       ]);
     // The Unknown account, which never has one
     expect((await ocm.get(`/api/carbon/trend?end=2026-08&account=${UNKNOWN_ACCOUNT}`)).body

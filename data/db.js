@@ -2576,11 +2576,13 @@ const carbonOps = {
   /**
    * The carbon footprint of the 12 months that end on a month (#154), location-based, of the
    * account (see accountCondition()), or of every account by default: each month's footprint
-   * by emission source and in total, in kg CO2eq, to the hundredth.
+   * by emission source and in total, in kg CO2eq, to the hundredth, and its covered share
+   * (#157), as getTies() gives it.
    * @param {string} end - The last month, YYYY-MM
    * @param {?string} [account]
-   * @returns {{month: string, footprint: ?object}[]} Each month, the earliest first, with its
-   *   footprint, null for a month without one
+   * @returns {{month: string, footprint: ?object, coveredShare: ?number}[]} Each month, the
+   *   earliest first, with its footprint and its covered share, null for a month without a
+   *   footprint
    */
   getTrend: (end, account = null) => {
     const first = shiftMonth(end, 1 - TREND_MONTHS);
@@ -2593,19 +2595,28 @@ const carbonOps = {
     `).all(first, end, ...ofAccount.params).map(({ month, ...footprint }) => [month, footprint]));
     return Array.from({ length: TREND_MONTHS }, (_, index) => {
       const month = shiftMonth(first, index);
-      return { month, footprint: byMonth.get(month) ?? null };
+      const footprint = byMonth.get(month) ?? null;
+      return {
+        month,
+        footprint,
+        coveredShare: footprint ? carbonOps.getTies(month, account).coveredShare : null,
+      };
     });
   },
 
   /**
    * The lines of a month's carbon footprint, of the account (see accountCondition()), or of
    * every account by default, each with what the bill lines that it ties to cost in that month
-   * of use, and its intensity (#155, see data/carbon-ties.js).
+   * of use, and its intensity (#155, see data/carbon-ties.js); and the covered cost of the
+   * month of use, with its share of that month's cost (#157).
    * @param {string} month - YYYY-MM
    * @param {?string} [account]
-   * @returns {object[]} As tieFootprint() gives them
+   * @returns {{lines: object[], coveredCost: number, monthCost: number,
+   *   coveredShare: ?number}} The lines as tieFootprint() gives them; the covered cost and the
+   *   cost of all the bill lines of the month of use, to the hundredth; and the share of that
+   *   cost that is covered, to the ten-thousandth, null when the month of use costs nothing
    */
-  getLines: (month, account = null) => {
+  getTies: (month, account = null) => {
     const db = getDb();
     const ofFootprint = accountCondition(account, 'account');
     const footprintLines = db.prepare(`
@@ -2627,7 +2638,15 @@ const carbonOps = {
     `).all(shiftMonth(month, 1), month, ...ofBills.params);
     const instanceRegions = new Map(db.prepare('SELECT id, region FROM cloud_instances').all()
       .map(({ id, region }) => [id, region]));
-    return tieFootprint(footprintLines, billLines, instanceRegions);
+    const { lines, coveredCost } = tieFootprint(footprintLines, billLines, instanceRegions);
+    const monthCost = Math.round(billLines.reduce((sum, line) => sum + line.total_price, 0)
+      * 100) / 100;
+    return {
+      lines,
+      coveredCost,
+      monthCost,
+      coveredShare: monthCost > 0 ? Math.round((coveredCost / monthCost) * 10000) / 10000 : null,
+    };
   },
 
   /**

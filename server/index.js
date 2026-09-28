@@ -1126,14 +1126,15 @@ function registerRoutes() {
   // The lines of a month's carbon footprint (#155), of the account the request asks for, or
   // of every account without one: each dedicated server, instance flavor and volume type that
   // OVHcloud's file names, per datacenter, and the servers that it does not name in one line,
-  // with what their bill lines cost in the month of use and their intensity
+  // with what their bill lines cost in the month of use and their intensity; and the covered
+  // cost of the month of use, with its share of that month's cost (#157)
   app.get('/api/carbon/by-server', accountParameter, (req, res) => {
     try {
       const { valid, error, month } = monthFromQuery(req.query);
       if (!valid) {
         return res.status(400).json({ error });
       }
-      res.json({ month, lines: db.carbon.getLines(month, req.account) });
+      res.json({ month, ...db.carbon.getTies(month, req.account) });
     } catch (err) {
       res.status(500).json({ error: err.message });
     }
@@ -1149,7 +1150,7 @@ function registerRoutes() {
         return res.status(400).json({ error });
       }
 
-      const lines = db.carbon.getLines(month, req.account).map(line => ({
+      const lines = db.carbon.getTies(month, req.account).lines.map(line => ({
         ...line,
         // What the line names: a dedicated server, or the servers that OVHcloud's file does
         // not name, or an instance flavor or a volume type

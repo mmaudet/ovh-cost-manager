@@ -27,7 +27,7 @@ async function fetchShownFootprint(month, account) {
  * The data queries of the Carbon tab (#147): the carbon footprint of the month selected, for
  * the account shown in the header, or that of the latest month that has one (#152), that of
  * the 12 months that end on the month it shows (#154), and the lines of that month with what
- * they cost (#155).
+ * they cost (#155), with the share of the month's cost that they cover (#157).
  * @param {object} shell - What the dashboard shell passes on, on every render
  * @param {?object} shell.selectedMonth - The month selected in the header
  * @param {boolean} shell.holdsSelectedMonth - Whether the months of the account shown hold
@@ -38,12 +38,14 @@ async function fetchShownFootprint(month, account) {
  *   for
  * @returns {{ carbonFootprint: (object|undefined), missingMonth: ?string,
  *   carbonTrend: (object[]|undefined), carbonLines: (object[]|undefined),
+ *   carbonCoverage: ({coveredCost: number, monthCost: number, coveredShare: ?number}|undefined),
  *   loadingCarbon: boolean, failedCarbon: boolean, loadingTrend: boolean,
  *   failedTrend: boolean, loadingLines: boolean, failedLines: boolean }} The footprint that
  *   the tab shows, as /api/carbon/footprint gives it; the month selected when that footprint
  *   is another month's, as the month selected has none, null otherwise; the trend, as
- *   /api/carbon/trend gives it; the lines, as /api/carbon/by-server gives them; and whether
- *   the tab shows that each loads, or that it could not load
+ *   /api/carbon/trend gives it; the lines, and the covered cost, the month's cost and the
+ *   share of it that the lines cover, as /api/carbon/by-server gives them; and whether the tab
+ *   shows that each loads, or that it could not load
  */
 const useCarbonTab = ({ selectedMonth, holdsSelectedMonth, activeTab, selectedAccount }) => {
   const { data, isPending, isError } = useQuery(accountQuery(selectedAccount, {
@@ -61,7 +63,8 @@ const useCarbonTab = ({ selectedMonth, holdsSelectedMonth, activeTab, selectedAc
     enabled: activeTab === 'carbon' && shownMonth !== undefined,
   }));
 
-  // And the lines of that month, with what they cost (#155)
+  // And the lines of that month, with what they cost (#155), and the share of the month's cost
+  // that they cover (#157)
   const byServer = useQuery(accountQuery(selectedAccount, {
     key: ['carbonByServer', shownMonth],
     fetch: (account) => fetchCarbonByServer(shownMonth, account),
@@ -73,6 +76,11 @@ const useCarbonTab = ({ selectedMonth, holdsSelectedMonth, activeTab, selectedAc
     missingMonth: data?.missingMonth ?? null,
     carbonTrend: trend.data,
     carbonLines: byServer.data?.lines,
+    carbonCoverage: byServer.data && {
+      coveredCost: byServer.data.coveredCost,
+      monthCost: byServer.data.monthCost,
+      coveredShare: byServer.data.coveredShare,
+    },
     // As the other tabs do (#64)
     loadingCarbon: isPending,
     failedCarbon: isError,

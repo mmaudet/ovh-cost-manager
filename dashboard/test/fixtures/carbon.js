@@ -22,26 +22,27 @@ export const carbon = {
       month: '2026-07', footprint: null, latestMonth: '2026-08', accountsWithoutFootprint: [],
     },
   },
-  // The 12 months that end on August (#154), by the month they end on: nothing before
-  // December, and nothing in July either
+  // The 12 months that end on August (#154), by the month they end on, each with its covered
+  // share (#157): nothing before December, and nothing in July either
   carbonTrend: {
     '2026-08': [
       ['2025-09', null], ['2025-10', null], ['2025-11', null],
-      ['2025-12', [1100, 2100, 400]],
-      ['2026-01', [1150, 2200, 420]],
-      ['2026-02', [1150, 2150, 410]],
-      ['2026-03', [1175, 2250, 430]],
-      ['2026-04', [1200, 2300, 440]],
-      ['2026-05', [1200, 2275, 435]],
-      ['2026-06', [1225, 2325, 450]],
+      ['2025-12', [1100, 2100, 400], 0.8],
+      ['2026-01', [1150, 2200, 420], 0.79],
+      ['2026-02', [1150, 2150, 410], 0.79],
+      ['2026-03', [1175, 2250, 430], 0.77],
+      ['2026-04', [1200, 2300, 440], 0.78],
+      ['2026-05', [1200, 2275, 435], 0.76],
+      ['2026-06', [1225, 2325, 450], 0.75],
       ['2026-07', null],
-      ['2026-08', [1234.5, 2345.25, 456.75]],
-    ].map(([month, sources]) => ({
+      ['2026-08', [1234.5, 2345.25, 456.75], 0.7189],
+    ].map(([month, sources, coveredShare = null]) => ({
       month,
       footprint: sources && {
         manufacturing: sources[0], electricity: sources[1], operations: sources[2],
         total: sources[0] + sources[1] + sources[2],
       },
+      coveredShare,
     })),
   },
   // August's lines (#155), with what their bill lines cost and their intensity, the largest
@@ -68,6 +69,10 @@ export const carbon = {
           serverDomain: null, footprint: 436, cost: 1744, intensity: 0.25,
         },
       ].map(line => ({ unnamedServers: null, account: 'xx1111-ovh', ...line })),
+      // What these lines cost, of the 40,000 € of the month of use (#157)
+      coveredCost: 28754,
+      monthCost: 40000,
+      coveredShare: 0.7189,
     },
   },
 };

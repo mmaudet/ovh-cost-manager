@@ -185,6 +185,9 @@ export const translations = {
     carbonUnnamedServers: 'Serveurs dédiés non nommés par OVHcloud',
     allDatacenters: 'Tous',
     range: 'Gamme',
+    // The share of a month's cost that its carbon footprint covers (#157)
+    coveredShare: 'Part couverte',
+    coveredShareUnderMonths: 'Sous chaque mois, la part de son coût que son empreinte couvre.',
     webCloud: 'Web Cloud',
     domains: 'Domaines',
     dnsZones: 'Zones DNS',
@@ -416,6 +419,9 @@ export const translations = {
     carbonUnnamedServers: 'Dedicated servers not named by OVHcloud',
     allDatacenters: 'All',
     range: 'Range',
+    // The share of a month's cost that its carbon footprint covers (#157)
+    coveredShare: 'Covered share',
+    coveredShareUnderMonths: 'Under each month, the share of its cost that its footprint covers.',
     webCloud: 'Web Cloud',
     domains: 'Domains',
     dnsZones: 'DNS zones',

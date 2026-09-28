@@ -108,13 +108,15 @@ function rowOf(fields, footprint, cost) {
  *   project on the next month's bills, the others on the month's, with the account of their
  *   bill and their total_price
  * @param {Map<string, string>} instanceRegions - The region of each instance of the inventory
- * @returns {object[]} A row per footprint line, its type, name, range, datacenter and
- *   serverDomain, and one row per account for the dedicated servers that the file does not
- *   name, with their number in unnamedServers; each with its account, footprint, cost and
- *   intensity, the largest footprint first
+ * @returns {{lines: object[], coveredCost: number}} A row per footprint line, its type, name,
+ *   range, datacenter and serverDomain, and one row per account for the dedicated servers that
+ *   the file does not name, with their number in unnamedServers; each with its account,
+ *   footprint, cost and intensity, the largest footprint first. And the covered cost (see
+ *   CONTEXT.md): what the bill lines that tie to them cost (#157).
  */
 function tieFootprint(footprintLines, billLines, instanceRegions) {
   const rows = [];
+  let coveredCost = 0;
   for (const account of new Set(footprintLines.map(line => line.account))) {
     const lines = footprintLines.filter(line => line.account === account);
     const named = lines.filter(line => !isUnnamedServer(line));
@@ -146,7 +148,10 @@ function tieFootprint(footprintLines, billLines, instanceRegions) {
         costs.set(line, (costs.get(line) ?? 0) + billLine.total_price);
       } else if (paid.type === SERVER && unnamed.length > 0) {
         unnamedCost = (unnamedCost ?? 0) + billLine.total_price;
+      } else {
+        continue;
       }
+      coveredCost += billLine.total_price;
     }
 
     for (const line of named) {
@@ -163,7 +168,10 @@ function tieFootprint(footprintLines, billLines, instanceRegions) {
       }, unnamed.reduce((sum, line) => sum + line.footprint, 0), unnamedCost));
     }
   }
-  return rows.sort((a, b) => b.footprint - a.footprint);
+  return {
+    lines: rows.sort((a, b) => b.footprint - a.footprint),
+    coveredCost: round(coveredCost, 2),
+  };
 }
 
 module.exports = { tieFootprint };

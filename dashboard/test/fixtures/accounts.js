@@ -281,6 +281,9 @@ export const severalAccounts = {
             serverDomain: 'ns1234567.ip-10-0-0.eu', unnamedServers: null, account: 'yy2222-ovh',
             footprint: 1500, cost: 3000, intensity: 0.5,
           }],
+          coveredCost: 3000,
+          monthCost: 4000,
+          coveredShare: 0.75,
         },
       },
       // Imported since August, its 12 months up to August (#154)
@@ -290,6 +293,7 @@ export const severalAccounts = {
           footprint: month === '2026-08'
             ? { manufacturing: 800, electricity: 1500, operations: 300, total: 2600 }
             : null,
+          coveredShare: month === '2026-08' ? 0.75 : null,
         })),
       },
       // No GPU

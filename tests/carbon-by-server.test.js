@@ -205,8 +205,32 @@ const LYON_AUGUST = [
 test("lists a month's footprint lines with their cost in the month of use", async () => {
   await withOcm(async (ocm) => {
     expect(await ocm.get(`/api/carbon/by-server?month=2026-08&account=${LYON}`)).toEqual({
-      status: 200, body: { month: '2026-08', lines: LYON_AUGUST },
+      status: 200,
+      body: {
+        month: '2026-08',
+        lines: LYON_AUGUST,
+        // The covered cost (#157): what the bill lines that tie to the footprint cost, 367 €,
+        // against the 434 € of all the bill lines of the month of use: the 289 € of
+        // September's Public Cloud bill and the 145 € of August's dedicated servers. The 3AZ
+        // lines and the savings plan tie to nothing.
+        coveredCost: 367,
+        monthCost: 434,
+        coveredShare: 0.8456,
+      },
     });
+  });
+}, 30000);
+
+// Each month of the trend with its covered share (#157), so that a step due to OVHcloud
+// covering a new service is not taken for an increase
+test('gives the covered share of each month of the trend', async () => {
+  await withOcm(async (ocm) => {
+    const trend = (await ocm.get(`/api/carbon/trend?end=2026-08&account=${LYON}`)).body;
+    expect(trend.filter(({ footprint }) => footprint !== null)
+      .map(({ month, coveredShare }) => [month, coveredShare]))
+      .toEqual([['2026-03', 1], ['2026-08', 0.8456]]);
+    // A month without a footprint has no share either
+    expect(trend.find(({ month }) => month === '2026-07').coveredShare).toBeNull();
   });
 }, 30000);
 
@@ -237,6 +261,10 @@ test('gathers the servers that the file does not name in one line', async () => 
         type: 'BAREMETAL', name: null, range: null, datacenter: null, unnamedServers: 2,
         footprint: 25, cost: 145, intensity: 0.1724,
       })],
+      // They cover every dedicated server of the month
+      coveredCost: 145,
+      monthCost: 145,
+      coveredShare: 1,
     });
   });
 }, 30000);
