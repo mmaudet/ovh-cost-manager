@@ -136,6 +136,15 @@ export const severalAccounts = {
   ...infrastructureOfSeveralAccounts.all,
   accounts: [lyonAccount, unnamedAccount, removedAccount, unknownAccount],
   projectsEnriched: [lyonProduction, unnamedStaging, unknownSandbox],
+  // The carbon footprint of all accounts (#147): that of account.js, where Lyon, configured, has
+  // none, which the route names (#153). The removed account is no longer imported, and the
+  // Unknown account never has one: the route names neither.
+  carbonFootprint: {
+    '2026-09': {
+      ...account.carbonFootprint['2026-09'], accountsWithout: [lyonAccount.nic, unnamedAccount.nic],
+    },
+    '2026-08': { ...account.carbonFootprint['2026-08'], accountsWithout: [lyonAccount.nic] },
+  },
   // The projects of the breakdown by project and of the GPU costs, for all accounts, once for
   // each account that billed them, with that account: as the Overview asks for them when its
   // lists name the account of each project (#118)
@@ -236,7 +245,9 @@ export const severalAccounts = {
       // Its carbon footprint (#147): none yet in September, and August's, its latest, part of
       // account.js's (#152)
       carbonFootprint: {
-        '2026-09': { month: '2026-09', footprint: null, latestMonth: '2026-08' },
+        '2026-09': {
+          month: '2026-09', footprint: null, latestMonth: '2026-08', accountsWithout: null,
+        },
         '2026-08': {
           month: '2026-08',
           footprint: {
@@ -244,6 +255,7 @@ export const severalAccounts = {
             marketBasedTotal: 2000,
           },
           latestMonth: '2026-08',
+          accountsWithout: null,
         },
       },
       // No GPU

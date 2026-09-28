@@ -46,7 +46,7 @@ describe('useCarbonTab', () => {
     expect(api.fetchCarbonFootprint).toHaveBeenCalledWith('2026-08', null);
   });
 
-  // August's answer, as the route gives it
+  // August's answer, as the route gives it for all accounts
   const august = {
     month: '2026-08',
     footprint: {
@@ -54,6 +54,7 @@ describe('useCarbonTab', () => {
       marketBasedTotal: 3012.25,
     },
     latestMonth: '2026-08',
+    accountsWithout: [],
   };
 
   it('returns the carbon footprint of the month, which the tab shows', async () => {

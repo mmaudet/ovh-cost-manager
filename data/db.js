@@ -2569,6 +2569,21 @@ const carbonOps = {
       SELECT MAX(month) FROM carbon_footprint_lines WHERE ${ofAccount.sql}
     `).pluck().get(...ofAccount.params);
   },
+
+  /**
+   * The configured accounts that have no carbon footprint for a month (#153), which the
+   * footprint of all accounts leaves out: those that the configuration of the last run lists,
+   * in its order. An account that it no longer lists is no longer imported, and the Unknown
+   * account never has one: neither is named.
+   * @param {string} month - YYYY-MM
+   * @returns {string[]} Their NIC handles
+   */
+  getAccountsWithout: (month) => getDb().prepare(`
+    SELECT nic FROM accounts
+    WHERE position IS NOT NULL
+      AND nic NOT IN (SELECT account FROM carbon_footprint_lines WHERE month = ?)
+    ORDER BY position
+  `).pluck().all(month),
 };
 
 module.exports = {

@@ -162,6 +162,9 @@ export const translations = {
     marketBasedExplanation: "L'empreinte market-based tient compte des contrats d'énergie bas "
       + "carbone d'OVHcloud, au lieu du mix électrique local de chaque datacenter.",
     latestMonthAvailable: 'dernier mois disponible',
+    carbonUnknownAccount: "Le compte inconnu n'a pas d'empreinte carbone : elle s'importe "
+      + 'compte par compte.',
+    carbonNoLongerImported: "Ce compte n'a pas d'empreinte carbone : il n'est plus importé.",
     webCloud: 'Web Cloud',
     domains: 'Domaines',
     dnsZones: 'Zones DNS',
@@ -370,6 +373,9 @@ export const translations = {
     marketBasedExplanation: "The market-based footprint counts OVHcloud's low-carbon energy "
       + "contracts instead of each datacenter's local electricity mix.",
     latestMonthAvailable: 'latest month available',
+    carbonUnknownAccount: 'The Unknown account has no carbon footprint: it is imported account '
+      + 'by account.',
+    carbonNoLongerImported: 'This account has no carbon footprint: it is no longer imported.',
     webCloud: 'Web Cloud',
     domains: 'Domains',
     dnsZones: 'DNS zones',

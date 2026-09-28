@@ -55,6 +55,8 @@ test('gives the carbon footprint of a month, by emission source and in total', a
           marketBasedTotal: 11.5,
         },
         latestMonth: '2026-08',
+        // The configured account that has none that month (#153)
+        accountsWithout: [NEW_ACCOUNT],
       },
     });
     // One account
@@ -65,10 +67,12 @@ test('gives the carbon footprint of a month, by emission source and in total', a
         marketBasedTotal: 4.5,
       },
       latestMonth: '2026-08',
+      // Only with all accounts
+      accountsWithout: null,
     });
     // The Unknown account, which has none, as the footprint is imported account by account
     expect((await ocm.get(`/api/carbon/footprint?month=2026-08&account=${UNKNOWN_ACCOUNT}`)).body)
-      .toEqual({ month: '2026-08', footprint: null, latestMonth: null });
+      .toEqual({ month: '2026-08', footprint: null, latestMonth: null, accountsWithout: null });
   });
 }, 30000);
 
@@ -77,11 +81,15 @@ test('gives the carbon footprint of a month, by emission source and in total', a
 test('gives the latest month that has a carbon footprint, for the accounts asked', async () => {
   await withOcm(async (ocm) => {
     // A month without a footprint, for all accounts
-    expect((await ocm.get('/api/carbon/footprint?month=2026-09')).body)
-      .toEqual({ month: '2026-09', footprint: null, latestMonth: '2026-08' });
+    expect((await ocm.get('/api/carbon/footprint?month=2026-09')).body).toEqual({
+      month: '2026-09', footprint: null, latestMonth: '2026-08',
+      accountsWithout: [LYON, PARIS, NEW_ACCOUNT],
+    });
     // For an account whose latest footprint is older
     expect((await ocm.get(`/api/carbon/footprint?month=2026-08&account=${NEW_ACCOUNT}`)).body)
-      .toEqual({ month: '2026-08', footprint: null, latestMonth: '2026-06' });
+      .toEqual({
+        month: '2026-08', footprint: null, latestMonth: '2026-06', accountsWithout: null,
+      });
   });
 }, 30000);
 
@@ -96,4 +104,25 @@ test('refuses a month that is not one, and an account that it does not know', as
     expect((await ocm.get('/api/carbon/footprint?month=2026-08&account=ww4444-ovh')).status)
       .toBe(400);
   });
+}, 30000);
+
+// With all accounts, the tab names the configured accounts that have no footprint for the
+// month it shows (#153): not an account that the configuration no longer lists, which is no
+// longer imported, nor the Unknown account, which never has one
+test('names the configured accounts without a carbon footprint, in their order', async () => {
+  const ocm = await startOcm(() => ({}), {
+    seed(db) {
+      seed(db);
+      // The third account no longer configured
+      db.accounts.recordConfiguration([LYON, PARIS]);
+    },
+  });
+  try {
+    expect((await ocm.get('/api/carbon/footprint?month=2026-06')).body.accountsWithout)
+      .toEqual([LYON, PARIS]);
+    expect((await ocm.get('/api/carbon/footprint?month=2026-08')).body.accountsWithout)
+      .toEqual([]);
+  } finally {
+    await ocm.stop();
+  }
 }, 30000);

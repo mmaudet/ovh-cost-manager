@@ -765,7 +765,10 @@ export default function Dashboard() {
 
         {/* Tab Content - Carbon footprint (#147) */}
         {activeTab === 'carbon' && (
-          <CarbonTab {...carbonTab} language={language} t={t} fmt={fmt} />
+          <CarbonTab
+            {...carbonTab} language={language} t={t} fmt={fmt} accounts={accounts}
+            selectedAccount={selectedAccount} accountColumn={accountColumn}
+          />
         )}
 
         {/* Footer */}
