@@ -263,6 +263,15 @@ export const severalAccounts = {
           accountsWithoutFootprint: null,
         },
       },
+      // Imported since August, its 12 months up to August (#154)
+      carbonTrend: {
+        '2026-08': account.carbonTrend['2026-08'].map(({ month }) => ({
+          month,
+          footprint: month === '2026-08'
+            ? { manufacturing: 800, electricity: 1500, operations: 300, total: 2600 }
+            : null,
+        })),
+      },
       // No GPU
       months: [september, august],
       summary: {

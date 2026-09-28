@@ -304,6 +304,7 @@ async function initializeServer() {
     console.log(`  GET /api/summary?from=YYYY-MM-DD&to=YYYY-MM-DD`);
     console.log(`  GET /api/months`);
     console.log(`  GET /api/carbon/footprint?month=YYYY-MM`);
+    console.log(`  GET /api/carbon/trend?end=YYYY-MM`);
     console.log(`  GET /api/import/status`);
     console.log(`\n`);
   });
@@ -1100,6 +1101,22 @@ function registerRoutes() {
           ? db.carbon.getAccountsWithoutFootprint(month)
           : null,
       });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // The carbon footprint of the 12 months that end on the `end` month (#154), of the account
+  // the request asks for, or of every account without one: each month's location-based
+  // emissions by emission source and in total, in kg CO2eq, null for a month without one, the
+  // earliest month first
+  app.get('/api/carbon/trend', accountParameter, (req, res) => {
+    try {
+      const { valid, error, month: end } = monthFromQuery(req.query, 'end');
+      if (!valid) {
+        return res.status(400).json({ error });
+      }
+      res.json(db.carbon.getTrend(end, req.account));
     } catch (err) {
       res.status(500).json({ error: err.message });
     }

@@ -23,6 +23,7 @@ describe('useCarbonTab', () => {
       const { result } = await renderTabHook(useCarbonTab, { ...onAugust, activeTab });
 
       expect(api.fetchCarbonFootprint).not.toHaveBeenCalled();
+      expect(api.fetchCarbonTrend).not.toHaveBeenCalled();
       expect(result.current.carbonFootprint).toBeUndefined();
     },
   );
@@ -60,7 +61,7 @@ describe('useCarbonTab', () => {
   it('returns the carbon footprint of the month, which the tab shows', async () => {
     const { result } = await renderTabHook(useCarbonTab, onTheTab);
 
-    expect(result.current).toEqual({
+    expect(result.current).toMatchObject({
       carbonFootprint: august,
       // Of the month selected
       missingMonth: null,
@@ -68,6 +69,33 @@ describe('useCarbonTab', () => {
       loadingCarbon: false,
       failedCarbon: false,
     });
+  });
+
+  // The trend ends on the month that the tab shows (#154)
+  it('returns the 12 months up to the month the tab shows', async () => {
+    const { result, keysOf } = await renderTabHook(useCarbonTab,
+      { ...onTheTab, selectedMonth: september });
+
+    // September shows August
+    expect(api.fetchCarbonTrend).toHaveBeenCalledWith('2026-08', null);
+    expect(result.current.carbonTrend).toHaveLength(12);
+    expect(result.current.carbonTrend.at(-1)).toMatchObject({
+      month: '2026-08', footprint: { total: 4036.5 },
+    });
+    expect(result.current).toMatchObject({ loadingTrend: false, failedTrend: false });
+    // Under the month that the tab shows, once known: until then, it waits without one
+    expect(keysOf('carbonTrend'))
+      .toEqual([['carbonTrend', undefined], ['carbonTrend', '2026-08']]);
+  });
+
+  it('requests no trend when there is no footprint at all', async () => {
+    const { result, queryClient } = await renderTabHook(useCarbonTab,
+      { ...onTheTab, selectedAccount: lyonAccount.id }, severalAccounts);
+
+    expect(api.fetchCarbonTrend).not.toHaveBeenCalled();
+    expect(result.current.carbonTrend).toBeUndefined();
+    expect(queryClient.getQueryState(['carbonTrend', undefined, lyonAccount.id]))
+      .toMatchObject(WAITING);
   });
 
   // OVHcloud never gives the current month's footprint (#152)

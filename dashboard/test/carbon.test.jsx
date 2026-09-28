@@ -1,11 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { screen } from '@testing-library/react';
+import { screen, within } from '@testing-library/react';
 import { account } from './fixtures/account.js';
 import { severalAccounts } from './fixtures/accounts.js';
 import { api } from './support/api.js';
 import {
-  cardRowOf, openTab, renderDashboard, selectAccount, selectLanguage, selectMonth, sentenceOf,
-  texts,
+  cardRowOf, disclosure, openTab, renderDashboard, rowsOf, selectAccount, selectLanguage,
+  selectMonth, sentenceOf, texts,
 } from './support/render.jsx';
 
 // The cards of the month's carbon footprint: its total, with its market-based total and what
@@ -256,5 +256,77 @@ describe('Carbon tab', () => {
       'href', 'https://docs.ovhcloud.com/en/guides/account-and-service-management/'
         + 'managing-billing-payments-and-services/carbon-footprint',
     );
+  });
+
+  // The footprint of the 12 months up to the month that the tab shows (#154)
+  describe('trend', () => {
+    // The table of its months, which the chart draws
+    const trendTable = (summary = 'Voir les chiffres') =>
+      within(disclosure(summary)).getByRole('table');
+    // Its legend, which names the emission sources that it stacks
+    const legend = (name = "Postes d'émission") => screen.getByRole('list', { name });
+    // A month without a footprint
+    const none = (month) => [month, '—', '—', '—', '—'];
+
+    it('shows the 12 months up to the month it shows, by emission source', async () => {
+      const { user } = await renderDashboard();
+
+      // September, which shows August
+      await openTab(user, 'Carbone');
+
+      expect(api.fetchCarbonTrend).toHaveBeenCalledWith('2026-08', null);
+      expect(screen.getByRole('heading', { name: 'Tendance sur 12 mois (kgCO₂e)' }))
+        .toBeInTheDocument();
+      expect(texts(legend())).toEqual(['Fabrication', 'Électricité', 'Opérations']);
+      expect(rowsOf(trendTable())).toEqual([
+        ['Mois', 'Fabrication', 'Électricité', 'Opérations', 'Total'],
+        none('Septembre 2025'), none('Octobre 2025'), none('Novembre 2025'),
+        ['Décembre 2025', '1 100,00', '2 100,00', '400,00', '3 600,00'],
+        ['Janvier 2026', '1 150,00', '2 200,00', '420,00', '3 770,00'],
+        ['Février 2026', '1 150,00', '2 150,00', '410,00', '3 710,00'],
+        ['Mars 2026', '1 175,00', '2 250,00', '430,00', '3 855,00'],
+        ['Avril 2026', '1 200,00', '2 300,00', '440,00', '3 940,00'],
+        ['Mai 2026', '1 200,00', '2 275,00', '435,00', '3 910,00'],
+        ['Juin 2026', '1 225,00', '2 325,00', '450,00', '4 000,00'],
+        none('Juillet 2026'),
+        ['Août 2026', '1 234,50', '2 345,25', '456,75', '4 036,50'],
+      ]);
+    });
+
+    it('asks for no trend without any carbon footprint', async () => {
+      const { user } = await renderDashboard(severalAccounts);
+      await selectAccount(user, 'Lyon subsidiary');
+
+      await openTab(user, 'Carbone');
+
+      expect(api.fetchCarbonTrend).not.toHaveBeenCalled();
+      expect(screen.queryByRole('heading', { name: /Tendance/ })).toBeNull();
+    });
+
+    it('follows the account selected in the header', async () => {
+      const { user } = await renderDashboard(severalAccounts);
+      await selectAccount(user, 'yy2222-ovh');
+
+      await openTab(user, 'Carbone');
+
+      expect(api.fetchCarbonTrend).toHaveBeenLastCalledWith('2026-08', 'yy2222-ovh');
+      expect(rowsOf(trendTable()).at(-1))
+        .toEqual(['Août 2026', '800,00', '1 500,00', '300,00', '2 600,00']);
+    });
+
+    it('speaks English', async () => {
+      const { user } = await renderDashboard();
+      await selectLanguage(user, 'EN');
+
+      await openTab(user, 'Carbon');
+
+      expect(screen.getByRole('heading', { name: '12-month trend (kgCO₂e)' }))
+        .toBeInTheDocument();
+      expect(texts(legend('Emission sources')))
+        .toEqual(['Manufacturing', 'Electricity', 'Operations']);
+      const rows = rowsOf(trendTable('See the figures'));
+      expect(rows[0]).toEqual(['Month', 'Manufacturing', 'Electricity', 'Operations', 'Total']);
+      expect(rows.at(-1)).toEqual(['August 2026', '1,234.50', '2,345.25', '456.75', '4,036.50']);
+    });
   });
 });

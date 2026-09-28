@@ -1,8 +1,23 @@
-import { formatMonthLabel, formatMonthName } from '../utils/format.js';
+import {
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+} from 'recharts';
+import {
+  formatMonthLabel, formatMonthName, formatYearMonth, localeOf,
+} from '../utils/format.js';
 
 // The emission sources of a carbon footprint, in the order the tab shows them: the key of
 // each one's figure, and of its label in the translations (see CONTEXT.md)
 const EMISSION_SOURCES = ['manufacturing', 'electricity', 'operations'];
+
+// The color of each emission source in the trend's chart (#154): the first three slots of a
+// categorical palette checked for color vision deficiencies, in the order of the sources. The
+// third is below 3:1 against the white panel: the legend names each one, and the table gives
+// every figure.
+const SOURCE_COLORS = {
+  manufacturing: '#2a78d6',
+  electricity: '#eb6834',
+  operations: '#1baf7a',
+};
 
 // The white block that the tab shows a card or a message in
 const PANEL = 'bg-white rounded-xl shadow-sm border border-gray-100';
@@ -88,6 +103,93 @@ const NoFootprint = ({ accountImport, language, t }) => {
   return <HowToGetOne language={language} />;
 };
 
+// The footprint of the 12 months up to the month that the tab shows (#154), stacked by
+// emission source, with the table of its figures: a month without a footprint has none, not 0
+const TrendPanel = ({ carbonTrend, loadingTrend, failedTrend, language, t, fmt }) => {
+  // The axis reads kg CO2eq as whole numbers
+  const axisNumbers = new Intl.NumberFormat(localeOf(language), { maximumFractionDigits: 0 });
+  let content;
+  if (loadingTrend) {
+    content = <p className="text-gray-500 text-sm">{t('loading')}</p>;
+  } else if (failedTrend) {
+    content = <p className="text-red-600 text-sm">{t('carbonTrendFailed')}</p>;
+  } else {
+    content = (
+      <>
+        <ul aria-label={t('emissionSources')} className="flex gap-4 text-sm text-gray-600">
+          {EMISSION_SOURCES.map(source => (
+            <li key={source} className="flex items-center gap-2">
+              <span
+                className="inline-block w-3 h-3 rounded-sm"
+                style={{ backgroundColor: SOURCE_COLORS[source] }}
+              />
+              {t(source)}
+            </li>
+          ))}
+        </ul>
+        <div className="h-64">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={carbonTrend.map(({ month, footprint }) => ({ month, ...footprint }))}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" vertical={false} />
+              <XAxis
+                dataKey="month" tick={{ fontSize: 12 }}
+                tickFormatter={(yearMonth) => formatYearMonth(yearMonth, language)}
+              />
+              <YAxis
+                tick={{ fontSize: 12 }} width={64}
+                tickFormatter={(value) => axisNumbers.format(value)}
+              />
+              <Tooltip
+                labelFormatter={(yearMonth) => formatMonthLabel(yearMonth, language)}
+                formatter={(value, name) => [`${fmt(value)} kgCO₂e`, name]}
+              />
+              {EMISSION_SOURCES.map((source, index) => (
+                <Bar
+                  key={source} dataKey={source} name={t(source)} stackId="footprint"
+                  fill={SOURCE_COLORS[source]} stroke="#ffffff" strokeWidth={2}
+                  radius={index === EMISSION_SOURCES.length - 1 ? [4, 4, 0, 0] : 0}
+                />
+              ))}
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+        <details>
+          <summary className="cursor-pointer text-sm text-gray-500">{t('seeFigures')}</summary>
+          <table className="w-full text-sm mt-2">
+            <thead>
+              <tr className="text-gray-500">
+                <th className="text-left font-medium py-1">{t('carbonMonth')}</th>
+                {EMISSION_SOURCES.map(source => (
+                  <th key={source} className="text-right font-medium py-1">{t(source)}</th>
+                ))}
+                <th className="text-right font-medium py-1">Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              {carbonTrend.map(({ month, footprint }) => (
+                <tr key={month} className="border-t border-gray-100">
+                  <td className="py-1">{formatMonthLabel(month, language)}</td>
+                  {[...EMISSION_SOURCES, 'total'].map(key => (
+                    <td key={key} className="text-right py-1">
+                      {footprint ? fmt(footprint[key]) : '—'}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </details>
+      </>
+    );
+  }
+  return (
+    <div className={`${PANEL} p-5 space-y-4`}>
+      <h3 className="text-lg font-semibold text-gray-800">{t('carbonTrend')} (kgCO₂e)</h3>
+      {content}
+    </div>
+  );
+};
+
 // The Carbon tab (#147), which the shell renders while it is active: what useCarbonTab()
 // returns, with the shell's language, translations (t) and amount format (fmt), how the
 // account shown is imported (importStateOf(), #153), and the Account column of the lists,
@@ -95,8 +197,8 @@ const NoFootprint = ({ accountImport, language, t }) => {
 // carbon calculator attributes to the month selected, by emission source, or, when that month
 // has none, to the latest month that has one (#152).
 const CarbonTab = ({
-  carbonFootprint, missingMonth, loadingCarbon, failedCarbon, language, t, fmt,
-  accountImport, accountColumn,
+  carbonFootprint, missingMonth, carbonTrend, loadingCarbon, failedCarbon, loadingTrend,
+  failedTrend, language, t, fmt, accountImport, accountColumn,
 }) => {
   if (loadingCarbon) {
     return <div className="text-center text-gray-500 py-8">{t('loading')}</div>;
@@ -146,6 +248,10 @@ const CarbonTab = ({
             .map(nic => accountColumn?.nameOf(nic) ?? nic).join(', '), language)}
         </p>
       )}
+      <TrendPanel
+        carbonTrend={carbonTrend} loadingTrend={loadingTrend} failedTrend={failedTrend}
+        language={language} t={t} fmt={fmt}
+      />
     </div>
   );
 };

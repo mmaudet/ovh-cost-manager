@@ -1,7 +1,7 @@
 const Database = require('better-sqlite3');
 const { classifyWebCloud, WEB_CLOUD_FAMILIES } = require('./classify');
 const { instanceLineCondition, readInstanceLine } = require('./instance-lines');
-const { monthsOfWindow } = require('./months');
+const { monthsOfWindow, shiftMonth } = require('./months');
 const ownership = require('./ownership');
 // The conditions of the queries that keep one account's rows (#115), or a list of ids
 const {
@@ -2555,6 +2555,35 @@ const carbonOps = {
       WHERE month = ? AND ${ofAccount.sql}
     `).get(month, ...ofAccount.params);
     return lines > 0 ? footprint : null;
+  },
+
+  /**
+   * The carbon footprint of the months that end on a month (#154), location-based, of the
+   * account (see accountCondition()), or of every account by default: each month's emissions
+   * by emission source and in total, in kg CO2eq, to the hundredth.
+   * @param {string} end - The last month, YYYY-MM
+   * @param {?string} [account]
+   * @param {number} [months] - How many months, 12 by default
+   * @returns {{month: string, footprint: ?object}[]} Each month, the earliest first, with its
+   *   footprint, null for a month without one
+   */
+  getTrend: (end, account = null, months = 12) => {
+    const first = shiftMonth(end, 1 - months);
+    const ofAccount = accountCondition(account, 'account');
+    const byMonth = new Map(getDb().prepare(`
+      SELECT month,
+        ROUND(SUM(manufacturing), 2) as manufacturing,
+        ROUND(SUM(electricity_location), 2) as electricity,
+        ROUND(SUM(operations_location), 2) as operations,
+        ROUND(SUM(manufacturing + electricity_location + operations_location), 2) as total
+      FROM carbon_footprint_lines
+      WHERE month >= ? AND month <= ? AND ${ofAccount.sql}
+      GROUP BY month
+    `).all(first, end, ...ofAccount.params).map(({ month, ...footprint }) => [month, footprint]));
+    return Array.from({ length: months }, (_, index) => {
+      const month = shiftMonth(first, index);
+      return { month, footprint: byMonth.get(month) ?? null };
+    });
   },
 
   /**

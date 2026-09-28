@@ -45,15 +45,17 @@ function trendWindowFromQuery(query, latestBilledMonth) {
 }
 
 /**
- * The month that a request asks for in its `month` parameter, YYYY-MM, as the routes of the
- * carbon footprint take it (#147). Anything else is refused, as the dates of the other routes
- * are.
- * @param {{month?: string}} query - The query parameters
+ * The month that a request asks for in one of its parameters, YYYY-MM, as the routes of the
+ * carbon footprint take it (#147): `month`, or `end` for the trend (#154). Anything else is
+ * refused, as the dates of the other routes are.
+ * @param {object} query - The query parameters
+ * @param {string} [name] - The parameter, `month` by default
  * @returns {{valid: boolean, error?: string, month?: string}}
  */
-function monthFromQuery({ month }) {
+function monthFromQuery(query, name = 'month') {
+  const month = query[name];
   if (typeof month !== 'string' || !MONTH_REGEX.test(month) || isNaN(new Date(month).getTime())) {
-    return { valid: false, error: `Invalid 'month' parameter: ${month ?? ''}. Expected YYYY-MM` };
+    return { valid: false, error: `Invalid '${name}' parameter: ${month ?? ''}. Expected YYYY-MM` };
   }
   return { valid: true, month };
 }
