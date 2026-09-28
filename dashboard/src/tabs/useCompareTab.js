@@ -37,7 +37,8 @@ const BY_MONTH_A = { column: 'totalA', kind: 'number', direction: 'desc' };
 const useCompareTab = ({ months, activeTab, selectedAccount, accountColumn }) => {
   const [compareMonthA, setCompareMonthA] = useState(null);
   const [compareMonthB, setCompareMonthB] = useState(null);
-  // The sort order of its tables, by table (#146)
+  // The sort order of its tables, by table (#146): the comparison by project, the
+  // infrastructure comparison, and the comparison of what each project consumed, by project
   const sortingOf = useTableSorts({ projects: BY_MONTH_A });
 
   // Whether the months list holds each month compared: not before months A and B have their

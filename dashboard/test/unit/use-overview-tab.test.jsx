@@ -107,9 +107,11 @@ describe('useOverviewTab', () => {
       projectsByAccount: [],
       gpuProjectsByAccount: [],
     });
-    // The project breakdown by amount, the most expensive first, until the user sorts it
+    // The project breakdown by amount, the most expensive first, until the user sorts it; the
+    // GPU costs by project in the order of the server
     expect(result.current.sortingOf('projects').sort)
       .toEqual({ column: 'total', kind: 'number', direction: 'desc' });
+    expect(result.current.sortingOf('gpuProjects').sort).toBeNull();
   });
 
   it('keeps the sort order across renders', async () => {

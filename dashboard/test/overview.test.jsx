@@ -16,6 +16,7 @@ import {
   headerOf,
   openTab,
   renderDashboard,
+  rowTextsOf,
   rowsOf,
   selectAccount,
   selectLanguage,
@@ -238,10 +239,49 @@ describe('Overview tab', () => {
       expect(texts(gpuCosts())).toEqual([
         'Coûts GPU', '420,50€', '(50,6 % du cloud)',
         'Par modèle GPU', 'NVIDIA L4', '420,50€',
-        'Par projet', 'Projet', 'Types GPU', 'Montant',
+        'Par projet', 'Projet', '○', 'Types GPU', '○', 'Montant', '○',
         'Production', 'l4-90', '420,50€', '100,0 %',
         'Total GPU', '420,50€',
       ]);
+    });
+
+    // By project, amount, or GPU types, whose list sorts as text (#146); the total stays last
+    it('sort the projects by any column', async () => {
+      const [production] = account.gpuSummary['2026-09'].byProject;
+      const { user } = await renderDashboard({
+        ...account,
+        gpuSummary: {
+          ...account.gpuSummary,
+          '2026-09': {
+            ...account.gpuSummary['2026-09'],
+            total: 500.5,
+            byProject: [
+              { ...production, total: 420.5 },
+              { project_name: 'Staging', project_id: 'project-staging', total: 80,
+                gpu_flavors: 'a100-180,h100-380' },
+            ],
+          },
+        },
+      });
+      const gpuTable = () => within(gpuCosts()).getByRole('table');
+
+      await sortTable(user, gpuTable(), /^Montant/);
+      await sortTable(user, gpuTable(), /^Montant/);
+
+      expect(rowTextsOf(gpuTable())).toEqual([
+        ['Projet', '○', 'Types GPU', '○', 'Montant', '▲'],
+        ['Staging', 'a100-180', 'h100-380', '80,00€', '16,0 %'],
+        ['Production', 'l4-90', '420,50€', '84,0 %'],
+        ['Total GPU', '500,50€'],
+      ]);
+
+      await sortTable(user, gpuTable(), /^Projet/);
+
+      expect(firstColumnOf(gpuTable())).toEqual(['Production', 'Staging']);
+
+      await sortTable(user, gpuTable(), /^Types GPU/);
+
+      expect(firstColumnOf(gpuTable())).toEqual(['Staging', 'Production']);
     });
 
     it('are left out of a month without any', async () => {
@@ -482,7 +522,7 @@ describe('Overview tab', () => {
     expect(texts(gpuCosts('GPU Costs'))).toEqual([
       'GPU Costs', '420.50€', '(50.6% of cloud)',
       'By GPU model', 'NVIDIA L4', '420.50€',
-      'By project', 'Project', 'GPU types', 'Amount',
+      'By project', 'Project', '○', 'GPU types', '○', 'Amount', '○',
       'Production', 'l4-90', '420.50€', '100.0%',
       'GPU Total', '420.50€',
     ]);
@@ -519,7 +559,7 @@ describe('Overview tab', () => {
     const gpuCostsOfOneAccount = [
       'Coûts GPU', '420,50€', '(50,6 % du cloud)',
       'Par modèle GPU', 'NVIDIA L4', '420,50€',
-      'Par projet', 'Projet', 'Types GPU', 'Montant',
+      'Par projet', 'Projet', '○', 'Types GPU', '○', 'Montant', '○',
       'Production', 'l4-90', '420,50€', '100,0 %',
       'Total GPU', '420,50€',
     ];
@@ -568,7 +608,7 @@ describe('Overview tab', () => {
         expect(texts(gpuCosts())).toEqual([
           'Coûts GPU', '420,50€', '(50,6 % du cloud)',
           'Par modèle GPU', 'NVIDIA L4', '420,50€',
-          'Par projet', 'Projet', 'Compte', 'Types GPU', 'Montant',
+          'Par projet', 'Projet', '○', 'Compte', '○', 'Types GPU', '○', 'Montant', '○',
           'Production', 'Lyon subsidiary', 'l4-90', '420,50€', '100,0 %',
           'Total GPU', '420,50€',
         ]);
@@ -604,7 +644,7 @@ describe('Overview tab', () => {
         expect(texts(gpuCosts())).toEqual([
           'Coûts GPU', '420,50€', '(68,9 % du cloud)',
           'Par modèle GPU', 'NVIDIA L4', '420,50€',
-          'Par projet', 'Projet', 'Types GPU', 'Montant',
+          'Par projet', 'Projet', '○', 'Types GPU', '○', 'Montant', '○',
           'Production', 'l4-90', '420,50€', '100,0 %',
           'Total GPU', '420,50€',
         ]);

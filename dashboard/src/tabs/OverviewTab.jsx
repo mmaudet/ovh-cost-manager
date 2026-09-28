@@ -15,6 +15,15 @@ const breakdownValues = (accountColumn, cloudTotal) => ({
   share: (p) => (cloudTotal ? p.total / cloudTotal : 0),
 });
 
+// The value of a project of the GPU costs in each column that sorts them (#146): its GPU types
+// as the text of their list, and its account while the Account column shows
+const gpuProjectValues = (accountColumn) => ({
+  name: (p) => p.project_name,
+  ...(accountColumn && { account: (p) => accountColumn.nameOf(p.account) }),
+  flavors: (p) => p.gpu_flavors,
+  total: (p) => p.total,
+});
+
 // The Overview tab, which the shell renders while it is active: what useOverviewTab()
 // returns, the sort order of its tables included (#146), with the shell's language,
 // translations (t) and amount format (fmt), and what the shell holds for the whole page: the
@@ -46,8 +55,10 @@ const OverviewTab = ({
   // The Top projects chart, which names no account, keeps each project once.
   const breakdownProjects = accountColumn ? projectsByAccount : byProject;
   const gpuProjects = accountColumn ? gpuProjectsByAccount : gpuSummary?.byProject;
-  // The sort of the breakdown, by amount until the user sorts it by another column (#146)
+  // The sort of the breakdown, by amount until the user sorts it by another column, and that
+  // of the GPU costs by project (#146)
   const breakdownSorting = sortingOf('projects');
+  const gpuSorting = sortingOf('gpuProjects');
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -229,16 +240,38 @@ const OverviewTab = ({
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b bg-gray-50">
-                      <th className="p-2 text-left font-medium">{t('project')}</th>
+                      <SortableHeader
+                        column="name" kind="text" sorting={gpuSorting} t={t}
+                        className="p-2 text-left font-medium"
+                      >
+                        {t('project')}
+                      </SortableHeader>
                       {accountColumn && (
-                        <th className="p-2 text-left font-medium">{accountColumn.label}</th>
+                        <SortableHeader
+                          column="account" kind="text" sorting={gpuSorting} t={t}
+                          className="p-2 text-left font-medium"
+                        >
+                          {accountColumn.label}
+                        </SortableHeader>
                       )}
-                      <th className="p-2 text-left font-medium">{t('gpuFlavors')}</th>
-                      <th className="p-2 text-right font-medium">{t('amount')}</th>
+                      <SortableHeader
+                        column="flavors" kind="text" sorting={gpuSorting} t={t}
+                        className="p-2 text-left font-medium"
+                      >
+                        {t('gpuFlavors')}
+                      </SortableHeader>
+                      <SortableHeader
+                        column="total" kind="number" sorting={gpuSorting} t={t}
+                        className="p-2 text-right font-medium"
+                      >
+                        {t('amount')}
+                      </SortableHeader>
                     </tr>
                   </thead>
                   <tbody>
-                    {gpuProjects.map(p => {
+                    {sortRows(
+                      gpuProjects, gpuSorting.sort, gpuProjectValues(accountColumn), language,
+                    ).map(p => {
                       const share = gpuSummary.total ? p.total / gpuSummary.total : 0;
                       // A project billed to several accounts has a row for each (#118)
                       const key = accountColumn ? `${p.project_id} ${p.account}` : p.project_id;
