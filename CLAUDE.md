@@ -43,16 +43,18 @@ OVH API ──> data/import.js ──> SQLite (ovh-bills.db) ──> server/inde
     description to a service type. **Classification runs at import time** and the result is
     stored in `bill_details.service_type`; the server reads the stored value, it does not
     re-classify. Changing classification rules requires a re-import to take effect on old data.
-  - `carbon-footprint.js` and `carbon-ties.js` — the carbon footprint (`CONTEXT.md`),
-    without side effects: the reading of the file that OVHcloud's carbon calculator
-    generates, and the 24 months that each import asks for again, then the ties of a
-    month's footprint lines to the bill lines of its month of use, which give each line its
-    cost and carbon intensity, and the month its covered cost and covered share. The month
-    of use of a Public Cloud project's line is the month before its bill's, as OVHcloud
-    bills Public Cloud after use, that of any other line its bill's. **The ties run when
-    the server reads them**, unlike classification: changing them needs no re-import.
-    `public-cloud-lines.js` reads the Public Cloud bill lines of instances and volumes, for
-    the ties and for `db.js`.
+  - `carbon-footprint.js` — pure functions reading the file that OVHcloud's carbon
+    calculator generates (`readFootprintFile()`), and the 24 months that each import asks
+    for again (`footprintMonths()`). The import stores its lines in
+    `carbon_footprint_lines`, which `db.carbon` reads; the server gives them under
+    `/api/carbon/*` and `/api/export/carbon`, and the Carbon tab shows them.
+  - `carbon-ties.js` — pure: ties a month's footprint lines to the bill lines of its month
+    of use (`CONTEXT.md`), which `billLinesOfUse()` in `db.js` selects, giving each line its
+    cost and carbon intensity, and the month its covered cost and covered share. **The ties
+    run when the server reads them**, unlike classification: changing them needs no
+    re-import.
+  - `public-cloud-lines.js` — parses the Public Cloud bill lines of instances and volumes,
+    for the ties and for `db.js`.
 - **`server/`** — read-only Express API over the DB. `index.js` is the single ~1300-line
   route file. `auth/` guards the API in one of two modes. With OIDC (openid-client v6):
   PKCE sign-in bound to the browser by a signed cookie per state, SQLite-backed sessions
@@ -83,8 +85,7 @@ NIC handle:
   without one was stored before the accounts: the Unknown account's. A query that can keep
   one account's rows takes an `account` argument, `null` for all accounts,
   `UNKNOWN_ACCOUNT` or a NIC handle, and joins `accountCondition()` to its WHERE clause.
-  The carbon footprint's lines, imported since the accounts, always hold theirs: no claim
-  reaches them, and `--full` does not clear them (ADR 0003).
+  The carbon footprint's lines always carry their account: no claim reaches them.
 - **API.** Every route that lists or adds up data takes the optional `account` parameter
   through the `accountParameter` middleware (`server/account-parameter.js`), into
   `req.account`: a NIC handle that the `accounts` table records, `unknown`, or none for all
@@ -175,11 +176,12 @@ datasets, off by default: `--include-consumption`, `--include-account`,
 everything.
 
 `--include-carbon` asks OVHcloud's carbon calculator for each account's footprint of the
-last 24 months: `POST /me/carbonCalculator/csv`, which the key needs a rule for, then the
-task, polled until the file is ready, and the file, from its pre-signed link. It replaces
-those months and keeps the older ones, which OVHcloud no longer gives, `--full` included
-(ADR 0003). A key without the rule gets a warning; any other failure counts among the
-failed items, and replaces nothing.
+last 24 months: it calls `POST /me/carbonCalculator/csv`, which the key needs a rule for,
+polls the task every 3 seconds, for 2 minutes at most, and downloads the file from its
+pre-signed link. It replaces those months and keeps the older ones, which OVHcloud no
+longer gives, `--full` included (ADR 0003). A key without the rule gets a warning; any
+other failure, a wait that runs out included, counts among the failed items, and replaces
+nothing.
 
 A run imports every configured account, one after the other, under one import log entry;
 each differential import starts from that account's own latest bill. An account that
@@ -285,10 +287,11 @@ See `docs/deployment.md` for full SSO/OIDC setup.
 Three values (`appKey`, `appSecret`, `consumerKey`) plus `endpoint` (e.g. `ovh-eu`), stored
 under `credentials` in `config.json`, or under that of each entry of `accounts` for several
 accounts (see Configuration resolution). Generate appKey/appSecret at
-https://eu.api.ovh.com/createToken/, then request a consumerKey with GET access to the
-paths listed in the README. Minimum useful scope is `GET /me`, `/me/*` and `/cloud/*`:
-every import reads the account it imports from `GET /me`, which `/me/*` does not cover.
-The other paths enable the infrastructure inventory.
+https://eu.api.ovh.com/createToken/, then request a consumerKey with the access rules
+listed in the README: GET on its paths, and the optional `POST /me/carbonCalculator/csv`.
+Minimum useful scope is `GET /me`, `/me/*` and `/cloud/*`: every import reads the account
+it imports from `GET /me`, which `/me/*` does not cover. The other paths enable the
+infrastructure inventory, and the POST rule the carbon footprint.
 
 ## Agent skills
 

@@ -257,7 +257,7 @@ The accounts have no environment variables: their keys stay in `config.json`, wh
 
 ### API rights
 
-Each account needs a consumer key of its own: request it with the [README](../README.md#2-generate-consumer-key)'s command, and open its `validationUrl` as that account. Every key needs `GET /me`, besides `/me/*` and `/cloud/*`: before it writes anything, the import reads from `GET /me` the account that the key gives access to, and the currency it bills in. `/me/*` does not cover `GET /me`. An account whose key lacks it fails its import, with a message that names the missing right. The other paths of the README's command give the infrastructure inventory.
+Each account needs a consumer key of its own: request it with the [README](../README.md#2-generate-consumer-key)'s command, and open its `validationUrl` as that account. Every key needs `GET /me`, besides `/me/*` and `/cloud/*`: before it writes anything, the import reads from `GET /me` the account that the key gives access to, and the currency it bills in. `/me/*` does not cover `GET /me`. An account whose key lacks it fails its import, with a message that names the missing right. The other paths of the README's command give the infrastructure inventory, and its `POST /me/carbonCalculator/csv` rule the carbon footprint.
 
 Two entries whose keys lead to the same account fail the whole run before it imports anything, and its message names both: list each account once.
 
