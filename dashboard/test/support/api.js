@@ -63,6 +63,8 @@ const emptyAnswers = {
     loadBalancers: { count: 0, total: 0 },
   }),
   backupStats: () => ({ vms: { count: 0, total: 0 }, enterprise: { count: 0, total: 0 } }),
+  // No carbon footprint for the month (#147)
+  carbonFootprint: (month) => ({ month, footprint: null }),
   list: () => [],
 };
 
@@ -173,6 +175,9 @@ const answers = {
   fetchPublicCloudStats: entryForPeriodOfAccount('publicCloudStats', emptyAnswers.publicCloudStats),
   // And the Veeam backups of a month, which the Compare and Backup tabs show (#119)
   fetchBackupStats: entryForPeriodOfAccount('backupStats', emptyAnswers.backupStats),
+  // The carbon footprint of a month, by that month, of the account the page selects (#147)
+  fetchCarbonFootprint: (data, month, account) =>
+    ofAccount(data, account).carbonFootprint?.[month] ?? emptyAnswers.carbonFootprint(month),
 };
 
 // One mock per function: what setup.js hands over to the page

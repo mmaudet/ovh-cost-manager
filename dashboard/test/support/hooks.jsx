@@ -11,7 +11,7 @@ import { createQueryClient, keysIn, settle } from './query-client.js';
 // The ids of the dashboard's tabs, in the order of the tab bar, as the shell's activeTab
 // holds them: 'inventory' is the Public Cloud tab.
 export const TAB_IDS = [
-  'overview', 'compare', 'trends', 'inventory', 'webcloud', 'infrastructure', 'backup',
+  'overview', 'compare', 'trends', 'inventory', 'webcloud', 'infrastructure', 'backup', 'carbon',
 ];
 
 // The state, in the query cache, of a query that waits for what it needs, a month or a

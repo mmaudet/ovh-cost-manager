@@ -27,6 +27,8 @@ import { useWebCloudTab } from '../tabs/useWebCloudTab.js';
 import { WebCloudTab, WebCloudTabModals } from '../tabs/WebCloudTab.jsx';
 import { useBackupTab } from '../tabs/useBackupTab.js';
 import { BackupTab } from '../tabs/BackupTab.jsx';
+import { useCarbonTab } from '../tabs/useCarbonTab.js';
+import { CarbonTab } from '../tabs/CarbonTab.jsx';
 import { useTrendsTab } from '../tabs/useTrendsTab.js';
 import { TrendsTab, TrendsPeriodSelector } from '../tabs/TrendsTab.jsx';
 import { useInfrastructureTab } from '../tabs/useInfrastructureTab.js';
@@ -230,6 +232,10 @@ export default function Dashboard() {
   const { inventoryServers } = infrastructureTab;
 
   const backupTab = useBackupTab({
+    selectedMonth, holdsSelectedMonth, activeTab, selectedAccount,
+  });
+
+  const carbonTab = useCarbonTab({
     selectedMonth, holdsSelectedMonth, activeTab, selectedAccount,
   });
 
@@ -675,6 +681,7 @@ export default function Dashboard() {
               { id: 'webcloud', labelKey: 'webCloud' },
               { id: 'infrastructure', labelKey: 'infrastructure' },
               { id: 'backup', labelKey: 'backup' },
+              { id: 'carbon', labelKey: 'carbon' },
             ].map(tab => (
               <button
                 key={tab.id}
@@ -754,6 +761,11 @@ export default function Dashboard() {
             {...backupTab} language={language} t={t} fmt={fmt}
             selectedMonth={selectedMonth} summary={summary} byResourceType={byResourceType}
           />
+        )}
+
+        {/* Tab Content - Carbon footprint (#147) */}
+        {activeTab === 'carbon' && (
+          <CarbonTab {...carbonTab} language={language} t={t} fmt={fmt} />
         )}
 
         {/* Footer */}

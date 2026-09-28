@@ -119,6 +119,21 @@ function useConfigFiles(contents) {
 const useDefaultConfig = () => useConfig({ ...CREDENTIALS });
 useDefaultConfig();
 
+// The files that the API's links lead to, by link: the carbon footprint that the carbon
+// calculator generates (#147), which the import downloads from the link of its task, with no
+// OVH authentication. Their content, or the error that downloading them rejects with.
+const files = new Map();
+
+// What the import downloads a link with, in place of the global fetch: it serves `files`, and
+// answers 404 to any other link, as an expired link does
+const simulatedFetch = async (url) => {
+  const content = files.get(String(url));
+  if (content instanceof Error) throw content;
+  return content === undefined
+    ? { ok: false, status: 404, text: async () => 'Not Found' }
+    : { ok: true, status: 200, text: async () => content };
+};
+
 // Handlers: an answer, or an error as the ovh client rejects with it
 const ok = (value) => () => Promise.resolve(value);
 const fail = (error, message) => () => Promise.reject({ error, message });
@@ -160,10 +175,10 @@ function emptyDatabase(db) {
 /**
  * Loads data/db.js and data/import.js on a throwaway database for the tests of the calling
  * file. Each test starts with GET /me served for the account of the tests (ACCOUNT, in
- * ./accounts.js), and no other route or account, a configuration that gives the credentials
- * of that account alone, in the legacy flat form, no call recorded, an empty database, a
- * silent console, fake timers, on which the retry delays cost no real time, and a
- * process.exit that only records its code, as an import that fails exits.
+ * ./accounts.js), and no other route or account, no file at any link, a configuration that
+ * gives the credentials of that account alone, in the legacy flat form, no call recorded, an
+ * empty database, a silent console, fake timers, on which the retry delays cost no real time,
+ * and a process.exit that only records its code, as an import that fails exits.
  * @param {string} prefix - The prefix of the throwaway directory
  * @returns {{db: object, importer: object}} Both set before the first test runs
  */
@@ -193,6 +208,8 @@ function useThrowawayImport(prefix) {
     jest.spyOn(console, 'warn').mockImplementation(() => {});
     jest.spyOn(console, 'error').mockImplementation(() => {});
     jest.spyOn(process, 'exit').mockImplementation(() => {});
+    jest.spyOn(global, 'fetch').mockImplementation(simulatedFetch);
+    files.clear();
     routes.clear();
     routes.set('/me', me(ACCOUNT));
     accounts.clear();
@@ -212,6 +229,6 @@ function useThrowawayImport(prefix) {
 }
 
 module.exports = {
-  ovh, jsonfile, client, routes, calls, clientCredentials, CREDENTIALS, CONFIG_FILES, ok, fail,
-  me, serveAccount, useConfig, useConfigFiles, useThrowawayImport,
+  ovh, jsonfile, client, routes, files, calls, clientCredentials, CREDENTIALS, CONFIG_FILES, ok,
+  fail, me, serveAccount, useConfig, useConfigFiles, useThrowawayImport,
 };

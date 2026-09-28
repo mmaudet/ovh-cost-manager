@@ -2,6 +2,7 @@ import { months } from './calendar.js';
 import { webCloud } from './web-cloud.js';
 import { trends } from './trends.js';
 import { backup } from './backup.js';
+import { carbon } from './carbon.js';
 import { infrastructure } from './infrastructure.js';
 import { publicCloud } from './public-cloud.js';
 
@@ -214,6 +215,7 @@ export const account = {
   ...webCloud,
   ...trends,
   ...backup,
+  ...carbon,
   ...infrastructure,
   ...publicCloud,
 };

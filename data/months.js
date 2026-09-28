@@ -66,4 +66,15 @@ function monthsOfWindow(from, to) {
   return months;
 }
 
-module.exports = { monthBounds, trendWindow, monthsOfWindow };
+/**
+ * The 'YYYY-MM' month that falls a number of months after another, or before it when the
+ * number is negative: 2 months before 2026-01 is 2025-11.
+ * @param {string} yearMonth - e.g. '2026-01'
+ * @param {number} months - e.g. -2
+ * @returns {string}
+ */
+function shiftMonth(yearMonth, months) {
+  return monthAt(monthIndex(yearMonth) + months);
+}
+
+module.exports = { monthBounds, trendWindow, monthsOfWindow, shiftMonth };
