@@ -149,25 +149,21 @@ const CarbonPanel = ({ heading, actions = null, loading, failed, failedLabel, t,
 
 // The columns of the list's CSV file (#156): what each line names, its account when all
 // accounts are shown, and its fields as OVHcloud's file and the route give them
-const listCsvColumns = (language, accountColumn) => [
-  { key: 'item', label: language === 'en' ? 'Item' : 'Élément' },
+const listCsvColumns = (t, accountColumn) => [
+  { key: 'item', label: t('carbonItem') },
   ...accountCsvColumns(accountColumn),
-  { key: 'type', label: 'Type' },
-  { key: 'range', label: language === 'en' ? 'Range' : 'Gamme' },
-  { key: 'datacenter', label: 'Datacenter' },
-  { key: 'footprint', label: language === 'en' ? 'Footprint (kgCO2e)' : 'Empreinte (kgCO2e)' },
-  { key: 'cost', label: language === 'en' ? 'Cost' : 'Coût' },
-  {
-    key: 'intensity',
-    label: language === 'en' ? 'Intensity (kgCO2e/€)' : 'Intensité (kgCO2e/€)',
-  },
+  { key: 'type', label: t('type') },
+  { key: 'range', label: t('range') },
+  { key: 'datacenter', label: t('datacenter') },
+  { key: 'footprint', label: t('carbonFootprintKg') },
+  { key: 'cost', label: t('cost') },
+  { key: 'intensity', label: t('carbonIntensity') },
 ];
 
-// Downloads the list of a month as CSV
-const exportList = (carbonLines, month, language, t, accountColumn) => downloadCSV(
-  withAccountNames(carbonLines.map(line => ({ ...line, item: itemOf(line, t) })), accountColumn),
-  listCsvColumns(language, accountColumn),
-  `ovh-carbon-footprint-${month}`,
+// The rows of the list, as its table and its CSV file show them: what each line names, and the
+// name of its account when all accounts are shown (withAccountNames())
+const rowsOfList = (carbonLines, t, accountColumn) => withAccountNames(
+  (carbonLines ?? []).map(line => ({ ...line, item: itemOf(line, t) })), accountColumn,
 );
 
 // Each line of the month's footprint (#155), the largest first, with what its bill lines cost
@@ -175,57 +171,62 @@ const exportList = (carbonLines, month, language, t, accountColumn) => downloadC
 // shown, second, as in the other lists
 const ListPanel = ({
   month, carbonLines, loadingLines, failedLines, language, t, fmt, accountColumn,
-}) => (
-  <CarbonPanel
-    heading={t('carbonList')} loading={loadingLines} failed={failedLines}
-    failedLabel={t('carbonListFailed')} t={t}
-    actions={(
-      <TableActions
-        language={language}
-        onExport={() => exportList(carbonLines, month, language, t, accountColumn)}
-      />
-    )}
-  >
-    <div className="max-h-96 overflow-y-auto">
-      <table className="w-full text-sm">
-        <thead className="sticky top-0 bg-white">
-          <tr className="text-gray-500">
-            <th className="text-left font-medium py-1">{t('carbonItem')}</th>
-            {accountColumn && (
-              <th className="text-left font-medium py-1">{accountColumn.label}</th>
-            )}
-            <th className="text-left font-medium py-1">{t('type')}</th>
-            <th className="text-left font-medium py-1">{t('datacenter')}</th>
-            <th className="text-right font-medium py-1">{t('carbonFootprintKg')}</th>
-            <th className="text-right font-medium py-1">{t('cost')}</th>
-            <th className="text-right font-medium py-1">{t('carbonIntensity')}</th>
-          </tr>
-        </thead>
-        <tbody>
-          {carbonLines?.map((line, index) => (
-            <tr key={index} className="border-t border-gray-100">
-              <td className="py-1">{itemOf(line, t)}</td>
-              {accountColumn && <td className="py-1">{accountColumn.nameOf(line.account)}</td>}
-              <td className="py-1">
-                {TYPE_LABELS[line.type] ? t(TYPE_LABELS[line.type]) : line.type}
-              </td>
-              <td className="py-1">{datacenterLabel(line.datacenter, t)}</td>
-              <td className="text-right py-1">{fmt(line.footprint)}</td>
-              <td className="text-right py-1">
-                {line.cost === null ? '—' : `${fmt(line.cost)}€`}
-              </td>
-              <td className="text-right py-1">
-                {line.intensity === null
-                  ? '—'
-                  : formatDecimal(line.intensity, language, { decimals: 3 })}
-              </td>
+}) => {
+  const rows = rowsOfList(carbonLines, t, accountColumn);
+  return (
+    <CarbonPanel
+      heading={t('carbonList')} loading={loadingLines} failed={failedLines}
+      failedLabel={t('carbonListFailed')} t={t}
+      actions={(
+        <TableActions
+          language={language}
+          onExport={() => downloadCSV(
+            rows, listCsvColumns(t, accountColumn), `ovh-carbon-footprint-${month}`,
+          )}
+        />
+      )}
+    >
+      <div className="max-h-96 overflow-y-auto">
+        <table className="w-full text-sm">
+          <thead className="sticky top-0 bg-white">
+            <tr className="text-gray-500">
+              <th className="text-left font-medium py-1">{t('carbonItem')}</th>
+              {accountColumn && (
+                <th className="text-left font-medium py-1">{accountColumn.label}</th>
+              )}
+              <th className="text-left font-medium py-1">{t('type')}</th>
+              <th className="text-left font-medium py-1">{t('datacenter')}</th>
+              <th className="text-right font-medium py-1">{t('carbonFootprintKg')}</th>
+              <th className="text-right font-medium py-1">{t('cost')}</th>
+              <th className="text-right font-medium py-1">{t('carbonIntensity')}</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  </CarbonPanel>
-);
+          </thead>
+          <tbody>
+            {rows.map((line, index) => (
+              <tr key={index} className="border-t border-gray-100">
+                <td className="py-1">{line.item}</td>
+                {accountColumn && <td className="py-1">{line.accountName}</td>}
+                <td className="py-1">
+                  {TYPE_LABELS[line.type] ? t(TYPE_LABELS[line.type]) : line.type}
+                </td>
+                <td className="py-1">{datacenterLabel(line.datacenter, t)}</td>
+                <td className="text-right py-1">{fmt(line.footprint)}</td>
+                <td className="text-right py-1">
+                  {line.cost === null ? '—' : `${fmt(line.cost)}€`}
+                </td>
+                <td className="text-right py-1">
+                  {line.intensity === null
+                    ? '—'
+                    : formatDecimal(line.intensity, language, { decimals: 3 })}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </CarbonPanel>
+  );
+};
 
 // The footprint of the 12 months up to the month that the tab shows (#154), stacked by
 // emission source, with the table of its figures: a month without a footprint has none, not 0
