@@ -157,6 +157,11 @@ export const translations = {
     manufacturing: 'Fabrication',
     electricity: 'Électricité',
     operations: 'Opérations',
+    carbonFailed: "Impossible de charger l'empreinte carbone.",
+    marketBased: 'Market-based',
+    marketBasedExplanation: "L'empreinte market-based tient compte des contrats d'énergie bas "
+      + "carbone d'OVHcloud, au lieu du mix électrique local de chaque datacenter.",
+    latestMonthAvailable: 'dernier mois disponible',
     webCloud: 'Web Cloud',
     domains: 'Domaines',
     dnsZones: 'Zones DNS',
@@ -360,6 +365,11 @@ export const translations = {
     manufacturing: 'Manufacturing',
     electricity: 'Electricity',
     operations: 'Operations',
+    carbonFailed: 'Could not load the carbon footprint.',
+    marketBased: 'Market-based',
+    marketBasedExplanation: "The market-based footprint counts OVHcloud's low-carbon energy "
+      + "contracts instead of each datacenter's local electricity mix.",
+    latestMonthAvailable: 'latest month available',
     webCloud: 'Web Cloud',
     domains: 'Domains',
     dnsZones: 'DNS zones',

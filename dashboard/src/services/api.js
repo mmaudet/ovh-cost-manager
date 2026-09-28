@@ -274,8 +274,10 @@ export const fetchBackupStats = async (from, to, account = null) => {
  * @param {string} month - The month, 'YYYY-MM'
  * @param {?string} [account] - The account whose footprint to ask for, as the functions above
  *   take it: null for all accounts
- * @returns {Promise<{ month: string, footprint: ?object }>} The footprint's manufacturing,
- *   electricity, operations and total, null when the month has none
+ * @returns {Promise<{ month: string, footprint: ?object, latestMonth: ?string }>} The
+ *   footprint's manufacturing, electricity, operations and total, and its market-based total
+ *   (#152), null when the month has none; and the latest month that has one, null when none
+ *   has
  */
 export const fetchCarbonFootprint = async (month, account = null) => {
   const { data } = await api.get('/carbon/footprint', {

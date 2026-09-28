@@ -112,6 +112,7 @@ test('imports the carbon footprint of the last 24 months with --include-carbon',
   ]);
   expect(db.carbon.getMonthFootprint('2026-08', ACCOUNT.nic)).toEqual({
     manufacturing: 18.33, electricity: 93.05, operations: 16.24, total: 127.62,
+    marketBasedTotal: 56.48,
   });
 });
 
@@ -213,7 +214,7 @@ test('reads the columns of the file by their names, and ignores the others', asy
   await runImport({ includeCarbon: true });
 
   expect(db.carbon.getMonthFootprint('2026-08', ACCOUNT.nic)).toEqual({
-    manufacturing: 1, electricity: 2, operations: 3, total: 6,
+    manufacturing: 1, electricity: 2, operations: 3, total: 6, marketBasedTotal: 5,
   });
 });
 

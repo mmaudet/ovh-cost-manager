@@ -2535,11 +2535,11 @@ const carbonOps = {
   /**
    * The carbon footprint of a month, location-based, of the account (see accountCondition()),
    * or of every account by default: its emissions by emission source, and in total, in kg
-   * CO2eq, to the hundredth.
+   * CO2eq, to the hundredth, with its market-based total (#152).
    * @param {string} month - YYYY-MM
    * @param {?string} [account]
-   * @returns {?{manufacturing: number, electricity: number, operations: number, total: number}}
-   *   Null when the month has no footprint line
+   * @returns {?{manufacturing: number, electricity: number, operations: number, total: number,
+   *   marketBasedTotal: number}} Null when the month has no footprint line
    */
   getMonthFootprint: (month, account = null) => {
     const ofAccount = accountCondition(account, 'account');
@@ -2548,11 +2548,26 @@ const carbonOps = {
         ROUND(SUM(manufacturing), 2) as manufacturing,
         ROUND(SUM(electricity_location), 2) as electricity,
         ROUND(SUM(operations_location), 2) as operations,
-        ROUND(SUM(manufacturing + electricity_location + operations_location), 2) as total
+        ROUND(SUM(manufacturing + electricity_location + operations_location), 2) as total,
+        ROUND(SUM(manufacturing + electricity_market + operations_market), 2)
+          as marketBasedTotal
       FROM carbon_footprint_lines
       WHERE month = ? AND ${ofAccount.sql}
     `).get(month, ...ofAccount.params);
     return lines > 0 ? footprint : null;
+  },
+
+  /**
+   * The latest month that has a carbon footprint, of the account (see accountCondition()), or
+   * of any account by default (#152): OVHcloud gives none for the current month.
+   * @param {?string} [account]
+   * @returns {?string} YYYY-MM, null when there is no footprint at all
+   */
+  getLatestMonth: (account = null) => {
+    const ofAccount = accountCondition(account, 'account');
+    return getDb().prepare(`
+      SELECT MAX(month) FROM carbon_footprint_lines WHERE ${ofAccount.sql}
+    `).pluck().get(...ofAccount.params);
   },
 };
 
