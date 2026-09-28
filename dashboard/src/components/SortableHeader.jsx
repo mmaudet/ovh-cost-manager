@@ -96,7 +96,7 @@ const SortableHeader = ({
     >
       <button
         type="button"
-        className="select-none after:absolute after:inset-0"
+        className="select-none [text-align:inherit] after:absolute after:inset-0"
         title={t(next.direction === 'asc' ? 'sortAscending' : 'sortDescending')}
         onClick={() => onSort(next)}
       >
