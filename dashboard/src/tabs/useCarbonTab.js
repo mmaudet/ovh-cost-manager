@@ -2,6 +2,7 @@
 // see docs/adr/0001-tab-state-lives-in-the-dashboard-shell.md
 
 import { useQuery } from '@tanstack/react-query';
+import { useTableSorts } from '../components/SortableHeader.jsx';
 import { fetchCarbonByServer, fetchCarbonFootprint, fetchCarbonTrend } from '../services/api.js';
 import { accountQuery } from '../utils/accounts.js';
 
@@ -40,13 +41,17 @@ async function fetchShownFootprint(month, account) {
  *   carbonTrend: (object[]|undefined), carbonLines: (object[]|undefined),
  *   carbonCoveredShare: (?number|undefined), loadingCarbon: boolean, failedCarbon: boolean,
  *   loadingTrend: boolean, failedTrend: boolean, loadingLines: boolean,
- *   failedLines: boolean }} The footprint that the tab shows, as /api/carbon/footprint gives
- *   it; the month selected when that footprint is another month's, as the month selected has
- *   none, null otherwise; the trend, as /api/carbon/trend gives it; the lines, and the share
- *   of the month's cost that they cover, as /api/carbon/by-server gives them; and whether the
- *   tab shows that each loads, or that it could not load
+ *   failedLines: boolean, sortingOf: function(string): object }} The footprint that the tab
+ *   shows, as /api/carbon/footprint gives it; the month selected when that footprint is
+ *   another month's, as the month selected has none, null otherwise; the trend, as
+ *   /api/carbon/trend gives it; the lines, and the share of the month's cost that they cover,
+ *   as /api/carbon/by-server gives them; whether the tab shows that each loads, or that it
+ *   could not load; and the sort order of the list and of the trend's figures (#146), as
+ *   useTableSorts() gives it
  */
 const useCarbonTab = ({ selectedMonth, holdsSelectedMonth, activeTab, selectedAccount }) => {
+  const sortingOf = useTableSorts();
+
   const { data, isPending, isError } = useQuery(accountQuery(selectedAccount, {
     key: ['carbonFootprint', selectedMonth?.value],
     fetch: (account) => fetchShownFootprint(selectedMonth.value, account),
@@ -83,6 +88,7 @@ const useCarbonTab = ({ selectedMonth, holdsSelectedMonth, activeTab, selectedAc
     failedTrend: trend.isError,
     loadingLines: byServer.isPending,
     failedLines: byServer.isError,
+    sortingOf,
   };
 };
 

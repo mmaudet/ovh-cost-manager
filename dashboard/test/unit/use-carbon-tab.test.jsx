@@ -80,6 +80,8 @@ describe('useCarbonTab', () => {
       failedTrend: false,
       loadingLines: false,
       failedLines: false,
+      // The sort order of the list and of the trend's figures (#146)
+      sortingOf: expect.any(Function),
     });
     expect(api.fetchCarbonTrend).toHaveBeenCalledWith('2026-08', null);
     expect(api.fetchCarbonByServer).toHaveBeenCalledWith('2026-08', null);

@@ -1,6 +1,7 @@
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from 'recharts';
+import { SortableHeader, sortRows } from '../components/SortableHeader.jsx';
 import TableActions from '../components/TableActions.jsx';
 import { accountCsvColumns, withAccountNames } from '../utils/accounts.js';
 import { downloadCSV } from '../utils/csv.js';
@@ -194,11 +195,25 @@ const rowsOfList = (carbonLines, t, accountColumn) => withAccountNames(
   (carbonLines ?? []).map(line => ({ ...line, item: itemOf(line, t) })), accountColumn,
 );
 
-// Each line of the month's footprint (#155), the largest first, with what its bill lines cost
-// in the month of use and its carbon intensity, and the Account column when all accounts are
-// shown, second, as in the other lists
+// The value of a line of the list in each column, which the list sorts by (#146): its type and
+// its datacenter as the list names them. The line of the servers that the file does not name
+// has no name nor datacenter of its own: it sorts by its figures, and comes last by them.
+const listValues = (t) => ({
+  item: (line) => (line.unnamedServers ? null : line.serverDomain ?? line.name),
+  account: (line) => line.accountName,
+  type: (line) => (TYPE_LABELS[line.type] ? t(TYPE_LABELS[line.type]) : line.type),
+  datacenter: (line) => (line.datacenter ? datacenterLabel(line.datacenter, t) : null),
+  footprint: (line) => line.footprint,
+  cost: (line) => line.cost,
+  intensity: (line) => line.intensity,
+});
+
+// Each line of the month's footprint (#155), the largest first until the user sorts them
+// (#146), with what its bill lines cost in the month of use and its carbon intensity, and the
+// Account column when all accounts are shown, second, as in the other lists. The CSV file
+// keeps the order of the route.
 const ListPanel = ({
-  month, carbonLines, loadingLines, failedLines, language, t, fmt, accountColumn,
+  month, carbonLines, loadingLines, failedLines, sorting, language, t, fmt, accountColumn,
 }) => {
   const rows = rowsOfList(carbonLines, t, accountColumn);
   return (
@@ -218,19 +233,54 @@ const ListPanel = ({
         <table className="w-full text-sm">
           <thead className="sticky top-0 bg-white">
             <tr className="text-gray-500">
-              <th className="text-left font-medium py-1">{t('carbonItem')}</th>
+              <SortableHeader
+                column="item" kind="text" sorting={sorting} t={t}
+                className="text-left font-medium py-1"
+              >
+                {t('carbonItem')}
+              </SortableHeader>
               {accountColumn && (
-                <th className="text-left font-medium py-1">{accountColumn.label}</th>
+                <SortableHeader
+                  column="account" kind="text" sorting={sorting} t={t}
+                  className="text-left font-medium py-1"
+                >
+                  {accountColumn.label}
+                </SortableHeader>
               )}
-              <th className="text-left font-medium py-1">{t('type')}</th>
-              <th className="text-left font-medium py-1">{t('datacenter')}</th>
-              <th className="text-right font-medium py-1">{t('carbonFootprintKg')}</th>
-              <th className="text-right font-medium py-1">{t('cost')}</th>
-              <th className="text-right font-medium py-1">{t('carbonIntensity')}</th>
+              <SortableHeader
+                column="type" kind="text" sorting={sorting} t={t}
+                className="text-left font-medium py-1"
+              >
+                {t('type')}
+              </SortableHeader>
+              <SortableHeader
+                column="datacenter" kind="text" sorting={sorting} t={t}
+                className="text-left font-medium py-1"
+              >
+                {t('datacenter')}
+              </SortableHeader>
+              <SortableHeader
+                column="footprint" kind="number" sorting={sorting} t={t}
+                className="text-right font-medium py-1"
+              >
+                {t('carbonFootprintKg')}
+              </SortableHeader>
+              <SortableHeader
+                column="cost" kind="number" sorting={sorting} t={t}
+                className="text-right font-medium py-1"
+              >
+                {t('cost')}
+              </SortableHeader>
+              <SortableHeader
+                column="intensity" kind="number" sorting={sorting} t={t}
+                className="text-right font-medium py-1"
+              >
+                {t('carbonIntensity')}
+              </SortableHeader>
             </tr>
           </thead>
           <tbody>
-            {rows.map((line, index) => (
+            {sortRows(rows, sorting.sort, listValues(t), language).map((line, index) => (
               <tr key={index} className="border-t border-gray-100">
                 <td className="py-1">{line.item}</td>
                 {accountColumn && <td className="py-1">{line.accountName}</td>}
@@ -275,10 +325,22 @@ const MonthTick = ({ x, y, payload, months, language }) => {
   );
 };
 
+// The value of a month of the trend in each column of the table of its figures, which the
+// table sorts by (#146): a month without a footprint has none
+const TREND_VALUES = {
+  month: (row) => row.month,
+  manufacturing: (row) => row.footprint?.manufacturing,
+  electricity: (row) => row.footprint?.electricity,
+  operations: (row) => row.footprint?.operations,
+  total: (row) => row.footprint?.total,
+  coveredShare: (row) => row.coveredShare,
+};
+
 // The footprint of the 12 months up to the month that the tab shows (#154), stacked by
 // emission source, with each month's covered share (#157) and the table of its figures: a
-// month without a footprint has none, not 0
-const TrendPanel = ({ carbonTrend, loadingTrend, failedTrend, language, t, fmt }) => {
+// month without a footprint has none, not 0. The table lists the months in order until the
+// user sorts it (#146).
+const TrendPanel = ({ carbonTrend, loadingTrend, failedTrend, sorting, language, t, fmt }) => {
   // Each month as the chart draws it: its emission sources and its covered share
   const months = (carbonTrend ?? []).map(({ month, footprint, coveredShare }) => ({
     month, coveredShare, ...footprint,
@@ -344,16 +406,38 @@ const TrendPanel = ({ carbonTrend, loadingTrend, failedTrend, language, t, fmt }
         <table className="w-full text-sm mt-2">
           <thead>
             <tr className="text-gray-500">
-              <th className="text-left font-medium py-1">{t('month')}</th>
+              <SortableHeader
+                column="month" kind="date" sorting={sorting} t={t}
+                className="text-left font-medium py-1"
+              >
+                {t('month')}
+              </SortableHeader>
               {EMISSION_SOURCES.map(source => (
-                <th key={source} className="text-right font-medium py-1">{t(source)}</th>
+                <SortableHeader
+                  key={source} column={source} kind="number" sorting={sorting} t={t}
+                  className="text-right font-medium py-1"
+                >
+                  {t(source)}
+                </SortableHeader>
               ))}
-              <th className="text-right font-medium py-1">Total</th>
-              <th className="text-right font-medium py-1">{t('coveredShare')}</th>
+              <SortableHeader
+                column="total" kind="number" sorting={sorting} t={t}
+                className="text-right font-medium py-1"
+              >
+                Total
+              </SortableHeader>
+              <SortableHeader
+                column="coveredShare" kind="number" sorting={sorting} t={t}
+                className="text-right font-medium py-1"
+              >
+                {t('coveredShare')}
+              </SortableHeader>
             </tr>
           </thead>
           <tbody>
-            {carbonTrend?.map(({ month, footprint, coveredShare }) => (
+            {sortRows(
+              carbonTrend ?? [], sorting.sort, TREND_VALUES, language,
+            ).map(({ month, footprint, coveredShare }) => (
               <tr key={month} className="border-t border-gray-100">
                 <td className="py-1">{formatMonthLabel(month, language)}</td>
                 {[...EMISSION_SOURCES, 'total'].map(key => (
@@ -374,7 +458,8 @@ const TrendPanel = ({ carbonTrend, loadingTrend, failedTrend, language, t, fmt }
 };
 
 // The Carbon tab (#147), which the shell renders while it is active: what useCarbonTab()
-// returns, with the shell's language, translations (t) and amount format (fmt), how the
+// returns, the sort order of its tables included (#146), with the shell's language,
+// translations (t) and amount format (fmt), how the
 // account shown is imported (importStateOf(), #153), and the Account column of the lists,
 // which names an account when all of them are shown: the carbon footprint that OVHcloud's
 // carbon calculator attributes to the month selected, by emission source, or, when that month
@@ -382,8 +467,8 @@ const TrendPanel = ({ carbonTrend, loadingTrend, failedTrend, language, t, fmt }
 // covers (#157).
 const CarbonTab = ({
   carbonFootprint, missingMonth, carbonTrend, carbonLines, carbonCoveredShare, loadingCarbon,
-  failedCarbon, loadingTrend, failedTrend, loadingLines, failedLines, language, t, fmt,
-  accountImport, accountColumn,
+  failedCarbon, loadingTrend, failedTrend, loadingLines, failedLines, sortingOf, language, t,
+  fmt, accountImport, accountColumn,
 }) => {
   if (loadingCarbon) {
     return <div className="text-center text-gray-500 py-8">{t('loading')}</div>;
@@ -439,12 +524,12 @@ const CarbonTab = ({
       )}
       <ListPanel
         month={month} carbonLines={carbonLines} loadingLines={loadingLines}
-        failedLines={failedLines}
+        failedLines={failedLines} sorting={sortingOf('lines')}
         language={language} t={t} fmt={fmt} accountColumn={accountColumn}
       />
       <TrendPanel
         carbonTrend={carbonTrend} loadingTrend={loadingTrend} failedTrend={failedTrend}
-        language={language} t={t} fmt={fmt}
+        sorting={sortingOf('trend')} language={language} t={t} fmt={fmt}
       />
     </div>
   );
