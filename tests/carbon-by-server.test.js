@@ -246,9 +246,69 @@ test('lists the lines of every account, each tied within its account', async () 
       }),
       ...LYON_AUGUST.slice(1),
     ]);
+    // Lyon's 367 € of 434 €, and Paris's 200 €, all of it covered
+    expect(body).toMatchObject({ coveredCost: 567, monthCost: 634, coveredShare: 0.8943 });
     // The Unknown account, which never has one
     expect((await ocm.get(`/api/carbon/by-server?month=2026-08&account=${UNKNOWN_ACCOUNT}`))
-      .body.lines).toEqual([]);
+      .body).toEqual({
+      month: '2026-08', lines: [], coveredCost: 0, monthCost: 0, coveredShare: null,
+    });
+  });
+}, 30000);
+
+// Nor a month without a footprint, even when it costs something: July's Public Cloud, which
+// August's bill pays for
+test('gives no covered share to a month without a footprint', async () => {
+  await withOcm(async (ocm) => {
+    expect((await ocm.get(`/api/carbon/by-server?month=2026-07&account=${LYON}`)).body).toEqual({
+      month: '2026-07', lines: [], coveredCost: 0, monthCost: 999, coveredShare: null,
+    });
+  });
+}, 30000);
+
+// The covered share compares what the services cost before their credits and discounts: a
+// credit pays for no service in particular, and would otherwise raise the share of the month
+// that it lowers the cost of
+test('leaves the credits and discounts out of the covered share', async () => {
+  await withSeededOcm((db) => {
+    recordAccounts(db, { nic: LYON }, { nic: PARIS });
+    project(db, 'p-lyon', 'Production', LYON);
+    bill(db, 'FR-SRV-AUG', '2026-08-10', LYON);
+    db.details.insertMany([
+      serverLine('FR-SRV-AUG', 'ns1.ip-10-0-0.eu', 100),
+      // A discount on that server, which ties to it
+      line('FR-SRV-AUG', {
+        domain: 'ns1.ip-10-0-0.eu', description: 'Black friday : 10% off on Advance servers',
+        cost: -10, type: 'dedicated_server',
+      }),
+      // A service that OVHcloud does not cover
+      line('FR-SRV-AUG', {
+        domain: 'example.com', description: 'Renouvellement du domaine example.com', cost: 60,
+        type: 'domain',
+      }),
+    ]);
+    // Credits pay for part of September's Public Cloud bill, which pays for August
+    bill(db, 'FR-PCI-SEP', '2026-09-03', LYON);
+    db.details.insertMany([line('FR-PCI-SEP', {
+      projectId: 'p-lyon', description: 'Utilisation du credit cloud', cost: -50,
+    })]);
+    db.carbon.replaceMonths(LYON, MONTHS, [footprintLine({
+      month: '2026-08', server_domain: 'ns1.ip-10-0-0.eu', manufacturing: 10,
+      electricity: [6, 1], operations: [4, 4],
+    })]);
+    // And Paris, which has no footprint: nothing covers what it costs
+    bill(db, 'FR-PARIS-AUG', '2026-08-12', PARIS);
+    db.details.insertMany([serverLine('FR-PARIS-AUG', 'ns9.ip-10-0-0.eu', 40)]);
+  }, async (ocm) => {
+    const { body } = await ocm.get(`/api/carbon/by-server?month=2026-08&account=${LYON}`);
+    // The server costs what its bill lines do, its discount included
+    expect(body.lines.map(({ cost }) => cost)).toEqual([90]);
+    // But its 100 € cover 100 € of the 160 € that the services cost before the discount and
+    // the credits
+    expect(body).toMatchObject({ coveredCost: 100, monthCost: 160, coveredShare: 0.625 });
+    // With every account, of the 200 € that they cost
+    expect((await ocm.get('/api/carbon/by-server?month=2026-08')).body)
+      .toMatchObject({ coveredCost: 100, monthCost: 200, coveredShare: 0.5 });
   });
 }, 30000);
 

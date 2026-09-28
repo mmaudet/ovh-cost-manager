@@ -62,15 +62,13 @@ function missingMonthNotice(missingMonth, shownMonth, accountImport, language) {
 }
 
 // The share of the month's cost that its footprint covers (#157), so that nobody takes the
-// footprint for that of the whole infrastructure: the covered cost, of the month of use's cost
-function coverageSentence({ coveredCost, monthCost, coveredShare }, language, fmt) {
+// footprint for that of the whole infrastructure
+const coverageSentence = (coveredShare, language) => {
   const share = formatPercent(coveredShare, language);
   return language === 'en'
-    ? `The footprint covers ${share} of the month's cost: ${fmt(coveredCost)}€ of `
-      + `${fmt(monthCost)}€.`
-    : `L'empreinte couvre ${share} du coût du mois : ${fmt(coveredCost)}€ sur `
-      + `${fmt(monthCost)}€.`;
-}
+    ? `The footprint covers ${share} of the month's cost.`
+    : `L'empreinte couvre ${share} du coût du mois.`;
+};
 
 // The accounts that the footprint of all accounts leaves out, as it has none for the month
 // (#153)
@@ -83,10 +81,9 @@ const guideUrl = (language) => `https://docs.ovhcloud.com/${language === 'en' ? 
   + '/guides/account-and-service-management/managing-billing-payments-and-services/'
   + 'carbon-footprint';
 
-// How to get a carbon footprint: the right to add to the account's key, and the import option
-// (#153)
-const HowToGetOne = ({ language }) => {
-  const code = (text) => <code className="text-xs bg-gray-100 rounded px-1">{text}</code>;
+// That OVHcloud does not compute the footprint of all its services, with the link to its
+// guide, which lists those that it covers
+const NotAllServices = ({ language }) => {
   const guideLink = (text) => (
     <a href={guideUrl(language)} className="text-blue-600 underline" target="_blank"
       rel="noreferrer">
@@ -95,18 +92,34 @@ const HowToGetOne = ({ language }) => {
   );
   return language === 'en' ? (
     <>
+      OVHcloud does not compute the footprint of all its services: see{' '}
+      {guideLink('the list of those it covers')}.
+    </>
+  ) : (
+    <>
+      OVHcloud ne calcule pas l'empreinte de tous ses services : voir{' '}
+      {guideLink("la liste de ceux qu'il couvre")}.
+    </>
+  );
+};
+
+// How to get a carbon footprint: the right to add to the account's key, and the import option
+// (#153)
+const HowToGetOne = ({ language }) => {
+  const code = (text) => <code className="text-xs bg-gray-100 rounded px-1">{text}</code>;
+  return language === 'en' ? (
+    <>
       No carbon footprint yet. To import it, add the right{' '}
       {code('POST /me/carbonCalculator/csv')} to the account's API key, and import with{' '}
-      {code('--include-carbon')}, which{' '}
-      {code('--all')} includes. OVHcloud does not compute the footprint of all its services:
-      see {guideLink('the list of those it covers')}.
+      {code('--include-carbon')}, which {code('--all')} includes.{' '}
+      <NotAllServices language={language} />
     </>
   ) : (
     <>
       Pas encore d'empreinte carbone. Pour l'importer, ajoutez à la clé API du compte le
       droit {code('POST /me/carbonCalculator/csv')}, et importez avec{' '}
-      {code('--include-carbon')}, que {code('--all')} comprend. OVHcloud ne calcule pas
-      l'empreinte de tous ses services : voir {guideLink("la liste de ceux qu'il couvre")}.
+      {code('--include-carbon')}, que {code('--all')} comprend.{' '}
+      <NotAllServices language={language} />
     </>
   );
 };
@@ -372,7 +385,7 @@ const TrendPanel = ({ carbonTrend, loadingTrend, failedTrend, language, t, fmt }
 // has none, to the latest month that has one (#152), and the share of the month's cost that it
 // covers (#157).
 const CarbonTab = ({
-  carbonFootprint, missingMonth, carbonTrend, carbonLines, carbonCoverage, loadingCarbon,
+  carbonFootprint, missingMonth, carbonTrend, carbonLines, carbonCoveredShare, loadingCarbon,
   failedCarbon, loadingTrend, failedTrend, loadingLines, failedLines, language, t, fmt,
   accountImport, accountColumn,
 }) => {
@@ -415,8 +428,11 @@ const CarbonTab = ({
         ))}
       </div>
       {/* Once the lines have loaded, and unless the month of use costs nothing (#157) */}
-      {carbonCoverage?.coveredShare != null && (
-        <p className="text-sm text-gray-600">{coverageSentence(carbonCoverage, language, fmt)}</p>
+      {carbonCoveredShare != null && (
+        <p className="text-sm text-gray-600">
+          {coverageSentence(carbonCoveredShare, language)}
+          {carbonCoveredShare < 1 && <>{' '}<NotAllServices language={language} /></>}
+        </p>
       )}
       {/* With all accounts, their sum leaves out those without a footprint (#153) */}
       {accountsWithoutFootprint?.length > 0 && (

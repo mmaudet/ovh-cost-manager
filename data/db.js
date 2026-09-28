@@ -2612,9 +2612,11 @@ const carbonOps = {
    * @param {string} month - YYYY-MM
    * @param {?string} [account]
    * @returns {{lines: object[], coveredCost: number, monthCost: number,
-   *   coveredShare: ?number}} The lines as tieFootprint() gives them; the covered cost and the
-   *   cost of all the bill lines of the month of use, to the hundredth; and the share of that
-   *   cost that is covered, to the ten-thousandth, null when the month of use costs nothing
+   *   coveredShare: ?number}} The lines as tieFootprint() gives them; the covered cost, as
+   *   tieFootprint() gives it, and what the bill lines of the month of use cost, of every
+   *   account asked for, those without a footprint included, both before their credits and
+   *   discounts, to the hundredth; and the share of that cost that is covered, to the
+   *   ten-thousandth, null without a footprint or when the month of use costs nothing
    */
   getTies: (month, account = null) => {
     const db = getDb();
@@ -2639,13 +2641,17 @@ const carbonOps = {
     const instanceRegions = new Map(db.prepare('SELECT id, region FROM cloud_instances').all()
       .map(({ id, region }) => [id, region]));
     const { lines, coveredCost } = tieFootprint(footprintLines, billLines, instanceRegions);
-    const monthCost = Math.round(billLines.reduce((sum, line) => sum + line.total_price, 0)
-      * 100) / 100;
+    // What the services of the month of use cost before their credits and discounts, the
+    // lines of a negative price: a credit pays for no service in particular
+    const monthCost = Math.round(billLines
+      .reduce((sum, line) => sum + Math.max(line.total_price, 0), 0) * 100) / 100;
     return {
       lines,
       coveredCost,
       monthCost,
-      coveredShare: monthCost > 0 ? Math.round((coveredCost / monthCost) * 10000) / 10000 : null,
+      coveredShare: lines.length > 0 && monthCost > 0
+        ? Math.round((coveredCost / monthCost) * 10000) / 10000
+        : null,
     };
   },
 

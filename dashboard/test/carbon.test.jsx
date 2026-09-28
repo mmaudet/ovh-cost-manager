@@ -487,15 +487,36 @@ describe('Carbon tab', () => {
   // The share of the month's cost that the footprint covers (#157), so that nobody takes it
   // for that of the whole infrastructure
   describe('covered cost', () => {
+    // The paragraph that says it, its link within its sentences
+    const coverage = () => screen.getByText(/(couvre|covers) \d/, { selector: 'p' });
+
     it("says what share of the month's cost the footprint covers", async () => {
       const { user } = await renderDashboard();
 
       // September, which shows August
       await openTab(user, 'Carbone');
 
-      expect(screen.getByText("L'empreinte couvre 71,9 % du coût du mois : 28 754,00€ sur "
-        + '40 000,00€.', { normalizer: (text) => text.replace(/\s+/g, ' ').trim() }))
-        .toBeInTheDocument();
+      expect(sentenceOf(coverage())).toBe("L'empreinte couvre 71,9 % du coût du mois. OVHcloud "
+        + "ne calcule pas l'empreinte de tous ses services : voir la liste de ceux qu'il couvre.");
+      expect(within(coverage()).getByRole('link', { name: "la liste de ceux qu'il couvre" }))
+        .toHaveAttribute('href', 'https://docs.ovhcloud.com/fr/guides/'
+          + 'account-and-service-management/managing-billing-payments-and-services/'
+          + 'carbon-footprint');
+    });
+
+    it('says only its share when the footprint covers the whole cost', async () => {
+      const { user } = await renderDashboard({
+        ...account,
+        carbonByServer: {
+          '2026-08': {
+            ...account.carbonByServer['2026-08'], coveredCost: 40000, coveredShare: 1,
+          },
+        },
+      });
+
+      await openTab(user, 'Carbone');
+
+      expect(sentenceOf(coverage())).toBe("L'empreinte couvre 100,0 % du coût du mois.");
     });
 
     it('says nothing of it when the month of use costs nothing', async () => {
@@ -521,9 +542,9 @@ describe('Carbon tab', () => {
 
       await openTab(user, 'Carbon');
 
-      expect(screen.getByText("The footprint covers 75.0% of the month's cost: 3,000.00€ of "
-        + '4,000.00€.', { normalizer: (text) => text.replace(/\s+/g, ' ').trim() }))
-        .toBeInTheDocument();
+      expect(sentenceOf(coverage())).toBe("The footprint covers 75.0% of the month's cost. "
+        + 'OVHcloud does not compute the footprint of all its services: see the list of those '
+        + 'it covers.');
     });
   });
 });

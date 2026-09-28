@@ -112,7 +112,8 @@ function rowOf(fields, footprint, cost) {
  *   range, datacenter and serverDomain, and one row per account for the dedicated servers that
  *   the file does not name, with their number in unnamedServers; each with its account,
  *   footprint, cost and intensity, the largest footprint first. And the covered cost (see
- *   CONTEXT.md): what the bill lines that tie to them cost (#157).
+ *   CONTEXT.md, #157): what the bill lines that tie to them cost before their credits and
+ *   discounts, which the cost of each row counts, to the hundredth.
  */
 function tieFootprint(footprintLines, billLines, instanceRegions) {
   const rows = [];
@@ -151,7 +152,8 @@ function tieFootprint(footprintLines, billLines, instanceRegions) {
       } else {
         continue;
       }
-      coveredCost += billLine.total_price;
+      // Before the credits and discounts, as the month's cost (see db.carbon.getTies())
+      coveredCost += Math.max(billLine.total_price, 0);
     }
 
     for (const line of named) {

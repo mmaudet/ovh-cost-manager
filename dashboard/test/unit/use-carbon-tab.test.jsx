@@ -72,7 +72,7 @@ describe('useCarbonTab', () => {
       // Its lines (#155)
       carbonLines: account.carbonByServer['2026-08'].lines,
       // And the share of the month's cost that they cover (#157)
-      carbonCoverage: { coveredCost: 28754, monthCost: 40000, coveredShare: 0.7189 },
+      carbonCoveredShare: 0.7189,
       // Answered: the tab shows them (#64)
       loadingCarbon: false,
       failedCarbon: false,
