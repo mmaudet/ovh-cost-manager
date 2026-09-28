@@ -42,7 +42,7 @@ The screenshots show anonymised data.
 ### Dashboard
 - **Interactive Dashboard**: React-based SPA with Recharts visualizations
 - **Multi-language Support**: French and English interface (i18n)
-- **7 navigation tabs**: Overview, Comparison, Trends, Public Cloud, Web Cloud, Infrastructure, Backup
+- **8 navigation tabs**: Overview, Comparison, Trends, Public Cloud, Web Cloud, Infrastructure, Backup, Carbon
 - **Several OVH Accounts**: one instance imports several accounts; a selector in the header narrows every tab down to one, and with all accounts shown, the lists name each row's account
 
 ### Cost Analysis
@@ -68,8 +68,13 @@ The screenshots show anonymised data.
 - **Backup**: Veeam Backup VMs and Enterprise licenses with cost breakdown
 - **Expiring Services**: Lists the services expired or expiring within 30 days, soonest first
 
+### Environmental Impact
+- **Carbon Footprint**: OVHcloud's estimate of each month's emissions, by emission source, location-based with the market-based total, next to what the same services cost (see [Carbon Footprint](#carbon-footprint))
+- **Carbon Intensity**: each dedicated server, instance flavor and volume type with its footprint, its cost and its kgCO2e per unit of the currency, exportable to CSV
+- **Covered Share**: the share of each month's cost that the footprint covers, as OVHcloud does not compute the footprint of all its services, with its 12-month trend
+
 ### Tools & Export
-- **Export**: PDF and Markdown report generation, CSV exports (bills, details, inventory)
+- **Export**: PDF and Markdown report generation, CSV exports (bills, details, inventory, carbon footprint)
 - **CLI Tools**: Download invoices, split by project, extract bills per project
 - **Data Import**: Full, differential, or targeted import from OVH API into local SQLite database
 
@@ -436,6 +441,44 @@ npm run bills -- --project "AI" --format md          # Markdown output
 npm run bills -- --month 2025-12                     # All bills for a month
 npm run bills -- --month 2025-12 --format md         # Markdown output
 ```
+
+## Carbon Footprint
+
+OCM imports, for each account, the carbon footprint that OVHcloud's carbon calculator attributes to its services, and shows it in the Carbon tab next to what those services cost.
+
+### What the Figures Are
+
+- **OVHcloud's estimates**: OVHcloud models them from its emission factors and from the services that each account used, rather than measuring them. OCM shows them as OVHcloud gives them, and computes none of its own.
+- **In kgCO2e**, kilograms of CO2 equivalent. OVHcloud gives no energy figure, in kWh, so OCM shows none.
+- **By emission source**: the manufacturing of the servers, the electricity that they draw, and the operations (freight, buildings, staff…).
+- **Location-based**: the electricity counts with the local electricity mix of each datacenter. Next to it, the market-based total counts OVHcloud's low-carbon energy contracts instead.
+- **Monthly**: OVHcloud gives a month's footprint once the month is over, so the current month never has one.
+
+### What OVHcloud Covers
+
+OVHcloud does not compute the footprint of all its services: its [guide](https://docs.ovhcloud.com/en/guides/account-and-service-management/managing-billing-payments-and-services/carbon-footprint) lists those that it covers, such as dedicated servers, Public Cloud instances and their Block Storage volumes. The Carbon tab says what share of each month's cost the footprint covers (see [What the Carbon Tab Shows](#what-the-carbon-tab-shows)).
+
+### The Months It Keeps
+
+OVHcloud's carbon calculator gives the last 24 months. Each import that includes the footprint asks for those 24 months again, and replaces them. It keeps the older months, which OVHcloud no longer gives, even with `--full` ([ADR 0003](docs/adr/0003-a-full-import-keeps-the-carbon-footprints-ovhcloud-no-longer-gives.md)).
+
+### How to Enable It
+
+1. Add the rule `POST /me/carbonCalculator/csv` to each account's consumer key, as in [Generate Consumer Key](#2-generate-consumer-key). It only asks OVHcloud to generate the file, which `GET /me/*` then reads.
+2. Import with `--include-carbon`, which `--all` includes: `npm run import -- --diff --include-carbon`. The Docker containers import with `--all` by default (`IMPORT_FLAGS`).
+
+Without the rule, the import says which right the key lacks, and imports the rest.
+
+### What the Carbon Tab Shows
+
+The tab follows the month and the account selected in the header:
+
+- **The month's footprint**, by emission source, with its market-based total. A month without one, such as the current month, shows the latest month that has one, and says so.
+- **The covered share**: what the services that the footprint covers cost, as a share of what all the services cost that month. A month's footprint counts the services used that month, so both are costs of the month of use: for a Public Cloud project, the bill lines of the next month's bills, as OVHcloud bills Public Cloud after use; for the other services, those of the month's bills. Both count the bill lines before their credits and discounts.
+- **Each item of the footprint**, the largest first: each dedicated server, instance flavor and volume type, per datacenter, with what its bill lines cost in the month of use and its carbon intensity, in kgCO2e per unit of the currency. Before July 2026, OVHcloud's file names no dedicated server: one line then gathers them, next to what all the dedicated servers cost. The CSV button exports the list.
+- **The 12-month trend** up to that month, by emission source, with each month's covered share under it: a step in the footprint may come from OVHcloud covering a new service, rather than from an increase.
+
+With all accounts shown, the footprint adds up the accounts that have one, and names those that have none, whose cost it does not cover. The Unknown account never has one, as the footprint is imported account by account. OVHcloud's file gives no footprint per Public Cloud project.
 
 ## Docker Deployment
 
