@@ -10,6 +10,7 @@ import {
   cardOf,
   cardRowOf,
   cloudProjectRow,
+  columnHeader,
   firstColumnOf,
   headerBadge,
   headerOf,
@@ -159,7 +160,7 @@ describe('Overview tab', () => {
     expect(texts(gpuCosts()).slice(0, 3))
       .toEqual(['Coûts GPU', '310,00€', '(44,2 % du cloud)']);
     expect(projectRows()).toEqual([
-      ['Projet○', 'Montant▼', '%'],
+      ['Projet○', 'Montant▼', '%○'],
       ['Production', '512,00€', '72,9 %'],
       ['Staging', '190,00€', '27,1 %'],
       ['Total Cloud', '702,00€', '100 %'],
@@ -261,7 +262,7 @@ describe('Overview tab', () => {
       await renderDashboard();
 
       expect(projectRows()).toEqual([
-        ['Projet○', 'Montant▼', '%'],
+        ['Projet○', 'Montant▼', '%○'],
         ['Production', '610,40€', '73,5 %'],
         ['Staging', '220,00€', '26,5 %'],
         ['Total Cloud', '830,40€', '100 %'],
@@ -275,7 +276,7 @@ describe('Overview tab', () => {
       await renderDashboard({ ...account, summary: { ...account.summary, '2026-09': september } });
 
       expect(projectRows()).toEqual([
-        ['Projet○', 'Montant▼', '%'],
+        ['Projet○', 'Montant▼', '%○'],
         ['Production', '610,40€', '0,0 %'],
         ['Staging', '220,00€', '0,0 %'],
         ['Total Cloud', '0,00€', '100 %'],
@@ -285,7 +286,7 @@ describe('Overview tab', () => {
     it('sorts the projects by amount or by name, each way in turn', async () => {
       const { user } = await renderDashboard({ ...account, ...threeBilledProjects });
       expect(projectRows()).toEqual([
-        ['Projet○', 'Montant▼', '%'],
+        ['Projet○', 'Montant▼', '%○'],
         ['Production', '460,40€', '55,4 %'],
         ['Staging', '250,00€', '30,1 %'],
         ['Sandbox', '120,00€', '14,5 %'],
@@ -294,34 +295,82 @@ describe('Overview tab', () => {
 
       await sortTable(user, projectTable(), /^Montant/);
 
-      expect(header()).toEqual(['Projet○', 'Montant▲', '%']);
+      expect(header()).toEqual(['Projet○', 'Montant▲', '%○']);
       expect(projects()).toEqual(['Sandbox', 'Staging', 'Production']);
 
       await sortTable(user, projectTable(), /^Projet/);
 
-      expect(header()).toEqual(['Projet▼', 'Montant○', '%']);
-      expect(projects()).toEqual(['Staging', 'Sandbox', 'Production']);
+      // From A to Z first, as every text column (#146)
+      expect(header()).toEqual(['Projet▲', 'Montant○', '%○']);
+      expect(projects()).toEqual(['Production', 'Sandbox', 'Staging']);
 
       await sortTable(user, projectTable(), /^Projet/);
 
-      expect(header()).toEqual(['Projet▲', 'Montant○', '%']);
-      expect(projects()).toEqual(['Production', 'Sandbox', 'Staging']);
+      expect(header()).toEqual(['Projet▼', 'Montant○', '%○']);
+      expect(projects()).toEqual(['Staging', 'Sandbox', 'Production']);
 
       await sortTable(user, projectTable(), /^Montant/);
 
-      expect(header()).toEqual(['Projet○', 'Montant▼', '%']);
+      expect(header()).toEqual(['Projet○', 'Montant▼', '%○']);
       expect(projects()).toEqual(['Production', 'Staging', 'Sandbox']);
     });
 
     it('keeps its sort order when the user comes back to the tab', async () => {
       const { user } = await renderDashboard();
+      // From Z to A, the second way (#146)
+      await sortTable(user, projectTable(), /^Projet/);
       await sortTable(user, projectTable(), /^Projet/);
 
       await openTab(user, 'Tendances');
       await openTab(user, "Vue d'ensemble");
 
       expect(projectRows()).toEqual([
-        ['Projet▼', 'Montant○', '%'],
+        ['Projet▼', 'Montant○', '%○'],
+        ['Staging', '220,00€', '26,5 %'],
+        ['Production', '610,40€', '73,5 %'],
+        ['Total Cloud', '830,40€', '100 %'],
+      ]);
+    });
+
+    // For the keyboard and screen readers (#146): a button in each header, which says what it
+    // does, and the order on the header of the column that sorts the table
+    it('sorts with the button of a header, which says what a click on it does', async () => {
+      const { user } = await renderDashboard();
+      // In the language of the page, as the heading of the breakdown says it
+      const columnOf = (column, heading) => columnHeader(
+        within(projectBreakdown(heading)).getByRole('table'), column,
+      );
+      const buttonOf = (column, heading) => within(columnOf(column, heading)).getByRole('button');
+      expect(columnOf('Montant')).toHaveAttribute('aria-sort', 'descending');
+      expect(columnOf('Projet')).not.toHaveAttribute('aria-sort');
+      expect(buttonOf('Montant')).toHaveAccessibleDescription('Trier par ordre croissant');
+      expect(buttonOf('Projet')).toHaveAccessibleDescription('Trier par ordre croissant');
+
+      buttonOf('Projet').focus();
+      await user.keyboard('{Enter}');
+
+      expect(columnOf('Projet')).toHaveAttribute('aria-sort', 'ascending');
+      expect(columnOf('Montant')).not.toHaveAttribute('aria-sort');
+      expect(buttonOf('Projet')).toHaveAccessibleDescription('Trier par ordre décroissant');
+      expect(buttonOf('Montant')).toHaveAccessibleDescription('Trier par ordre décroissant');
+
+      await selectLanguage(user, 'en');
+
+      const inEnglish = 'Breakdown by project';
+      expect(buttonOf('Project', inEnglish))
+        .toHaveAccessibleDescription('Sort in descending order');
+      expect(buttonOf('%', inEnglish)).toHaveAccessibleDescription('Sort in descending order');
+    });
+
+    // As by amount, the smallest share first on a second click; the total stays last
+    it('sorts the projects by their share of the Cloud total too (#146)', async () => {
+      const { user } = await renderDashboard();
+
+      await sortTable(user, projectTable(), /^%/);
+      await sortTable(user, projectTable(), /^%/);
+
+      expect(projectRows()).toEqual([
+        ['Projet○', 'Montant○', '%▲'],
         ['Staging', '220,00€', '26,5 %'],
         ['Production', '610,40€', '73,5 %'],
         ['Total Cloud', '830,40€', '100 %'],
@@ -438,7 +487,7 @@ describe('Overview tab', () => {
       'GPU Total', '420.50€',
     ]);
     expect(rowsOf(within(projectBreakdown('Breakdown by project')).getByRole('table'))).toEqual([
-      ['Project○', 'Amount▼', '%'],
+      ['Project○', 'Amount▼', '%○'],
       ['Production', '610.40€', '73.5%'],
       ['Staging', '220.00€', '26.5%'],
       ['Cloud Total', '830.40€', '100%'],
@@ -462,7 +511,7 @@ describe('Overview tab', () => {
     // The breakdown by project and the GPU costs of September, with a single account, or with
     // all accounts but without the Account column
     const projectsOfOneAccount = [
-      ['Projet○', 'Montant▼', '%'],
+      ['Projet○', 'Montant▼', '%○'],
       ['Production', '610,40€', '73,5 %'],
       ['Staging', '220,00€', '26,5 %'],
       ['Total Cloud', '830,40€', '100 %'],
@@ -524,7 +573,7 @@ describe('Overview tab', () => {
           'Total GPU', '420,50€',
         ]);
         expect(projectRows()).toEqual([
-          ['Projet○', 'Compte', 'Montant▼', '%'],
+          ['Projet○', 'Compte○', 'Montant▼', '%○'],
           ['Production', 'Lyon subsidiary', '610,40€', '73,5 %'],
           ['Staging', 'yy2222-ovh', '220,00€', '26,5 %'],
           ['Total Cloud', '830,40€', '100 %'],
@@ -560,7 +609,7 @@ describe('Overview tab', () => {
           'Total GPU', '420,50€',
         ]);
         expect(projectRows()).toEqual([
-          ['Projet○', 'Montant▼', '%'],
+          ['Projet○', 'Montant▼', '%○'],
           ['Production', '610,40€', '100,0 %'],
           ['Total Cloud', '610,40€', '100 %'],
         ]);
@@ -573,7 +622,7 @@ describe('Overview tab', () => {
 
       expect(screen.queryByText('Coûts GPU')).not.toBeInTheDocument();
       expect(projectRows()).toEqual([
-        ['Projet○', 'Montant▼', '%'],
+        ['Projet○', 'Montant▼', '%○'],
         ['Staging', '220,00€', '100,0 %'],
         ['Total Cloud', '220,00€', '100 %'],
       ]);
@@ -598,7 +647,7 @@ describe('Overview tab', () => {
         await renderDashboard(stagingMoved);
 
         expect(projectRows()).toEqual([
-          ['Projet○', 'Compte', 'Montant▼', '%'],
+          ['Projet○', 'Compte○', 'Montant▼', '%○'],
           ['Production', 'Lyon subsidiary', '610,40€', '73,5 %'],
           ['Staging', 'yy2222-ovh', '170,00€', '20,5 %'],
           ['Staging', 'Lyon subsidiary', '50,00€', '6,0 %'],
@@ -642,7 +691,7 @@ describe('Overview tab', () => {
 
       await selectAccount(user, 'Tous les comptes');
 
-      expect(headerOf(projectTable())).toEqual(['Projet○', 'Compte', 'Montant▼', '%']);
+      expect(headerOf(projectTable())).toEqual(['Projet○', 'Compte○', 'Montant▼', '%○']);
       expect(texts(gpuCosts())).toContain('Lyon subsidiary');
     });
 
@@ -804,7 +853,7 @@ describe('Overview tab', () => {
         });
 
         expect(projectRows()).toEqual([
-          ['Projet○', 'Compte', 'Montant▼', '%'],
+          ['Projet○', 'Compte○', 'Montant▼', '%○'],
           ['Production', 'Lyon subsidiary', '610,40€', '73,5 %'],
           ['Legacy', 'Compte inconnu', '220,00€', '26,5 %'],
           ['Total Cloud', '830,40€', '100 %'],
@@ -814,7 +863,7 @@ describe('Overview tab', () => {
 
         expect(rowsOf(within(projectBreakdown('Breakdown by project')).getByRole('table')))
           .toEqual([
-            ['Project○', 'Account', 'Amount▼', '%'],
+            ['Project○', 'Account○', 'Amount▼', '%○'],
             ['Production', 'Lyon subsidiary', '610.40€', '73.5%'],
             ['Legacy', 'Unknown account', '220.00€', '26.5%'],
             ['Cloud Total', '830.40€', '100%'],

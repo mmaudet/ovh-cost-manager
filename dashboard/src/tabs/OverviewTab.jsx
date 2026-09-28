@@ -2,28 +2,36 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell,
 } from 'recharts';
-import { SortIcon } from '../components/SortIcon.jsx';
+import { SortableHeader, sortRows } from '../components/SortableHeader.jsx';
 import { accountInBrackets } from '../utils/accounts.js';
 import { formatPercent, takesSingular } from '../utils/format.js';
-import { sortProjects } from '../utils/projectSort.js';
+
+// The value of a project of the breakdown in each column that sorts it (#146): its share of
+// the Cloud total of the month too, and its account while the Account column shows
+const breakdownValues = (accountColumn, cloudTotal) => ({
+  name: (p) => p.projectName,
+  ...(accountColumn && { account: (p) => accountColumn.nameOf(p.account) }),
+  total: (p) => p.total,
+  share: (p) => (cloudTotal ? p.total / cloudTotal : 0),
+});
 
 // The Overview tab, which the shell renders while it is active: what useOverviewTab()
-// returns, with the shell's language, translations (t) and amount format (fmt), and what
-// the shell holds for the whole page: the month's figures, of the account selected in the
-// header (#118), and the services about to expire, of that account too (#123), which load at
-// page start for the KPI cards, the header, the Markdown report or other tabs too, and the
-// budget with its setter, which the month-end forecast card reads as well. The budget is that
-// of what the page shows (#117), with whether the user may change it: the dashboard budget,
-// which setBudget changes, for all accounts, or else the account's own, which config.json
-// sets, or null when it has none. Its lists, the breakdown by project and the GPU projects,
-// name the account of each project in the Account column of the shell (accountColumn), when
-// it shows one: they then list the projects by account that the hook requests, a project
-// billed to several accounts once for each (#118). The services about to expire name their
-// account there too (#123).
+// returns, the sort order of its tables included (#146), with the shell's language,
+// translations (t) and amount format (fmt), and what the shell holds for the whole page: the
+// month's figures, of the account selected in the header (#118), and the services about to
+// expire, of that account too (#123), which load at page start for the KPI cards, the header,
+// the Markdown report or other tabs too, and the budget with its setter, which the month-end
+// forecast card reads as well. The budget is that of what the page shows (#117), with whether
+// the user may change it: the dashboard budget, which setBudget changes, for all accounts, or
+// else the account's own, which config.json sets, or null when it has none. Its lists, the
+// breakdown by project and the GPU projects, name the account of each project in the Account
+// column of the shell (accountColumn), when it shows one: they then list the projects by
+// account that the hook requests, a project billed to several accounts once for each (#118).
+// The services about to expire name their account there too (#123).
 // Its links navigate with the shell's setters: what each one keeps open is in
 // docs/adr/0001-tab-state-lives-in-the-dashboard-shell.md (#56).
 const OverviewTab = ({
-  projectSort, handleProjectSort, projectsByAccount, gpuProjectsByAccount,
+  sortingOf, projectsByAccount, gpuProjectsByAccount,
   language, t, fmt, accountColumn,
   summary, total, byService, byProject, byResourceType, gpuSummary,
   expiringServices, budget, setBudget,
@@ -38,6 +46,8 @@ const OverviewTab = ({
   // The Top projects chart, which names no account, keeps each project once.
   const breakdownProjects = accountColumn ? projectsByAccount : byProject;
   const gpuProjects = accountColumn ? gpuProjectsByAccount : gpuSummary?.byProject;
+  // The sort of the breakdown, by amount until the user sorts it by another column (#146)
+  const breakdownSorting = sortingOf('projects');
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -290,26 +300,39 @@ const OverviewTab = ({
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b bg-gray-50">
-                <th
-                  className="p-3 text-left font-medium cursor-pointer hover:bg-gray-100 select-none"
-                  onClick={() => handleProjectSort('name')}
+                <SortableHeader
+                  column="name" kind="text" sorting={breakdownSorting} t={t}
+                  className="p-3 text-left font-medium"
                 >
-                  {t('project')}<SortIcon column="name" current={projectSort} />
-                </th>
+                  {t('project')}
+                </SortableHeader>
                 {accountColumn && (
-                  <th className="p-3 text-left font-medium">{accountColumn.label}</th>
+                  <SortableHeader
+                    column="account" kind="text" sorting={breakdownSorting} t={t}
+                    className="p-3 text-left font-medium"
+                  >
+                    {accountColumn.label}
+                  </SortableHeader>
                 )}
-                <th
-                  className="p-3 text-right font-medium cursor-pointer hover:bg-gray-100 select-none"
-                  onClick={() => handleProjectSort('total')}
+                <SortableHeader
+                  column="total" kind="number" sorting={breakdownSorting} t={t}
+                  className="p-3 text-right font-medium"
                 >
-                  {t('amount')}<SortIcon column="total" current={projectSort} />
-                </th>
-                <th className="p-3 text-right font-medium">%</th>
+                  {t('amount')}
+                </SortableHeader>
+                <SortableHeader
+                  column="share" kind="number" sorting={breakdownSorting} t={t}
+                  className="p-3 text-right font-medium"
+                >
+                  %
+                </SortableHeader>
               </tr>
             </thead>
             <tbody>
-              {sortProjects(breakdownProjects, projectSort).map((p, i) => {
+              {sortRows(
+                breakdownProjects, breakdownSorting.sort,
+                breakdownValues(accountColumn, summary?.cloudTotal), language,
+              ).map((p, i) => {
                 // With one decimal, 0,0 % of a Cloud total of 0 € included (#87)
                 const share = summary?.cloudTotal ? p.total / summary.cloudTotal : 0;
                 // A project billed to several accounts has a row for each (#118)

@@ -191,9 +191,14 @@ export function rowTextsOf(table) {
   return [...table.querySelectorAll('tr')].map((row) => texts(row));
 }
 
-// Sorts a table on a column, as the user does: with a click on its header
+// The header of a column of a table, found by its label
+export function columnHeader(table, column) {
+  return within(table).getByRole('columnheader', { name: column });
+}
+
+// Sorts a table on a column, as the user does: with a click on the button of its header
 export async function sortTable(user, table, column) {
-  await user.click(within(table).getByRole('columnheader', { name: column }));
+  await user.click(within(columnHeader(table, column)).getByRole('button'));
 }
 
 // The header of a table: the label of each column, with its sort mark

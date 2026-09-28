@@ -194,7 +194,7 @@ describe('useCompareTab', () => {
     }
   });
 
-  it('returns months A and B, their figures and the sort order', async () => {
+  it('returns months A and B, their figures and the sort orders of its tables', async () => {
     const { result } = await renderTabHook(useCompareTab, onCompare);
 
     // What the shell spreads over the tab, and nothing else
@@ -203,8 +203,7 @@ describe('useCompareTab', () => {
       setCompareMonthA: expect.any(Function),
       compareMonthB: expect.any(Object),
       setCompareMonthB: expect.any(Function),
-      compareSort: { column: 'totalA', direction: 'desc' },
-      handleCompareSort: expect.any(Function),
+      sortingOf: expect.any(Function),
       compareDataA: expect.any(Object),
       compareDataB: expect.any(Object),
       byServiceA: expect.any(Array),
@@ -217,6 +216,9 @@ describe('useCompareTab', () => {
       backupStatsA: expect.any(Object),
       backupStatsB: expect.any(Object),
     });
+    // The comparison by project by month A, the most expensive first, until the user sorts it
+    expect(result.current.sortingOf('projects').sort)
+      .toEqual({ column: 'totalA', kind: 'number', direction: 'desc' });
     expect(compared(result.current)).toEqual(['2026-08', '2026-09']);
     expect(result.current.compareDataA.total).toBe(1042);
     expect(result.current.compareDataB.total).toBe(1250.4);
@@ -293,36 +295,19 @@ describe('useCompareTab', () => {
       .toEqual({ vms: { count: 2, total: 40 }, enterprise: { count: 0, total: 0 } });
   });
 
-  it('sorts on a new column most expensive first, then each way in turn', async () => {
-    const { result } = await renderTabHook(useCompareTab, onCompare);
-
-    act(() => result.current.handleCompareSort('totalA'));
-    expect(result.current.compareSort).toEqual({ column: 'totalA', direction: 'asc' });
-
-    act(() => result.current.handleCompareSort('name'));
-    expect(result.current.compareSort).toEqual({ column: 'name', direction: 'desc' });
-
-    act(() => result.current.handleCompareSort('name'));
-    expect(result.current.compareSort).toEqual({ column: 'name', direction: 'asc' });
-
-    act(() => result.current.handleCompareSort('name'));
-    expect(result.current.compareSort).toEqual({ column: 'name', direction: 'desc' });
-
-    act(() => result.current.handleCompareSort('diff'));
-    expect(result.current.compareSort).toEqual({ column: 'diff', direction: 'desc' });
-  });
-
   it('keeps months A and B and the sort order when another tab opens', async () => {
     const { result, rerender, queryClient } = await renderTabHook(useCompareTab, onCompare);
     act(() => result.current.setCompareMonthA(july));
     act(() => result.current.setCompareMonthB(august));
-    act(() => result.current.handleCompareSort('diff'));
+    // What a click on the header of the variation gives: the largest first
+    const byVariation = { column: 'variation', kind: 'number', direction: 'desc' };
+    act(() => result.current.sortingOf('projects').onSort(byVariation));
     await settle(queryClient);
 
     await rerender({ ...monthsArrive, activeTab: 'overview' });
 
     expect(compared(result.current)).toEqual(['2026-07', '2026-08']);
-    expect(result.current.compareSort).toEqual({ column: 'diff', direction: 'desc' });
+    expect(result.current.sortingOf('projects').sort).toEqual(byVariation);
     // The answers stay
     expect(result.current.compareDataA.total).toBe(980);
     expect(result.current.compareDataB.total).toBe(1042);

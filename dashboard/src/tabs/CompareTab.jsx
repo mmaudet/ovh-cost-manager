@@ -2,7 +2,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
 } from 'recharts';
 import Accordion from '../components/Accordion.jsx';
-import { SortIcon } from '../components/SortIcon.jsx';
+import { SortableHeader, sortRows } from '../components/SortableHeader.jsx';
 import ProjectProductComparison from '../components/ProjectProductComparison.jsx';
 import { Variation } from '../components/Variation.jsx';
 import { accountInBrackets } from '../utils/accounts.js';
@@ -21,17 +21,26 @@ const backupsOf = (backupStats, kind) => ({
   total: backupStats?.[kind]?.total || 0,
 });
 
+// The value of a row of the comparison by project in each column that sorts it (#146), and its
+// account while the Account column shows
+const projectComparisonValues = (accountColumn) => ({
+  name: (row) => row.projectName,
+  ...(accountColumn && { account: (row) => accountColumn.nameOf(row.account) }),
+  totalA: (row) => row.totalA,
+  totalB: (row) => row.totalB,
+  variation: (row) => row.variation,
+});
+
 // The Compare tab, which the shell renders while it is active: what useCompareTab() returns,
-// with the shell's language, translations (t), amount format (fmt) and months list, and the
-// dedicated servers of the inventory, which the Infrastructure hook loads, on its own tab
-// and on this one (#35). The months and their figures are those of the account selected in
-// the header (#119). The comparison by project names the account of each project in the
-// Account column of the shell (accountColumn), when it shows one: it then compares the
-// projects by account that the hook requests, a project billed to several accounts once for
-// each.
+// the sort order of its tables included (#146), with the shell's language, translations (t),
+// amount format (fmt) and months list, and the dedicated servers of the inventory, which the
+// Infrastructure hook loads, on its own tab and on this one (#35). The months and their
+// figures are those of the account selected in the header (#119). The comparison by project
+// names the account of each project in the Account column of the shell (accountColumn), when
+// it shows one: it then compares the projects by account that the hook requests, a project
+// billed to several accounts once for each.
 const CompareTab = ({
-  compareMonthA, setCompareMonthA, compareMonthB, setCompareMonthB,
-  compareSort, handleCompareSort,
+  compareMonthA, setCompareMonthA, compareMonthB, setCompareMonthB, sortingOf,
   compareDataA, compareDataB, byServiceA, byServiceB, byProjectA, byProjectB,
   byResourceTypeA, byResourceTypeB, backupStatsA, backupStatsB,
   language, t, fmt, months, inventoryServers, accountColumn,
@@ -40,32 +49,13 @@ const CompareTab = ({
   const monthALabel = formatMonthLabel(compareMonthA?.value, language);
   const monthBLabel = formatMonthLabel(compareMonthB?.value, language);
 
-  // Merge and sort comparison data: the projects of months A and B, paired by id (#55), and
-  // by account in the Account column (#119)
-  const getSortedCompareProjects = () => {
-    const merged = projectComparisonRows(byProjectA, byProjectB);
-    return merged.sort((a, b) => {
-      let aVal, bVal;
-      if (compareSort.column === 'name') {
-        aVal = a.projectName?.toLowerCase() || '';
-        bVal = b.projectName?.toLowerCase() || '';
-      } else if (compareSort.column === 'totalA') {
-        aVal = a.totalA || 0;
-        bVal = b.totalA || 0;
-      } else if (compareSort.column === 'totalB') {
-        aVal = a.totalB || 0;
-        bVal = b.totalB || 0;
-      } else if (compareSort.column === 'diff') {
-        aVal = a.variation ?? -Infinity;
-        bVal = b.variation ?? -Infinity;
-      }
-      if (aVal < bVal) return compareSort.direction === 'asc' ? -1 : 1;
-      if (aVal > bVal) return compareSort.direction === 'asc' ? 1 : -1;
-      return 0;
-    });
-  };
-
-  const compareProjects = getSortedCompareProjects();
+  // The projects of months A and B, paired by id (#55), and by account in the Account column
+  // (#119), in the order the user sorts them, by month A until then (#146)
+  const projectSorting = sortingOf('projects');
+  const compareProjects = sortRows(
+    projectComparisonRows(byProjectA, byProjectB), projectSorting.sort,
+    projectComparisonValues(accountColumn), language,
+  );
   // The projects whose consumption the tab compares, once each, in the order of their first
   // rows: in the Account column, a project billed to several accounts has a row for each (#119)
   const consumptionProjects = firstRowOfEachProject(compareProjects);
@@ -196,33 +186,38 @@ const CompareTab = ({
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b text-left bg-gray-50">
-              <th
-                className="p-3 font-medium rounded-tl-lg cursor-pointer hover:bg-gray-100 select-none"
-                onClick={() => handleCompareSort('name')}
+              <SortableHeader
+                column="name" kind="text" sorting={projectSorting} t={t}
+                className="p-3 font-medium rounded-tl-lg"
               >
-                {t('project')}<SortIcon column="name" current={compareSort} />
-              </th>
+                {t('project')}
+              </SortableHeader>
               {accountColumn && (
-                <th className="p-3 font-medium">{accountColumn.label}</th>
+                <SortableHeader
+                  column="account" kind="text" sorting={projectSorting} t={t}
+                  className="p-3 font-medium"
+                >
+                  {accountColumn.label}
+                </SortableHeader>
               )}
-              <th
-                className="p-3 font-medium text-right cursor-pointer hover:bg-gray-100 select-none"
-                onClick={() => handleCompareSort('totalA')}
+              <SortableHeader
+                column="totalA" kind="number" sorting={projectSorting} t={t}
+                className="p-3 font-medium text-right"
               >
-                {monthALabel}<SortIcon column="totalA" current={compareSort} />
-              </th>
-              <th
-                className="p-3 font-medium text-right cursor-pointer hover:bg-gray-100 select-none"
-                onClick={() => handleCompareSort('totalB')}
+                {monthALabel}
+              </SortableHeader>
+              <SortableHeader
+                column="totalB" kind="number" sorting={projectSorting} t={t}
+                className="p-3 font-medium text-right"
               >
-                {monthBLabel}<SortIcon column="totalB" current={compareSort} />
-              </th>
-              <th
-                className="p-3 font-medium text-right rounded-tr-lg cursor-pointer hover:bg-gray-100 select-none"
-                onClick={() => handleCompareSort('diff')}
+                {monthBLabel}
+              </SortableHeader>
+              <SortableHeader
+                column="variation" kind="number" sorting={projectSorting} t={t}
+                className="p-3 font-medium text-right rounded-tr-lg"
               >
-                {t('variation')}<SortIcon column="diff" current={compareSort} />
-              </th>
+                {t('variation')}
+              </SortableHeader>
             </tr>
           </thead>
           <tbody>

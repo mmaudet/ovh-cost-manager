@@ -241,21 +241,24 @@ describe('Compare tab', () => {
 
       await sortTable(user, projectTable(), /^Projet/);
 
-      expect(header()).toEqual(['Projet▼', 'Août 2026○', 'Septembre 2026○', 'Variation○']);
-      expect(projects()).toEqual(['Staging', 'Sandbox', 'Production']);
+      // From A to Z first, as every text column (#146)
+      expect(header()).toEqual(['Projet▲', 'Août 2026○', 'Septembre 2026○', 'Variation○']);
+      expect(projects()).toEqual(['Production', 'Sandbox', 'Staging']);
 
       await sortTable(user, projectTable(), /^Projet/);
 
-      expect(header()).toEqual(['Projet▲', 'Août 2026○', 'Septembre 2026○', 'Variation○']);
-      expect(projects()).toEqual(['Production', 'Sandbox', 'Staging']);
+      expect(header()).toEqual(['Projet▼', 'Août 2026○', 'Septembre 2026○', 'Variation○']);
+      expect(projects()).toEqual(['Staging', 'Sandbox', 'Production']);
       // The comparisons of each project follow the same order
       expect(projectComparisons())
-        .toEqual(['Production (Projet)', 'Sandbox (Projet)', 'Staging (Projet)']);
+        .toEqual(['Staging (Projet)', 'Sandbox (Projet)', 'Production (Projet)']);
     });
 
     it('keeps its sort order when the user comes back to the tab', async () => {
       const { user } = await renderDashboard();
       await openTab(user, 'Comparaison');
+      // From Z to A, the second way (#146)
+      await sortTable(user, projectTable(), /^Projet/);
       await sortTable(user, projectTable(), /^Projet/);
 
       await openTab(user, "Vue d'ensemble");
@@ -374,7 +377,13 @@ describe('Compare tab', () => {
       expect(header()).toEqual(['Projet○', 'Juillet 2026○', 'Septembre 2026○', 'Variation▼']);
       expect(projects()).toEqual(['Production', 'Staging', 'Sandbox']);
 
-      await sortTable(user, projectTable(), /^Projet/);
+      await sortTable(user, projectTable(), /^Variation/);
+
+      // Whichever way, as any value that the page cannot show (#146)
+      expect(header()).toEqual(['Projet○', 'Juillet 2026○', 'Septembre 2026○', 'Variation▲']);
+      expect(projects()).toEqual(['Production', 'Staging', 'Sandbox']);
+
+      // From A to Z first, as every text column (#146)
       await sortTable(user, projectTable(), /^Projet/);
 
       expect(header()).toEqual(['Projet▲', 'Juillet 2026○', 'Septembre 2026○', 'Variation○']);
@@ -1065,7 +1074,7 @@ describe('Compare tab', () => {
         await openTab(user, 'Comparaison');
 
         expect(projectRows()).toEqual([
-          ['Projet○', 'Compte', 'Août 2026▼', 'Septembre 2026○', 'Variation○'],
+          ['Projet○', 'Compte○', 'Août 2026▼', 'Septembre 2026○', 'Variation○'],
           ['Production', 'Lyon subsidiary', '512,00€', '610,40€', '+19,2 %'],
           ['Staging', 'yy2222-ovh', '190,00€', '220,00€', '+15,8 %'],
         ]);
@@ -1085,7 +1094,7 @@ describe('Compare tab', () => {
 
           // (170 - 190) / 190
           expect(projectRows()).toEqual([
-            ['Projet○', 'Compte', 'Août 2026▼', 'Septembre 2026○', 'Variation○'],
+            ['Projet○', 'Compte○', 'Août 2026▼', 'Septembre 2026○', 'Variation○'],
             ['Production', 'Lyon subsidiary', '512,00€', '610,40€', '+19,2 %'],
             ['Staging', 'yy2222-ovh', '190,00€', '170,00€', '-10,5 %'],
             ['Staging', 'Lyon subsidiary', '0,00€', '50,00€', '—'],
@@ -1115,7 +1124,7 @@ describe('Compare tab', () => {
           await selectAccount(user, 'Tous les comptes');
 
           expect(headerOf(comparisonTable(PROJECTS)))
-            .toEqual(['Projet○', 'Compte', 'Août 2026▼', 'Septembre 2026○', 'Variation○']);
+            .toEqual(['Projet○', 'Compte○', 'Août 2026▼', 'Septembre 2026○', 'Variation○']);
         });
 
       // As the page shows it before an instance could import several accounts, whatever the
@@ -1154,7 +1163,7 @@ describe('Compare tab', () => {
         await selectLanguage(user, 'en');
 
         expect(rowsOf(comparisonTable(/^Comparison by project/))).toEqual([
-          ['Project○', 'Account', 'August 2026▼', 'September 2026○', 'Variation○'],
+          ['Project○', 'Account○', 'August 2026▼', 'September 2026○', 'Variation○'],
           ['Production', 'Lyon subsidiary', '512.00€', '610.40€', '+19.2%'],
           ['Staging', 'yy2222-ovh', '190.00€', '0.00€', '-100.0%'],
           ['Legacy', 'Unknown account', '0.00€', '20.00€', '—'],

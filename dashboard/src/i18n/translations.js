@@ -59,6 +59,10 @@ export const translations = {
     variation: 'Variation',
     variationNotComputable: 'non calculable : mois A à 0 € ou moins',
 
+    // What a click on the header of a column that sorts its table does (#146)
+    sortAscending: 'Trier par ordre croissant',
+    sortDescending: 'Trier par ordre décroissant',
+
     // Trends
     evolutionOver: 'Évolution sur',
     noDataAvailable: 'Pas de données disponibles pour cette période',
@@ -292,6 +296,10 @@ export const translations = {
     projectComparison: 'Comparison by project',
     variation: 'Variation',
     variationNotComputable: 'cannot be computed: month A at €0 or below',
+
+    // What a click on the header of a column that sorts its table does (#146)
+    sortAscending: 'Sort in ascending order',
+    sortDescending: 'Sort in descending order',
 
     // Trends
     evolutionOver: 'Evolution over',
