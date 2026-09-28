@@ -10,6 +10,7 @@ import {
   backdropOf,
   cardOf,
   cardRowOf,
+  headerOf,
   openTab,
   renderDashboard,
   rowsOf,
@@ -17,6 +18,7 @@ import {
   selectLanguage,
   selectMonth,
   settle,
+  sortTable,
   texts,
 } from './support/render.jsx';
 
@@ -31,7 +33,7 @@ const familyButton = (family, name) => within(familyPanel(family)).getByRole('bu
 const familyHeadings = () =>
   screen.queryAllByRole('heading', { level: 3 }).map((heading) => texts(heading));
 
-const tableHeader = ['Service', 'Libellé de facture', 'Dernière facture', 'Coût'];
+const tableHeader = ['Service○', 'Libellé de facture○', 'Dernière facture○', 'Coût○'];
 // The byte order mark that starts the CSV files, so that Excel reads their
 // accents as UTF-8
 const BOM = '\uFEFF';
@@ -130,6 +132,33 @@ describe('Web Cloud tab', () => {
     expect(rowsOf(familyTable('Options'))).toEqual([
       tableHeader,
       ['example.com', 'Option CDN Basic example.com - 12 mois', '2026-09-01', '11,88€'],
+    ]);
+  });
+
+  // Each family on its own (#146)
+  it('sorts the services of a family by any column, in its "show all" modal too', async () => {
+    const { user } = await renderDashboard();
+    await openTab(user, 'Web Cloud');
+
+    await sortTable(user, familyTable('Domaines'), /^Dernière facture/);
+
+    // The latest billed first
+    expect(rowsOf(familyTable('Domaines'))).toEqual([
+      ['Service○', 'Libellé de facture○', 'Dernière facture▼', 'Coût○'],
+      ['example.org', 'Renouvellement du domaine example.org - 1 an', '2026-09-01', '12,49€'],
+      ['example.com', 'Renouvellement du domaine example.com - 1 an', '2026-01-05', '15,99€'],
+    ]);
+    expect(headerOf(familyTable('Emails'))).toEqual(tableHeader);
+
+    await sortTable(user, familyTable('Emails'), /^Coût/);
+    await sortTable(user, familyTable('Emails'), /^Coût/);
+    await user.click(familyButton('Emails', 'Tout afficher'));
+
+    // The credit note first
+    expect(rowsOf(within(screen.getByRole('dialog')).getByRole('table'))).toEqual([
+      ['Service○', 'Libellé de facture○', 'Dernière facture○', 'Coût▲'],
+      ['example.org', 'Avoir MX Plan example.org', '2026-09-01', '-3,00€'],
+      ['example.com', 'Email Pro example.com - 2 comptes - 12 mois', '2026-09-01', '47,52€'],
     ]);
   });
 
@@ -322,7 +351,7 @@ describe('Web Cloud tab', () => {
     ]);
     expect(familyHeadings()[0]).toEqual(['Domains (2)', '28.48€', 'Show all', 'CSV']);
     expect(rowsOf(familyTable('Domains'))[0])
-      .toEqual(['Service', 'Bill wording', 'Last billed', 'Cost']);
+      .toEqual(['Service○', 'Bill wording○', 'Last billed○', 'Cost○']);
     const downloadedFiles = captureFileDownloads();
 
     await user.click(familyButton('Domains', 'CSV'));
@@ -416,7 +445,7 @@ describe('Web Cloud tab with several accounts', () => {
 
   describe('Account column', () => {
     const headerWithAccount =
-      ['Service', 'Compte', 'Libellé de facture', 'Dernière facture', 'Coût'];
+      ['Service○', 'Compte○', 'Libellé de facture○', 'Dernière facture○', 'Coût○'];
 
     // By its name, or else its NIC handle, as that of the account removed from config.json.
     // Email Pro example.com moved from that account to Lyon: a service of each, with its cost.
@@ -507,7 +536,7 @@ describe('Web Cloud tab with several accounts', () => {
       await openTab(user, 'Web Cloud');
 
       expect(rowsOf(familyTable('DNS zones'))).toEqual([
-        ['Service', 'Account', 'Bill wording', 'Last billed', 'Cost'],
+        ['Service○', 'Account○', 'Bill wording○', 'Last billed○', 'Cost○'],
         ['example.com', 'Unknown account', 'Zone DNS Anycast example.com - 12 mois',
           '2026-07-01', '1.20€'],
       ]);
