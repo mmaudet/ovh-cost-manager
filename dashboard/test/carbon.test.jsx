@@ -269,7 +269,7 @@ describe('Carbon tab', () => {
     // Its legend, which names the emission sources that it stacks
     const legend = (name = "Postes d'émission") => screen.getByRole('list', { name });
     // A month without a footprint
-    const none = (month) => [month, '—', '—', '—', '—'];
+    const none = (month) => [month, '—', '—', '—', '—', '—'];
 
     it('shows the 12 months up to the month it shows, by emission source', async () => {
       const { user } = await renderDashboard();
@@ -281,19 +281,22 @@ describe('Carbon tab', () => {
       expect(screen.getByRole('heading', { name: 'Tendance sur 12 mois (kgCO₂e)' }))
         .toBeInTheDocument();
       expect(texts(legend())).toEqual(['Fabrication', 'Électricité', 'Opérations']);
+      // With each month's covered share (#157)
       expect(rowsOf(trendTable())).toEqual([
-        ['Mois', 'Fabrication', 'Électricité', 'Opérations', 'Total'],
+        ['Mois', 'Fabrication', 'Électricité', 'Opérations', 'Total', 'Part couverte'],
         none('Septembre 2025'), none('Octobre 2025'), none('Novembre 2025'),
-        ['Décembre 2025', '1 100,00', '2 100,00', '400,00', '3 600,00'],
-        ['Janvier 2026', '1 150,00', '2 200,00', '420,00', '3 770,00'],
-        ['Février 2026', '1 150,00', '2 150,00', '410,00', '3 710,00'],
-        ['Mars 2026', '1 175,00', '2 250,00', '430,00', '3 855,00'],
-        ['Avril 2026', '1 200,00', '2 300,00', '440,00', '3 940,00'],
-        ['Mai 2026', '1 200,00', '2 275,00', '435,00', '3 910,00'],
-        ['Juin 2026', '1 225,00', '2 325,00', '450,00', '4 000,00'],
+        ['Décembre 2025', '1 100,00', '2 100,00', '400,00', '3 600,00', '80,0 %'],
+        ['Janvier 2026', '1 150,00', '2 200,00', '420,00', '3 770,00', '79,0 %'],
+        ['Février 2026', '1 150,00', '2 150,00', '410,00', '3 710,00', '79,0 %'],
+        ['Mars 2026', '1 175,00', '2 250,00', '430,00', '3 855,00', '77,0 %'],
+        ['Avril 2026', '1 200,00', '2 300,00', '440,00', '3 940,00', '78,0 %'],
+        ['Mai 2026', '1 200,00', '2 275,00', '435,00', '3 910,00', '76,0 %'],
+        ['Juin 2026', '1 225,00', '2 325,00', '450,00', '4 000,00', '75,0 %'],
         none('Juillet 2026'),
-        ['Août 2026', '1 234,50', '2 345,25', '456,75', '4 036,50'],
+        ['Août 2026', '1 234,50', '2 345,25', '456,75', '4 036,50', '71,9 %'],
       ]);
+      expect(screen.getByText('Sous chaque mois, la part de son coût que son empreinte couvre.'))
+        .toBeInTheDocument();
     });
 
     it('asks for no trend without any carbon footprint', async () => {
@@ -314,7 +317,7 @@ describe('Carbon tab', () => {
 
       expect(api.fetchCarbonTrend).toHaveBeenLastCalledWith('2026-08', 'yy2222-ovh');
       expect(rowsOf(trendTable()).at(-1))
-        .toEqual(['Août 2026', '800,00', '1 500,00', '300,00', '2 600,00']);
+        .toEqual(['Août 2026', '800,00', '1 500,00', '300,00', '2 600,00', '75,0 %']);
     });
 
     it('speaks English', async () => {
@@ -328,8 +331,12 @@ describe('Carbon tab', () => {
       expect(texts(legend('Emission sources')))
         .toEqual(['Manufacturing', 'Electricity', 'Operations']);
       const rows = rowsOf(trendTable('See the figures'));
-      expect(rows[0]).toEqual(['Month', 'Manufacturing', 'Electricity', 'Operations', 'Total']);
-      expect(rows.at(-1)).toEqual(['August 2026', '1,234.50', '2,345.25', '456.75', '4,036.50']);
+      expect(rows[0]).toEqual([
+        'Month', 'Manufacturing', 'Electricity', 'Operations', 'Total', 'Covered share',
+      ]);
+      expect(rows.at(-1)).toEqual([
+        'August 2026', '1,234.50', '2,345.25', '456.75', '4,036.50', '71.9%',
+      ]);
     });
   });
 
@@ -474,6 +481,69 @@ describe('Carbon tab', () => {
         ['Item', 'Type', 'Datacenter', 'Footprint (kgCO₂e)', 'Cost', 'Intensity (kgCO₂e/€)'],
         ['ns1234567.ip-10-0-0.eu', 'Dedicated server', 'GRA', '1,500.00', '3,000.00€', '0.500'],
       ]);
+    });
+  });
+
+  // The share of the month's cost that the footprint covers (#157), so that nobody takes it
+  // for that of the whole infrastructure
+  describe('covered cost', () => {
+    // The paragraph that says it, its link within its sentences
+    const coverage = () => screen.getByText(/(couvre|covers) \d/, { selector: 'p' });
+
+    it("says what share of the month's cost the footprint covers", async () => {
+      const { user } = await renderDashboard();
+
+      // September, which shows August
+      await openTab(user, 'Carbone');
+
+      expect(sentenceOf(coverage())).toBe("L'empreinte couvre 71,9 % du coût du mois. OVHcloud "
+        + "ne calcule pas l'empreinte de tous ses services : voir la liste de ceux qu'il couvre.");
+      expect(within(coverage()).getByRole('link', { name: "la liste de ceux qu'il couvre" }))
+        .toHaveAttribute('href', 'https://docs.ovhcloud.com/fr/guides/'
+          + 'account-and-service-management/managing-billing-payments-and-services/'
+          + 'carbon-footprint');
+    });
+
+    it('says only its share when the footprint covers the whole cost', async () => {
+      const { user } = await renderDashboard({
+        ...account,
+        carbonByServer: {
+          '2026-08': {
+            ...account.carbonByServer['2026-08'], coveredCost: 40000, coveredShare: 1,
+          },
+        },
+      });
+
+      await openTab(user, 'Carbone');
+
+      expect(sentenceOf(coverage())).toBe("L'empreinte couvre 100,0 % du coût du mois.");
+    });
+
+    it('says nothing of it when the month of use costs nothing', async () => {
+      const { user } = await renderDashboard({
+        ...account,
+        carbonByServer: {
+          '2026-08': {
+            ...account.carbonByServer['2026-08'], coveredCost: 0, coveredShare: null,
+          },
+        },
+      });
+
+      await openTab(user, 'Carbone');
+
+      expect(screen.queryByText(/L'empreinte couvre/)).toBeNull();
+    });
+
+    it('speaks English', async () => {
+      const { user } = await renderDashboard(severalAccounts);
+      await selectLanguage(user, 'EN');
+      await selectAccount(user, 'yy2222-ovh');
+
+      await openTab(user, 'Carbon');
+
+      expect(sentenceOf(coverage())).toBe("The footprint covers 75.0% of the month's cost. "
+        + 'OVHcloud does not compute the footprint of all its services: see the list of those '
+        + 'it covers.');
     });
   });
 });

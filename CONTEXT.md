@@ -85,5 +85,11 @@ _Avoid_: efficiency, emission factor
 
 **Covered cost**:
 The part of a month of use's cost whose bill lines the carbon footprint of that month
-names.
+covers, before their credits and discounts: those of the services that it names, and every
+dedicated server's when it names none of them.
 _Avoid_: covered spend
+
+**Covered share**:
+The share of a month of use's cost, before its credits and discounts, that is covered
+cost, which shows what the carbon footprint leaves out.
+_Avoid_: coverage rate

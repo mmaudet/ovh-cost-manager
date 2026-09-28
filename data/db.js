@@ -2519,6 +2519,47 @@ const FOOTPRINT_SUMS = `
 // How many months the trend of the carbon footprint covers (#154)
 const TREND_MONTHS = 12;
 
+// The footprint lines of the months from `first` to `last`, YYYY-MM, of the account (see
+// accountCondition()), or of every account, each with its location-based footprint, as
+// tieFootprint() takes them
+function footprintLinesOf(first, last, account) {
+  const ofAccount = accountCondition(account, 'account');
+  return getDb().prepare(`
+    SELECT *, ${LOCATION_FOOTPRINT} as footprint
+    FROM carbon_footprint_lines
+    WHERE month >= ? AND month <= ? AND ${ofAccount.sql}
+    ORDER BY id
+  `).all(first, last, ...ofAccount.params);
+}
+
+// The bill lines of the months of use from `first` to `last`, YYYY-MM, of the account (see
+// accountCondition()), or of every account, as tieFootprint() takes them, each with its month
+// of use: the lines of a Public Cloud project, which OVHcloud bills after use, are on the next
+// month's bills, the others on the month's. The dates of the bills bound the query, which
+// their index serves.
+function billLinesOfUse(first, last, account) {
+  const ofBills = accountCondition(account, 'b.account');
+  const dayOne = (month) => `${month}-01`;
+  return getDb().prepare(`
+    SELECT d.description, d.domain, d.project_id, d.resource_type, d.total_price, b.account,
+      CASE WHEN d.project_id IS NULL THEN substr(b.date, 1, 7)
+        ELSE strftime('%Y-%m', substr(b.date, 1, 10), 'start of month', '-1 month')
+      END as month
+    FROM bills b
+    JOIN bill_details d ON d.bill_id = b.id
+    WHERE b.date >= ? AND b.date < ?
+      AND ((d.project_id IS NOT NULL AND b.date >= ?) OR (d.project_id IS NULL AND b.date < ?))
+      AND ${ofBills.sql}
+  `).all(
+    dayOne(first), dayOne(shiftMonth(last, 2)), dayOne(shiftMonth(first, 1)),
+    dayOne(shiftMonth(last, 1)), ...ofBills.params,
+  );
+}
+
+// The region of each instance of the inventory, which places a prorata that names none
+const instanceRegionsOf = () => new Map(getDb().prepare('SELECT id, region FROM cloud_instances')
+  .all().map(({ id, region }) => [id, region]));
+
 const carbonOps = {
   /**
    * Replaces an account's footprint lines of some months with those of a file, in one
@@ -2576,11 +2617,13 @@ const carbonOps = {
   /**
    * The carbon footprint of the 12 months that end on a month (#154), location-based, of the
    * account (see accountCondition()), or of every account by default: each month's footprint
-   * by emission source and in total, in kg CO2eq, to the hundredth.
+   * by emission source and in total, in kg CO2eq, to the hundredth, and its covered share
+   * (#157), as getTies() gives it.
    * @param {string} end - The last month, YYYY-MM
    * @param {?string} [account]
-   * @returns {{month: string, footprint: ?object}[]} Each month, the earliest first, with its
-   *   footprint, null for a month without one
+   * @returns {{month: string, footprint: ?object, coveredShare: ?number}[]} Each month, the
+   *   earliest first, with its footprint and its covered share, null for a month without a
+   *   footprint
    */
   getTrend: (end, account = null) => {
     const first = shiftMonth(end, 1 - TREND_MONTHS);
@@ -2591,44 +2634,39 @@ const carbonOps = {
       WHERE month >= ? AND month <= ? AND ${ofAccount.sql}
       GROUP BY month
     `).all(first, end, ...ofAccount.params).map(({ month, ...footprint }) => [month, footprint]));
+    // The lines of the 12 months and the bill lines of their months of use, read at once
+    const footprintLines = Map.groupBy(footprintLinesOf(first, end, account), line => line.month);
+    const billLines = Map.groupBy(billLinesOfUse(first, end, account), line => line.month);
+    const instanceRegions = instanceRegionsOf();
     return Array.from({ length: TREND_MONTHS }, (_, index) => {
       const month = shiftMonth(first, index);
-      return { month, footprint: byMonth.get(month) ?? null };
+      const footprint = byMonth.get(month) ?? null;
+      return {
+        month,
+        footprint,
+        coveredShare: footprint
+          ? tieFootprint(footprintLines.get(month), billLines.get(month) ?? [], instanceRegions)
+            .coveredShare
+          : null,
+      };
     });
   },
 
   /**
    * The lines of a month's carbon footprint, of the account (see accountCondition()), or of
    * every account by default, each with what the bill lines that it ties to cost in that month
-   * of use, and its intensity (#155, see data/carbon-ties.js).
+   * of use, and its intensity (#155, see data/carbon-ties.js); and the covered cost of the
+   * month of use, with its covered share (#157).
    * @param {string} month - YYYY-MM
    * @param {?string} [account]
-   * @returns {object[]} As tieFootprint() gives them
+   * @returns {{lines: object[], coveredCost: number, coveredShare: ?number}} As
+   *   tieFootprint() gives them, from the bill lines of the month of use of every account
+   *   asked for, those without a footprint included
    */
-  getLines: (month, account = null) => {
-    const db = getDb();
-    const ofFootprint = accountCondition(account, 'account');
-    const footprintLines = db.prepare(`
-      SELECT *, ${LOCATION_FOOTPRINT} as footprint
-      FROM carbon_footprint_lines
-      WHERE month = ? AND ${ofFootprint.sql}
-      ORDER BY id
-    `).all(month, ...ofFootprint.params);
-    // The bill lines of the month of use: those of a Public Cloud project, which OVHcloud bills
-    // after use, on the next month's bills, and the others on the month's
-    const ofBills = accountCondition(account, 'b.account');
-    const billLines = db.prepare(`
-      SELECT d.description, d.domain, d.project_id, d.resource_type, d.total_price, b.account
-      FROM bill_details d
-      JOIN bills b ON b.id = d.bill_id
-      WHERE ((d.project_id IS NOT NULL AND substr(b.date, 1, 7) = ?)
-          OR (d.project_id IS NULL AND substr(b.date, 1, 7) = ?))
-        AND ${ofBills.sql}
-    `).all(shiftMonth(month, 1), month, ...ofBills.params);
-    const instanceRegions = new Map(db.prepare('SELECT id, region FROM cloud_instances').all()
-      .map(({ id, region }) => [id, region]));
-    return tieFootprint(footprintLines, billLines, instanceRegions);
-  },
+  getTies: (month, account = null) => tieFootprint(
+    footprintLinesOf(month, month, account), billLinesOfUse(month, month, account),
+    instanceRegionsOf(),
+  ),
 
   /**
    * The latest month that has a carbon footprint, of the account (see accountCondition()), or

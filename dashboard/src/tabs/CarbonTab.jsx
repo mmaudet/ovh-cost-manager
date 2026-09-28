@@ -5,7 +5,8 @@ import TableActions from '../components/TableActions.jsx';
 import { accountCsvColumns, withAccountNames } from '../utils/accounts.js';
 import { downloadCSV } from '../utils/csv.js';
 import {
-  formatDecimal, formatMonthLabel, formatMonthName, formatWholeNumber, formatYearMonth,
+  formatDecimal, formatMonthLabel, formatMonthName, formatPercent, formatWholeNumber,
+  formatYearMonth,
 } from '../utils/format.js';
 
 // The emission sources of a carbon footprint, in the order the tab shows them: the key of
@@ -24,6 +25,9 @@ const SOURCE_COLORS = {
 
 // The white block that the tab shows a card or a message in
 const PANEL = 'bg-white rounded-xl shadow-sm border border-gray-100';
+
+// What goes before a colon: a space in French, none in English
+const beforeColon = (language) => (language === 'en' ? '' : ' ');
 
 // A card of the footprint: its label, its emissions in kg CO2eq, and what it adds to them
 const FootprintCard = ({ label, value, fmt, emphasis = false, children = null }) => (
@@ -57,6 +61,15 @@ function missingMonthNotice(missingMonth, shownMonth, accountImport, language) {
     : `${label} n'a pas d'empreinte carbone.`;
 }
 
+// The share of the month's cost that its footprint covers (#157), so that nobody takes the
+// footprint for that of the whole infrastructure
+const coverageSentence = (coveredShare, language) => {
+  const share = formatPercent(coveredShare, language);
+  return language === 'en'
+    ? `The footprint covers ${share} of the month's cost.`
+    : `L'empreinte couvre ${share} du coût du mois.`;
+};
+
 // The accounts that the footprint of all accounts leaves out, as it has none for the month
 // (#153)
 const withoutFootprintSentence = (month, names, language) => (language === 'en'
@@ -68,10 +81,9 @@ const guideUrl = (language) => `https://docs.ovhcloud.com/${language === 'en' ? 
   + '/guides/account-and-service-management/managing-billing-payments-and-services/'
   + 'carbon-footprint';
 
-// How to get a carbon footprint: the right to add to the account's key, and the import option
-// (#153)
-const HowToGetOne = ({ language }) => {
-  const code = (text) => <code className="text-xs bg-gray-100 rounded px-1">{text}</code>;
+// That OVHcloud does not compute the footprint of all its services, with the link to its
+// guide, which lists those that it covers
+const NotAllServices = ({ language }) => {
   const guideLink = (text) => (
     <a href={guideUrl(language)} className="text-blue-600 underline" target="_blank"
       rel="noreferrer">
@@ -80,18 +92,34 @@ const HowToGetOne = ({ language }) => {
   );
   return language === 'en' ? (
     <>
+      OVHcloud does not compute the footprint of all its services: see{' '}
+      {guideLink('the list of those it covers')}.
+    </>
+  ) : (
+    <>
+      OVHcloud ne calcule pas l'empreinte de tous ses services : voir{' '}
+      {guideLink("la liste de ceux qu'il couvre")}.
+    </>
+  );
+};
+
+// How to get a carbon footprint: the right to add to the account's key, and the import option
+// (#153)
+const HowToGetOne = ({ language }) => {
+  const code = (text) => <code className="text-xs bg-gray-100 rounded px-1">{text}</code>;
+  return language === 'en' ? (
+    <>
       No carbon footprint yet. To import it, add the right{' '}
       {code('POST /me/carbonCalculator/csv')} to the account's API key, and import with{' '}
-      {code('--include-carbon')}, which{' '}
-      {code('--all')} includes. OVHcloud does not compute the footprint of all its services:
-      see {guideLink('the list of those it covers')}.
+      {code('--include-carbon')}, which {code('--all')} includes.{' '}
+      <NotAllServices language={language} />
     </>
   ) : (
     <>
       Pas encore d'empreinte carbone. Pour l'importer, ajoutez à la clé API du compte le
       droit {code('POST /me/carbonCalculator/csv')}, et importez avec{' '}
-      {code('--include-carbon')}, que {code('--all')} comprend. OVHcloud ne calcule pas
-      l'empreinte de tous ses services : voir {guideLink("la liste de ceux qu'il couvre")}.
+      {code('--include-carbon')}, que {code('--all')} comprend.{' '}
+      <NotAllServices language={language} />
     </>
   );
 };
@@ -228,91 +256,134 @@ const ListPanel = ({
   );
 };
 
+// A month under the trend's chart, and under it the share of its cost that its footprint
+// covers (#157), when it has one: a step in the footprint may come from OVHcloud covering a
+// new service, rather than from an increase
+const MonthTick = ({ x, y, payload, months, language }) => {
+  const coveredShare = months.find(({ month }) => month === payload.value)?.coveredShare;
+  return (
+    <g transform={`translate(${x},${y})`}>
+      <text dy={12} textAnchor="middle" fill="#6b7280" fontSize={12}>
+        {formatYearMonth(payload.value, language)}
+      </text>
+      {coveredShare != null && (
+        <text dy={28} textAnchor="middle" fill="#6b7280" fontSize={11}>
+          {formatPercent(coveredShare, language)}
+        </text>
+      )}
+    </g>
+  );
+};
+
 // The footprint of the 12 months up to the month that the tab shows (#154), stacked by
-// emission source, with the table of its figures: a month without a footprint has none, not 0
-const TrendPanel = ({ carbonTrend, loadingTrend, failedTrend, language, t, fmt }) => (
-  <CarbonPanel
-    heading={`${t('carbonTrend')} (kgCO₂e)`} loading={loadingTrend} failed={failedTrend}
-    failedLabel={t('carbonTrendFailed')} t={t}
-  >
-    <ul aria-label={t('emissionSources')} className="flex gap-4 text-sm text-gray-600">
-      {EMISSION_SOURCES.map(source => (
-        <li key={source} className="flex items-center gap-2">
-          <span
-            className="inline-block w-3 h-3 rounded-sm"
-            style={{ backgroundColor: SOURCE_COLORS[source] }}
-          />
-          {t(source)}
-        </li>
-      ))}
-    </ul>
-    <div className="h-64">
-      <ResponsiveContainer width="100%" height="100%">
-        <BarChart
-          data={(carbonTrend ?? []).map(({ month, footprint }) => ({ month, ...footprint }))}
-        >
-          <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" vertical={false} />
-          <XAxis
-            dataKey="month" tick={{ fontSize: 12 }}
-            tickFormatter={(yearMonth) => formatYearMonth(yearMonth, language)}
-          />
-          <YAxis
-            tick={{ fontSize: 12 }} width={64}
-            tickFormatter={(value) => formatWholeNumber(value, language)}
-          />
-          <Tooltip
-            labelFormatter={(yearMonth) => formatYearMonth(yearMonth, language)}
-            formatter={(value, name) => [`${fmt(value)} kgCO₂e`, name]}
-          />
-          {EMISSION_SOURCES.map((source, index) => (
-            <Bar
-              key={source} dataKey={source} name={t(source)} stackId="footprint"
-              fill={SOURCE_COLORS[source]} stroke="#ffffff" strokeWidth={2}
-              radius={index === EMISSION_SOURCES.length - 1 ? [4, 4, 0, 0] : 0}
+// emission source, with each month's covered share (#157) and the table of its figures: a
+// month without a footprint has none, not 0
+const TrendPanel = ({ carbonTrend, loadingTrend, failedTrend, language, t, fmt }) => {
+  // Each month as the chart draws it: its emission sources and its covered share
+  const months = (carbonTrend ?? []).map(({ month, footprint, coveredShare }) => ({
+    month, coveredShare, ...footprint,
+  }));
+  return (
+    <CarbonPanel
+      heading={`${t('carbonTrend')} (kgCO₂e)`} loading={loadingTrend} failed={failedTrend}
+      failedLabel={t('carbonTrendFailed')} t={t}
+    >
+      <ul aria-label={t('emissionSources')} className="flex gap-4 text-sm text-gray-600">
+        {EMISSION_SOURCES.map(source => (
+          <li key={source} className="flex items-center gap-2">
+            <span
+              className="inline-block w-3 h-3 rounded-sm"
+              style={{ backgroundColor: SOURCE_COLORS[source] }}
             />
-          ))}
-        </BarChart>
-      </ResponsiveContainer>
-    </div>
-    <details>
-      <summary className="cursor-pointer text-sm text-gray-500">{t('seeFigures')}</summary>
-      <table className="w-full text-sm mt-2">
-        <thead>
-          <tr className="text-gray-500">
-            <th className="text-left font-medium py-1">{t('month')}</th>
-            {EMISSION_SOURCES.map(source => (
-              <th key={source} className="text-right font-medium py-1">{t(source)}</th>
+            {t(source)}
+          </li>
+        ))}
+      </ul>
+      <div className="h-64">
+        <ResponsiveContainer width="100%" height="100%">
+          <BarChart data={months}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" vertical={false} />
+            <XAxis
+              dataKey="month" height={40}
+              tick={<MonthTick months={months} language={language} />}
+            />
+            <YAxis
+              tick={{ fontSize: 12 }} width={64}
+              tickFormatter={(value) => formatWholeNumber(value, language)}
+            />
+            <Tooltip
+              labelFormatter={(yearMonth, items) => {
+                const coveredShare = items?.[0]?.payload.coveredShare;
+                return (
+                  <>
+                    {formatYearMonth(yearMonth, language)}
+                    {coveredShare != null && (
+                      <span className="block font-normal text-gray-500">
+                        {t('coveredShare')}{beforeColon(language)}:{' '}
+                        {formatPercent(coveredShare, language)}
+                      </span>
+                    )}
+                  </>
+                );
+              }}
+              formatter={(value, name) => [`${fmt(value)} kgCO₂e`, name]}
+            />
+            {EMISSION_SOURCES.map((source, index) => (
+              <Bar
+                key={source} dataKey={source} name={t(source)} stackId="footprint"
+                fill={SOURCE_COLORS[source]} stroke="#ffffff" strokeWidth={2}
+                radius={index === EMISSION_SOURCES.length - 1 ? [4, 4, 0, 0] : 0}
+              />
             ))}
-            <th className="text-right font-medium py-1">Total</th>
-          </tr>
-        </thead>
-        <tbody>
-          {carbonTrend?.map(({ month, footprint }) => (
-            <tr key={month} className="border-t border-gray-100">
-              <td className="py-1">{formatMonthLabel(month, language)}</td>
-              {[...EMISSION_SOURCES, 'total'].map(key => (
-                <td key={key} className="text-right py-1">
-                  {footprint ? fmt(footprint[key]) : '—'}
-                </td>
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+      <p className="text-xs text-gray-500">{t('coveredShareUnderMonths')}</p>
+      <details>
+        <summary className="cursor-pointer text-sm text-gray-500">{t('seeFigures')}</summary>
+        <table className="w-full text-sm mt-2">
+          <thead>
+            <tr className="text-gray-500">
+              <th className="text-left font-medium py-1">{t('month')}</th>
+              {EMISSION_SOURCES.map(source => (
+                <th key={source} className="text-right font-medium py-1">{t(source)}</th>
               ))}
+              <th className="text-right font-medium py-1">Total</th>
+              <th className="text-right font-medium py-1">{t('coveredShare')}</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
-    </details>
-  </CarbonPanel>
-);
+          </thead>
+          <tbody>
+            {carbonTrend?.map(({ month, footprint, coveredShare }) => (
+              <tr key={month} className="border-t border-gray-100">
+                <td className="py-1">{formatMonthLabel(month, language)}</td>
+                {[...EMISSION_SOURCES, 'total'].map(key => (
+                  <td key={key} className="text-right py-1">
+                    {footprint ? fmt(footprint[key]) : '—'}
+                  </td>
+                ))}
+                <td className="text-right py-1">
+                  {coveredShare == null ? '—' : formatPercent(coveredShare, language)}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </details>
+    </CarbonPanel>
+  );
+};
 
 // The Carbon tab (#147), which the shell renders while it is active: what useCarbonTab()
 // returns, with the shell's language, translations (t) and amount format (fmt), how the
 // account shown is imported (importStateOf(), #153), and the Account column of the lists,
 // which names an account when all of them are shown: the carbon footprint that OVHcloud's
 // carbon calculator attributes to the month selected, by emission source, or, when that month
-// has none, to the latest month that has one (#152).
+// has none, to the latest month that has one (#152), and the share of the month's cost that it
+// covers (#157).
 const CarbonTab = ({
-  carbonFootprint, missingMonth, carbonTrend, carbonLines, loadingCarbon, failedCarbon,
-  loadingTrend, failedTrend, loadingLines, failedLines, language, t, fmt, accountImport,
-  accountColumn,
+  carbonFootprint, missingMonth, carbonTrend, carbonLines, carbonCoveredShare, loadingCarbon,
+  failedCarbon, loadingTrend, failedTrend, loadingLines, failedLines, language, t, fmt,
+  accountImport, accountColumn,
 }) => {
   if (loadingCarbon) {
     return <div className="text-center text-gray-500 py-8">{t('loading')}</div>;
@@ -330,9 +401,6 @@ const CarbonTab = ({
     );
   }
 
-  // French puts a space before a colon, English none
-  const colon = language === 'en' ? ':' : ' :';
-
   return (
     <div className="space-y-6">
       {missingMonth && (
@@ -347,7 +415,7 @@ const CarbonTab = ({
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <FootprintCard label={t('carbonFootprint')} value={footprint.total} fmt={fmt} emphasis>
           <p className="text-xs text-gray-500 mt-1">
-            {t('marketBased')}{colon} {fmt(footprint.marketBasedTotal)} kgCO₂e
+            {t('marketBased')}{beforeColon(language)}: {fmt(footprint.marketBasedTotal)} kgCO₂e
           </p>
           <p className="text-xs text-gray-400 mt-1">{t('marketBasedExplanation')}</p>
         </FootprintCard>
@@ -355,6 +423,13 @@ const CarbonTab = ({
           <FootprintCard key={source} label={t(source)} value={footprint[source]} fmt={fmt} />
         ))}
       </div>
+      {/* Once the lines have loaded, and unless the month of use costs nothing (#157) */}
+      {carbonCoveredShare != null && (
+        <p className="text-sm text-gray-600">
+          {coverageSentence(carbonCoveredShare, language)}
+          {carbonCoveredShare < 1 && <>{' '}<NotAllServices language={language} /></>}
+        </p>
+      )}
       {/* With all accounts, their sum leaves out those without a footprint (#153) */}
       {accountsWithoutFootprint?.length > 0 && (
         <p className="text-sm text-gray-600">
