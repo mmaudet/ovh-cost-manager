@@ -385,7 +385,7 @@ export const translations = {
     inventory: 'Public Cloud',
     infrastructure: 'Infrastructure',
     backup: 'Backup',
-    carbon: 'Carbon',
+    carbon: 'Carbon footprint',
     // The carbon footprint and its emission sources (#147)
     carbonFootprint: 'Carbon footprint',
     manufacturing: 'Manufacturing',

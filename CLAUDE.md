@@ -47,7 +47,7 @@ OVH API ──> data/import.js ──> SQLite (ovh-bills.db) ──> server/inde
     calculator generates (`readFootprintFile()`), and the 24 months that each import asks
     for again (`footprintMonths()`). The import stores its lines in
     `carbon_footprint_lines`, which `db.carbon` reads; the server gives them under
-    `/api/carbon/*` and `/api/export/carbon`, and the Carbon tab shows them.
+    `/api/carbon/*` and `/api/export/carbon`, and the Carbon footprint tab shows them.
   - `carbon-ties.js` — pure: ties a month's footprint lines to the bill lines of its month
     of use (`CONTEXT.md`), which `billLinesOfUse()` in `db.js` selects, giving each line its
     cost and carbon intensity, and the month its covered cost and covered share. **The ties
