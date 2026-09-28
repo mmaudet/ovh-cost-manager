@@ -43,6 +43,18 @@ OVH API ──> data/import.js ──> SQLite (ovh-bills.db) ──> server/inde
     description to a service type. **Classification runs at import time** and the result is
     stored in `bill_details.service_type`; the server reads the stored value, it does not
     re-classify. Changing classification rules requires a re-import to take effect on old data.
+  - `carbon-footprint.js` — pure functions reading the file that OVHcloud's carbon
+    calculator generates (`readFootprintFile()`), and the 24 months that each import asks
+    for again (`footprintMonths()`). The import stores its lines in
+    `carbon_footprint_lines`, which `db.carbon` reads; the server gives them under
+    `/api/carbon/*` and `/api/export/carbon`, and the Carbon tab shows them.
+  - `carbon-ties.js` — pure: ties a month's footprint lines to the bill lines of its month
+    of use (`CONTEXT.md`), which `billLinesOfUse()` in `db.js` selects, giving each line its
+    cost and carbon intensity, and the month its covered cost and covered share. **The ties
+    run when the server reads them**, unlike classification: changing them needs no
+    re-import.
+  - `public-cloud-lines.js` — parses the Public Cloud bill lines of instances and volumes,
+    for the ties and for `db.js`.
 - **`server/`** — read-only Express API over the DB. `index.js` is the single ~1300-line
   route file. `auth/` guards the API in one of two modes. With OIDC (openid-client v6):
   PKCE sign-in bound to the browser by a signed cookie per state, SQLite-backed sessions
@@ -73,16 +85,17 @@ NIC handle:
   without one was stored before the accounts: the Unknown account's. A query that can keep
   one account's rows takes an `account` argument, `null` for all accounts,
   `UNKNOWN_ACCOUNT` or a NIC handle, and joins `accountCondition()` to its WHERE clause.
+  The carbon footprint's lines always carry their account: no claim reaches them.
 - **API.** Every route that lists or adds up data takes the optional `account` parameter
   through the `accountParameter` middleware (`server/account-parameter.js`), into
   `req.account`: a NIC handle that the `accounts` table records, `unknown`, or none for all
   accounts; anything else gets a 400. The routes of one bill or one project need none, as
   that bill or project belongs to one account. Without it, a route answers as before the
   accounts, and the account-wide figures (consumption, forecast, balance, consumption
-  history) add up the accounts. `byAccount=true` opts a list of projects or services into
-  one row per account, and the CSV exports gain a last `account` column once
-  `/api/accounts` lists two entries (`sendCsv()`). `GET /api/accounts` lists the recorded
-  accounts, then the Unknown account while rows without an account remain.
+  history, carbon footprint) add up the accounts. `byAccount=true` opts a list of projects
+  or services into one row per account, and the CSV exports gain a last `account` column
+  once `/api/accounts` lists two entries (`sendCsv()`). `GET /api/accounts` lists the
+  recorded accounts, then the Unknown account while rows without an account remain.
 - **Dashboard.** The shell holds the selected account (`useSelectedAccount()`, remembered
   in the browser, per ADR 0001) and passes `selectedAccount` to the tab hooks: `null` for
   all accounts, the default, or the `id` that `/api/accounts` gives. A query that follows
@@ -159,7 +172,16 @@ npm run bills -- --project "AI" --format md
 
 `--full` (clears + reimports) | `--diff` [`--since DATE`] | `--from`/`--to` | and the extra
 datasets, off by default: `--include-consumption`, `--include-account`,
-`--include-inventory`, `--include-cloud-details`, or `--all` for everything.
+`--include-inventory`, `--include-cloud-details`, `--include-carbon`, or `--all` for
+everything.
+
+`--include-carbon` asks OVHcloud's carbon calculator for each account's footprint of the
+last 24 months: it calls `POST /me/carbonCalculator/csv`, which the key needs a rule for,
+polls the task every 3 seconds, for 2 minutes at most, and downloads the file from its
+pre-signed link. It replaces those months and keeps the older ones, which OVHcloud no
+longer gives, `--full` included (ADR 0003). A key without the rule gets a warning; any
+other failure, a wait that runs out included, counts among the failed items, and replaces
+nothing.
 
 A run imports every configured account, one after the other, under one import log entry;
 each differential import starts from that account's own latest bill. An account that
@@ -193,9 +215,9 @@ Two suites:
   the tests of `server/index.js` itself start the real server in a child process
   (`tests/support/ocm-server.js`, with a throwaway HOME and DATA_DIR, and the
   repository's `config.json` hidden): its startup settings, rate limiting, the CORS
-  check, the accounts route over a database that the test seeds, and the OIDC sign-in,
-  which `tests/auth-oidc-flow.test.js` goes through against a fake OpenID provider served
-  in the test's process (`tests/support/fake-provider.js`).
+  check, the accounts and carbon routes over a database that the test seeds, and the OIDC
+  sign-in, which `tests/auth-oidc-flow.test.js` goes through against a fake OpenID
+  provider served in the test's process (`tests/support/fake-provider.js`).
 - **Dashboard tests**: Vitest and Testing Library in jsdom, in `dashboard/test/`. The page
   tests render the whole dashboard with the API service module replaced by synthetic
   fixtures, act like a user and check what is visible. They pin the dashboard's behaviour:
@@ -265,10 +287,11 @@ See `docs/deployment.md` for full SSO/OIDC setup.
 Three values (`appKey`, `appSecret`, `consumerKey`) plus `endpoint` (e.g. `ovh-eu`), stored
 under `credentials` in `config.json`, or under that of each entry of `accounts` for several
 accounts (see Configuration resolution). Generate appKey/appSecret at
-https://eu.api.ovh.com/createToken/, then request a consumerKey with GET access to the
-paths listed in the README. Minimum useful scope is `GET /me`, `/me/*` and `/cloud/*`:
-every import reads the account it imports from `GET /me`, which `/me/*` does not cover.
-The other paths enable the infrastructure inventory.
+https://eu.api.ovh.com/createToken/, then request a consumerKey with the access rules
+listed in the README: GET on its paths, and the optional `POST /me/carbonCalculator/csv`.
+Minimum useful scope is `GET /me`, `/me/*` and `/cloud/*`: every import reads the account
+it imports from `GET /me`, which `/me/*` does not cover. The other paths enable the
+infrastructure inventory, and the POST rule the carbon footprint.
 
 ## Agent skills
 
