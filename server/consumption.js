@@ -91,10 +91,12 @@ function forecastOfAccount({ snapshot, cloud }, now) {
   const snapshotForecast = snapshot?.forecast_total || 0;
   const snapshotCurrent = snapshot?.current_total || 0;
   // OVH tells neither: the consumption of the projects so far, over the days it covers,
-  // extrapolated to the end of the month
+  // extrapolated to the end of the month, but for what OVH gives for the whole month, such as
+  // the monthly plans, which counts once (#145)
   if (snapshotForecast === 0 && snapshotCurrent === 0 && cloud && cloud.total > 0) {
     const { daysElapsed, daysInMonth } = daysOf(cloud.period_start, cloud.period_end);
-    const forecast = (cloud.total / daysElapsed) * daysInMonth;
+    const monthly = cloud.monthly_total || 0;
+    const forecast = monthly + ((cloud.total - monthly) / daysElapsed) * daysInMonth;
     const forecastTotal = toCents(forecast);
     const currentTotal = toCents(cloud.total);
     return {

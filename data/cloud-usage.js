@@ -41,11 +41,18 @@ const DETAILED_PARTS = [
   ['savings_plan', (u) => u.monthlyUsage?.savingsPlan, (d) => d.id],
 ];
 
-// The parts whose items are their own resource, by kind, and the resource an item names
+// The parts whose items are their own resource, by kind, and the name of that resource, its
+// id too
 const WHOLE_PARTS = [
   ['instance_bandwidth', (u) => u.hourlyUsage?.instanceBandwidth, () => ''],
   ['snapshot', (u) => u.hourlyUsage?.snapshot, () => ''],
   ['storage', (u) => u.hourlyUsage?.storage, (item) => item.bucketName],
+];
+
+// The kinds that OVH gives for the whole month rather than as they are used, which a
+// month-end forecast counts once
+const MONTHLY_KINDS = [
+  'instance_monthly', 'instance_option_monthly', 'certification_monthly', 'savings_plan',
 ];
 
 // The rows of the items of a detailed part: one per detail, or the item's own when it
@@ -62,11 +69,12 @@ function detailedRows(kind, items, idOf) {
   });
 }
 
-// The rows of the typed resources: one per component, of the resource's type
+// The rows of the typed resources: one per component, of the resource's type, in the region
+// of its resource
 function typedRows(typedResources) {
   return (typedResources || []).flatMap(({ type, totalPrice, resources }) => {
-    const components = (resources || []).flatMap(({ region, components: parts }) => (parts || [])
-      .map((component) => ({ ...component, region })));
+    const components = (resources || []).flatMap((resource) => (resource.components || [])
+      .map((component) => ({ ...component, region: resource.region })));
     if (components.length === 0) return [rowOf(type || 'other', { totalPrice })];
     return components.map((component) => rowOf(type || 'other', {
       id: component.id || component.resourceId, name: component.name,
@@ -84,17 +92,28 @@ function typedRows(typedResources) {
 function usageRows(usage) {
   const rows = [
     ...DETAILED_PARTS.flatMap(([kind, itemsOf, idOf]) => detailedRows(kind, itemsOf(usage), idOf)),
-    ...WHOLE_PARTS.flatMap(([kind, itemsOf, idOf]) => (itemsOf(usage) || [])
-      .map((item) => rowOf(kind, { ...item, id: idOf(item), name: idOf(item) }))),
+    ...WHOLE_PARTS.flatMap(([kind, itemsOf, nameOf]) => (itemsOf(usage) || [])
+      .map((item) => rowOf(kind, { ...item, id: nameOf(item), name: nameOf(item) }))),
     ...typedRows(usage.resourcesUsage),
   ];
   // What the total that OVH gives holds beyond the parts, to the cent
-  if (usage.totalPrice != null) {
-    const counted = rows.reduce((sum, row) => sum + row.total_price, 0);
-    const rest = Math.round((amountOf(usage.totalPrice) - counted) * 100) / 100;
-    if (rest > 0) rows.push(rowOf('other', { totalPrice: rest }));
-  }
+  const rest = -beyondTotal(usage, rows);
+  if (rest > 0) rows.push(rowOf('other', { totalPrice: rest }));
   return rows;
 }
 
-module.exports = { usageRows };
+/**
+ * What the rows of a project's usage count beyond the total that OVH gives it, to the cent:
+ * 0 when they count no more, or when OVH gives no total. More would mean that two parts of
+ * the answer count the same resource, which no answer has shown so far.
+ * @param {object} usage - The answer, cloud.usage.UsageCurrent
+ * @param {{total_price: number}[]} rows - Its rows, as usageRows() gives them
+ * @returns {number} Negative when the total holds more than the rows
+ */
+function beyondTotal(usage, rows) {
+  if (usage.totalPrice == null) return 0;
+  const counted = rows.reduce((sum, row) => sum + row.total_price, 0);
+  return Math.round((counted - amountOf(usage.totalPrice)) * 100) / 100;
+}
+
+module.exports = { MONTHLY_KINDS, beyondTotal, usageRows };

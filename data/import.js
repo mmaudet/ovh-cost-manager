@@ -27,7 +27,7 @@ const {
 } = require('./account-attempts');
 const { classifyService, classifyResourceTypeFromDomain } = require('./classify');
 const { footprintMonths, readFootprintFile } = require('./carbon-footprint');
-const { usageRows } = require('./cloud-usage');
+const { beyondTotal, usageRows } = require('./cloud-usage');
 const { monthBounds } = require('./months');
 
 // Skip this run if another import (cron or manual resync) is in progress.
@@ -1091,7 +1091,13 @@ async function importCloudDetails(ovh, projectIds, nic, heartbeat = () => {}) {
 
         // Every part of the usage, one row per resource and cloud resource kind, which add
         // up to the total that OVH gives the project (#145)
-        for (const row of usageRows(usage)) {
+        const rows = usageRows(usage);
+        const beyond = beyondTotal(usage, rows);
+        if (beyond > 0) {
+          console.warn(`    The usage of project ${projectId} counts ${beyond} more than the `
+            + 'total OVH gives it: a part may count a resource that another counts too');
+        }
+        for (const row of rows) {
           db.cloudDetails.insertConsumption({
             project_id: projectId,
             period_start: periodStart,

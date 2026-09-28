@@ -248,7 +248,8 @@ describe('project consumption import', () => {
     await importUsageOn('2026-09-15', 'b2-15', 12.25);
 
     expect(db.cloudDetails.getConsumptionSummary(ACCOUNT.nic)).toEqual({
-      period_start: '2026-09-01', period_end: '2026-09-15', total: 12.25, project_count: 1,
+      period_start: '2026-09-01', period_end: '2026-09-15', total: 12.25, monthly_total: 0,
+      project_count: 1,
     });
   });
 
@@ -316,7 +317,9 @@ describe('project consumption import', () => {
       }],
       savingsPlan: [{
         flavor: 'b3-8', totalPrice: price(6),
-        details: [{ id: 'sp-1', planName: 'b3-8', size: 1, totalPrice: price(6), unitPrice: price(6) }],
+        details: [{
+          id: 'sp-1', planName: 'b3-8', size: 1, totalPrice: price(6), unitPrice: price(6),
+        }],
       }],
     };
     const resourcesUsage = [{
@@ -335,7 +338,9 @@ describe('project consumption import', () => {
 
       const [project] = db.projects.getEnriched(ACCOUNT.nic);
       expect(project.consumption_total).toBeCloseTo(53, 2);
-      expect(db.cloudDetails.getConsumptionSummary(ACCOUNT.nic).total).toBeCloseTo(53, 2);
+      // The monthly plan and the savings plan, which a month-end forecast counts once
+      expect(db.cloudDetails.getConsumptionSummary(ACCOUNT.nic))
+        .toMatchObject({ total: 53, monthly_total: 26 });
     });
 
     test('splits it by cloud resource kind, the registry included', async () => {
@@ -365,6 +370,17 @@ describe('project consumption import', () => {
       expect(project.consumption_total).toBeCloseTo(55.25, 2);
       expect(db.cloudDetails.getConsumptionByResourceType(PROJECT))
         .toContainEqual({ resource_type: 'other', total: 2.25, count: 1 });
+    });
+
+    // As if two parts of the answer counted one resource
+    test('warns when its parts count more than the total that OVH gives the project', async () => {
+      await importEveryPart(50);
+
+      expect(console.warn).toHaveBeenCalledWith(
+        expect.stringContaining('counts 3 more than the total OVH gives it'),
+      );
+      const [project] = db.projects.getEnriched(ACCOUNT.nic);
+      expect(project.consumption_total).toBeCloseTo(53, 2);
     });
 
     // The bucket is named like an L4 flavor
@@ -397,7 +413,7 @@ describe('project consumption import', () => {
 
     test('sums no consumption in the consumption summary', () => {
       expect(db.cloudDetails.getConsumptionSummary(ACCOUNT.nic)).toEqual({
-        period_start: null, period_end: null, total: null, project_count: 0,
+        period_start: null, period_end: null, total: null, monthly_total: null, project_count: 0,
       });
     });
 
