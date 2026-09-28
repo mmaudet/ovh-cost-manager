@@ -2321,11 +2321,13 @@ const cloudDetailOps = {
       ORDER BY ${grouping.orderBy}
     `).all(...args);
 
-    // Get GPU flavors per project from project_consumption (current month detail)
+    // Get GPU flavors per project from project_consumption (current month detail): those of
+    // its instances, whose name is their flavor, as a bucket may be named like one (#145)
     const projectFlavors = db.prepare(`
       SELECT project_id, GROUP_CONCAT(DISTINCT resource_name) as gpu_flavors
       FROM project_consumption
       WHERE period_start = ?
+        AND resource_type IN ('instance', 'instance_monthly')
         AND (resource_name LIKE 'l4-%' OR resource_name LIKE 'l40s-%'
         OR resource_name LIKE 'a100-%' OR resource_name LIKE 't1-%'
         OR resource_name LIKE 't2-%' OR resource_name LIKE 'h100-%'
