@@ -489,7 +489,7 @@ Before going to production, go through the [production checklist](docs/deploymen
 
 ## API Endpoints
 
-For an instance of [several accounts](#several-ovh-accounts), every route that lists or adds up data takes an optional `account` parameter, `/api/bills`, `/api/analysis/daily-trend` and the four [CSV exports](#csv-exports) included:
+For an instance of [several accounts](#several-ovh-accounts), every route that lists or adds up data takes an optional `account` parameter, `/api/bills`, `/api/analysis/daily-trend` and the five [CSV exports](#csv-exports) included:
 
 - the NIC handle of an account that `GET /api/accounts` lists, such as `?account=xx1111-ovh`;
 - `unknown`, for the Unknown account: the data stored before the upgrade that no account claimed;
@@ -584,6 +584,7 @@ The carbon footprint is what OVHcloud's carbon calculator attributes to the acco
 | `GET /api/export/details?from=&to=`    | Bill lines                                  |
 | `GET /api/export/by-project?from=&to=` | Costs by project                            |
 | `GET /api/export/inventory`            | Dedicated servers, VPS and storage services |
+| `GET /api/export/carbon?month=YYYY-MM` | Lines of a month's carbon footprint         |
 
 The exports are CSV files for a spreadsheet: `;`-separated, with decimal
 commas, in UTF-8 with a byte order mark. Each takes the optional `account`

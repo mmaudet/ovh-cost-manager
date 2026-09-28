@@ -1,8 +1,8 @@
 /**
- * The list of the carbon footprint (#155), GET /api/carbon/by-server, of the server started
- * in a child process over a database that the test seeds as the import writes it: each line
- * of OVHcloud's file with what it cost in the month of use, as the bill lines that it ties to
- * say, and its intensity.
+ * The list of the carbon footprint (#155), GET /api/carbon/by-server, and its CSV file (#156),
+ * GET /api/export/carbon, of the server started in a child process over a database that the
+ * test seeds as the import writes it: each line of OVHcloud's file with what it cost in the
+ * month of use, as the bill lines that it ties to say, and its intensity.
  */
 
 const {
@@ -247,3 +247,62 @@ test('refuses a month that is not one', async () => {
     expect([status, body.error]).toEqual([400, expect.stringMatching(/^Invalid 'month'/)]);
   });
 }, 30000);
+
+// The list as a CSV file (#156), as the other exports of the API write theirs: ';' between the
+// cells, a decimal comma, and, as the database holds several accounts, the account last
+describe('GET /api/export/carbon', () => {
+  const HEADER = '\ufeff"Élément";"Type";"Gamme";"Datacenter";"Empreinte (kgCO2e)";"Coût";'
+    + '"Intensité (kgCO2e/€)"';
+
+  test('exports the list of a month as CSV', async () => {
+    await withOcm(async (ocm) => {
+      const { status, headers, body } = await ocm.getText(
+        `/api/export/carbon?month=2026-08&account=${LYON}`,
+      );
+      expect([status, headers.get('content-type'), headers.get('content-disposition')]).toEqual([
+        200, 'text/csv; charset=utf-8', 'attachment; filename="empreinte_carbone_2026-08.csv"',
+      ]);
+      const lines = body.split('\n');
+      expect(lines.slice(0, 3)).toEqual([
+        `${HEADER};"account"`,
+        `"ns2.ip-10-0-0.eu";"BAREMETAL";"advance gen4";"GRA";30;80;0,375;"${LYON}"`,
+        `"ns1.ip-10-0-0.eu";"BAREMETAL";"advance gen4";"GRA";20;65;0,3077;"${LYON}"`,
+      ]);
+      // A line that nothing billed has neither a cost nor an intensity
+      expect(lines).toContain(`"r2-15";"PCI-COMPUTE";"r2";"GRA";4;;;"${LYON}"`);
+
+      // March, whose file names no server
+      expect((await ocm.getText(`/api/export/carbon?month=2026-03&account=${LYON}`)).body
+        .split('\n')[1]).toBe(
+        `"Serveurs dédiés non nommés par OVHcloud (2)";"BAREMETAL";;;25;145;0,1724;"${LYON}"`,
+      );
+      // A month that is not one
+      expect((await ocm.getText('/api/export/carbon?month=2026-8')).status).toBe(400);
+    });
+  }, 30000);
+
+  test("exports every account's lines without the parameter, and refuses an unknown one",
+    async () => {
+      await withOcm(async (ocm) => {
+        const lines = (await ocm.getText('/api/export/carbon?month=2026-08')).body.split('\n');
+        expect(lines[2]).toBe(`"b2-7";"PCI-COMPUTE";"b2";"GRA";25;200;0,125;"${PARIS}"`);
+        expect((await ocm.getText('/api/export/carbon?month=2026-08&account=ww4444-ovh'))
+          .status).toBe(400);
+      });
+    }, 30000);
+
+  // A single-account installation gets its files as before it could import several
+  test('gives no account column to a single-account database', async () => {
+    await withSeededOcm((db) => {
+      recordAccounts(db, { nic: LYON });
+      db.carbon.replaceMonths(LYON, MONTHS, [footprintLine({
+        month: '2026-08', server_domain: 'ns1.ip-10-0-0.eu', manufacturing: 10,
+        electricity: [6, 1], operations: [4, 4],
+      })]);
+    }, async (ocm) => {
+      expect((await ocm.getText('/api/export/carbon?month=2026-08')).body.split('\n')).toEqual([
+        HEADER, '"ns1.ip-10-0-0.eu";"BAREMETAL";"advance gen4";"GRA";20;;',
+      ]);
+    });
+  }, 30000);
+});

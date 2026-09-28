@@ -1139,6 +1139,40 @@ function registerRoutes() {
     }
   });
 
+  // The lines of a month's carbon footprint as CSV (#156), as /api/carbon/by-server gives
+  // them: those of the account the request asks for, or of every account without one, each
+  // with its account when the database holds several
+  app.get('/api/export/carbon', accountParameter, (req, res) => {
+    try {
+      const { valid, error, month } = monthFromQuery(req.query);
+      if (!valid) {
+        return res.status(400).json({ error });
+      }
+
+      const lines = db.carbon.getLines(month, req.account).map(line => ({
+        ...line,
+        // What the line names: a dedicated server, or the servers that OVHcloud's file does
+        // not name, or an instance flavor or a volume type
+        item: line.unnamedServers
+          ? `Serveurs dédiés non nommés par OVHcloud (${line.unnamedServers})`
+          : line.serverDomain ?? line.name,
+      }));
+      const columns = [
+        { key: 'item', label: 'Élément' },
+        { key: 'type', label: 'Type' },
+        { key: 'range', label: 'Gamme' },
+        { key: 'datacenter', label: 'Datacenter' },
+        { key: 'footprint', label: 'Empreinte (kgCO2e)' },
+        { key: 'cost', label: 'Coût' },
+        { key: 'intensity', label: 'Intensité (kgCO2e/€)' },
+      ];
+
+      sendCsv(res, `empreinte_carbone_${month}.csv`, lines, columns);
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   // ========================
   // Account Endpoints (Phase 2)
   // ========================
