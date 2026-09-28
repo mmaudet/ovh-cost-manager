@@ -151,10 +151,11 @@ describe('project consumption import', () => {
   });
 
   // Imports what usage/current answers at `instant`: the hourly resources used over a
-  // period, which OVH gives with its UTC offset, or over none
-  async function importUsageAt(instant, period, hourlyUsage) {
+  // period, which OVH gives with its UTC offset, or over none, and the other parts of the
+  // answer, if any
+  async function importUsageAt(instant, period, hourlyUsage, otherParts = {}) {
     jest.setSystemTime(new Date(instant));
-    routes.set(`${BASE}/usage/current`, ok({ period, hourlyUsage }));
+    routes.set(`${BASE}/usage/current`, ok({ period, hourlyUsage, ...otherParts }));
     await importProject();
   }
 
@@ -247,7 +248,8 @@ describe('project consumption import', () => {
     await importUsageOn('2026-09-15', 'b2-15', 12.25);
 
     expect(db.cloudDetails.getConsumptionSummary(ACCOUNT.nic)).toEqual({
-      period_start: '2026-09-01', period_end: '2026-09-15', total: 12.25, project_count: 1,
+      period_start: '2026-09-01', period_end: '2026-09-15', total: 12.25, monthly_total: 0,
+      project_count: 1,
     });
   });
 
@@ -266,6 +268,128 @@ describe('project consumption import', () => {
     await importUsageOn('2026-09-15', 'l4-90', 12.25);
 
     expect(gpuFlavors()).toEqual([[PROJECT, 'l4-90']]);
+  });
+
+  // A project that used one resource of every kind that usage/current details, shaped as
+  // OVH's schema gives them (cloud.usage.UsageCurrent): some amounts are numbers, others
+  // an order.Price, and some parts detail no resource. Their total is OVH's, 53 € (#145).
+  describe('with every part of the usage', () => {
+    const price = (value) => ({
+      currencyCode: 'EUR', priceInUcents: value * 100000000, text: `${value.toFixed(2)} €`, value,
+    });
+    const hours = (value) => ({ value, unit: 'Hour' });
+    const gib = (value, unit = 'GiBh') => ({ value, unit });
+    const hourlyUsage = {
+      instance: [{
+        reference: 'b3-8', region: 'SBG5', quantity: hours(600), totalPrice: 10,
+        details: [{ instanceId: 'inst-1', quantity: hours(600), totalPrice: 10 }],
+      }],
+      instanceOption: [{
+        reference: 'win-b3-8', region: 'SBG5', quantity: hours(600), totalPrice: 1.5,
+        details: [{ instanceId: 'inst-1', quantity: hours(600), totalPrice: 1.5 }],
+      }],
+      instanceBandwidth: [{
+        region: 'SBG5', totalPrice: 0.5,
+        outgoingBandwidth: { quantity: gib(50, 'GiB'), totalPrice: 0.5 },
+      }],
+      volume: [{
+        type: 'classic', region: 'SBG5', quantity: gib(7200), totalPrice: 2,
+        details: [{ volumeId: 'vol-1', quantity: gib(7200), totalPrice: 2 }],
+      }],
+      snapshot: [{
+        region: 'SBG5', totalPrice: 1,
+        instance: { quantity: gib(36000), totalPrice: 1 },
+      }],
+      storage: [{
+        bucketName: 'l4-datasets', region: 'SBG', type: 'storage-standard', totalPrice: 5,
+        stored: { quantity: gib(720000), totalPrice: 4.5 },
+        outgoingBandwidth: { quantity: gib(10, 'GiB'), totalPrice: 0.5 },
+      }],
+      managedKubernetesService: [{
+        reference: 'mks.standard', region: 'SBG5', quantity: hours(600), totalPrice: price(4),
+        details: [{ id: 'kube-1', quantity: hours(600), totalPrice: price(4) }],
+      }],
+    };
+    const monthlyUsage = {
+      instance: [{
+        reference: 'b3-16', region: 'SBG5', totalPrice: 20,
+        details: [{ instanceId: 'inst-2', activation: '2026-09-01T00:00:00Z', totalPrice: 20 }],
+      }],
+      savingsPlan: [{
+        flavor: 'b3-8', totalPrice: price(6),
+        details: [{
+          id: 'sp-1', planName: 'b3-8', size: 1, totalPrice: price(6), unitPrice: price(6),
+        }],
+      }],
+    };
+    const resourcesUsage = [{
+      type: 'registry', totalPrice: 3,
+      resources: [{
+        region: 'GRA',
+        components: [{ id: 'reg-1', name: 'registry.small', quantity: hours(650), totalPrice: 3 }],
+      }],
+    }];
+    const importEveryPart = (totalPrice) => importUsageAt('2026-09-27T10:00:00Z', {
+      from: '2026-09-01T00:00:00+02:00', to: '2026-09-27T12:00:00+02:00',
+    }, hourlyUsage, { monthlyUsage, resourcesUsage, totalPrice: price(totalPrice) });
+
+    test('counts all of it in the current consumption of the project', async () => {
+      await importEveryPart(53);
+
+      const [project] = db.projects.getEnriched(ACCOUNT.nic);
+      expect(project.consumption_total).toBeCloseTo(53, 2);
+      // The monthly plan and the savings plan, which a month-end forecast counts once
+      expect(db.cloudDetails.getConsumptionSummary(ACCOUNT.nic))
+        .toMatchObject({ total: 53, monthly_total: 26 });
+    });
+
+    test('splits it by cloud resource kind, the registry included', async () => {
+      await importEveryPart(53);
+
+      const byKind = Object.fromEntries(db.cloudDetails.getConsumptionByResourceType(PROJECT)
+        .map(({ resource_type: kind, total }) => [kind, Math.round(total * 100) / 100]));
+      expect(byKind).toEqual({
+        instance: 10,
+        instance_option: 1.5,
+        instance_bandwidth: 0.5,
+        volume: 2,
+        snapshot: 1,
+        storage: 5,
+        kubernetes: 4,
+        instance_monthly: 20,
+        savings_plan: 6,
+        registry: 3,
+      });
+    });
+
+    // OVH adds kinds of resources to its answer over time
+    test('counts what no part names in the total that OVH gives the project', async () => {
+      await importEveryPart(55.25);
+
+      const [project] = db.projects.getEnriched(ACCOUNT.nic);
+      expect(project.consumption_total).toBeCloseTo(55.25, 2);
+      expect(db.cloudDetails.getConsumptionByResourceType(PROJECT))
+        .toContainEqual({ resource_type: 'other', total: 2.25, count: 1 });
+    });
+
+    // As if two parts of the answer counted one resource
+    test('warns when its parts count more than the total that OVH gives the project', async () => {
+      await importEveryPart(50);
+
+      expect(console.warn).toHaveBeenCalledWith(
+        expect.stringContaining('counts 3 more than the total OVH gives it'),
+      );
+      const [project] = db.projects.getEnriched(ACCOUNT.nic);
+      expect(project.consumption_total).toBeCloseTo(53, 2);
+    });
+
+    // The bucket is named like an L4 flavor
+    test('names no GPU flavor from a resource that is no instance', async () => {
+      billGpuInstances();
+      await importEveryPart(53);
+
+      expect(gpuFlavors()).toEqual([[PROJECT, '']]);
+    });
   });
 
   // On 2 September, OVH reports September, without any usage yet: the current consumption
@@ -289,7 +413,7 @@ describe('project consumption import', () => {
 
     test('sums no consumption in the consumption summary', () => {
       expect(db.cloudDetails.getConsumptionSummary(ACCOUNT.nic)).toEqual({
-        period_start: null, period_end: null, total: null, project_count: 0,
+        period_start: null, period_end: null, total: null, monthly_total: null, project_count: 0,
       });
     });
 

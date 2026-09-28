@@ -244,6 +244,23 @@ export const translations = {
     gpuInstances: 'Instances GPU',
     gpuFlavors: 'Types GPU',
     noGpuData: 'Aucune donnée GPU',
+
+    // The kinds of a project's current consumption, as the import names them (#145)
+    cloudKindInstance: 'Instances',
+    cloudKindInstanceMonthly: 'Instances (forfait mensuel)',
+    cloudKindInstanceOption: 'Options d\'instance',
+    cloudKindInstanceOptionMonthly: 'Options d\'instance (forfait mensuel)',
+    cloudKindInstanceBandwidth: 'Bande passante des instances',
+    cloudKindVolume: 'Volumes',
+    cloudKindSnapshot: 'Snapshots',
+    cloudKindStorage: 'Stockage objet',
+    cloudKindKubernetes: 'Kubernetes',
+    cloudKindRancher: 'Rancher',
+    cloudKindQuantum: 'Quantum',
+    cloudKindSavingsPlan: 'Savings plans',
+    cloudKindCertification: 'Certifications',
+    cloudKindRegistry: 'Registre',
+    cloudKindOther: 'Autres',
   },
   en: {
     // Header
@@ -490,5 +507,22 @@ export const translations = {
     gpuInstances: 'GPU Instances',
     gpuFlavors: 'GPU types',
     noGpuData: 'No GPU data',
+
+    // The kinds of a project's current consumption, as the import names them (#145)
+    cloudKindInstance: 'Instances',
+    cloudKindInstanceMonthly: 'Instances (monthly plan)',
+    cloudKindInstanceOption: 'Instance options',
+    cloudKindInstanceOptionMonthly: 'Instance options (monthly plan)',
+    cloudKindInstanceBandwidth: 'Instance bandwidth',
+    cloudKindVolume: 'Volumes',
+    cloudKindSnapshot: 'Snapshots',
+    cloudKindStorage: 'Object storage',
+    cloudKindKubernetes: 'Kubernetes',
+    cloudKindRancher: 'Rancher',
+    cloudKindQuantum: 'Quantum',
+    cloudKindSavingsPlan: 'Savings plans',
+    cloudKindCertification: 'Certifications',
+    cloudKindRegistry: 'Container registry',
+    cloudKindOther: 'Other',
   }
 };

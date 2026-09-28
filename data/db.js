@@ -4,6 +4,7 @@ const {
   instanceLineCondition, readInstanceLine, readVolumeLine,
 } = require('./public-cloud-lines');
 const { tieFootprint } = require('./carbon-ties');
+const { MONTHLY_KINDS } = require('./cloud-usage');
 const { productFigures } = require('./public-cloud-products');
 const { monthsOfWindow, shiftMonth } = require('./months');
 const ownership = require('./ownership');
@@ -2166,20 +2167,25 @@ const cloudDetailOps = {
    * @param {string} account - The account (see accountCondition()): a NIC handle, or
    *   UNKNOWN_ACCOUNT
    * @returns {{ period_start: ?string, period_end: ?string, total: ?number,
-   *   project_count: number }} The period from the earliest start to the latest end of their
-   *   consumption, its total, and the number of projects that it covers
+   *   monthly_total: ?number, project_count: number }} The period from the earliest start to
+   *   the latest end of their consumption, its total, the part of it that OVH gives for the
+   *   whole month (#145), and the number of projects that it covers
    */
   getConsumptionSummary: (account) => {
     const ofAccount = accountCondition(account, 'p.account');
+    const monthly = MONTHLY_KINDS.map(() => '?').join(', ');
     return getDb().prepare(`
       SELECT
         MIN(c.period_start) as period_start,
         MAX(c.period_end) as period_end,
         SUM(c.total_price) as total,
+        SUM(CASE WHEN c.resource_type IN (${monthly}) THEN c.total_price ELSE 0 END)
+          as monthly_total,
         COUNT(DISTINCT c.project_id) as project_count
       FROM project_consumption c LEFT JOIN projects p ON p.id = c.project_id
       WHERE c.period_start = ? AND ${ofAccount.sql}
-    `).get(cloudDetailOps.getCurrentConsumptionMonth(account), ...ofAccount.params);
+    `).get(...MONTHLY_KINDS, cloudDetailOps.getCurrentConsumptionMonth(account),
+      ...ofAccount.params);
   },
 
   // GPU cost summary from bill_details (covers full history) + project_consumption (current
@@ -2265,11 +2271,13 @@ const cloudDetailOps = {
       ORDER BY ${grouping.orderBy}
     `).all(...args);
 
-    // Get GPU flavors per project from project_consumption (current month detail)
+    // Get GPU flavors per project from project_consumption (current month detail): those of
+    // its instances, whose name is their flavor, as a bucket may be named like one (#145)
     const projectFlavors = db.prepare(`
       SELECT project_id, GROUP_CONCAT(DISTINCT resource_name) as gpu_flavors
       FROM project_consumption
       WHERE period_start = ?
+        AND resource_type IN ('instance', 'instance_monthly')
         AND (resource_name LIKE 'l4-%' OR resource_name LIKE 'l40s-%'
         OR resource_name LIKE 'a100-%' OR resource_name LIKE 't1-%'
         OR resource_name LIKE 't2-%' OR resource_name LIKE 'h100-%'

@@ -335,7 +335,7 @@ describe('usePublicCloudTab', () => {
 
       expect(consumption(result.current.projectConsumption)).toEqual([
         ['instance', 210.25], ['instance', 12], ['instance', 12], ['instance_monthly', 64],
-        ['volume', 5.25], ['volume', 2.25], ['snapshot', 3.25], ['objectStorage', 41],
+        ['volume', 5.25], ['volume', 2.25], ['snapshot', 3.25], ['storage', 41],
       ]);
       // By name, as the server sorts them, then the bill lines of the deleted instances
       expect(instances(result.current.projectInstances)).toEqual([

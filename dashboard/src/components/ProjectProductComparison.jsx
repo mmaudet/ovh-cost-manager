@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { fetchProjectConsumption } from '../services/api';
 import { formatMonthLabel } from '../utils/format.js';
 import { Variation } from './Variation.jsx';
+import { cloudKindLabel } from '../utils/cloudKinds.js';
 
 export default function ProjectProductComparison({ projectId, monthA, monthB, fmt, language, t }) {
   // Fetch the detailed consumption of each month
@@ -53,7 +54,7 @@ export default function ProjectProductComparison({ projectId, monthA, monthB, fm
           const valB = bByType[type] || 0;
           return (
             <tr key={type} className="border-b hover:bg-gray-50 transition-colors">
-              <td className="p-3 font-medium">{type}</td>
+              <td className="p-3 font-medium">{cloudKindLabel(type, t)}</td>
               <td className="p-3 text-right font-medium">{fmt(valA)}€</td>
               <td className="p-3 text-right text-gray-500">{fmt(valB)}€</td>
               <td className="p-3 text-right">
