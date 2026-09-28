@@ -11,7 +11,9 @@ import {
   InstancesTable, instanceCsvColumns, instanceCsvRows
 } from '../components/InstancesTable.jsx';
 import { downloadCSV } from '../utils/csv.js';
-import { formatMonthLabel } from '../utils/format.js';
+import { formatMonthLabel, formatMonthName } from '../utils/format.js';
+import { cloudKindLabel } from '../utils/cloudKinds.js';
+import { publicCloudProductLabel } from '../utils/publicCloudProducts.js';
 
 // The Account column of the CSV files of the open project's resources (#121): when the lists
 // show the column, its label and the name of the project's account, as the list gives it; a
@@ -54,14 +56,14 @@ const downloadResources = (openProjectAccount, rows, columns, filename) => {
 // language, translations (t), amount format (fmt) and locale, the selected month, the setter of
 // the selected project, and two of its queries that load at page start: the month's costs by
 // resource type and its GPU costs. And the Account column of the lists, null when they show
-// none (#121).
+// none (#121), and the cloud total of the selected month, which the cards add up to (#145).
 const PublicCloudTab = ({
   projectsEnriched, publicCloudStats, projectConsumption, projectInstances, instanceCount,
   projectInstanceTotal, projectBuckets, projectVolumes, projectSnapshots, projectSavingsPlans,
-  projectQuotas, setShowAllInstances, setShowAllBuckets, setShowAllVolumes,
+  projectOtherServices, projectQuotas, setShowAllInstances, setShowAllBuckets, setShowAllVolumes,
   setShowAllSnapshots, setShowAllSavingsPlans, sortingOf,
   language, t, fmt, locale, selectedMonth, openProject, setSelectedProject,
-  byResourceType, gpuSummary, accountColumn,
+  byResourceType, gpuSummary, accountColumn, cloudTotal,
 }) => {
   // The Account column of the CSV files of the open project's resources, for all of them
   const openProjectAccount = openProjectAccountOf(accountColumn, projectsEnriched, openProject);
@@ -72,6 +74,21 @@ const PublicCloudTab = ({
   );
   return (
     <div className="space-y-6">
+      {/* What the cards add up to, and why it is not the current consumption (#145) */}
+      {selectedMonth?.value && cloudTotal !== undefined && (
+        <p className="text-sm text-gray-600">
+          {language === 'en'
+            ? `Public Cloud costs billed in ${formatMonthName(selectedMonth.value, language)}`
+              + `: ${fmt(cloudTotal)}€, which the cards below break down. OVHcloud bills `
+              + 'hourly usage the month after: the current consumption, at the top of the page '
+              + 'and in the list of projects, is not billed yet.'
+            : `Coûts Public Cloud facturés en ${formatMonthName(selectedMonth.value, language)}`
+              + ` : ${fmt(cloudTotal)}€, que détaillent les cartes ci-dessous. OVHcloud `
+              + 'facture la consommation à l\'heure le mois suivant : la consommation en cours, '
+              + 'en haut de la page et dans la liste des projets, n\'est pas encore facturée.'}
+        </p>
+      )}
+
       {/* Cloud Summary Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
         <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
@@ -133,7 +150,30 @@ const PublicCloudTab = ({
             <p className="text-xs text-gray-400">{fmt(publicCloudStats.registry.total)}€</p>
           )}
         </div>
+        {/* What no card of its own counts: its products, and their cost (#145) */}
+        <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
+          <span className="text-gray-500 text-sm">{t('otherServices')}</span>
+          <div className="text-3xl font-bold text-slate-600 mt-2">{publicCloudStats?.other?.products?.length || 0}</div>
+          {publicCloudStats?.other?.products?.length > 0 && (
+            <p className="text-xs text-gray-400">{fmt(publicCloudStats.other.total)}€</p>
+          )}
+        </div>
       </div>
+      {publicCloudStats?.other?.products?.length > 0 && (
+        <p className="text-sm text-gray-600">
+          {`${t('otherServices')}${language === 'en' ? ':' : ' :'} `}
+          {publicCloudStats.other.products
+            .map(({ product, total }) => `${publicCloudProductLabel(product, t)} ${fmt(total)}€`)
+            .join(' · ')}
+        </p>
+      )}
+      {/* The credit that the bills used, which pays for no product (#145) */}
+      {publicCloudStats?.credits?.total ? (
+        <p className="text-sm text-gray-600">
+          {`${t('cloudCreditUsed')}${language === 'en' ? ':' : ' :'} `}
+          {`${fmt(publicCloudStats.credits.total)}€`}
+        </p>
+      ) : null}
 
       {/* Cloud Projects Table with inline detail */}
       {projectsEnriched.length > 0 && (
@@ -221,7 +261,10 @@ const PublicCloudTab = ({
                                   byType[key] = (byType[key] || 0) + (c.total_price || 0);
                                 });
                                 const chartData = Object.entries(byType)
-                                  .map(([name, value]) => ({ name, value: Math.round(value * 100) / 100 }))
+                                  .map(([kind, value]) => ({
+                                    name: cloudKindLabel(kind, t),
+                                    value: Math.round(value * 100) / 100,
+                                  }))
                                   .sort((a, b) => b.value - a.value);
                                 const typeColors = ['#3b82f6', '#ef4444', '#f59e0b', '#10b981', '#8b5cf6', '#ec4899', '#6b7280'];
 
@@ -414,6 +457,41 @@ const PublicCloudTab = ({
                                       language={language} t={t} fmt={fmt}
                                     />
                                   </div>
+                                </div>
+                              )}
+
+                              {/* What no section of its own lists: its registry… (#145) */}
+                              {(projectOtherServices.products.length > 0
+                                || projectOtherServices.credits !== 0) && (
+                                <div className="lg:col-span-2">
+                                  <h4 className="font-medium text-gray-700 mb-3 flex items-center gap-2">
+                                    <span>
+                                      {t('otherServices')} ({projectOtherServices.products.length})
+                                      <span className="ml-2 text-sm font-normal text-slate-600">
+                                        {fmt(projectOtherServices.total)}€
+                                      </span>
+                                    </span>
+                                  </h4>
+                                  <table className="w-full text-sm bg-white rounded-lg">
+                                    <tbody>
+                                      {projectOtherServices.products.map(({ product, total }) => (
+                                        <tr key={product} className="border-b">
+                                          <td className="p-2">
+                                            {publicCloudProductLabel(product, t)}
+                                          </td>
+                                          <td className="p-2 text-right">{fmt(total)}€</td>
+                                        </tr>
+                                      ))}
+                                      {projectOtherServices.credits !== 0 && (
+                                        <tr className="border-b text-gray-500">
+                                          <td className="p-2">{t('cloudCreditUsed')}</td>
+                                          <td className="p-2 text-right">
+                                            {fmt(projectOtherServices.credits)}€
+                                          </td>
+                                        </tr>
+                                      )}
+                                    </tbody>
+                                  </table>
                                 </div>
                               )}
                             </div>

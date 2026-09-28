@@ -4,16 +4,17 @@ import { formatMonthLabel } from '../utils/format.js';
 import { variationPercent } from '../utils/variation.js';
 import { SortableHeader, sortRows } from './SortableHeader.jsx';
 import { Variation } from './Variation.jsx';
+import { cloudKindLabel } from '../utils/cloudKinds.js';
 
-// The value of a cloud resource kind in each column that sorts the comparison (#146): what the
-// project consumed of it in months A and B, and the variation from one to the other, none from
-// 0 € or less
-const RESOURCE_KIND_VALUES = {
-  type: (row) => row.type,
+// The value of a cloud resource kind in each column that sorts the comparison (#146): its name
+// as the table gives it, what the project consumed of it in months A and B, and the variation
+// from one to the other, none from 0 € or less
+const resourceKindValues = (t) => ({
+  type: (row) => cloudKindLabel(row.type, t),
   totalA: (row) => row.valA,
   totalB: (row) => row.valB,
   variation: (row) => variationPercent(row.valA, row.valB),
-};
+});
 
 // What a project consumed in months A and B by cloud resource kind, in the order of its kinds in
 // month A then in month B until the user sorts them (sorting, which the Compare tab's hook holds
@@ -85,11 +86,11 @@ export default function ProjectProductComparison({
       </thead>
       <tbody>
         {sortRows(
-          rows, sorting.sort, RESOURCE_KIND_VALUES, language,
+          rows, sorting.sort, resourceKindValues(t), language,
         ).map(({ type, valA, valB }) => {
           return (
             <tr key={type} className="border-b hover:bg-gray-50 transition-colors">
-              <td className="p-3 font-medium">{type}</td>
+              <td className="p-3 font-medium">{cloudKindLabel(type, t)}</td>
               <td className="p-3 text-right font-medium">{fmt(valA)}€</td>
               <td className="p-3 text-right text-gray-500">{fmt(valB)}€</td>
               <td className="p-3 text-right">

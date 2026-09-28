@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { screen, within } from '@testing-library/react';
 import { account } from './fixtures/account.js';
+import { publicCloudFigures } from './fixtures/public-cloud.js';
 import { lyonAccount, removedAccount, severalAccounts } from './fixtures/accounts.js';
 import { api } from './support/api.js';
 import {
@@ -84,7 +85,7 @@ const bucketRows = [
   ['Nom', '○', 'Type', '○', 'Région', '○', 'Taille', '○', 'Coût', '○'],
   ['archives-2025', 'Cold Archive', 'archived', 'GRA', '1,5 To', '~', '9,00€'],
   ['assets-example-com', 'Standard', 'GRA', '4,2 Go', '14,00€'],
-  ['logs-empty', 'Standard', 'GRA', '0 o', '0,00€'],
+  ['logs-empty', 'Vide', 'GRA', '0 o', '0,00€'],
   // Billed, but gone from the inventory
   ['old-exports', '†', 'Inconnu', 'SBG', '-', '2,00€'],
 ];
@@ -142,7 +143,62 @@ describe('Public Cloud tab', () => {
       'Snapshots', '2', '6,00€',
       'Savings plans', '2', '28,00€',
       'Registre', '1', '40,00€',
+      'Autres services', '0',
     ]);
+  });
+
+  // The cards add up to the cloud total that the month's bills give, and a card gathers the
+  // products that no card of their own counts (#145)
+  it('adds its cards up to the cloud total billed in the month', async () => {
+    const { user } = await renderDashboard({
+      ...account,
+      publicCloudStats: {
+        ...account.publicCloudStats,
+        // With the credit, 830,40€, the cloud total of September
+        '2026-09': publicCloudFigures({
+          instances: { total: 693.4 },
+          volumes: { count: 3, total: 12.5 },
+          snapshots: { count: 2, total: 6 },
+          savingsPlans: { count: 2, total: 28 },
+          objectStorage: { count: 3, total: 25 },
+          registry: { count: 1, total: 40 },
+          other: {
+            total: 35.5,
+            products: [
+              { product: 'databases', total: 30 }, { product: 'loadBalancers', total: 5.5 },
+            ],
+          },
+          credits: { total: -10 },
+        }),
+      },
+    });
+
+    await openTab(user, 'Public Cloud');
+
+    expect(texts(screen.getByText(/^Coûts Public Cloud facturés/))).toEqual([
+      'Coûts Public Cloud facturés en septembre 2026 : 830,40€, que détaillent les cartes '
+      + 'ci-dessous. OVHcloud facture la consommation à l\'heure le mois suivant : la '
+      + 'consommation en cours, en haut de la page et dans la liste des projets, n\'est pas '
+      + 'encore facturée.',
+    ]);
+    expect(texts(figures()).slice(-3)).toEqual(['Autres services', '2', '35,50€']);
+    expect(texts(screen.getByText(/^Autres services :/)))
+      .toEqual(['Autres services : Bases de données 30,00€ · Load balancers 5,50€']);
+    expect(texts(screen.getByText(/^Crédit Cloud utilisé :/)))
+      .toEqual(['Crédit Cloud utilisé : -10,00€']);
+
+    await selectLanguage(user, 'en');
+
+    expect(texts(screen.getByText(/^Public Cloud costs billed/))).toEqual([
+      'Public Cloud costs billed in September 2026: 830.40€, which the cards below break down. '
+      + 'OVHcloud bills hourly usage the month after: the current consumption, at the top of '
+      + 'the page and in the list of projects, is not billed yet.',
+    ]);
+    expect(texts(figures()).slice(-3)).toEqual(['Other services', '2', '35.50€']);
+    expect(texts(screen.getByText(/^Other services:/)))
+      .toEqual(['Other services: Databases 30.00€ · Load balancers 5.50€']);
+    expect(texts(screen.getByText(/^Cloud credit used:/)))
+      .toEqual(['Cloud credit used: -10.00€']);
   });
 
   describe('projects', () => {
@@ -172,6 +228,7 @@ describe('Public Cloud tab', () => {
         ['Volumes (4)', '12,50€', 'Tout afficher', 'CSV'],
         ['Snapshots (2)', '6,00€', 'Tout afficher', 'CSV'],
         ['Savings plans (2)', '28,00€', 'Tout afficher', 'CSV'],
+        ['Autres services (1)', '40,00€'],
         ['Quotas par région'],
       ]);
 
@@ -224,6 +281,14 @@ describe('Public Cloud tab', () => {
   });
 
   describe('project detail', () => {
+    // The products that no section of its own lists, from the bills of the month (#145)
+    it('names the other services of the project, its registry among them', async () => {
+      await openProduction();
+
+      const panel = panelOf(screen.getByRole('heading', { name: /^Autres services \(/ }));
+      expect(rowTextsOf(within(panel).getByRole('table'))).toEqual([['Registre', '40,00€']]);
+    });
+
     it('loads the resources of the project, for the selected month', async () => {
       await openProduction();
 
@@ -259,6 +324,7 @@ describe('Public Cloud tab', () => {
         'Snapshots', '2', '6,00€',
         'Savings plans', '2', '28,00€',
         'Registre', '1', '40,00€',
+        'Autres services', '0',
       ]);
       expect(api.fetchProjectInstances)
         .toHaveBeenCalledWith('project-production', '2026-08-01', '2026-08-31');
@@ -437,6 +503,15 @@ describe('Public Cloud tab', () => {
       expect(costsWith(table, COLD_ARCHIVE_SHARE)).toEqual(['~9,00€']);
     });
 
+    // OVHcloud gives a class to each object: an empty bucket has none (#145)
+    it('say that an empty bucket has no class, and why', async () => {
+      await openProduction();
+
+      expect(within(resourceTable('Buckets')).getByText('Vide')).toHaveAttribute(
+        'title', "Un bucket vide n'a pas de classe : OVHcloud en donne une à chaque objet",
+      );
+    });
+
     it('are all shown in their "show all" modal, which closes with its button', async () => {
       const { user } = await openProduction();
 
@@ -534,7 +609,7 @@ describe('Public Cloud tab', () => {
         '"archives-2025";"Cold Archive";"archived";"GRA";12;1500000000000;9;1;1;'
           + '"2025-06-30T08:00:00Z"',
         '"assets-example-com";"Standard";;"GRA";1520;4200000000;14;0;1;"2025-11-03T08:00:00Z"',
-        '"logs-empty";"Standard";;"GRA";0;0;0;0;1;"2026-09-10T08:00:00Z"',
+        '"logs-empty";;;"GRA";0;0;0;0;1;"2026-09-10T08:00:00Z"',
         '"old-exports";;;"SBG";;;2;0;0;',
       ]));
     });
@@ -774,6 +849,7 @@ describe('Public Cloud tab', () => {
       'Snapshots', '2', '6.00€',
       'Savings plans', '2', '28.00€',
       'Container Registry', '1', '40.00€',
+      'Other services', '0',
     ]);
     expect(detailHeadings()).toEqual([
       ['Consumption by resource'],
@@ -782,6 +858,7 @@ describe('Public Cloud tab', () => {
       ['Volumes (4)', '12.50€', 'Show all', 'CSV'],
       ['Snapshots (2)', '6.00€', 'Show all', 'CSV'],
       ['Savings plans (2)', '28.00€', 'Show all', 'CSV'],
+      ['Other services (1)', '40.00€'],
       ['Quotas by region'],
     ]);
     const instances = resourceTable('Instances');
@@ -793,7 +870,7 @@ describe('Public Cloud tab', () => {
     expect(rowTextsOf(resourceTable('Buckets')).slice(1)).toEqual([
       ['archives-2025', 'Cold Archive', 'archived', 'GRA', '1.5 TB', '~', '9.00€'],
       ['assets-example-com', 'Standard', 'GRA', '4.2 GB', '14.00€'],
-      ['logs-empty', 'Standard', 'GRA', '0 B', '0.00€'],
+      ['logs-empty', 'Empty', 'GRA', '0 B', '0.00€'],
       ['old-exports', '†', 'Unknown', 'SBG', '-', '2.00€'],
     ]);
     expect(rowTextsOf(resourceTable('Volumes'))[4])
@@ -849,6 +926,7 @@ describe('Public Cloud tab', () => {
         'Snapshots', '2', '6,00€',
         'Savings plans', '2', '28,00€',
         'Registre', '1', '40,00€',
+        'Autres services', '0',
       ]);
       expect(projectRows().map(([name]) => name)).toEqual(['Production', 'Staging', 'Sandbox']);
     });
@@ -866,6 +944,7 @@ describe('Public Cloud tab', () => {
         'Snapshots', '2', '6,00€',
         'Savings plans', '2', '28,00€',
         'Registre', '0',
+        'Autres services', '0',
       ]);
       expect(projectRows()).toEqual([
         ['Production', 'Customer-facing services', 'ok', '5', '350,00€', '▼'],
@@ -883,6 +962,7 @@ describe('Public Cloud tab', () => {
         'Snapshots', '0',
         'Savings plans', '0',
         'Registre', '1', '40,00€',
+        'Autres services', '0',
       ]);
       expect(projectRows()).toEqual([['Staging', 'ok', '0', '52,35€', '▼']]);
     });
@@ -896,6 +976,7 @@ describe('Public Cloud tab', () => {
         'Projets Cloud', '0', 'Instances', '0', 'Instances GPU', '0', 'Kubernetes', '0',
         'Stockage Objet', '0', 'Volumes', '0', 'Snapshots', '0', 'Savings plans', '0',
         'Registre', '0',
+        'Autres services', '0',
       ]);
     });
 
@@ -913,6 +994,7 @@ describe('Public Cloud tab', () => {
         ['Volumes (4)', '12,50€', 'Tout afficher', 'CSV'],
         ['Snapshots (2)', '6,00€', 'Tout afficher', 'CSV'],
         ['Savings plans (2)', '28,00€', 'Tout afficher', 'CSV'],
+        ['Autres services (1)', '40,00€'],
         ['Quotas par région'],
       ]);
 

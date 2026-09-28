@@ -54,7 +54,7 @@ const productionUsage = [
     resource_name: 'classic', quantity: 33600, unit: 'GiBh', total_price: 2.25, region: 'GRA11' }),
   usage({ id: 7, project_id: PRODUCTION, resource_type: 'snapshot', resource_id: '',
     resource_name: 'SBG5', quantity: 16800, unit: 'GiBh', total_price: 3.25, region: 'SBG5' }),
-  usage({ id: 8, project_id: PRODUCTION, resource_type: 'objectStorage', resource_id: '',
+  usage({ id: 8, project_id: PRODUCTION, resource_type: 'storage', resource_id: '',
     resource_name: 'GRA', quantity: 1920000, unit: 'GiBh', total_price: 41, region: 'GRA' }),
 ];
 
@@ -112,8 +112,8 @@ const buckets = [
   { name: 'old-exports', type: null, region: 'SBG', status: null,
     objectsCount: null, objectsSize: null, createdAt: null,
     inInventory: false, allocated: false, total: 2 },
-  // Created this month, still empty
-  { name: 'logs-empty', type: 'Standard', region: 'GRA', status: null,
+  // Created this month, still empty: without an object, it has no class (#145)
+  { name: 'logs-empty', type: null, region: 'GRA', status: null,
     objectsCount: 0, objectsSize: 0, createdAt: '2026-09-10T08:00:00Z',
     inInventory: true, allocated: false, total: 0 },
 ];
@@ -183,6 +183,10 @@ export const publicCloudFigures = (fields) => ({
   savingsPlans: { count: 0, total: 0 },
   objectStorage: { count: 0, total: 0 },
   registry: { count: 0, total: 0 },
+  // What no card of its own counts (#145)
+  other: { total: 0, products: [] },
+  // The credit that the bills used, which pays for no product (#145)
+  credits: { total: 0 },
   aiml: { count: 0, total: 0 },
   loadBalancers: { count: 0, total: 0 },
   ...fields,
@@ -244,6 +248,13 @@ export const publicCloud = {
     [STAGING]: { '2026-09': { total: 180 } },
   },
   projectBuckets: { [PRODUCTION]: { '2026-09': buckets } },
+  // What its detail lists no section of its own for: its registry, which the registry card of
+  // September counts (#145)
+  projectOtherServices: {
+    [PRODUCTION]: {
+      '2026-09': { total: 40, products: [{ product: 'registry', total: 40 }], credits: 0 },
+    },
+  },
   projectVolumes: { [PRODUCTION]: { '2026-09': volumes } },
   projectSnapshots: { [PRODUCTION]: { '2026-09': snapshots } },
   projectSavingsPlans: { [PRODUCTION]: { '2026-09': savingsPlans } },

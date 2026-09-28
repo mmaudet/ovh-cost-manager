@@ -7,7 +7,7 @@ import { useTableSorts } from '../components/SortableHeader.jsx';
 import {
   fetchProjectsEnriched, fetchProjectConsumption, fetchProjectInstances, fetchProjectQuotas,
   fetchProjectVolumes, fetchProjectSnapshots, fetchProjectSavingsPlans, fetchProjectBuckets,
-  fetchProjectInstanceTotal, fetchPublicCloudStats,
+  fetchProjectInstanceTotal, fetchPublicCloudStats, fetchProjectOtherServices,
 } from '../services/api.js';
 import { accountQuery } from '../utils/accounts.js';
 
@@ -19,6 +19,9 @@ import { accountQuery } from '../utils/accounts.js';
 // month, holdsSelectedMonth, as the shell checks it: not while they load, nor when the account
 // lacks the month, until the shell selects its latest month (#115). A month the account lacks
 // would never show (#120).
+// What a project's detail shows of its other services until they load
+const NO_OTHER_SERVICES = { total: 0, products: [], credits: 0 };
+
 const usePublicCloudTab = ({
   selectedMonth, holdsSelectedMonth, activeTab, selectedProject, selectedAccount,
 }) => {
@@ -92,6 +95,13 @@ const usePublicCloudTab = ({
     enabled: !!openProject && holdsSelectedMonth
   });
 
+  // The project's other services of the selected month, its registry among them (#145)
+  const { data: projectOtherServices = NO_OTHER_SERVICES } = useQuery({
+    queryKey: ['projectOtherServices', openProject?.id, selectedMonth?.from, selectedMonth?.to],
+    queryFn: () => fetchProjectOtherServices(openProject.id, selectedMonth.from, selectedMonth.to),
+    enabled: !!openProject && holdsSelectedMonth
+  });
+
   // Project instance total cost (filtered by selected month)
   const { data: projectInstanceTotal } = useQuery({
     queryKey: ['projectInstanceTotal', openProject?.id, selectedMonth?.from, selectedMonth?.to],
@@ -129,6 +139,7 @@ const usePublicCloudTab = ({
     projectSavingsPlans,
     projectBuckets,
     projectInstanceTotal,
+    projectOtherServices,
     publicCloudStats,
   };
 };

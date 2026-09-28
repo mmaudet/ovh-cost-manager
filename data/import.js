@@ -27,7 +27,9 @@ const {
 } = require('./account-attempts');
 const { classifyService, classifyResourceTypeFromDomain } = require('./classify');
 const { footprintMonths, readFootprintFile } = require('./carbon-footprint');
+const { beyondTotal, usageRows } = require('./cloud-usage');
 const { monthBounds } = require('./months');
+const { storageClassLabel } = require('./storage-classes');
 
 // Skip this run if another import (cron or manual resync) is in progress.
 // Checked first, before --full clears the database.
@@ -918,13 +920,8 @@ function buildResourceTypeMap(projectMap) {
 
 // OVH reports the storage class per object, never per bucket. The class is
 // picked at bucket creation and applies to everything written to it, so
-// sampling a single object identifies the bucket's class.
-const STORAGE_CLASS_LABELS = {
-  STANDARD: 'Standard',
-  STANDARD_IA: 'Standard IA',
-  HIGH_PERFORMANCE: 'High Performance',
-  HIGH_PERF: 'High Performance'
-};
+// sampling a single object identifies the bucket's class; an empty bucket has
+// none (data/storage-classes.js names them).
 
 async function detectStorageClass(ovh, projectId, regionName, bucketName) {
   try {
@@ -934,7 +931,7 @@ async function detectStorageClass(ovh, projectId, regionName, bucketName) {
       { limit: 1 }
     ));
     const raw = objects?.[0]?.storageClass;
-    return raw ? (STORAGE_CLASS_LABELS[raw] || raw) : null;
+    return raw ? storageClassLabel(raw) : null;
   } catch (err) {
     return null; // empty bucket or listing not permitted: leave the class unknown
   }
@@ -1076,7 +1073,7 @@ async function importCloudDetails(ovh, projectIds, nic, heartbeat = () => {}) {
     heartbeat();
     console.log(`  Project ${projectId}...`);
 
-    // Current usage (hourly + monthly)
+    // Current usage
     try {
       const usage = await ovh.requestPromised('GET', `/cloud/project/${projectId}/usage/current`);
 
@@ -1088,54 +1085,22 @@ async function importCloudDetails(ovh, projectIds, nic, heartbeat = () => {}) {
         db.cloudDetails.clearProjectInventory(projectId);
         db.cloudDetails.clearConsumptionOfMonth(projectId, periodStart);
 
-        // Process hourly usage
-        if (usage.hourlyUsage) {
-          const hourlyTypes = ['instance', 'volume', 'snapshot', 'objectStorage'];
-          for (const rt of hourlyTypes) {
-            const items = usage.hourlyUsage[rt] || [];
-            for (const item of items) {
-              for (const detail of (item.details || [])) {
-                db.cloudDetails.insertConsumption({
-                  project_id: projectId,
-                  period_start: periodStart,
-                  period_end: periodEnd,
-                  resource_type: rt,
-                  resource_id: detail.instanceId || detail.resourceId || detail.volumeId || '',
-                  resource_name: item.reference || '',
-                  quantity: detail.quantity?.value || 0,
-                  unit: detail.quantity?.unit || '',
-                  unit_price: 0,
-                  total_price: detail.totalPrice || 0,
-                  region: item.region || ''
-                });
-              }
-            }
-          }
+        // Every part of the usage, one row per resource and cloud resource kind, which add
+        // up to the total that OVH gives the project (#145)
+        const rows = usageRows(usage);
+        const beyond = beyondTotal(usage, rows);
+        if (beyond > 0) {
+          console.warn(`    The usage of project ${projectId} counts ${beyond} more than the `
+            + 'total OVH gives it: a part may count a resource that another counts too');
         }
-
-        // Process monthly usage
-        if (usage.monthlyUsage) {
-          const monthlyTypes = ['instance', 'volume', 'certification'];
-          for (const rt of monthlyTypes) {
-            const items = usage.monthlyUsage[rt] || [];
-            for (const item of items) {
-              for (const detail of (item.details || [])) {
-                db.cloudDetails.insertConsumption({
-                  project_id: projectId,
-                  period_start: periodStart,
-                  period_end: periodEnd,
-                  resource_type: rt + '_monthly',
-                  resource_id: detail.instanceId || detail.resourceId || '',
-                  resource_name: item.reference || '',
-                  quantity: detail.quantity?.value || 0,
-                  unit: detail.quantity?.unit || '',
-                  unit_price: 0,
-                  total_price: detail.totalPrice || 0,
-                  region: item.region || ''
-                });
-              }
-            }
-          }
+        for (const row of rows) {
+          db.cloudDetails.insertConsumption({
+            project_id: projectId,
+            period_start: periodStart,
+            period_end: periodEnd,
+            unit_price: 0,
+            ...row,
+          });
         }
       }
     } catch (err) {

@@ -93,6 +93,8 @@ describe('query keys', () => {
       ['projectSnapshots', undefined, '2026-09-01', '2026-09-30'],
       ['projectSavingsPlans', undefined, undefined, undefined],
       ['projectSavingsPlans', undefined, '2026-09-01', '2026-09-30'],
+      ['projectOtherServices', undefined, undefined, undefined],
+      ['projectOtherServices', undefined, '2026-09-01', '2026-09-30'],
       ['publicCloudStats', undefined, undefined],
       ['publicCloudStats', '2026-09-01', '2026-09-30'],
       // The Web Cloud tab's: the 12 months that end on the selected one

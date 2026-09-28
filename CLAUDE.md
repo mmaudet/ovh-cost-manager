@@ -55,6 +55,18 @@ OVH API ──> data/import.js ──> SQLite (ovh-bills.db) ──> server/inde
     re-import.
   - `public-cloud-lines.js` — parses the Public Cloud bill lines of instances and volumes,
     for the ties and for `db.js`.
+  - `cloud-usage.js` — pure: the rows of a Public Cloud project's current consumption, from
+    what OVH's `usage/current` answers, one per resource and cloud resource kind. Every part
+    counts, the typed resources such as the registry included, and `other` holds what no
+    part names, so that a project's rows add up to the total OVH gives it (#145).
+  - `public-cloud-products.js` — pure: the Public Cloud product of a bill line (`CONTEXT.md`),
+    and what lines add up to by product (`productFigures()`), for the Public Cloud cards and a
+    project's other services. Each line has one; those without a card of their own go to the
+    other services, so that the cards and the credit add up to the month's cloud total (#145).
+    **Products are read when the server reads the bills**, like the ties: changing the rules
+    needs no re-import.
+  - `storage-classes.js` — pure: the names of the storage classes that OVH gives the objects
+    of a bucket, for the import and for the buckets an earlier import stored (#145).
 - **`server/`** — read-only Express API over the DB. `index.js` is the single ~1300-line
   route file. `auth/` guards the API in one of two modes. With OIDC (openid-client v6):
   PKCE sign-in bound to the browser by a signed cookie per state, SQLite-backed sessions

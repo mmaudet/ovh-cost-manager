@@ -294,7 +294,7 @@ describe('Compare tab', () => {
         .toHaveBeenCalledWith('project-staging', '2026-07-01', '2026-07-31');
       expect(rowsOf(comparisonTable(/^Staging \(Projet\)/))).toEqual([
         ['Produit/Type○', 'Juillet 2026○', 'Septembre 2026○', 'Variation○'],
-        ['instance', '0,00€', '52,35€', '—'],
+        ['Instances', '0,00€', '52,35€', '—'],
       ]);
 
       await selectLanguage(user, 'en');
@@ -630,11 +630,11 @@ describe('Compare tab', () => {
       // consumption came in September (#54): no variation to compute (#65)
       expect(rowsOf(comparisonTable(PRODUCTION_CONSUMPTION))).toEqual([
         ['Produit/Type○', 'Août 2026○', 'Septembre 2026○', 'Variation○'],
-        ['instance', '0,00€', '234,25€', '—'],
-        ['instance_monthly', '0,00€', '64,00€', '—'],
-        ['volume', '0,00€', '7,50€', '—'],
-        ['snapshot', '0,00€', '3,25€', '—'],
-        ['objectStorage', '0,00€', '41,00€', '—'],
+        ['Instances', '0,00€', '234,25€', '—'],
+        ['Instances (forfait mensuel)', '0,00€', '64,00€', '—'],
+        ['Volumes', '0,00€', '7,50€', '—'],
+        ['Snapshots', '0,00€', '3,25€', '—'],
+        ['Stockage objet', '0,00€', '41,00€', '—'],
       ]);
       expect(within(comparisonTable(PRODUCTION_CONSUMPTION))
         .getAllByTitle('non calculable : mois A à 0 € ou moins')).toHaveLength(5);
@@ -651,11 +651,11 @@ describe('Compare tab', () => {
 
       expect(rowsOf(comparisonTable(PRODUCTION_CONSUMPTION))).toEqual([
         ['Produit/Type○', 'Août 2026○', 'Septembre 2026▼', 'Variation○'],
-        ['instance', '0,00€', '234,25€', '—'],
-        ['instance_monthly', '0,00€', '64,00€', '—'],
-        ['objectStorage', '0,00€', '41,00€', '—'],
-        ['volume', '0,00€', '7,50€', '—'],
-        ['snapshot', '0,00€', '3,25€', '—'],
+        ['Instances', '0,00€', '234,25€', '—'],
+        ['Instances (forfait mensuel)', '0,00€', '64,00€', '—'],
+        ['Stockage objet', '0,00€', '41,00€', '—'],
+        ['Volumes', '0,00€', '7,50€', '—'],
+        ['Snapshots', '0,00€', '3,25€', '—'],
       ]);
       expect(headerOf(comparisonTable(/^Staging \(Projet\)/)))
         .toEqual(['Produit/Type○', 'Août 2026○', 'Septembre 2026○', 'Variation○']);
@@ -664,8 +664,10 @@ describe('Compare tab', () => {
       await openComparison(user, PRODUCTION_CONSUMPTION);
       await openComparison(user, PRODUCTION_CONSUMPTION);
 
-      expect(firstColumnOf(comparisonTable(PRODUCTION_CONSUMPTION)))
-        .toEqual(['instance', 'instance_monthly', 'objectStorage', 'snapshot', 'volume']);
+      // By the name of each kind, as the table gives it
+      expect(firstColumnOf(comparisonTable(PRODUCTION_CONSUMPTION))).toEqual([
+        'Instances', 'Instances (forfait mensuel)', 'Snapshots', 'Stockage objet', 'Volumes',
+      ]);
     });
 
     it('show a variation of -100% to a month without any consumption stored (#54)', async () => {
@@ -680,11 +682,11 @@ describe('Compare tab', () => {
       // each month's consumption (#54): every cloud resource kind drops to nothing
       expect(rowsOf(comparisonTable(PRODUCTION_CONSUMPTION))).toEqual([
         ['Produit/Type○', 'Septembre 2026○', 'Juillet 2026○', 'Variation○'],
-        ['instance', '234,25€', '0,00€', '-100,0 %'],
-        ['instance_monthly', '64,00€', '0,00€', '-100,0 %'],
-        ['volume', '7,50€', '0,00€', '-100,0 %'],
-        ['snapshot', '3,25€', '0,00€', '-100,0 %'],
-        ['objectStorage', '41,00€', '0,00€', '-100,0 %'],
+        ['Instances', '234,25€', '0,00€', '-100,0 %'],
+        ['Instances (forfait mensuel)', '64,00€', '0,00€', '-100,0 %'],
+        ['Volumes', '7,50€', '0,00€', '-100,0 %'],
+        ['Snapshots', '3,25€', '0,00€', '-100,0 %'],
+        ['Stockage objet', '41,00€', '0,00€', '-100,0 %'],
       ]);
     });
 
@@ -885,7 +887,7 @@ describe('Compare tab', () => {
       .toEqual(['Type', 'Private Cloud Hosts', 'Private Cloud Datastores']);
     expect(rowsOf(comparisonTable(/^Production \(Project\)/)).slice(0, 2)).toEqual([
       ['Product/Type○', 'August 2026○', 'September 2026○', 'Variation○'],
-      ['instance', '0.00€', '234.25€', '—'],
+      ['Instances', '0.00€', '234.25€', '—'],
     ]);
   });
 

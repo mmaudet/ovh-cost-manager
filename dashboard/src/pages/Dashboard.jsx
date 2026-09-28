@@ -761,7 +761,7 @@ export default function Dashboard() {
             {...publicCloudTab} language={language} t={t} fmt={fmt} locale={locale}
             selectedMonth={selectedMonth}
             setSelectedProject={setSelectedProject} byResourceType={byResourceType}
-            gpuSummary={gpuSummary} accountColumn={accountColumn}
+            gpuSummary={gpuSummary} accountColumn={accountColumn} cloudTotal={summary?.cloudTotal}
           />
         )}
 

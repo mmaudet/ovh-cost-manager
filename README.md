@@ -37,6 +37,11 @@ The screenshots show anonymised data.
 ### Web Cloud
 ![Web Cloud - Domains, DNS zones, hosting and email over 12 rolling months](docs/screenshots/web-cloud.png)
 
+### Carbon Footprint Tab
+New in version 3.1.0.
+
+![Carbon footprint - Each month's footprint by emission source, each server, flavor and volume type with its cost, and the 12-month trend](docs/screenshots/carbon-footprint.png)
+
 ## Features
 
 ### Dashboard
@@ -61,7 +66,7 @@ The screenshots show anonymised data.
 - **Account Balance**: Debt, credits, and deposit tracking
 
 ### Infrastructure Inventory
-- **Public Cloud**: Projects, instances (with GPU highlighting), quotas by region, Kubernetes clusters, Object Storage (S3) buckets with cost, Container Registry
+- **Public Cloud**: Projects, instances (with GPU highlighting), quotas by region, Kubernetes clusters, Object Storage (S3) buckets with cost, Container Registry, and the other services (volume backups, databases, load balancers…): the cards add up to the month's cloud total
 - **Private Cloud / vSphere**: Hosts (ESXi), datastores (SSD), management fees
 - **Dedicated Servers**: Full specs (CPU, RAM, datacenter, expiration, renewal) — Scale, Advance, Infra series
 - **VPS**: Model, zone, specs, state
@@ -70,7 +75,7 @@ The screenshots show anonymised data.
 - **Expiring Services**: Lists the services expired or expiring within 30 days, soonest first
 
 ### Environmental Impact
-- **Carbon Footprint**: OVHcloud's estimate of each month's carbon footprint, by emission source, location-based with the market-based footprint, next to what the same services cost (see [Carbon Footprint](#carbon-footprint))
+- **Carbon Footprint** (new in version 3.1.0): OVHcloud's estimate of each month's carbon footprint, by emission source, location-based with the market-based footprint, next to what the same services cost (see [Carbon Footprint](#carbon-footprint))
 - **Carbon Intensity**: each dedicated server, instance flavor and volume type with its footprint, its cost and its kgCO2e per unit of the currency, exportable to CSV
 - **Covered Share**: the share of each month's cost that the footprint covers, as OVHcloud does not compute the footprint of all its services, with its 12-month trend
 
@@ -445,7 +450,7 @@ npm run bills -- --month 2025-12 --format md         # Markdown output
 
 ## Carbon Footprint
 
-OCM imports the carbon footprint that OVHcloud's carbon calculator attributes to each account's services, and shows it in the Carbon footprint tab next to what those services cost.
+Since version 3.1.0, OCM imports the carbon footprint that OVHcloud's carbon calculator attributes to each account's services, and shows it in the Carbon footprint tab next to what those services cost.
 
 ### What the Figures Are
 
@@ -558,7 +563,7 @@ The route lists the accounts that the imports recorded: those that the configura
 | `GET /api/analysis/by-service?from=&to=`                  | Costs grouped by service type                 |
 | `GET /api/analysis/by-resource-type?from=&to=`            | Costs grouped by resource type                |
 | `GET /api/analysis/resource-type-details?type=&from=&to=` | Detail for a specific resource type           |
-| `GET /api/analysis/public-cloud-stats?from=&to=`          | Public Cloud stats (K8s, S3, Registry)        |
+| `GET /api/analysis/public-cloud-stats?from=&to=`          | Public Cloud cards, `other` included          |
 | `GET /api/analysis/backup-stats?from=&to=`                | Backup stats (Veeam VMs, Enterprise licenses) |
 | `GET /api/analysis/daily-trend?from=&to=&account=`        | Daily cost trend                              |
 | `GET /api/analysis/monthly-trend?months=6&end=YYYY-MM`    | Monthly cost trend, `months` ending on `end`  |
@@ -601,6 +606,7 @@ The carbon footprint is what OVHcloud's carbon calculator attributes to the acco
 | `GET /api/projects/:id/instances`                | Project instances                            |
 | `GET /api/projects/:id/quotas`                   | Project quotas by region                     |
 | `GET /api/projects/:id/buckets?from=&to=`        | Project S3 buckets with cost                 |
+| `GET /api/projects/:id/other-services?from=&to=` | Project's other services, registry included |
 | `GET /api/projects/:id/instance-total?from=&to=` | Project instance total cost                  |
 | `GET /api/inventory/servers`                     | Dedicated servers list                       |
 | `GET /api/inventory/vps`                         | VPS instances list                           |

@@ -189,6 +189,24 @@ describe('bucket type', () => {
       ['gone', null, 0.5]
     ]);
   });
+
+  // An import before #145 stored these classes as OVH gives them
+  test('names the archive classes that an earlier import stored as OVHcloud does', () => {
+    for (const [name, storageClass] of [['cool', 'GLACIER_IR'], ['frozen', 'DEEP_ARCHIVE']]) {
+      db.cloudDetails.upsertBucket({
+        id: `${PROJECT}:EU-WEST-PAR:${name}`, project_id: PROJECT, name, region: 'EU-WEST-PAR',
+        storage_class: storageClass, status: null, objects_count: 1, objects_size: 10,
+        created_at: '2025-01-01T00:00:00Z',
+      });
+    }
+
+    const buckets = db.cloudDetails.getBucketsByProject(PROJECT, FROM, TO);
+
+    expect(buckets.map(b => [b.name, b.storage_class])).toEqual([
+      ['cool', 'Active Archive'],
+      ['frozen', 'Cold Archive'],
+    ]);
+  });
 });
 
 describe('instance cost', () => {
@@ -253,6 +271,108 @@ describe('Public Cloud cards', () => {
 
     expect(stats.kubernetes).toEqual({ count: 1, total: 12 });
     expect(stats.savingsPlans).toEqual({ count: 1, total: 90 });
+  });
+
+  // Each line of a Public Cloud project counts in one card, so that the cards add up to the
+  // cloud total of the month, which adds up the lines of the projects (#145)
+  describe('with a line of each product', () => {
+    const LINES = [
+      ['Consommation à l\'heure pour les instances b3-8 gra11', 100],
+      ['Forfait mensuel pour une instance b2-30 (id 5a1c2e3d-0000-4000-8000-000000000001, region gra7) - 01 mois', 50],
+      ['Prorata de la facturation mensuelle d\'une instance b2-30 (id 5a1c2e3d-0000-4000-8000-000000000001, region gra7)', 5],
+      ['Disques supplémentaires à gra9 de type high-speed', 20],
+      ['Snapshots Public Cloud - gra9', 3],
+      ['Sauvegarde de disques - gra9', 7],
+      ['Stockage Standard - Bucket assets sur la région gra', 10],
+      ['Stockage d\'object Public Cloud - gra', 4],
+      ['Bande passante - stockage d\'objects Public Cloud - gra', 0.25],
+      ['Bande passante out Stockage Standard Infrequent Access - gra', 0.25],
+      ['Stockage Standard - Bucket registry-cache sur la région gra', 1],
+      ['Managed Private Registry - plan M', 40],
+      ['Managed Kubernetes Service - Standard plan', 12],
+      ['Savings plan (id : savings-plan-1xb3-8) pour 1 instance(s) b3-8 - Durée : 1M', 90],
+      ['Public Cloud Databases PostgreSQL business DB1-7 à gra', 30],
+      ['Octavia Loadbalancer - Small', 12],
+      ['Public Cloud Floating IP', 2],
+      ['Public Cloud Gateway Small', 3],
+      ['Public Cloud AI Notebooks stockage du workspace', 0.5],
+      ['A product that OVH launched since', 1],
+      ['Utilisation du credit cloud', -5],
+    ];
+    const CLOUD_TOTAL = LINES.reduce((sum, [, price]) => sum + price, 0);
+    const CARDS = [
+      'instances', 'kubernetes', 'objectStorage', 'volumes', 'snapshots', 'savingsPlans',
+      'registry', 'other',
+    ];
+
+    beforeEach(() => {
+      for (const [description, price] of LINES) seedBillLine(description, price);
+    });
+
+    test('the cards and the credit add up to the cloud total of the month', () => {
+      const stats = db.inventory.getPublicCloudStats(FROM, TO);
+
+      const cards = CARDS.reduce((sum, card) => sum + stats[card].total, 0);
+      expect(cards + stats.credits.total).toBeCloseTo(CLOUD_TOTAL, 2);
+      expect(db.analysis.summary(FROM, TO).cloud_total).toBeCloseTo(CLOUD_TOTAL, 2);
+    });
+
+    test('the instance card counts the proratas of the monthly plans', () => {
+      expect(db.inventory.getPublicCloudStats(FROM, TO).instances.total).toBe(155);
+    });
+
+    // Whatever the buckets' names: that of a registry, here
+    test('the object storage card counts the Swift lines, the bandwidth and every bucket', () => {
+      const stats = db.inventory.getPublicCloudStats(FROM, TO);
+
+      expect(stats.objectStorage.total).toBe(15.5);
+      expect(stats.registry.total).toBe(40);
+    });
+
+    test('the other services card names what the other cards leave, the largest first', () => {
+      expect(db.inventory.getPublicCloudStats(FROM, TO).other).toEqual({
+        total: 55.5,
+        products: [
+          { product: 'databases', total: 30 },
+          { product: 'loadBalancers', total: 12 },
+          { product: 'volumeBackups', total: 7 },
+          { product: 'gateways', total: 3 },
+          { product: 'floatingIps', total: 2 },
+          { product: 'other', total: 1 },
+          { product: 'ai', total: 0.5 },
+        ],
+      });
+    });
+
+    // A credit pays for no product: it would lower the other services, or make them negative
+    test('the credit that the bills used stays apart', () => {
+      expect(db.inventory.getPublicCloudStats(FROM, TO).credits).toEqual({ total: -5 });
+    });
+
+    // The detail lists the project's instances, buckets, volumes, snapshots and savings plans
+    test("a project's detail names its other services, the registry included", () => {
+      expect(db.cloudDetails.getOtherServicesByProject(PROJECT, FROM, TO)).toEqual({
+        total: 107.5,
+        products: [
+          { product: 'registry', total: 40 },
+          { product: 'databases', total: 30 },
+          { product: 'kubernetes', total: 12 },
+          { product: 'loadBalancers', total: 12 },
+          { product: 'volumeBackups', total: 7 },
+          { product: 'gateways', total: 3 },
+          { product: 'floatingIps', total: 2 },
+          { product: 'other', total: 1 },
+          { product: 'ai', total: 0.5 },
+        ],
+        credits: -5,
+      });
+    });
+  });
+
+  test('the other services card names no product that cost nothing', () => {
+    seedBillLine('A product that OVH launched since', 0);
+
+    expect(db.inventory.getPublicCloudStats(FROM, TO).other).toEqual({ total: 0, products: [] });
   });
 });
 
