@@ -81,7 +81,16 @@ function paidFor(billLine, instanceRegions) {
 // before July 2026: it ties to the month's dedicated servers as a group
 const isUnnamedServer = (line) => line.type === SERVER && !line.server_domain;
 
+// What a footprint line and a bill line that pays for it both name: a type and, in lower
+// case, a name
+const nameKey = (type, name) => `${type} ${String(name ?? '').toLowerCase()}`;
+
 const round = (value, decimals) => Math.round(value * 10 ** decimals) / 10 ** decimals;
+
+// What a bill line costs in the covered cost and in the cost that it is a share of: nothing
+// for a credit or a discount, a line of a negative price, as a credit pays for no service in
+// particular
+const beforeCredits = (billLine) => Math.max(billLine.total_price, 0);
 
 // A row of the list: a footprint, what its bill lines cost, null when none ties to it, and its
 // carbon intensity, in kg CO2eq per unit of the currency
@@ -104,16 +113,19 @@ function rowOf(fields, footprint, cost) {
  * datacenters: nothing tells which one it is.
  * @param {object[]} footprintLines - The month's lines, as the carbon_footprint_lines table
  *   holds them, each with its location-based `footprint`
- * @param {object[]} billLines - The bill lines of the month of use: those of a Public Cloud
- *   project on the next month's bills, the others on the month's, with the account of their
- *   bill and their total_price
+ * @param {object[]} billLines - The bill lines of the month of use, of the accounts that the
+ *   footprint lines are of and of any other: those of a Public Cloud project on the next
+ *   month's bills, the others on the month's, with the account of their bill and their
+ *   total_price
  * @param {Map<string, string>} instanceRegions - The region of each instance of the inventory
- * @returns {{lines: object[], coveredCost: number}} A row per footprint line, its type, name,
- *   range, datacenter and serverDomain, and one row per account for the dedicated servers that
- *   the file does not name, with their number in unnamedServers; each with its account,
- *   footprint, cost and intensity, the largest footprint first. And the covered cost (see
- *   CONTEXT.md, #157): what the bill lines that tie to them cost before their credits and
- *   discounts, which the cost of each row counts, to the hundredth.
+ * @returns {{lines: object[], coveredCost: number, coveredShare: ?number}} A row per footprint
+ *   line, its type, name, range, datacenter and serverDomain, and one row per account for the
+ *   dedicated servers that the file does not name, with their number in unnamedServers; each
+ *   with its account, footprint, cost and intensity, the largest footprint first. And the
+ *   covered cost (see CONTEXT.md, #157): what the bill lines that tie to them cost before
+ *   their credits and discounts, which the cost of each row counts, to the hundredth; and the
+ *   covered share, of what all the bill lines cost before theirs, to the ten-thousandth, null
+ *   without a footprint line or when the bill lines cost nothing.
  */
 function tieFootprint(footprintLines, billLines, instanceRegions) {
   const rows = [];
@@ -127,14 +139,20 @@ function tieFootprint(footprintLines, billLines, instanceRegions) {
       .filter(datacenter => datacenter && datacenter !== ANY_DATACENTER));
     const costs = new Map();
     let unnamedCost = null;
+    // The named lines by what they name, looked up for each bill line: a dedicated server by
+    // its domain, the first line that names it, and the others by their type and name
+    const byServer = new Map();
+    for (const line of named) {
+      if (line.type === SERVER && !byServer.has(line.server_domain)) {
+        byServer.set(line.server_domain, line);
+      }
+    }
+    const byName = Map.groupBy(named, line => nameKey(line.type, line.name));
 
     // The footprint line that a bill line pays for, if any
     const tiedTo = (paid) => {
-      if (paid.type === SERVER) {
-        return named.find(line => line.type === SERVER && line.server_domain === paid.serverDomain);
-      }
-      const sameName = named.filter(line => line.type === paid.type
-        && String(line.name ?? '').toLowerCase() === paid.name);
+      if (paid.type === SERVER) return byServer.get(paid.serverDomain);
+      const sameName = byName.get(nameKey(paid.type, paid.name)) ?? [];
       if (paid.datacenter === null) return sameName.length === 1 ? sameName[0] : undefined;
       if (!covered.has(paid.datacenter)) return undefined;
       return sameName.find(line => line.datacenter === paid.datacenter)
@@ -152,8 +170,7 @@ function tieFootprint(footprintLines, billLines, instanceRegions) {
       } else {
         continue;
       }
-      // Before the credits and discounts, as the month's cost (see db.carbon.getTies())
-      coveredCost += Math.max(billLine.total_price, 0);
+      coveredCost += beforeCredits(billLine);
     }
 
     for (const line of named) {
@@ -170,9 +187,11 @@ function tieFootprint(footprintLines, billLines, instanceRegions) {
       }, unnamed.reduce((sum, line) => sum + line.footprint, 0), unnamedCost));
     }
   }
+  const cost = billLines.reduce((sum, billLine) => sum + beforeCredits(billLine), 0);
   return {
     lines: rows.sort((a, b) => b.footprint - a.footprint),
     coveredCost: round(coveredCost, 2),
+    coveredShare: rows.length > 0 && cost > 0 ? round(coveredCost / cost, 4) : null,
   };
 }
 

@@ -71,7 +71,6 @@ export const carbon = {
       ].map(line => ({ unnamedServers: null, account: 'xx1111-ovh', ...line })),
       // What these lines cost, of the 40,000 € of the month of use (#157)
       coveredCost: 28754,
-      monthCost: 40000,
       coveredShare: 0.7189,
     },
   },

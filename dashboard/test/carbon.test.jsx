@@ -524,8 +524,7 @@ describe('Carbon tab', () => {
         ...account,
         carbonByServer: {
           '2026-08': {
-            ...account.carbonByServer['2026-08'], coveredCost: 0, monthCost: 0,
-            coveredShare: null,
+            ...account.carbonByServer['2026-08'], coveredCost: 0, coveredShare: null,
           },
         },
       });

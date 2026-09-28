@@ -281,8 +281,8 @@ export const severalAccounts = {
             serverDomain: 'ns1234567.ip-10-0-0.eu', unnamedServers: null, account: 'yy2222-ovh',
             footprint: 1500, cost: 3000, intensity: 0.5,
           }],
+          // Of the 4,000 € of the month of use
           coveredCost: 3000,
-          monthCost: 4000,
           coveredShare: 0.75,
         },
       },

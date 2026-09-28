@@ -210,11 +210,10 @@ test("lists a month's footprint lines with their cost in the month of use", asyn
         month: '2026-08',
         lines: LYON_AUGUST,
         // The covered cost (#157): what the bill lines that tie to the footprint cost, 367 €,
-        // against the 434 € of all the bill lines of the month of use: the 289 € of
-        // September's Public Cloud bill and the 145 € of August's dedicated servers. The 3AZ
-        // lines and the savings plan tie to nothing.
+        // of the 434 € of all the bill lines of the month of use: the 289 € of September's
+        // Public Cloud bill and the 145 € of August's dedicated servers. The 3AZ lines and the
+        // savings plan tie to nothing.
         coveredCost: 367,
-        monthCost: 434,
         coveredShare: 0.8456,
       },
     });
@@ -246,22 +245,20 @@ test('lists the lines of every account, each tied within its account', async () 
       }),
       ...LYON_AUGUST.slice(1),
     ]);
-    // Lyon's 367 € of 434 €, and Paris's 200 €, all of it covered
-    expect(body).toMatchObject({ coveredCost: 567, monthCost: 634, coveredShare: 0.8943 });
+    // Lyon's 367 € of 434 €, and Paris's 200 €, all of it covered: 567 € of 634 €
+    expect(body).toMatchObject({ coveredCost: 567, coveredShare: 0.8943 });
     // The Unknown account, which never has one
     expect((await ocm.get(`/api/carbon/by-server?month=2026-08&account=${UNKNOWN_ACCOUNT}`))
-      .body).toEqual({
-      month: '2026-08', lines: [], coveredCost: 0, monthCost: 0, coveredShare: null,
-    });
+      .body).toEqual({ month: '2026-08', lines: [], coveredCost: 0, coveredShare: null });
   });
 }, 30000);
 
 // Nor a month without a footprint, even when it costs something: July's Public Cloud, which
-// August's bill pays for
+// August's bill pays for 999 €
 test('gives no covered share to a month without a footprint', async () => {
   await withOcm(async (ocm) => {
     expect((await ocm.get(`/api/carbon/by-server?month=2026-07&account=${LYON}`)).body).toEqual({
-      month: '2026-07', lines: [], coveredCost: 0, monthCost: 999, coveredShare: null,
+      month: '2026-07', lines: [], coveredCost: 0, coveredShare: null,
     });
   });
 }, 30000);
@@ -305,10 +302,10 @@ test('leaves the credits and discounts out of the covered share', async () => {
     expect(body.lines.map(({ cost }) => cost)).toEqual([90]);
     // But its 100 € cover 100 € of the 160 € that the services cost before the discount and
     // the credits
-    expect(body).toMatchObject({ coveredCost: 100, monthCost: 160, coveredShare: 0.625 });
+    expect(body).toMatchObject({ coveredCost: 100, coveredShare: 0.625 });
     // With every account, of the 200 € that they cost
     expect((await ocm.get('/api/carbon/by-server?month=2026-08')).body)
-      .toMatchObject({ coveredCost: 100, monthCost: 200, coveredShare: 0.5 });
+      .toMatchObject({ coveredCost: 100, coveredShare: 0.5 });
   });
 }, 30000);
 
@@ -323,7 +320,6 @@ test('gathers the servers that the file does not name in one line', async () => 
       })],
       // They cover every dedicated server of the month
       coveredCost: 145,
-      monthCost: 145,
       coveredShare: 1,
     });
   });

@@ -259,8 +259,8 @@ const ListPanel = ({
 // A month under the trend's chart, and under it the share of its cost that its footprint
 // covers (#157), when it has one: a step in the footprint may come from OVHcloud covering a
 // new service, rather than from an increase
-const MonthTick = ({ x, y, payload, coveredShares, language }) => {
-  const coveredShare = coveredShares.get(payload.value);
+const MonthTick = ({ x, y, payload, months, language }) => {
+  const coveredShare = months.find(({ month }) => month === payload.value)?.coveredShare;
   return (
     <g transform={`translate(${x},${y})`}>
       <text dy={12} textAnchor="middle" fill="#6b7280" fontSize={12}>
@@ -278,104 +278,100 @@ const MonthTick = ({ x, y, payload, coveredShares, language }) => {
 // The footprint of the 12 months up to the month that the tab shows (#154), stacked by
 // emission source, with each month's covered share (#157) and the table of its figures: a
 // month without a footprint has none, not 0
-const TrendPanel = ({ carbonTrend, loadingTrend, failedTrend, language, t, fmt }) => (
-  <CarbonPanel
-    heading={`${t('carbonTrend')} (kgCO₂e)`} loading={loadingTrend} failed={failedTrend}
-    failedLabel={t('carbonTrendFailed')} t={t}
-  >
-    <ul aria-label={t('emissionSources')} className="flex gap-4 text-sm text-gray-600">
-      {EMISSION_SOURCES.map(source => (
-        <li key={source} className="flex items-center gap-2">
-          <span
-            className="inline-block w-3 h-3 rounded-sm"
-            style={{ backgroundColor: SOURCE_COLORS[source] }}
-          />
-          {t(source)}
-        </li>
-      ))}
-    </ul>
-    <div className="h-64">
-      <ResponsiveContainer width="100%" height="100%">
-        <BarChart
-          data={(carbonTrend ?? []).map(({ month, footprint, coveredShare }) => ({
-            month, coveredShare, ...footprint,
-          }))}
-        >
-          <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" vertical={false} />
-          <XAxis
-            dataKey="month" height={40}
-            tick={(
-              <MonthTick
-                coveredShares={new Map((carbonTrend ?? [])
-                  .map(({ month, coveredShare }) => [month, coveredShare]))}
-                language={language}
-              />
-            )}
-          />
-          <YAxis
-            tick={{ fontSize: 12 }} width={64}
-            tickFormatter={(value) => formatWholeNumber(value, language)}
-          />
-          <Tooltip
-            labelFormatter={(yearMonth, items) => {
-              const coveredShare = items?.[0]?.payload.coveredShare;
-              return (
-                <>
-                  {formatYearMonth(yearMonth, language)}
-                  {coveredShare != null && (
-                    <span className="block font-normal text-gray-500">
-                      {t('coveredShare')}{beforeColon(language)}:{' '}
-                      {formatPercent(coveredShare, language)}
-                    </span>
-                  )}
-                </>
-              );
-            }}
-            formatter={(value, name) => [`${fmt(value)} kgCO₂e`, name]}
-          />
-          {EMISSION_SOURCES.map((source, index) => (
-            <Bar
-              key={source} dataKey={source} name={t(source)} stackId="footprint"
-              fill={SOURCE_COLORS[source]} stroke="#ffffff" strokeWidth={2}
-              radius={index === EMISSION_SOURCES.length - 1 ? [4, 4, 0, 0] : 0}
+const TrendPanel = ({ carbonTrend, loadingTrend, failedTrend, language, t, fmt }) => {
+  // Each month as the chart draws it: its emission sources and its covered share
+  const months = (carbonTrend ?? []).map(({ month, footprint, coveredShare }) => ({
+    month, coveredShare, ...footprint,
+  }));
+  return (
+    <CarbonPanel
+      heading={`${t('carbonTrend')} (kgCO₂e)`} loading={loadingTrend} failed={failedTrend}
+      failedLabel={t('carbonTrendFailed')} t={t}
+    >
+      <ul aria-label={t('emissionSources')} className="flex gap-4 text-sm text-gray-600">
+        {EMISSION_SOURCES.map(source => (
+          <li key={source} className="flex items-center gap-2">
+            <span
+              className="inline-block w-3 h-3 rounded-sm"
+              style={{ backgroundColor: SOURCE_COLORS[source] }}
             />
-          ))}
-        </BarChart>
-      </ResponsiveContainer>
-    </div>
-    <p className="text-xs text-gray-500">{t('coveredShareUnderMonths')}</p>
-    <details>
-      <summary className="cursor-pointer text-sm text-gray-500">{t('seeFigures')}</summary>
-      <table className="w-full text-sm mt-2">
-        <thead>
-          <tr className="text-gray-500">
-            <th className="text-left font-medium py-1">{t('month')}</th>
-            {EMISSION_SOURCES.map(source => (
-              <th key={source} className="text-right font-medium py-1">{t(source)}</th>
+            {t(source)}
+          </li>
+        ))}
+      </ul>
+      <div className="h-64">
+        <ResponsiveContainer width="100%" height="100%">
+          <BarChart data={months}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" vertical={false} />
+            <XAxis
+              dataKey="month" height={40}
+              tick={<MonthTick months={months} language={language} />}
+            />
+            <YAxis
+              tick={{ fontSize: 12 }} width={64}
+              tickFormatter={(value) => formatWholeNumber(value, language)}
+            />
+            <Tooltip
+              labelFormatter={(yearMonth, items) => {
+                const coveredShare = items?.[0]?.payload.coveredShare;
+                return (
+                  <>
+                    {formatYearMonth(yearMonth, language)}
+                    {coveredShare != null && (
+                      <span className="block font-normal text-gray-500">
+                        {t('coveredShare')}{beforeColon(language)}:{' '}
+                        {formatPercent(coveredShare, language)}
+                      </span>
+                    )}
+                  </>
+                );
+              }}
+              formatter={(value, name) => [`${fmt(value)} kgCO₂e`, name]}
+            />
+            {EMISSION_SOURCES.map((source, index) => (
+              <Bar
+                key={source} dataKey={source} name={t(source)} stackId="footprint"
+                fill={SOURCE_COLORS[source]} stroke="#ffffff" strokeWidth={2}
+                radius={index === EMISSION_SOURCES.length - 1 ? [4, 4, 0, 0] : 0}
+              />
             ))}
-            <th className="text-right font-medium py-1">Total</th>
-            <th className="text-right font-medium py-1">{t('coveredShare')}</th>
-          </tr>
-        </thead>
-        <tbody>
-          {carbonTrend?.map(({ month, footprint, coveredShare }) => (
-            <tr key={month} className="border-t border-gray-100">
-              <td className="py-1">{formatMonthLabel(month, language)}</td>
-              {[...EMISSION_SOURCES, 'total'].map(key => (
-                <td key={key} className="text-right py-1">
-                  {footprint ? fmt(footprint[key]) : '—'}
-                </td>
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+      <p className="text-xs text-gray-500">{t('coveredShareUnderMonths')}</p>
+      <details>
+        <summary className="cursor-pointer text-sm text-gray-500">{t('seeFigures')}</summary>
+        <table className="w-full text-sm mt-2">
+          <thead>
+            <tr className="text-gray-500">
+              <th className="text-left font-medium py-1">{t('month')}</th>
+              {EMISSION_SOURCES.map(source => (
+                <th key={source} className="text-right font-medium py-1">{t(source)}</th>
               ))}
-              <td className="text-right py-1">
-                {coveredShare === null ? '—' : formatPercent(coveredShare, language)}
-              </td>
+              <th className="text-right font-medium py-1">Total</th>
+              <th className="text-right font-medium py-1">{t('coveredShare')}</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
-    </details>
-  </CarbonPanel>
-);
+          </thead>
+          <tbody>
+            {carbonTrend?.map(({ month, footprint, coveredShare }) => (
+              <tr key={month} className="border-t border-gray-100">
+                <td className="py-1">{formatMonthLabel(month, language)}</td>
+                {[...EMISSION_SOURCES, 'total'].map(key => (
+                  <td key={key} className="text-right py-1">
+                    {footprint ? fmt(footprint[key]) : '—'}
+                  </td>
+                ))}
+                <td className="text-right py-1">
+                  {coveredShare == null ? '—' : formatPercent(coveredShare, language)}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </details>
+    </CarbonPanel>
+  );
+};
 
 // The Carbon tab (#147), which the shell renders while it is active: what useCarbonTab()
 // returns, with the shell's language, translations (t) and amount format (fmt), how the

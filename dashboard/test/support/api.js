@@ -69,9 +69,7 @@ const emptyAnswers = {
     month: shiftMonths(end, index - 11).slice(0, 7), footprint: null, coveredShare: null,
   })),
   // No line of the month's carbon footprint (#155)
-  carbonByServer: (month) => ({
-    month, lines: [], coveredCost: 0, monthCost: 0, coveredShare: null,
-  }),
+  carbonByServer: (month) => ({ month, lines: [], coveredCost: 0, coveredShare: null }),
   // No carbon footprint for the month (#147), nor for any other (#152), and for all accounts,
   // none to name without one (#153)
   carbonFootprint: (month, account) => ({
