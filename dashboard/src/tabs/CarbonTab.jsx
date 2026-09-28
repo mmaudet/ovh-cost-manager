@@ -1,6 +1,9 @@
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from 'recharts';
+import TableActions from '../components/TableActions.jsx';
+import { accountCsvColumns, withAccountNames } from '../utils/accounts.js';
+import { downloadCSV } from '../utils/csv.js';
 import {
   formatDecimal, formatMonthLabel, formatMonthName, formatWholeNumber, formatYearMonth,
 } from '../utils/format.js';
@@ -127,29 +130,61 @@ const datacenterLabel = (datacenter, t) => {
   return datacenter === ANY_DATACENTER ? t('allDatacenters') : datacenter;
 };
 
-// A panel of the tab: its heading, and its content once it has loaded, or what says that it
-// loads or that it could not load
-const CarbonPanel = ({ heading, loading, failed, failedLabel, t, children }) => {
+// A panel of the tab: its heading, with its actions once it has loaded, and its content, or
+// what says that it loads or that it could not load
+const CarbonPanel = ({ heading, actions = null, loading, failed, failedLabel, t, children }) => {
   let content = children;
   if (loading) content = <p className="text-gray-500 text-sm">{t('loading')}</p>;
   else if (failed) content = <p className="text-red-600 text-sm">{failedLabel}</p>;
   return (
     <div className={`${PANEL} p-5 space-y-4`}>
-      <h3 className="text-lg font-semibold text-gray-800">{heading}</h3>
+      <div className="flex items-center gap-2">
+        <h3 className="text-lg font-semibold text-gray-800">{heading}</h3>
+        {!loading && !failed && actions}
+      </div>
       {content}
     </div>
   );
 };
 
+// The columns of the list's CSV file (#156): what each line names, its account when all
+// accounts are shown, and its fields as OVHcloud's file and the route give them
+const listCsvColumns = (language, accountColumn) => [
+  { key: 'item', label: language === 'en' ? 'Item' : 'Élément' },
+  ...accountCsvColumns(accountColumn),
+  { key: 'type', label: 'Type' },
+  { key: 'range', label: language === 'en' ? 'Range' : 'Gamme' },
+  { key: 'datacenter', label: 'Datacenter' },
+  { key: 'footprint', label: language === 'en' ? 'Footprint (kgCO2e)' : 'Empreinte (kgCO2e)' },
+  { key: 'cost', label: language === 'en' ? 'Cost' : 'Coût' },
+  {
+    key: 'intensity',
+    label: language === 'en' ? 'Intensity (kgCO2e/€)' : 'Intensité (kgCO2e/€)',
+  },
+];
+
+// Downloads the list of a month as CSV
+const exportList = (carbonLines, month, language, t, accountColumn) => downloadCSV(
+  withAccountNames(carbonLines.map(line => ({ ...line, item: itemOf(line, t) })), accountColumn),
+  listCsvColumns(language, accountColumn),
+  `ovh-carbon-footprint-${month}`,
+);
+
 // Each line of the month's footprint (#155), the largest first, with what its bill lines cost
 // in the month of use and its carbon intensity, and the Account column when all accounts are
 // shown, second, as in the other lists
 const ListPanel = ({
-  carbonLines, loadingLines, failedLines, language, t, fmt, accountColumn,
+  month, carbonLines, loadingLines, failedLines, language, t, fmt, accountColumn,
 }) => (
   <CarbonPanel
     heading={t('carbonList')} loading={loadingLines} failed={failedLines}
     failedLabel={t('carbonListFailed')} t={t}
+    actions={(
+      <TableActions
+        language={language}
+        onExport={() => exportList(carbonLines, month, language, t, accountColumn)}
+      />
+    )}
   >
     <div className="max-h-96 overflow-y-auto">
       <table className="w-full text-sm">
@@ -327,7 +362,8 @@ const CarbonTab = ({
         </p>
       )}
       <ListPanel
-        carbonLines={carbonLines} loadingLines={loadingLines} failedLines={failedLines}
+        month={month} carbonLines={carbonLines} loadingLines={loadingLines}
+        failedLines={failedLines}
         language={language} t={t} fmt={fmt} accountColumn={accountColumn}
       />
       <TrendPanel

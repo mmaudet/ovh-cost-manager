@@ -247,3 +247,33 @@ test('refuses a month that is not one', async () => {
     expect([status, body.error]).toEqual([400, expect.stringMatching(/^Invalid 'month'/)]);
   });
 }, 30000);
+
+// The list as a CSV file (#156), as the other exports of the API write theirs: ';' between the
+// cells, a decimal comma, and, as the database holds several accounts, the account last
+test('exports the list of a month as CSV', async () => {
+  await withOcm(async (ocm) => {
+    const { status, headers, body } = await ocm.getText(
+      `/api/export/carbon?month=2026-08&account=${LYON}`,
+    );
+    expect([status, headers.get('content-type'), headers.get('content-disposition')]).toEqual([
+      200, 'text/csv; charset=utf-8', 'attachment; filename="empreinte_carbone_2026-08.csv"',
+    ]);
+    const lines = body.split('\n');
+    expect(lines.slice(0, 3)).toEqual([
+      '﻿"Élément";"Type";"Gamme";"Datacenter";"Empreinte (kgCO2e)";"Coût";'
+        + '"Intensité (kgCO2e/€)";"account"',
+      `"ns2.ip-10-0-0.eu";"BAREMETAL";"advance gen4";"GRA";30;80;0,375;"${LYON}"`,
+      `"ns1.ip-10-0-0.eu";"BAREMETAL";"advance gen4";"GRA";20;65;0,3077;"${LYON}"`,
+    ]);
+    // A line that nothing billed has neither a cost nor an intensity
+    expect(lines).toContain(`"r2-15";"PCI-COMPUTE";"r2";"GRA";4;;;"${LYON}"`);
+
+    // March, whose file names no server
+    expect((await ocm.getText(`/api/export/carbon?month=2026-03&account=${LYON}`)).body
+      .split('\n')[1]).toBe(
+      `"Serveurs dédiés non nommés par OVHcloud (2)";"BAREMETAL";;;25;145;0,1724;"${LYON}"`,
+    );
+    // A month that is not one
+    expect((await ocm.getText('/api/export/carbon?month=2026-8')).status).toBe(400);
+  });
+}, 30000);

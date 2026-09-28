@@ -3,6 +3,7 @@ import { screen, within } from '@testing-library/react';
 import { account } from './fixtures/account.js';
 import { severalAccounts } from './fixtures/accounts.js';
 import { api } from './support/api.js';
+import { captureFileDownloads, csvFile } from './support/downloads.js';
 import {
   cardOf, cardRowOf, disclosure, openTab, renderDashboard, rowsOf, selectAccount,
   selectLanguage, selectMonth, sentenceOf, texts,
@@ -425,6 +426,41 @@ describe('Carbon tab', () => {
       expect(rowsOf(list()).slice(1)).toEqual([
         ['ns1234567.ip-10-0-0.eu', 'Serveur dédié', 'GRA', '1 500,00', '3 000,00€', '0,500'],
       ]);
+    });
+
+    // As the other lists do, from the rows the page holds (#156)
+    it('exports the lines of the month it shows to CSV', async () => {
+      const { user } = await renderDashboard();
+      await openTab(user, 'Carbone');
+      const downloadedFiles = captureFileDownloads();
+
+      await user.click(within(cardOf(screen.getByRole('heading', { name: HEADING })))
+        .getByRole('button', { name: 'CSV' }));
+
+      expect(await downloadedFiles()).toEqual([csvFile('ovh-carbon-footprint-2026-08.csv', [
+        '"Élément";"Type";"Gamme";"Datacenter";"Empreinte (kgCO2e)";"Coût";'
+          + '"Intensité (kgCO2e/€)"',
+        '"ns1234567.ip-10-0-0.eu";"BAREMETAL";"advance gen4";"GRA";1500;3000;0,5',
+        '"b2-15.monthly";"PCI-COMPUTE";"b2";"GRA";1200,5;24010;0,05',
+        '"r2-15";"PCI-COMPUTE";"r2";"SBG";900;;',
+        '"high-speed";"PCI-BLOCK-STORAGE";"high-speed";"GRA";436;1744;0,25',
+      ])]);
+    });
+
+    it('names the account of each line in the CSV when all accounts are shown', async () => {
+      const { user } = await renderDashboard(severalAccounts);
+      await openTab(user, 'Carbone');
+      const downloadedFiles = captureFileDownloads();
+
+      await user.click(within(cardOf(screen.getByRole('heading', { name: HEADING })))
+        .getByRole('button', { name: 'CSV' }));
+
+      const [{ content }] = await downloadedFiles();
+      const [header, first] = content.slice(1).split('\n');
+      expect(header).toBe('"Élément";"Compte";"Type";"Gamme";"Datacenter";'
+        + '"Empreinte (kgCO2e)";"Coût";"Intensité (kgCO2e/€)"');
+      expect(first).toBe('"ns1234567.ip-10-0-0.eu";"yy2222-ovh";"BAREMETAL";"advance gen4";'
+        + '"GRA";1500;3000;0,5');
     });
 
     it('speaks English', async () => {

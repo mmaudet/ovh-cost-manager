@@ -578,12 +578,13 @@ The carbon footprint is what OVHcloud's carbon calculator attributes to the acco
 
 ### CSV Exports
 
-| Endpoint                               | Description                                 |
-| -------------------------------------- | ------------------------------------------- |
-| `GET /api/export/bills?from=&to=`      | Bills                                       |
-| `GET /api/export/details?from=&to=`    | Bill lines                                  |
-| `GET /api/export/by-project?from=&to=` | Costs by project                            |
-| `GET /api/export/inventory`            | Dedicated servers, VPS and storage services |
+| Endpoint                               | Description                                                        |
+| -------------------------------------- | ------------------------------------------------------------------ |
+| `GET /api/export/bills?from=&to=`      | Bills                                                              |
+| `GET /api/export/details?from=&to=`    | Bill lines                                                         |
+| `GET /api/export/by-project?from=&to=` | Costs by project                                                   |
+| `GET /api/export/inventory`            | Dedicated servers, VPS and storage services                        |
+| `GET /api/export/carbon?month=YYYY-MM` | Lines of a month's carbon footprint, with their cost and intensity |
 
 The exports are CSV files for a spreadsheet: `;`-separated, with decimal
 commas, in UTF-8 with a byte order mark. Each takes the optional `account`
