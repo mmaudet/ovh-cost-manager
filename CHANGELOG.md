@@ -12,6 +12,61 @@ sections were written afterwards from the git history.
 
 <!-- scripts/release.sh inserts each new version above the first version heading. -->
 
+## 3.1.0 - 2026-09-28
+
+OVH Cost Manager now imports the carbon footprint that OVHcloud's carbon
+calculator attributes to each account's services, and shows it next to what
+those services cost, in a new Carbon footprint tab (« Bilan carbone » in
+French). The tab shows each month's footprint by emission source, its trend
+over 12 months, and each dedicated server, instance flavor and volume type
+with its cost and carbon intensity. It also shows the share of the month's
+cost that the footprint covers, as OVHcloud does not compute the footprint of
+all its services. The figures are OVHcloud's estimates, in kgCO2e: OCM
+computes none of its own. See
+[Carbon Footprint](https://github.com/mmaudet/ovh-cost-manager/blob/v3.1.0/README.md#carbon-footprint)
+in the README.
+
+### Upgrade notes
+
+- **Nothing changes until you enable it.** The first start adds the
+  footprint's table to the database. The other tabs, routes and exports are
+  unchanged.
+- **Enabling it takes a new consumer key for each account.** A key keeps the
+  rules it was created with: request one with the command of
+  [Generate Consumer Key](https://github.com/mmaudet/ovh-cost-manager/blob/v3.1.0/README.md#2-generate-consumer-key),
+  which now lists `POST /me/carbonCalculator/csv`, and replace the account's
+  `consumerKey` in `config.json`. With Docker, do it before you start 3.1.0,
+  or restart the container afterwards: the compose files mount `config.json`
+  as a single file.
+- **The imports then fetch it.** `--include-carbon` imports it, and `--all`
+  includes it: `--all` is the Docker containers' default `IMPORT_FLAGS`, which
+  the dashboard's resync button uses too. Each import asks OVHcloud for the
+  last 24 months again, and keeps the older months, even with `--full`.
+- **Without the rule,** the import writes one line that names it and imports
+  the rest, and the run's status does not change. The tab then says how to
+  enable the footprint.
+- **API.** `GET /api/carbon/footprint`, `/api/carbon/trend`,
+  `/api/carbon/by-server` and `/api/export/carbon` are new. They take the
+  `account` parameter, as the other data routes do.
+
+### New features
+* feat: import the carbon footprint and show a month's footprint by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/160
+* feat: say why the carbon footprint could not be imported by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/161
+* feat: show the latest carbon footprint and the market-based total by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/162
+* feat: say why an account has no carbon footprint by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/163
+* feat: show the carbon footprint's 12-month trend by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/164
+* feat: list the carbon footprint's lines with their cost by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/165
+* feat: export the carbon footprint's list to CSV by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/166
+* feat: show the carbon footprint's covered cost by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/167
+* feat: name the carbon tab "Bilan carbone" in French by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/169
+* feat: name the carbon tab "Carbon footprint" in English by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/170
+### Maintenance
+* docs: add the carbon footprint vocabulary and ADR 0003 by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/148
+* refactor: read Public Cloud instance lines in one place by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/159
+* docs: document the carbon footprint by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/168
+
+**Full Changelog**: https://github.com/mmaudet/ovh-cost-manager/compare/v3.0.0...v3.1.0
+
 ## 3.0.0 - 2026-09-27
 
 OVH Cost Manager now imports several OVH accounts into one instance (#106).
