@@ -300,3 +300,21 @@ export const fetchCarbonTrend = async (end, account = null) => {
   });
   return data;
 };
+
+/**
+ * The lines of a month's carbon footprint (#155): each dedicated server, instance flavor and
+ * volume type that OVHcloud's file names, per datacenter, and the servers that it does not
+ * name in one line, with what their bill lines cost in the month of use and their intensity
+ * @param {string} month - The month, 'YYYY-MM'
+ * @param {?string} [account] - The account whose lines to ask for, as the functions above take
+ *   it: null for all accounts
+ * @returns {Promise<{ month: string, lines: object[] }>} Each line's type, name, range,
+ *   datacenter, serverDomain, unnamedServers, account, footprint, cost and intensity, the
+ *   largest footprint first
+ */
+export const fetchCarbonByServer = async (month, account = null) => {
+  const { data } = await api.get('/carbon/by-server', {
+    params: { month, ...accountParams(account) },
+  });
+  return data;
+};

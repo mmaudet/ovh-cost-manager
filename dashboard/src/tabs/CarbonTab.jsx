@@ -2,7 +2,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from 'recharts';
 import {
-  formatMonthLabel, formatMonthName, formatWholeNumber, formatYearMonth,
+  formatDecimal, formatMonthLabel, formatMonthName, formatWholeNumber, formatYearMonth,
 } from '../utils/format.js';
 
 // The emission sources of a carbon footprint, in the order the tab shows them: the key of
@@ -103,6 +103,87 @@ const NoFootprint = ({ accountImport, language, t }) => {
   return <HowToGetOne language={language} />;
 };
 
+// The translation keys of the types of footprint lines that the list names (#155); another
+// type shows as OVHcloud's file names it
+const TYPE_LABELS = {
+  BAREMETAL: 'carbonServer',
+  'PCI-COMPUTE': 'carbonInstance',
+  'PCI-BLOCK-STORAGE': 'carbonVolume',
+};
+
+// What a line of the list names: a dedicated server, the servers that OVHcloud's file does not
+// name, with their number, or an instance flavor or a volume type
+const itemOf = (line, t) => (line.unnamedServers
+  ? `${t('carbonUnnamedServers')} (${line.unnamedServers})`
+  : line.serverDomain ?? line.name);
+
+// A line's datacenter: none for the servers that the file does not name, all of them for a
+// line that the file gives for every datacenter
+const datacenterOf = (datacenter, t) => {
+  if (!datacenter) return '—';
+  return datacenter === 'ALL' ? t('allDatacenters') : datacenter;
+};
+
+// Each line of the month's footprint (#155), the largest first, with what its bill lines cost
+// in the month of use and its intensity, and the Account column when all accounts are shown
+const ListPanel = ({
+  carbonLines, loadingLines, failedLines, language, t, fmt, accountColumn,
+}) => {
+  let content;
+  if (loadingLines) {
+    content = <p className="text-gray-500 text-sm">{t('loading')}</p>;
+  } else if (failedLines) {
+    content = <p className="text-red-600 text-sm">{t('carbonListFailed')}</p>;
+  } else {
+    content = (
+      <div className="max-h-96 overflow-y-auto">
+        <table className="w-full text-sm">
+          <thead className="sticky top-0 bg-white">
+            <tr className="text-gray-500">
+              <th className="text-left font-medium py-1">{t('carbonItem')}</th>
+              <th className="text-left font-medium py-1">{t('carbonType')}</th>
+              <th className="text-left font-medium py-1">{t('datacenter')}</th>
+              <th className="text-right font-medium py-1">{t('carbonFootprintKg')}</th>
+              <th className="text-right font-medium py-1">{t('carbonCost')}</th>
+              <th className="text-right font-medium py-1">{t('carbonIntensity')}</th>
+              {accountColumn && (
+                <th className="text-left font-medium py-1 pl-4">{accountColumn.label}</th>
+              )}
+            </tr>
+          </thead>
+          <tbody>
+            {carbonLines.map((line, index) => (
+              <tr key={index} className="border-t border-gray-100">
+                <td className="py-1">{itemOf(line, t)}</td>
+                <td className="py-1">
+                  {TYPE_LABELS[line.type] ? t(TYPE_LABELS[line.type]) : line.type}
+                </td>
+                <td className="py-1">{datacenterOf(line.datacenter, t)}</td>
+                <td className="text-right py-1">{fmt(line.footprint)}</td>
+                <td className="text-right py-1">
+                  {line.cost === null ? '—' : `${fmt(line.cost)}€`}
+                </td>
+                <td className="text-right py-1">
+                  {line.intensity === null ? '—' : formatDecimal(line.intensity, language, 3)}
+                </td>
+                {accountColumn && (
+                  <td className="py-1 pl-4">{accountColumn.nameOf(line.account)}</td>
+                )}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
+  }
+  return (
+    <div className={`${PANEL} p-5 space-y-4`}>
+      <h3 className="text-lg font-semibold text-gray-800">{t('carbonList')}</h3>
+      {content}
+    </div>
+  );
+};
+
 // The footprint of the 12 months up to the month that the tab shows (#154), stacked by
 // emission source, with the table of its figures: a month without a footprint has none, not 0
 const TrendPanel = ({ carbonTrend, loadingTrend, failedTrend, language, t, fmt }) => {
@@ -195,8 +276,9 @@ const TrendPanel = ({ carbonTrend, loadingTrend, failedTrend, language, t, fmt }
 // carbon calculator attributes to the month selected, by emission source, or, when that month
 // has none, to the latest month that has one (#152).
 const CarbonTab = ({
-  carbonFootprint, missingMonth, carbonTrend, loadingCarbon, failedCarbon, loadingTrend,
-  failedTrend, language, t, fmt, accountImport, accountColumn,
+  carbonFootprint, missingMonth, carbonTrend, carbonLines, loadingCarbon, failedCarbon,
+  loadingTrend, failedTrend, loadingLines, failedLines, language, t, fmt, accountImport,
+  accountColumn,
 }) => {
   if (loadingCarbon) {
     return <div className="text-center text-gray-500 py-8">{t('loading')}</div>;
@@ -246,6 +328,10 @@ const CarbonTab = ({
             .map(nic => accountColumn?.nameOf(nic) ?? nic).join(', '), language)}
         </p>
       )}
+      <ListPanel
+        carbonLines={carbonLines} loadingLines={loadingLines} failedLines={failedLines}
+        language={language} t={t} fmt={fmt} accountColumn={accountColumn}
+      />
       <TrendPanel
         carbonTrend={carbonTrend} loadingTrend={loadingTrend} failedTrend={failedTrend}
         language={language} t={t} fmt={fmt}

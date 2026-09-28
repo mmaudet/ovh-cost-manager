@@ -25,6 +25,7 @@ describe('useCarbonTab', () => {
 
       expect(api.fetchCarbonFootprint).not.toHaveBeenCalled();
       expect(api.fetchCarbonTrend).not.toHaveBeenCalled();
+      expect(api.fetchCarbonByServer).not.toHaveBeenCalled();
       expect(result.current.carbonFootprint).toBeUndefined();
     },
   );
@@ -68,13 +69,31 @@ describe('useCarbonTab', () => {
       missingMonth: null,
       // Which ends on it (#154)
       carbonTrend: account.carbonTrend['2026-08'],
+      // Its lines (#155)
+      carbonLines: account.carbonByServer['2026-08'].lines,
       // Answered: the tab shows them (#64)
       loadingCarbon: false,
       failedCarbon: false,
       loadingTrend: false,
       failedTrend: false,
+      loadingLines: false,
+      failedLines: false,
     });
     expect(api.fetchCarbonTrend).toHaveBeenCalledWith('2026-08', null);
+    expect(api.fetchCarbonByServer).toHaveBeenCalledWith('2026-08', null);
+  });
+
+  // The lines of the month that the tab shows (#155)
+  it('returns the lines of the month the tab shows, under a key that names it', async () => {
+    const { result, keysOf } = await renderTabHook(useCarbonTab,
+      { ...onTheTab, selectedMonth: september });
+
+    // September shows August
+    expect(api.fetchCarbonByServer).toHaveBeenCalledWith('2026-08', null);
+    expect(result.current.carbonLines).toHaveLength(4);
+    // Until the month shown is known, the query waits without one
+    expect(keysOf('carbonByServer'))
+      .toEqual([['carbonByServer', undefined], ['carbonByServer', '2026-08']]);
   });
 
   // The trend ends on the month that the tab shows (#154)
@@ -94,12 +113,14 @@ describe('useCarbonTab', () => {
       .toEqual([['carbonTrend', undefined], ['carbonTrend', '2026-08']]);
   });
 
-  it('requests no trend when there is no footprint at all', async () => {
+  it('requests no trend nor lines when there is no footprint at all', async () => {
     const { result, queryClient } = await renderTabHook(useCarbonTab,
       { ...onTheTab, selectedAccount: lyonAccount.id }, severalAccounts);
 
     expect(api.fetchCarbonTrend).not.toHaveBeenCalled();
+    expect(api.fetchCarbonByServer).not.toHaveBeenCalled();
     expect(result.current.carbonTrend).toBeUndefined();
+    expect(result.current.carbonLines).toBeUndefined();
     expect(queryClient.getQueryState(['carbonTrend', undefined, lyonAccount.id]))
       .toMatchObject(WAITING);
   });

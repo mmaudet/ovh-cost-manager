@@ -150,6 +150,15 @@ export const severalAccounts = {
       accountsWithoutFootprint: [lyonAccount.nic, removedAccount.nic],
     },
   },
+  // August's lines of all accounts (#155): those of account.js, all of the unnamed account,
+  // the only one with a footprint that month
+  carbonByServer: {
+    '2026-08': {
+      ...account.carbonByServer['2026-08'],
+      lines: account.carbonByServer['2026-08'].lines
+        .map((line) => ({ ...line, account: unnamedAccount.nic })),
+    },
+  },
   // The projects of the breakdown by project and of the GPU costs, for all accounts, once for
   // each account that billed them, with that account: as the Overview asks for them when its
   // lists name the account of each project (#118)
@@ -261,6 +270,17 @@ export const severalAccounts = {
           },
           latestMonth: '2026-08',
           accountsWithoutFootprint: null,
+        },
+      },
+      // Its lines of August (#155): the server of account.js's
+      carbonByServer: {
+        '2026-08': {
+          month: '2026-08',
+          lines: [{
+            type: 'BAREMETAL', name: 'advance-2', range: 'advance gen4', datacenter: 'GRA',
+            serverDomain: 'ns1234567.ip-10-0-0.eu', unnamedServers: null, account: 'yy2222-ovh',
+            footprint: 1500, cost: 3000, intensity: 0.5,
+          }],
         },
       },
       // Imported since August, its 12 months up to August (#154)

@@ -1,6 +1,7 @@
 const Database = require('better-sqlite3');
 const { classifyWebCloud, WEB_CLOUD_FAMILIES } = require('./classify');
 const { instanceLineCondition, readInstanceLine } = require('./instance-lines');
+const { tieFootprint } = require('./carbon-ties');
 const { monthsOfWindow, shiftMonth } = require('./months');
 const ownership = require('./ownership');
 // The conditions of the queries that keep one account's rows (#115), or a list of ids
@@ -2587,6 +2588,36 @@ const carbonOps = {
       const month = shiftMonth(first, index);
       return { month, footprint: byMonth.get(month) ?? null };
     });
+  },
+
+  /**
+   * The lines of a month's carbon footprint, of the account (see accountCondition()), or of
+   * every account by default, each with what the bill lines that it ties to cost in that month
+   * of use, and its intensity (#155, see data/carbon-ties.js).
+   * @param {string} month - YYYY-MM
+   * @param {?string} [account]
+   * @returns {object[]} As tieFootprint() gives them
+   */
+  getByServer: (month, account = null) => {
+    const db = getDb();
+    const ofFootprint = accountCondition(account, 'account');
+    const footprintLines = db.prepare(`
+      SELECT * FROM carbon_footprint_lines WHERE month = ? AND ${ofFootprint.sql} ORDER BY id
+    `).all(month, ...ofFootprint.params);
+    // The bill lines of the month of use: those of a Public Cloud project, which OVHcloud bills
+    // after use, on the next month's bills, and the others on the month's
+    const ofBills = accountCondition(account, 'b.account');
+    const billLines = db.prepare(`
+      SELECT d.description, d.domain, d.project_id, d.resource_type, d.total_price, b.account
+      FROM bill_details d
+      JOIN bills b ON b.id = d.bill_id
+      WHERE ((d.project_id IS NOT NULL AND substr(b.date, 1, 7) = ?)
+          OR (d.project_id IS NULL AND substr(b.date, 1, 7) = ?))
+        AND ${ofBills.sql}
+    `).all(shiftMonth(month, 1), month, ...ofBills.params);
+    const instanceRegions = new Map(db.prepare('SELECT id, region FROM cloud_instances').all()
+      .map(({ id, region }) => [id, region]));
+    return tieFootprint(footprintLines, billLines, instanceRegions);
   },
 
   /**

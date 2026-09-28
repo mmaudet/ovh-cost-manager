@@ -305,6 +305,7 @@ async function initializeServer() {
     console.log(`  GET /api/months`);
     console.log(`  GET /api/carbon/footprint?month=YYYY-MM`);
     console.log(`  GET /api/carbon/trend?end=YYYY-MM`);
+    console.log(`  GET /api/carbon/by-server?month=YYYY-MM`);
     console.log(`  GET /api/import/status`);
     console.log(`\n`);
   });
@@ -1117,6 +1118,22 @@ function registerRoutes() {
         return res.status(400).json({ error });
       }
       res.json(db.carbon.getTrend(end, req.account));
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // The lines of a month's carbon footprint (#155), of the account the request asks for, or
+  // of every account without one: each dedicated server, instance flavor and volume type that
+  // OVHcloud's file names, per datacenter, and the servers that it does not name in one line,
+  // with what their bill lines cost in the month of use and their intensity
+  app.get('/api/carbon/by-server', accountParameter, (req, res) => {
+    try {
+      const { valid, error, month } = monthFromQuery(req.query);
+      if (!valid) {
+        return res.status(400).json({ error });
+      }
+      res.json({ month, lines: db.carbon.getByServer(month, req.account) });
     } catch (err) {
       res.status(500).json({ error: err.message });
     }
