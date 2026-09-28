@@ -56,3 +56,29 @@ _Avoid_: allocated cost
 The cost of a Public Cloud project's instance bill lines whose instances are no longer
 in the inventory, typically deleted since they were billed.
 _Avoid_: unattributed cost
+
+**Carbon footprint**:
+The greenhouse gas emissions that OVHcloud's carbon calculator attributes to an account's
+services for a month, in kilograms of CO2 equivalent, counting the local electricity mix
+of each datacenter (location-based).
+_Avoid_: CO2, emissions, energy, consumption (the Public Cloud's, in euros)
+
+**Market-based footprint**:
+The carbon footprint as OVHcloud also reports it, counting its low-carbon energy
+contracts instead of the local electricity mix.
+
+**Emission source**:
+One of the three parts that OVHcloud splits a carbon footprint into: manufacturing (of
+the servers), electricity (that they draw) and operations (freight, buildings, staff…).
+_Avoid_: category, scope (OVHcloud's scopes 1 to 3 are all its customer's scope 3), usage
+(which names the Public Cloud's consumption)
+
+**Month of use**:
+The month a bill line pays for: the month before its bill's for the lines of a Public
+Cloud project, which OVHcloud bills after use, and the month of its bill for the others.
+_Avoid_: usage month, billing month
+
+**Covered cost**:
+The part of a month of use's cost whose bill lines the carbon footprint of that month
+names.
+_Avoid_: covered spend
