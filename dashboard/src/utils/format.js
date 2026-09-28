@@ -15,8 +15,9 @@ const formatWholeNumber = (value, language = 'fr') => (
   new Intl.NumberFormat(localeOf(language), { maximumFractionDigits: 0 }).format(value)
 );
 
-// A number to a given number of decimals: 0,500 in French, 0.500 in English for 3
-const formatDecimal = (value, language = 'fr', decimals = 3) => (
+// A number to a number of decimals, 3 unless told otherwise: 0,500 in French, 0.500 in
+// English
+const formatDecimal = (value, language = 'fr', { decimals = 3 } = {}) => (
   new Intl.NumberFormat(localeOf(language), {
     minimumFractionDigits: decimals,
     maximumFractionDigits: decimals,

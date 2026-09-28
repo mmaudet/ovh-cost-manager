@@ -1133,7 +1133,7 @@ function registerRoutes() {
       if (!valid) {
         return res.status(400).json({ error });
       }
-      res.json({ month, lines: db.carbon.getByServer(month, req.account) });
+      res.json({ month, lines: db.carbon.getLines(month, req.account) });
     } catch (err) {
       res.status(500).json({ error: err.message });
     }

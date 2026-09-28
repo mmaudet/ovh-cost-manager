@@ -5,18 +5,14 @@
  * say, and its intensity.
  */
 
-const { startOcm } = require('./support/ocm-server');
 const {
   LYON, PARIS, UNKNOWN_ACCOUNT, recordAccounts, bill, project,
 } = require('./support/accounts');
-const { footprintLine } = require('./support/carbon');
+const { CARBON_MONTHS: MONTHS, footprintLine, withSeededOcm } = require('./support/carbon');
 
 // The instances of Lyon's monthly plans
 const PLAN = '5e2487f7-9131-4898-97b3-9d3f532625e4';
 const PRORATED = '89804469-61f2-486b-82a5-398ac89db348';
-
-// The months that the imports of the seed asked for
-const MONTHS = { first: '2024-09', last: '2026-08' };
 
 // A bill line of a bill, as the import stores it: of a Public Cloud project when given one
 let lineNumber = 0;
@@ -64,18 +60,30 @@ function seed(db) {
     line('FR-PCI-SEP', lyon({
       description: 'Disques supplémentaires à gra9 de type high-speed', cost: 30,
     })),
-    // In a 3AZ region, which OVHcloud does not cover
+    // An encrypted volume, which the file counts as its base type
     line('FR-PCI-SEP', lyon({
-      description: "Consommation à l'heure pour les instances b3-8 eu-west-par", cost: 20,
+      description: 'Disques supplémentaires à gra9 de type high-speed-luks', cost: 12,
     })),
-    // A savings plan pays for a plan, not an instance
+    // In a 3AZ region, which OVHcloud does not cover, a flavor that it covers elsewhere
     line('FR-PCI-SEP', lyon({
-      description: 'Savings plan b3-8 (id : sp-1) pour 2 instance(s) b3-8 Durée : 12 mois',
+      description: "Consommation à l'heure pour les instances b2-7 eu-west-par", cost: 20,
+    })),
+    // A savings plan pays for a plan, not an instance, of a flavor that the file gives
+    line('FR-PCI-SEP', lyon({
+      description: 'Savings plan b2-7 (id : sp-1) pour 2 instance(s) b2-7 Durée : 12 mois',
       cost: 40,
     })),
-    // A flavor whose footprint line names no datacenter
+    // A flavor whose footprint line names no datacenter, in a region that the file covers
     line('FR-PCI-SEP', lyon({
       description: "Consommation à l'heure pour les instances b3-64 sbg5", cost: 10,
+    })),
+    // And in a 3AZ region, which that line does not cover either
+    line('FR-PCI-SEP', lyon({
+      description: "Consommation à l'heure pour les instances b3-64 eu-west-par", cost: 7,
+    })),
+    // In a region named by its continent, its direction and its city: Toronto
+    line('FR-PCI-SEP', lyon({
+      description: "Consommation à l'heure pour les instances b2-7 ca-east-tor", cost: 15,
     })),
   ]);
   // The Public Cloud bill of August, which pays for July: not August's
@@ -110,6 +118,11 @@ function seed(db) {
       month: '2026-08' },
     { ...compute('b2-15.monthly', 'GRA',
       { manufacturing: 2, electricity: [3, 1], operations: [1, 1] }), month: '2026-08' },
+    // The same flavor in another datacenter: only the inventory places the prorata
+    { ...compute('b2-15.monthly', 'SBG',
+      { manufacturing: 1, electricity: [1, 0.5], operations: [1, 1] }), month: '2026-08' },
+    { ...compute('b2-7', 'TOR', { manufacturing: 1, electricity: [3, 1], operations: [1, 1] }),
+      month: '2026-08' },
     { ...compute('b3-64', 'ALL', { manufacturing: 0.4, electricity: [0.4, 0.1],
       operations: [0.2, 0.2] }), month: '2026-08' },
     // Nothing billed it
@@ -145,14 +158,7 @@ function seed(db) {
 }
 
 // The server over the seeded database, for the time of `use`
-async function withOcm(use) {
-  const ocm = await startOcm(() => ({}), { seed });
-  try {
-    await use(ocm);
-  } finally {
-    await ocm.stop();
-  }
-}
+const withOcm = (use) => withSeededOcm(seed, use);
 
 // A row of the list: a line of the file, of Lyon by default, with its footprint, its cost and
 // its intensity. Lines of the Public Cloud name no server.
@@ -171,18 +177,28 @@ const LYON_AUGUST = [
     type: 'BAREMETAL', name: 'advance-2', range: 'advance gen4', datacenter: 'GRA',
     serverDomain: 'ns1.ip-10-0-0.eu', footprint: 20, cost: 65, intensity: 0.3077,
   }),
-  // The hourly line of September's bill, not that of August's
+  // The hourly line of September's bill, not that of August's, nor the 3AZ line or the
+  // savings plan of the flavor
   row({ name: 'b2-7', range: 'b2', datacenter: 'GRA', footprint: 10, cost: 100, intensity: 0.1 }),
   // The monthly plan, and the prorata whose instance the inventory places in GRA7
   row({
     name: 'b2-15.monthly', range: 'b2', datacenter: 'GRA', footprint: 6, cost: 55,
     intensity: 0.1091,
   }),
+  row({
+    name: 'b2-7', range: 'b2', datacenter: 'TOR', footprint: 5, cost: 15, intensity: 0.3333,
+  }),
   row({ name: 'r2-15', range: 'r2', datacenter: 'GRA', footprint: 4, cost: null, intensity: null }),
   row({
-    type: 'PCI-BLOCK-STORAGE', name: 'high-speed', range: 'high-speed', datacenter: 'GRA',
-    footprint: 2, cost: 30, intensity: 0.0667,
+    name: 'b2-15.monthly', range: 'b2', datacenter: 'SBG', footprint: 3, cost: null,
+    intensity: null,
   }),
+  // The volumes, the encrypted one included
+  row({
+    type: 'PCI-BLOCK-STORAGE', name: 'high-speed', range: 'high-speed', datacenter: 'GRA',
+    footprint: 2, cost: 42, intensity: 0.0476,
+  }),
+  // The line of sbg5, not the 3AZ one
   row({ name: 'b3-64', range: 'b3', datacenter: 'ALL', footprint: 1, cost: 10, intensity: 0.1 }),
 ];
 

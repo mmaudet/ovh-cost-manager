@@ -4,11 +4,10 @@
  * calculator attributes to the accounts, month by month.
  */
 
-const { startOcm } = require('./support/ocm-server');
 const {
   LYON, PARIS, NEW_ACCOUNT, UNKNOWN_ACCOUNT, recordAccounts,
 } = require('./support/accounts');
-const { footprintLine } = require('./support/carbon');
+const { CARBON_MONTHS: MONTHS, footprintLine, withSeededOcm } = require('./support/carbon');
 
 // A footprint line of a month, a dedicated server, with its emissions in kg CO2eq:
 // manufacturing, electricity and operations, location-based. Its market-based electricity and
@@ -17,9 +16,6 @@ const lineOf = (month, [manufacturing, electricity, operations]) => footprintLin
   month, manufacturing, electricity: [electricity, electricity / 2],
   operations: [operations, operations / 2],
 });
-
-// The months that the imports of the seed asked for
-const MONTHS = { first: '2024-09', last: '2026-08' };
 
 // Three accounts, whose footprint an import stored: Lyon's August of two lines, Paris's of
 // one, and the third account's June, its latest
@@ -34,14 +30,7 @@ function seed(db) {
 
 // The server over the database that seedWith() seeds, the seed above by default, for the time
 // of `use`
-async function withOcm(use, seedWith = seed) {
-  const ocm = await startOcm(() => ({}), { seed: seedWith });
-  try {
-    await use(ocm);
-  } finally {
-    await ocm.stop();
-  }
-}
+const withOcm = (use, seedWith = seed) => withSeededOcm(seedWith, use);
 
 test('gives the carbon footprint of a month, by emission source and in total', async () => {
   await withOcm(async (ocm) => {

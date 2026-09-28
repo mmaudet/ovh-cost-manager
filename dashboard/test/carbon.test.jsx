@@ -342,7 +342,7 @@ describe('Carbon tab', () => {
       'Intensité (kgCO₂e/€)',
     ];
 
-    it("lists the lines of the month it shows, with their cost and intensity", async () => {
+    it('lists the lines of the month it shows, with their cost and intensity', async () => {
       const { user } = await renderDashboard();
 
       // September, which shows August
@@ -399,9 +399,10 @@ describe('Carbon tab', () => {
 
       await openTab(user, 'Carbone');
 
+      // Second, as in the other lists
       const rows = rowsOf(list());
-      expect(rows[0]).toEqual([...HEADER, 'Compte']);
-      expect(rows.slice(1).map((row) => row.at(-1))).toEqual(Array(4).fill('yy2222-ovh'));
+      expect(rows[0]).toEqual([HEADER[0], 'Compte', ...HEADER.slice(1)]);
+      expect(rows.slice(1).map((row) => row[1])).toEqual(Array(4).fill('yy2222-ovh'));
     });
 
     it('asks for no list without any carbon footprint', async () => {
