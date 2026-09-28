@@ -231,6 +231,13 @@ export const fetchProjectBuckets = async (projectId, from, to) => {
   return data;
 };
 
+// The products of a project over a period that its detail lists no section of its own for,
+// its registry among them, and the credit that its bills used (#145)
+export const fetchProjectOtherServices = async (projectId, from, to) => {
+  const { data } = await api.get(`/projects/${projectId}/other-services`, { params: { from, to } });
+  return data;
+};
+
 export const fetchProjectInstanceTotal = async (projectId, from, to) => {
   const { data } = await api.get(`/projects/${projectId}/instance-total`, { params: { from, to } });
   return data;

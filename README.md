@@ -60,7 +60,7 @@ The screenshots show anonymised data.
 - **Account Balance**: Debt, credits, and deposit tracking
 
 ### Infrastructure Inventory
-- **Public Cloud**: Projects, instances (with GPU highlighting), quotas by region, Kubernetes clusters, Object Storage (S3) buckets with cost, Container Registry
+- **Public Cloud**: Projects, instances (with GPU highlighting), quotas by region, Kubernetes clusters, Object Storage (S3) buckets with cost, Container Registry, and the other services (volume backups, databases, load balancers…): the cards add up to the month's cloud total
 - **Private Cloud / vSphere**: Hosts (ESXi), datastores (SSD), management fees
 - **Dedicated Servers**: Full specs (CPU, RAM, datacenter, expiration, renewal) — Scale, Advance, Infra series
 - **VPS**: Model, zone, specs, state
@@ -557,7 +557,7 @@ The route lists the accounts that the imports recorded: those that the configura
 | `GET /api/analysis/by-service?from=&to=`                  | Costs grouped by service type                 |
 | `GET /api/analysis/by-resource-type?from=&to=`            | Costs grouped by resource type                |
 | `GET /api/analysis/resource-type-details?type=&from=&to=` | Detail for a specific resource type           |
-| `GET /api/analysis/public-cloud-stats?from=&to=`          | Public Cloud stats (K8s, S3, Registry)        |
+| `GET /api/analysis/public-cloud-stats?from=&to=`          | Public Cloud cards, `other` included          |
 | `GET /api/analysis/backup-stats?from=&to=`                | Backup stats (Veeam VMs, Enterprise licenses) |
 | `GET /api/analysis/daily-trend?from=&to=&account=`        | Daily cost trend                              |
 | `GET /api/analysis/monthly-trend?months=6&end=YYYY-MM`    | Monthly cost trend, `months` ending on `end`  |
@@ -600,6 +600,7 @@ The carbon footprint is what OVHcloud's carbon calculator attributes to the acco
 | `GET /api/projects/:id/instances`                | Project instances                            |
 | `GET /api/projects/:id/quotas`                   | Project quotas by region                     |
 | `GET /api/projects/:id/buckets?from=&to=`        | Project S3 buckets with cost                 |
+| `GET /api/projects/:id/other-services?from=&to=` | Project's other services, registry included |
 | `GET /api/projects/:id/instance-total?from=&to=` | Project instance total cost                  |
 | `GET /api/inventory/servers`                     | Dedicated servers list                       |
 | `GET /api/inventory/vps`                         | VPS instances list                           |

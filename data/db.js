@@ -5,6 +5,7 @@ const {
 } = require('./public-cloud-lines');
 const { tieFootprint } = require('./carbon-ties');
 const { MONTHLY_KINDS } = require('./cloud-usage');
+const { productFigures } = require('./public-cloud-products');
 const { monthsOfWindow, shiftMonth } = require('./months');
 const ownership = require('./ownership');
 // The conditions of the queries that keep one account's rows (#115), or a list of ids
@@ -1265,11 +1266,15 @@ const inventoryOps = {
   },
 
   /**
-   * The figures of the Public Cloud cards over a period (Kubernetes clusters, S3 buckets, etc),
-   * for the account (see accountCondition()), every account's by default (#121). The costs are
-   * those of the bill lines of its bills; the counts of volumes, snapshots and buckets, those of
-   * the inventory of its projects, as a project's resources belong to its account (ADR 0002),
-   * but for the buckets of an inventory that holds none (below).
+   * The figures of the Public Cloud cards over a period, for the account (see
+   * accountCondition()), every account's by default (#121). Each bill line of a Public Cloud
+   * project counts in one card, that of its product (data/public-cloud-products.js), and the
+   * products without a card of their own in the other services, which name them. With the
+   * Public Cloud credit that the bills used, they add up to the cloud total of the period,
+   * which adds up the lines of the projects (#145).
+   * The counts of volumes, snapshots and buckets are those of the inventory of its projects,
+   * as a project's resources belong to its account (ADR 0002), but for the buckets of an
+   * inventory that holds none (below); the other counts, those of the bill lines.
    * @param {string} fromDate
    * @param {string} toDate
    * @param {?string} [account]
@@ -1280,18 +1285,15 @@ const inventoryOps = {
     const ofBills = accountCondition(account, 'b.account');
     const ofProjects = accountCondition(account, 'p.account');
 
-    // Count unique Kubernetes services from descriptions. Savings plans for
-    // nodes ("savings-plan-3xc3-4_node_k8s") match '%k8s%' but belong to the
-    // savings plan card, as for the instance total.
-    const k8s = db.prepare(`
-      SELECT COUNT(DISTINCT domain) as count, ROUND(SUM(total_price), 2) as total
+    // The bill lines of the projects, by product
+    const { figuresOf, others, credits } = productFigures(db.prepare(`
+      SELECT d.description, d.domain, d.total_price
       FROM bill_details d
       JOIN bills b ON d.bill_id = b.id
       WHERE b.date >= ? AND b.date <= ?
-        AND (LOWER(description) LIKE '%kubernetes%' OR LOWER(description) LIKE '%kube%' OR LOWER(description) LIKE '%k8s%')
-        AND LOWER(description) NOT LIKE 'savings plan%'
+        AND d.project_id IS NOT NULL
         AND ${ofBills.sql}
-    `).get(fromDate, toDate, ...ofBills.params);
+    `).all(fromDate, toDate, ...ofBills.params));
 
     // Count object storage buckets from the imported inventory (buckets that exist
     // right now, including the ones that cost nothing over the period): those of the
@@ -1333,43 +1335,6 @@ const inventoryOps = {
       `).get(fromDate, toDate, ...ofBills.params);
     }
     
-    // Total cost for all object storage (including bandwidth, archives)
-    const s3Total = db.prepare(`
-      SELECT ROUND(SUM(total_price), 2) as total
-      FROM bill_details d
-      JOIN bills b ON d.bill_id = b.id
-      WHERE b.date >= ? AND b.date <= ?
-        AND (
-          LOWER(description) LIKE '%stockage standard%bucket%'
-          OR LOWER(description) LIKE '%stockage high performance%bucket%'
-          OR LOWER(description) LIKE '%stockage standard infrequent%bucket%'
-          OR LOWER(description) LIKE '%stockage d''objects%'
-          OR LOWER(description) LIKE '%public cloud archive%'
-          OR LOWER(description) LIKE 'stockage cold archive%'
-        )
-        AND ${ofBills.sql}
-    `).get(fromDate, toDate, ...ofBills.params);
-
-    // Instances: monthly + hourly lines. Savings plans read as "%instance%" but
-    // are prepaid compute billed on their own line, they are counted apart.
-    const instances = db.prepare(`
-      SELECT ROUND(SUM(d.total_price), 2) as total
-      FROM bill_details d
-      JOIN bills b ON d.bill_id = b.id
-      WHERE b.date >= ? AND b.date <= ?
-        AND (d.description LIKE 'Forfait mensuel pour une instance%'
-             OR d.description LIKE 'Consommation à l%heure pour les instances%')
-        AND ${ofBills.sql}
-    `).get(fromDate, toDate, ...ofBills.params);
-
-    const volumes = db.prepare(`
-      SELECT ROUND(SUM(d.total_price), 2) as total
-      FROM bill_details d
-      JOIN bills b ON d.bill_id = b.id
-      WHERE b.date >= ? AND b.date <= ?
-        AND d.description LIKE 'Disques supplémentaires%'
-        AND ${ofBills.sql}
-    `).get(fromDate, toDate, ...ofBills.params);
     const volumeCount = db.prepare(`
       SELECT COUNT(*) as count FROM cloud_volumes v
       LEFT JOIN projects p ON p.id = v.project_id
@@ -1377,14 +1342,6 @@ const inventoryOps = {
         AND ${ofProjects.sql}
     `).get(toDate, ...ofProjects.params);
 
-    const snapshots = db.prepare(`
-      SELECT ROUND(SUM(d.total_price), 2) as total
-      FROM bill_details d
-      JOIN bills b ON d.bill_id = b.id
-      WHERE b.date >= ? AND b.date <= ?
-        AND d.description LIKE 'Snapshots Public Cloud%'
-        AND ${ofBills.sql}
-    `).get(fromDate, toDate, ...ofBills.params);
     const snapshotCount = db.prepare(`
       SELECT COUNT(*) as count FROM cloud_snapshots s
       LEFT JOIN projects p ON p.id = s.project_id
@@ -1392,55 +1349,21 @@ const inventoryOps = {
         AND ${ofProjects.sql}
     `).get(toDate, ...ofProjects.params);
 
-    const savingsPlans = db.prepare(`
-      SELECT COUNT(DISTINCT d.description) as count, ROUND(SUM(d.total_price), 2) as total
-      FROM bill_details d
-      JOIN bills b ON d.bill_id = b.id
-      WHERE b.date >= ? AND b.date <= ?
-        AND d.description LIKE 'Savings plan%'
-        AND ${ofBills.sql}
-    `).get(fromDate, toDate, ...ofBills.params);
-
-    // Count Container Registry services
-    const registry = db.prepare(`
-      SELECT COUNT(DISTINCT domain) as count, ROUND(SUM(total_price), 2) as total
-      FROM bill_details d
-      JOIN bills b ON d.bill_id = b.id
-      WHERE b.date >= ? AND b.date <= ?
-        AND (LOWER(description) LIKE '%registry%' OR LOWER(description) LIKE '%container registry%' OR LOWER(description) LIKE '%harbor%')
-        AND ${ofBills.sql}
-    `).get(fromDate, toDate, ...ofBills.params);
-
-    // Count AI/ML services
-    const aiml = db.prepare(`
-      SELECT COUNT(DISTINCT domain) as count, ROUND(SUM(total_price), 2) as total
-      FROM bill_details d
-      JOIN bills b ON d.bill_id = b.id
-      WHERE b.date >= ? AND b.date <= ?
-        AND (LOWER(description) LIKE '%ai training%' OR LOWER(description) LIKE '%ai deploy%' OR LOWER(description) LIKE '%notebook%' OR LOWER(description) LIKE '%ml%')
-        AND ${ofBills.sql}
-    `).get(fromDate, toDate, ...ofBills.params);
-
-    // Count Load Balancers
-    const lbs = db.prepare(`
-      SELECT COUNT(DISTINCT domain) as count, ROUND(SUM(total_price), 2) as total
-      FROM bill_details d
-      JOIN bills b ON d.bill_id = b.id
-      WHERE b.date >= ? AND b.date <= ?
-        AND (LOWER(description) LIKE '%load balancer%' OR LOWER(description) LIKE '%loadbalancer%' OR LOWER(description) LIKE '%octavia%')
-        AND ${ofBills.sql}
-    `).get(fromDate, toDate, ...ofBills.params);
-
+    const card = (product, count) => ({ count, total: figuresOf(product).total });
     return {
-      kubernetes: { count: k8s?.count || 0, total: k8s?.total || 0 },
-      instances: { total: instances?.total || 0 },
-      volumes: { count: volumeCount?.count || 0, total: volumes?.total || 0 },
-      snapshots: { count: snapshotCount?.count || 0, total: snapshots?.total || 0 },
-      savingsPlans: { count: savingsPlans?.count || 0, total: savingsPlans?.total || 0 },
-      objectStorage: { count: s3?.count || 0, total: s3Total?.total || 0 },
-      registry: { count: registry?.count || 0, total: registry?.total || 0 },
-      aiml: { count: aiml?.count || 0, total: aiml?.total || 0 },
-      loadBalancers: { count: lbs?.count || 0, total: lbs?.total || 0 }
+      kubernetes: card('kubernetes', figuresOf('kubernetes').services),
+      instances: { total: figuresOf('instances').total },
+      volumes: card('volumes', volumeCount?.count || 0),
+      snapshots: card('snapshots', snapshotCount?.count || 0),
+      savingsPlans: card('savingsPlans', figuresOf('savingsPlans').descriptions),
+      objectStorage: card('objectStorage', s3?.count || 0),
+      registry: card('registry', figuresOf('registry').services),
+      other: others,
+      // The credit that the bills used, which pays for no product: with the cards, it adds up
+      // to the cloud total
+      credits: { total: credits },
+      aiml: card('ai', figuresOf('ai').services),
+      loadBalancers: card('loadBalancers', figuresOf('loadBalancers').services),
     };
   },
 
@@ -2113,6 +2036,27 @@ const cloudDetailOps = {
     }
 
     return snapshots.sort((a, b) => b.total - a.total || (a.name || '').localeCompare(b.name || ''));
+  },
+
+  /**
+   * The products of a Public Cloud project over a period that its detail shows no section of
+   * its own for, such as its registry, its databases or its load balancers, each with its
+   * cost, the most expensive first, and the Public Cloud credit that its bills used (#145).
+   * The detail lists the instances, buckets, volumes, snapshots and savings plans itself.
+   * @param {string} projectId
+   * @param {string} fromDate
+   * @param {string} toDate
+   * @returns {{total: number, products: {product: string, total: number}[], credits: number}}
+   */
+  getOtherServicesByProject: (projectId, fromDate, toDate) => {
+    const { others, credits } = productFigures(getDb().prepare(`
+      SELECT d.description, d.domain, d.total_price
+      FROM bill_details d
+      JOIN bills b ON d.bill_id = b.id
+      WHERE d.project_id = ? AND b.date >= ? AND b.date <= ?
+    `).all(projectId, fromDate, toDate),
+    ['instances', 'objectStorage', 'volumes', 'snapshots', 'savingsPlans']);
+    return { ...others, credits };
   },
 
   /**
