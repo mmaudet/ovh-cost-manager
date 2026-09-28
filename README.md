@@ -543,7 +543,7 @@ or none when none of them has a bill.
 | ----------------------------------------- | ---------------------------------------------------------------------------------------- |
 | `GET /api/carbon/footprint?month=YYYY-MM` | A month's carbon footprint, location-based, by emission source and in total, in kg CO2eq |
 
-The carbon footprint is what OVHcloud's carbon calculator attributes to the accounts' services: `footprint` gives its `manufacturing`, `electricity`, `operations` and `total`, or is `null` for a month without one, such as the current month.
+The carbon footprint is what OVHcloud's carbon calculator attributes to the accounts' services: `footprint` gives its `manufacturing`, `electricity`, `operations` and `total`, location-based, and its `marketBasedTotal`, which counts OVHcloud's low-carbon energy contracts instead of the local electricity mix; it is `null` for a month without one, such as the current month. `latestMonth` is the latest month that has one, or `null` when none has.
 
 ### Inventory
 

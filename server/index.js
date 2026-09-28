@@ -1082,15 +1082,20 @@ function registerRoutes() {
 
   // The carbon footprint of a month, that OVHcloud's carbon calculator attributes to the
   // services of the account the request asks for, or of every account without one: its
-  // location-based emissions by emission source and in total, in kg CO2eq, null when the month
-  // has none
+  // location-based emissions by emission source and in total, in kg CO2eq, and its market-based
+  // total, null when the month has none; and the latest month that has one (#152), which the
+  // dashboard shows when the month has none
   app.get('/api/carbon/footprint', accountParameter, (req, res) => {
     try {
       const { valid, error, month } = monthFromQuery(req.query);
       if (!valid) {
         return res.status(400).json({ error });
       }
-      res.json({ month, footprint: db.carbon.getMonthFootprint(month, req.account) });
+      res.json({
+        month,
+        footprint: db.carbon.getMonthFootprint(month, req.account),
+        latestMonth: db.carbon.getLatestMonth(req.account),
+      });
     } catch (err) {
       res.status(500).json({ error: err.message });
     }
