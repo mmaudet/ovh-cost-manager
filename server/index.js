@@ -18,7 +18,7 @@ const { createAccountParameterMiddleware } = require('./account-parameter');
 const { createOriginCheckMiddleware, readAllowedOrigins } = require('./cors');
 const { createHostCheckMiddleware } = require('./hosts');
 const { importsEnabled } = require('./imports');
-const { trendWindowFromQuery } = require('./months');
+const { trendWindowFromQuery, monthFromQuery } = require('./months');
 const { consumptionForecast, currentConsumption } = require('./consumption');
 const { readConfigFile } = require('./config-file');
 const { buildRateLimitConfig } = require('./rate-limit-config');
@@ -303,6 +303,7 @@ async function initializeServer() {
     console.log(`  GET /api/analysis/monthly-trend?months=6&end=YYYY-MM`);
     console.log(`  GET /api/summary?from=YYYY-MM-DD&to=YYYY-MM-DD`);
     console.log(`  GET /api/months`);
+    console.log(`  GET /api/carbon/footprint?month=YYYY-MM`);
     console.log(`  GET /api/import/status`);
     console.log(`\n`);
   });
@@ -1070,6 +1071,26 @@ function registerRoutes() {
         service_type: h.service_type
       }));
       res.json(result);
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ========================
+  // Carbon footprint (#147)
+  // ========================
+
+  // The carbon footprint of a month, that OVHcloud's carbon calculator attributes to the
+  // services of the account the request asks for, or of every account without one: its
+  // location-based emissions by emission source and in total, in kg CO2eq, null when the month
+  // has none
+  app.get('/api/carbon/footprint', accountParameter, (req, res) => {
+    try {
+      const { valid, error, month } = monthFromQuery(req.query);
+      if (!valid) {
+        return res.status(400).json({ error });
+      }
+      res.json({ month, footprint: db.carbon.getMonthFootprint(month, req.account) });
     } catch (err) {
       res.status(500).json({ error: err.message });
     }

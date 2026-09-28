@@ -233,6 +233,13 @@ export const severalAccounts = {
       },
       // Every Veeam backup of account.js
       backupStats: account.backupStats,
+      // Its carbon footprint in August, part of account.js's (#147)
+      carbonFootprint: {
+        '2026-08': {
+          month: '2026-08',
+          footprint: { manufacturing: 800, electricity: 1500, operations: 300, total: 2600 },
+        },
+      },
       // No GPU
       months: [september, august],
       summary: {

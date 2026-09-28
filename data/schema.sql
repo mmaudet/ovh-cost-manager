@@ -322,3 +322,27 @@ CREATE TABLE IF NOT EXISTS cloud_snapshots (
 );
 
 CREATE INDEX IF NOT EXISTS idx_cloud_snapshots_project ON cloud_snapshots(project_id);
+
+-- The carbon footprint that OVHcloud's carbon calculator attributes to each account, month by
+-- month (#147): one row per line of the file it generates, a dedicated server, or an instance
+-- flavor or a volume type in a datacenter. Every row carries its account from its first
+-- import: none was stored before the accounts, and a full import keeps them (ADR 0003), so
+-- the table is none of the account tables of data/ownership.js.
+CREATE TABLE IF NOT EXISTS carbon_footprint_lines (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  account TEXT NOT NULL,              -- NIC handle of its account
+  month TEXT NOT NULL,                -- YYYY-MM
+  type TEXT,                          -- 'BAREMETAL', 'PCI-COMPUTE', 'PCI-BLOCK-STORAGE', ...
+  datacenter TEXT,                    -- 'GRA', 'RBX', ..., or 'ALL'
+  product_range TEXT,                 -- 'advance gen4', 'b2', 'classic', ...
+  name TEXT,                          -- A server's model, a flavor ('b2-7.monthly'), a volume type
+  server_domain TEXT,                 -- A dedicated server's service name, since July 2026
+  manufacturing REAL NOT NULL,        -- Its emissions in kg CO2eq: the manufacturing's,
+  electricity_location REAL NOT NULL, -- and the electricity's and the operations', each
+  electricity_market REAL NOT NULL,   -- location-based and market-based
+  operations_location REAL NOT NULL,
+  operations_market REAL NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_carbon_footprint_lines_month
+  ON carbon_footprint_lines(account, month);

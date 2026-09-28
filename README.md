@@ -168,12 +168,13 @@ curl -X POST \
     {"method": "GET", "path": "/vps"},
     {"method": "GET", "path": "/vps/*"},
     {"method": "GET", "path": "/storage"},
-    {"method": "GET", "path": "/storage/*"}
+    {"method": "GET", "path": "/storage/*"},
+    {"method": "POST", "path": "/me/carbonCalculator/csv"}
   ]}' \
   https://eu.api.ovh.com/1.0/auth/credential
 ```
 
-> **Minimum permissions**: `GET /me`, `/me/*` and `/cloud/*` are required. Every import reads the account it imports from `GET /me`, which `/me/*` does not cover: a key without it fails every import. The additional paths (`/dedicated/server/*`, `/dedicatedCloud/*`, `/vps/*`, `/storage/*`, `/ip/*`, `/ipLoadbalancing/*`) enable the full infrastructure inventory. The dashboard works without them but inventory data will be limited.
+> **Minimum permissions**: `GET /me`, `/me/*` and `/cloud/*` are required. Every import reads the account it imports from `GET /me`, which `/me/*` does not cover: a key without it fails every import. The additional paths (`/dedicated/server/*`, `/dedicatedCloud/*`, `/vps/*`, `/storage/*`, `/ip/*`, `/ipLoadbalancing/*`) enable the full infrastructure inventory. The dashboard works without them but inventory data will be limited. The optional `POST /me/carbonCalculator/csv` lets the import ask OVHcloud's carbon calculator for the account's carbon footprint (`--include-carbon`, which `--all` includes): it only asks OVHcloud to generate the file, which `GET /me/*` then reads. Without it, the import logs OVHcloud's refusal and imports the rest.
 
 Visit the `validationUrl` in the response to authorize the application.
 
@@ -386,6 +387,9 @@ npm run import -- --from 2025-01-01 --include-inventory
 # Include cloud project details (instances, quotas)
 npm run import -- --from 2025-01-01 --include-cloud-details
 
+# Include the carbon footprint of the last 24 months, which OVHcloud's carbon calculator gives
+npm run import -- --diff --include-carbon
+
 # Import everything
 npm run import -- --from 2025-01-01 --all
 
@@ -532,6 +536,14 @@ or none when none of them has a bill.
 | `GET /api/consumption/usage-history?from=&to=` | Consumption history             |
 | `GET /api/account/balance`                     | Debt, credits, deposits         |
 | `GET /api/account/credits`                     | Credit movements                |
+
+### Carbon Footprint
+
+| Endpoint                                  | Description                                                                              |
+| ----------------------------------------- | ---------------------------------------------------------------------------------------- |
+| `GET /api/carbon/footprint?month=YYYY-MM` | A month's carbon footprint, location-based, by emission source and in total, in kg CO2eq |
+
+The carbon footprint is what OVHcloud's carbon calculator attributes to the accounts' services: `footprint` gives its `manufacturing`, `electricity`, `operations` and `total`, or is `null` for a month without one, such as the current month.
 
 ### Inventory
 

@@ -267,3 +267,19 @@ export const fetchBackupStats = async (from, to, account = null) => {
   });
   return data;
 };
+
+/**
+ * The carbon footprint of a month (#147): what OVHcloud's carbon calculator attributes to the
+ * services, location-based, by emission source and in total, in kg CO2eq
+ * @param {string} month - The month, 'YYYY-MM'
+ * @param {?string} [account] - The account whose footprint to ask for, as the functions above
+ *   take it: null for all accounts
+ * @returns {Promise<{ month: string, footprint: ?object }>} The footprint's manufacturing,
+ *   electricity, operations and total, null when the month has none
+ */
+export const fetchCarbonFootprint = async (month, account = null) => {
+  const { data } = await api.get('/carbon/footprint', {
+    params: { month, ...accountParams(account) },
+  });
+  return data;
+};

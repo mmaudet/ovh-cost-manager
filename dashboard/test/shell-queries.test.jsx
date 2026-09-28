@@ -109,6 +109,9 @@ describe('query keys', () => {
       // The Backup tab's
       ['backupStats', undefined, undefined],
       ['backupStats', '2026-09-01', '2026-09-30'],
+      // The Carbon tab's carbon footprint of the month (#147)
+      ['carbonFootprint', undefined],
+      ['carbonFootprint', '2026-09'],
     ]));
   });
 
@@ -145,8 +148,9 @@ describe('query keys', () => {
       // The months list and the summaries of the KPI cards, on September, the current month's
       // consumption and forecast (#116), the figures of the month that the Overview shows
       // (#118), and the queries of the Compare (#119), Trends (#120), Public Cloud (#121), Web
-      // Cloud (#122) and Infrastructure (#123) tabs, and the Backup tab's Veeam backups (#119).
-      // Not the accounts, which give the budget of each at once (#117).
+      // Cloud (#122) and Infrastructure (#123) tabs, the Backup tab's Veeam backups (#119),
+      // and the Carbon tab's footprint (#147). Not the accounts, which give the budget of each
+      // at once (#117).
       expect(sorted(allKeys().filter((key) => key.includes(lyonAccount.id)))).toEqual(sorted([
         ['months', 'xx1111-ovh'],
         ['summary', '2026-09-01', '2026-09-30', 'xx1111-ovh'],
@@ -189,6 +193,8 @@ describe('query keys', () => {
         ['inventoryVps', 'xx1111-ovh'],
         ['inventoryStorage', 'xx1111-ovh'],
         ['resourceTypeDetails', null, '2026-09-01', '2026-09-30', 'xx1111-ovh'],
+        // The Carbon tab's footprint of the month, which waits for the tab (#147)
+        ['carbonFootprint', '2026-09', 'xx1111-ovh'],
       ]));
     });
 });

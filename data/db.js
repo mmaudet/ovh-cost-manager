@@ -2493,6 +2493,65 @@ const webCloudOps = {
   }
 };
 
+// The carbon footprint of the accounts (#147): the lines of the file that OVHcloud's carbon
+// calculator generates for each account, month by month (see data/carbon-footprint.js)
+const carbonOps = {
+  /**
+   * Replaces an account's footprint lines of some months with those of a file, in one
+   * transaction: the lines of its other months stay, those older than the months the carbon
+   * calculator gives included (ADR 0003), and so do the other accounts'.
+   * @param {string} account - The NIC handle of the account
+   * @param {{first: string, last: string}} months - The first and the last month replaced,
+   *   YYYY-MM: the file's lines of other months are left out
+   * @param {object[]} lines - The lines of the file, as readFootprintFile() reads them
+   */
+  replaceMonths: (account, { first, last }, lines) => {
+    const db = getDb();
+    const insert = db.prepare(`
+      INSERT INTO carbon_footprint_lines (
+        account, month, type, datacenter, product_range, name, server_domain, manufacturing,
+        electricity_location, electricity_market, operations_location, operations_market
+      ) VALUES (
+        @account, @month, @type, @datacenter, @product_range, @name, @server_domain,
+        @manufacturing, @electricity_location, @electricity_market, @operations_location,
+        @operations_market
+      )
+    `);
+    db.transaction(() => {
+      db.prepare(`
+        DELETE FROM carbon_footprint_lines WHERE account = ? AND month >= ? AND month <= ?
+      `).run(account, first, last);
+      for (const line of lines) {
+        if (line.month < first || line.month > last) continue;
+        insert.run(requireAccount('carbon_footprint_lines', { ...line, account }));
+      }
+    })();
+  },
+
+  /**
+   * The carbon footprint of a month, location-based, of the account (see accountCondition()),
+   * or of every account by default: its emissions by emission source, and in total, in kg
+   * CO2eq, to the hundredth.
+   * @param {string} month - YYYY-MM
+   * @param {?string} [account]
+   * @returns {?{manufacturing: number, electricity: number, operations: number, total: number}}
+   *   Null when the month has no footprint line
+   */
+  getMonthFootprint: (month, account = null) => {
+    const ofAccount = accountCondition(account, 'account');
+    const { lines, ...footprint } = getDb().prepare(`
+      SELECT COUNT(*) as lines,
+        ROUND(SUM(manufacturing), 2) as manufacturing,
+        ROUND(SUM(electricity_location), 2) as electricity,
+        ROUND(SUM(operations_location), 2) as operations,
+        ROUND(SUM(manufacturing + electricity_location + operations_location), 2) as total
+      FROM carbon_footprint_lines
+      WHERE month = ? AND ${ofAccount.sql}
+    `).get(month, ...ofAccount.params);
+    return lines > 0 ? footprint : null;
+  },
+};
+
 module.exports = {
   getDb,
   closeDb,
@@ -2513,5 +2572,6 @@ module.exports = {
   balance: balanceOps,
   inventory: inventoryOps,
   cloudDetails: cloudDetailOps,
-  webCloud: webCloudOps
+  webCloud: webCloudOps,
+  carbon: carbonOps,
 };

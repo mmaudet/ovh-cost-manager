@@ -26,6 +26,7 @@ const {
   failureMessage,
 } = require('./account-attempts');
 const { classifyService, classifyResourceTypeFromDomain } = require('./classify');
+const { footprintMonths, readFootprintFile } = require('./carbon-footprint');
 const { monthBounds } = require('./months');
 
 // Skip this run if another import (cron or manual resync) is in progress.
@@ -143,9 +144,12 @@ async function runInBatches(items, asyncFn, batchSize = BATCH_SIZE) {
   return results;
 }
 
-// Parse command line arguments
-function parseArgs() {
-  const args = process.argv.slice(2);
+/**
+ * Reads the options of the command line.
+ * @param {string[]} [args] - Its arguments, those of the script's by default
+ * @returns {object} The options, as runImport() takes them
+ */
+function parseArgs(args = process.argv.slice(2)) {
   const params = {
     full: false,
     diff: false,
@@ -156,6 +160,7 @@ function parseArgs() {
     includeAccount: false,
     includeInventory: false,
     includeCloudDetails: false,
+    includeCarbon: false,
     all: false,
     account: null
   };
@@ -182,12 +187,15 @@ function parseArgs() {
       params.includeInventory = true;
     } else if (args[i] === '--include-cloud-details') {
       params.includeCloudDetails = true;
+    } else if (args[i] === '--include-carbon') {
+      params.includeCarbon = true;
     } else if (args[i] === '--all') {
       params.all = true;
       params.includeConsumption = true;
       params.includeAccount = true;
       params.includeInventory = true;
       params.includeCloudDetails = true;
+      params.includeCarbon = true;
     }
   }
 
@@ -1298,6 +1306,53 @@ async function importBill(ovh, billId, { nic, params, projectMap, resourceTypeMa
   return details.length;
 }
 
+// --- The carbon footprint (#147) ---
+
+// How the import waits for the carbon calculator: it asks how its task goes every 3 seconds,
+// as OVHcloud's control panel does, for 2 minutes at most, as a generation takes seconds
+const CARBON_POLL_INTERVAL_MS = 3000;
+const CARBON_WAIT_MS = 2 * 60 * 1000;
+
+/**
+ * Imports the carbon footprint of the account: the carbon calculator generates the file of its
+ * last 24 months, which the import downloads from the link of its task, and whose lines
+ * replace those of these months (see data/carbon-footprint.js). A footprint that cannot be
+ * imported replaces nothing, and the rest of the import goes on.
+ * @param {object} ovh - The OVH API client of the account
+ * @param {string} nic - The NIC handle of the account, which every line it stores carries
+ * @param {Function} heartbeat - Keeps the run's lock while the import waits for the task
+ */
+async function importCarbonFootprint(ovh, nic, heartbeat) {
+  console.log('\n--- Importing the carbon footprint ---');
+  try {
+    const months = footprintMonths(new Date());
+    const { taskID } = await withRetry(() => ovh.requestPromised(
+      'POST', '/me/carbonCalculator/csv', { startMonth: `${months.first}-01`, endMonth: `${months.last}-01` },
+    ));
+
+    let task = { status: 'IN_PROGRESS' };
+    for (let waited = 0; task.status === 'IN_PROGRESS' && waited < CARBON_WAIT_MS;
+      waited += CARBON_POLL_INTERVAL_MS) {
+      await new Promise(resolve => setTimeout(resolve, CARBON_POLL_INTERVAL_MS));
+      task = await withRetry(() => ovh.requestPromised('GET', `/me/carbonCalculator/task/${taskID}`));
+      heartbeat();
+    }
+    if (task.status !== 'SUCCESS') {
+      throw new Error(`The carbon calculator's task ${taskID} ended ${task.status}`);
+    }
+
+    const response = await fetch(task.link);
+    if (!response.ok) {
+      throw new Error(`The carbon footprint file could not be downloaded: HTTP ${response.status}`);
+    }
+    const lines = readFootprintFile(await response.text());
+    db.carbon.replaceMonths(nic, months, lines);
+    console.log(`  Imported ${lines.length} footprint lines, from ${months.first} to ${months.last}`);
+  } catch (err) {
+    console.error(`  Error importing the carbon footprint: ${describeError(err)}`);
+  }
+}
+
 /**
  * Imports one account through its OVH API client: its projects, its inventories when asked,
  * its bills from the day that billsStartOf() gives, then the other datasets asked for. Every
@@ -1391,6 +1446,10 @@ async function importAccount(ovh, nic, { params, importType, toDate, heartbeat }
     if (params.includeCloudDetails) {
       await importCloudDetails(ovh, Object.keys(projectMap), nic, heartbeat);
     }
+    if (params.includeCarbon) {
+      await importCarbonFootprint(ovh, nic, heartbeat);
+      heartbeat();
+    }
     return { imported };
   } catch (err) {
     // A call that rejects with nothing fails the account all the same
@@ -1410,6 +1469,7 @@ function printUsage() {
   console.error('  --include-account       Import account balance, debts, credits');
   console.error('  --include-inventory     Import service inventory (servers, VPS, storage)');
   console.error('  --include-cloud-details Import cloud project instances, quotas, consumption');
+  console.error('  --include-carbon        Import the carbon footprint of the last 24 months');
   console.error('  --all                   Import all additional data');
   console.error('  --account <NIC handle>  Import the configured account of this NIC handle only');
   console.error('                          (with --full, clear and reimport that account only)');
@@ -1630,4 +1690,4 @@ if (require.main === module) {
   runImport(params);
 }
 
-module.exports = { importCloudDetails, importInventory, runImport };
+module.exports = { importCloudDetails, importInventory, parseArgs, runImport };
