@@ -14,6 +14,7 @@ import {
   cardRowOf,
   cloudProjectRow,
   cloudProjects,
+  cloudProjectsTable,
   headerOf,
   openTab,
   panelOf,
@@ -45,8 +46,6 @@ const resourcePanel = (kind) =>
 const resourceTable = (kind) => within(resourcePanel(kind)).getByRole('table');
 // The name of each row of a table, in the order shown: the first text of its first cell
 const namesIn = (table) => rowTextsOf(table).slice(1).map(([name]) => name);
-// The table of the projects, without the tables of the detail of the open project
-const projectsTable = () => within(cloudProjects()).getAllByRole('table')[0];
 const resourceButton = (kind, name) => within(resourcePanel(kind)).getByRole('button', { name });
 const showAll = async (user, kind) => {
   await user.click(resourceButton(kind, 'Tout afficher'));
@@ -199,11 +198,11 @@ describe('Public Cloud tab', () => {
       const { user } = await renderDashboard();
       await openTab(user, 'Public Cloud');
 
-      await sortTable(user, projectsTable(), /^Consommation en cours/);
-      await sortTable(user, projectsTable(), /^Consommation en cours/);
+      await sortTable(user, cloudProjectsTable(), /^Consommation en cours/);
+      await sortTable(user, cloudProjectsTable(), /^Consommation en cours/);
 
       // The least consuming first, and last the project that consumed nothing
-      expect(rowTextsOf(projectsTable())).toEqual([
+      expect(rowTextsOf(cloudProjectsTable())).toEqual([
         ['Nom', '○', 'État', '○', 'Instances', '○', 'Consommation en cours', '▲'],
         ['Staging', 'ok', '0', '52,35€', '▼'],
         ['Production', 'Customer-facing services', 'ok', '5', '350,00€', '▼'],
@@ -212,12 +211,12 @@ describe('Public Cloud tab', () => {
 
       await openProject(user, 'Production');
       // By the header of the list, rather than one of the tables of the project's detail
-      await sortTable(user, projectsTable().tHead, /^Nom/);
+      await sortTable(user, cloudProjectsTable().tHead, /^Nom/);
 
-      expect(headerOf(projectsTable()))
+      expect(headerOf(cloudProjectsTable()))
         .toEqual(['Nom▲', 'État○', 'Instances○', 'Consommation en cours○', '']);
       // Each row by its first text: Production, its detail, then the other projects
-      expect([...projectsTable().tBodies[0].rows].map((row) => texts(row)[0]))
+      expect([...cloudProjectsTable().tBodies[0].rows].map((row) => texts(row)[0]))
         .toEqual(['Production', 'Consommation par ressource', 'Sandbox', 'Staging']);
     });
 
@@ -727,6 +726,24 @@ describe('Public Cloud tab', () => {
     });
   });
 
+  // The panel and the "show all" modal of each resource table share its order (#146)
+  it.each(['Instances', 'Buckets', 'Volumes', 'Snapshots', 'Savings plans'])(
+    'shows the %s in their "show all" modal in the order of their panel',
+    async (kind) => {
+      const { user } = await openProduction();
+      // The least expensive first
+      await sortTable(user, resourceTable(kind), /^Coût/);
+      await sortTable(user, resourceTable(kind), /^Coût/);
+      const panelOrder = namesIn(resourceTable(kind));
+
+      const dialog = await showAll(user, kind);
+
+      const tableOfDialog = within(dialog).getByRole('table');
+      expect(headerOf(tableOfDialog).at(-1)).toBe('Coût▲');
+      expect(namesIn(tableOfDialog)).toEqual(panelOrder);
+    },
+  );
+
   it('shows only its figures when there is no Public Cloud project', async () => {
     const { user } = await renderDashboard({ ...account, projectsEnriched: [] });
 
@@ -958,7 +975,7 @@ describe('Public Cloud tab', () => {
         await openTab(user, 'Public Cloud');
 
         // Its name, or else its NIC handle, and the Unknown account for a project without one
-        expect(rowTextsOf(projectsTable())).toEqual([
+        expect(rowTextsOf(cloudProjectsTable())).toEqual([
           ['Nom', '○', 'Compte', '○', 'État', '○', 'Instances', '○', 'Consommation en cours', '○'],
           ['Production', 'Customer-facing services', 'Lyon subsidiary', 'ok', '5', '350,00€',
             '▼'],
@@ -968,10 +985,10 @@ describe('Public Cloud tab', () => {
 
         await selectLanguage(user, 'en');
 
-        expect(rowTextsOf(projectsTable())[0]).toEqual([
+        expect(rowTextsOf(cloudProjectsTable())[0]).toEqual([
           'Name', '○', 'Account', '○', 'State', '○', 'Instances', '○', 'Current consumption', '○',
         ]);
-        expect(rowTextsOf(projectsTable())[3])
+        expect(rowTextsOf(cloudProjectsTable())[3])
           .toEqual(['Sandbox', 'Unknown account', 'ok', '0', '-', '▼']);
       });
 
@@ -979,11 +996,11 @@ describe('Public Cloud tab', () => {
         async () => {
           const { user } = await openOnAccount('Lyon subsidiary');
 
-          expect(rowTextsOf(projectsTable())[0]).toEqual(WITHOUT_ACCOUNT);
+          expect(rowTextsOf(cloudProjectsTable())[0]).toEqual(WITHOUT_ACCOUNT);
 
           await selectAccount(user, 'Tous les comptes');
 
-          expect(rowTextsOf(projectsTable())[0]).toEqual([
+          expect(rowTextsOf(cloudProjectsTable())[0]).toEqual([
             'Nom', '○', 'Compte', '○', 'État', '○', 'Instances', '○', 'Consommation en cours', '○',
           ]);
         });
@@ -998,7 +1015,7 @@ describe('Public Cloud tab', () => {
 
         await openTab(user, 'Public Cloud');
 
-        expect(rowTextsOf(projectsTable())[0]).toEqual(WITHOUT_ACCOUNT);
+        expect(rowTextsOf(cloudProjectsTable())[0]).toEqual(WITHOUT_ACCOUNT);
       });
     });
 

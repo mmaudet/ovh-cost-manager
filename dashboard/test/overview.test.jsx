@@ -22,6 +22,7 @@ import {
   selectLanguage,
   selectMonth,
   settle,
+  sortButton,
   sortTable,
   texts,
 } from './support/render.jsx';
@@ -377,10 +378,9 @@ describe('Overview tab', () => {
     it('sorts with the button of a header, which says what a click on it does', async () => {
       const { user } = await renderDashboard();
       // In the language of the page, as the heading of the breakdown says it
-      const columnOf = (column, heading) => columnHeader(
-        within(projectBreakdown(heading)).getByRole('table'), column,
-      );
-      const buttonOf = (column, heading) => within(columnOf(column, heading)).getByRole('button');
+      const tableOf = (heading) => within(projectBreakdown(heading)).getByRole('table');
+      const columnOf = (column, heading) => columnHeader(tableOf(heading), column);
+      const buttonOf = (column, heading) => sortButton(tableOf(heading), column);
       expect(columnOf('Montant')).toHaveAttribute('aria-sort', 'descending');
       expect(columnOf('Projet')).not.toHaveAttribute('aria-sort');
       expect(buttonOf('Montant')).toHaveAccessibleDescription('Trier par ordre croissant');
