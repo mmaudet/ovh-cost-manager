@@ -1,6 +1,9 @@
 const Database = require('better-sqlite3');
 const { classifyWebCloud, WEB_CLOUD_FAMILIES } = require('./classify');
-const { instanceLineCondition, readInstanceLine } = require('./instance-lines');
+const {
+  instanceLineCondition, readInstanceLine, readVolumeLine,
+} = require('./public-cloud-lines');
+const { tieFootprint } = require('./carbon-ties');
 const { monthsOfWindow, shiftMonth } = require('./months');
 const ownership = require('./ownership');
 // The conditions of the queries that keep one account's rows (#115), or a list of ids
@@ -2052,15 +2055,16 @@ const cloudDetailOps = {
 
     for (const line of lines) {
       // "Disques supplémentaires à <region> de type <type>"
-      const match = line.description.match(/à\s+(\S+)\s+de type\s+(.+)$/i);
-      const region = (match?.[1] || '').toLowerCase();
-      const type = (match?.[2] || '').trim().toLowerCase();
+      const volume = readVolumeLine(line.description);
+      const region = (volume?.region || '').toLowerCase();
+      const type = (volume?.type || '').toLowerCase();
       const matching = volumes.filter(v =>
         (v.region || '').toLowerCase() === region && (v.type || '').toLowerCase() === type
       );
       if (!allocateProRata(matching, line.total, v => v.size_gb)) {
         volumes.push({
-          id: null, name: line.description, region: match?.[1] || null, type: match?.[2] || null,
+          id: null, name: line.description, region: volume?.region || null,
+          type: volume?.type || null,
           size_gb: null, status: null, bootable: 0, attached_to: null, created_at: null,
           total: line.total, allocated: true, in_inventory: 0
         });
@@ -2500,13 +2504,17 @@ const webCloudOps = {
 // The carbon footprint of the accounts (#147): the lines of the file that OVHcloud's carbon
 // calculator generates for each account, month by month (see data/carbon-footprint.js)
 
+// A footprint line's location-based footprint, in kg CO2eq: the carbon footprint that OCM
+// shows, market-based aside (see CONTEXT.md)
+const LOCATION_FOOTPRINT = 'manufacturing + electricity_location + operations_location';
+
 // What the queries of a carbon footprint select of its lines: its location-based footprint
 // by emission source and in total, in kg CO2eq, to the hundredth
 const FOOTPRINT_SUMS = `
   ROUND(SUM(manufacturing), 2) as manufacturing,
   ROUND(SUM(electricity_location), 2) as electricity,
   ROUND(SUM(operations_location), 2) as operations,
-  ROUND(SUM(manufacturing + electricity_location + operations_location), 2) as total`;
+  ROUND(SUM(${LOCATION_FOOTPRINT}), 2) as total`;
 
 // How many months the trend of the carbon footprint covers (#154)
 const TREND_MONTHS = 12;
@@ -2587,6 +2595,39 @@ const carbonOps = {
       const month = shiftMonth(first, index);
       return { month, footprint: byMonth.get(month) ?? null };
     });
+  },
+
+  /**
+   * The lines of a month's carbon footprint, of the account (see accountCondition()), or of
+   * every account by default, each with what the bill lines that it ties to cost in that month
+   * of use, and its intensity (#155, see data/carbon-ties.js).
+   * @param {string} month - YYYY-MM
+   * @param {?string} [account]
+   * @returns {object[]} As tieFootprint() gives them
+   */
+  getLines: (month, account = null) => {
+    const db = getDb();
+    const ofFootprint = accountCondition(account, 'account');
+    const footprintLines = db.prepare(`
+      SELECT *, ${LOCATION_FOOTPRINT} as footprint
+      FROM carbon_footprint_lines
+      WHERE month = ? AND ${ofFootprint.sql}
+      ORDER BY id
+    `).all(month, ...ofFootprint.params);
+    // The bill lines of the month of use: those of a Public Cloud project, which OVHcloud bills
+    // after use, on the next month's bills, and the others on the month's
+    const ofBills = accountCondition(account, 'b.account');
+    const billLines = db.prepare(`
+      SELECT d.description, d.domain, d.project_id, d.resource_type, d.total_price, b.account
+      FROM bill_details d
+      JOIN bills b ON b.id = d.bill_id
+      WHERE ((d.project_id IS NOT NULL AND substr(b.date, 1, 7) = ?)
+          OR (d.project_id IS NULL AND substr(b.date, 1, 7) = ?))
+        AND ${ofBills.sql}
+    `).all(shiftMonth(month, 1), month, ...ofBills.params);
+    const instanceRegions = new Map(db.prepare('SELECT id, region FROM cloud_instances').all()
+      .map(({ id, region }) => [id, region]));
+    return tieFootprint(footprintLines, billLines, instanceRegions);
   },
 
   /**

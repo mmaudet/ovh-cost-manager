@@ -1,5 +1,5 @@
 /**
- * The instance lines of a Public Cloud project's bills, as OVH words them:
+ * The instance and volume lines of a Public Cloud project's bills, as OVH words them:
  *
  * - a monthly plan names its flavor, its instance and its region: "Forfait mensuel pour une
  *   instance b2-30 (id <uuid>, region gra7) - 01 mois";
@@ -8,9 +8,12 @@
  * - the hourly instances of a flavor are billed on one line, most often per region:
  *   "Consommation à l'heure pour les instances r3-16 gra11".
  *
- * The per-instance costs pick them with instanceLineCondition() and read them with
- * readInstanceLine(), and so will the ties of the carbon footprint (#147). This module has no
- * side effect.
+ * - the additional disks of a type are billed on one line per region: "Disques
+ *   supplémentaires à gra9 de type high-speed".
+ *
+ * The per-instance costs pick the instance lines with instanceLineCondition() and read them
+ * with readInstanceLine(), the per-volume costs read the volume lines with readVolumeLine(),
+ * and so do the ties of the carbon footprint (#155). This module has no side effect.
  */
 
 // How the description of each kind of instance line starts, with `_` for the apostrophe,
@@ -87,4 +90,17 @@ function instanceLineCondition(column) {
   };
 }
 
-module.exports = { instanceLineCondition, readInstanceLine };
+// An additional disks' line: its region, and the type of its volumes
+const VOLUME = /^Disques supplémentaires à\s+(\S+)\s+de type\s+(.+)$/i;
+
+/**
+ * Reads a volume bill line, of the additional disks of a type in a region.
+ * @param {?string} description - The bill line's description
+ * @returns {?{region: string, type: string}} As the line words them, null for any other line
+ */
+function readVolumeLine(description) {
+  const volume = String(description ?? '').match(VOLUME);
+  return volume ? { region: volume[1], type: volume[2].trim() } : null;
+}
+
+module.exports = { instanceLineCondition, readInstanceLine, readVolumeLine };

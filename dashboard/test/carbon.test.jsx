@@ -4,8 +4,8 @@ import { account } from './fixtures/account.js';
 import { severalAccounts } from './fixtures/accounts.js';
 import { api } from './support/api.js';
 import {
-  cardRowOf, disclosure, openTab, renderDashboard, rowsOf, selectAccount, selectLanguage,
-  selectMonth, sentenceOf, texts,
+  cardOf, cardRowOf, disclosure, openTab, renderDashboard, rowsOf, selectAccount,
+  selectLanguage, selectMonth, sentenceOf, texts,
 } from './support/render.jsx';
 
 // The cards of the month's carbon footprint: its total, with its market-based total and what
@@ -329,6 +329,115 @@ describe('Carbon tab', () => {
       const rows = rowsOf(trendTable('See the figures'));
       expect(rows[0]).toEqual(['Month', 'Manufacturing', 'Electricity', 'Operations', 'Total']);
       expect(rows.at(-1)).toEqual(['August 2026', '1,234.50', '2,345.25', '456.75', '4,036.50']);
+    });
+  });
+
+  // Each line of the month's footprint, next to what it cost in the month of use (#155)
+  describe('list', () => {
+    const HEADING = 'Empreinte et coût de chaque élément';
+    const list = (heading = HEADING) =>
+      within(cardOf(screen.getByRole('heading', { name: heading }))).getByRole('table');
+    const HEADER = [
+      'Élément', 'Type', 'Datacenter', 'Empreinte (kgCO₂e)', 'Coût',
+      'Intensité (kgCO₂e/€)',
+    ];
+
+    it('lists the lines of the month it shows, with their cost and intensity', async () => {
+      const { user } = await renderDashboard();
+
+      // September, which shows August
+      await openTab(user, 'Carbone');
+
+      expect(api.fetchCarbonByServer).toHaveBeenCalledWith('2026-08', null);
+      expect(rowsOf(list())).toEqual([
+        HEADER,
+        ['ns1234567.ip-10-0-0.eu', 'Serveur dédié', 'GRA', '1 500,00', '3 000,00€', '0,500'],
+        ['b2-15.monthly', 'Instance', 'GRA', '1 200,50', '24 010,00€', '0,050'],
+        // Nothing billed it
+        ['r2-15', 'Instance', 'SBG', '900,00', '—', '—'],
+        ['high-speed', 'Volume', 'GRA', '436,00', '1 744,00€', '0,250'],
+      ]);
+    });
+
+    // Before July 2026, OVHcloud's file names no dedicated server
+    it('shows the servers that the file does not name in one line', async () => {
+      const { user } = await renderDashboard({
+        ...account,
+        carbonByServer: {
+          '2026-08': {
+            month: '2026-08',
+            lines: [
+              {
+                type: 'BAREMETAL', name: null, range: null, datacenter: null, serverDomain: null,
+                unnamedServers: 26, account: 'xx1111-ovh', footprint: 941.83, cost: 7149.72,
+                intensity: 0.1317,
+              },
+              {
+                type: 'PCI-COMPUTE', name: 'b3-64', range: 'b3', datacenter: 'ALL',
+                serverDomain: null, unnamedServers: null, account: 'xx1111-ovh', footprint: 1,
+                cost: 10, intensity: 0.1,
+              },
+            ],
+          },
+        },
+      });
+
+      await openTab(user, 'Carbone');
+
+      expect(rowsOf(list()).slice(1)).toEqual([
+        [
+          'Serveurs dédiés non nommés par OVHcloud (26)', 'Serveur dédié', '—', '941,83',
+          '7 149,72€', '0,132',
+        ],
+        // A line that names no datacenter
+        ['b3-64', 'Instance', 'Tous', '1,00', '10,00€', '0,100'],
+      ]);
+    });
+
+    it('names the account of each line when all accounts are shown', async () => {
+      const { user } = await renderDashboard(severalAccounts);
+
+      await openTab(user, 'Carbone');
+
+      // Second, as in the other lists
+      const rows = rowsOf(list());
+      expect(rows[0]).toEqual([HEADER[0], 'Compte', ...HEADER.slice(1)]);
+      expect(rows.slice(1).map((row) => row[1])).toEqual(Array(4).fill('yy2222-ovh'));
+    });
+
+    it('asks for no list without any carbon footprint', async () => {
+      const { user } = await renderDashboard(severalAccounts);
+      await selectAccount(user, 'Lyon subsidiary');
+
+      await openTab(user, 'Carbone');
+
+      expect(api.fetchCarbonByServer).not.toHaveBeenCalled();
+      expect(screen.queryByRole('heading', { name: HEADING })).toBeNull();
+    });
+
+    it('follows the account selected in the header', async () => {
+      const { user } = await renderDashboard(severalAccounts);
+      await selectAccount(user, 'yy2222-ovh');
+
+      await openTab(user, 'Carbone');
+
+      expect(api.fetchCarbonByServer).toHaveBeenLastCalledWith('2026-08', 'yy2222-ovh');
+      expect(rowsOf(list()).slice(1)).toEqual([
+        ['ns1234567.ip-10-0-0.eu', 'Serveur dédié', 'GRA', '1 500,00', '3 000,00€', '0,500'],
+      ]);
+    });
+
+    it('speaks English', async () => {
+      const { user } = await renderDashboard();
+      await selectLanguage(user, 'EN');
+
+      await openTab(user, 'Carbon');
+
+      const rows = rowsOf(list('Footprint and cost of each item'));
+      expect(rows.slice(0, 2)).toEqual([
+        ['Item', 'Type', 'Datacenter', 'Footprint (kgCO₂e)', 'Cost', 'Intensity (kgCO₂e/€)'],
+        ['ns1234567.ip-10-0-0.eu', 'Dedicated server', 'GRA', '1,500.00', '3,000.00€', '0.500'],
+      ]);
     });
   });
 });

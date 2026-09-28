@@ -1,7 +1,27 @@
 /**
  * What the tests of the carbon footprint (#147) share: a footprint line as the import stores
- * it, a dedicated server of an invented account by default.
+ * it, a dedicated server of an invented account by default, the months that an import asks
+ * the carbon calculator for, and the server over a database that a test seeds.
  */
+
+const { startOcm } = require('./ocm-server');
+
+// The months that an import asks the carbon calculator for, on 15 September 2026
+const CARBON_MONTHS = { first: '2024-09', last: '2026-08' };
+
+/**
+ * Runs `use` with the server started over a database that `seed` writes to, and stops it.
+ * @param {function(object)} seed - Writes to the database, through the data layer
+ * @param {function(object): Promise} use - What the test does with the server
+ */
+async function withSeededOcm(seed, use) {
+  const ocm = await startOcm(() => ({}), { seed });
+  try {
+    await use(ocm);
+  } finally {
+    await ocm.stop();
+  }
+}
 
 /**
  * A footprint line of a month, as data/db.js's carbon.replaceMonths() stores it.
@@ -33,4 +53,4 @@ function footprintLine({ month, manufacturing, electricity, operations, ...descr
   };
 }
 
-module.exports = { footprintLine };
+module.exports = { CARBON_MONTHS, footprintLine, withSeededOcm };

@@ -15,6 +15,15 @@ const formatWholeNumber = (value, language = 'fr') => (
   new Intl.NumberFormat(localeOf(language), { maximumFractionDigits: 0 }).format(value)
 );
 
+// A number to a number of decimals, 3 unless told otherwise: 0,500 in French, 0.500 in
+// English
+const formatDecimal = (value, language = 'fr', { decimals = 3 } = {}) => (
+  new Intl.NumberFormat(localeOf(language), {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  }).format(value)
+);
+
 // Format a share (0.092) as a percentage, based on language: 9,2 % in French, 9.2% in
 // English, with one decimal unless told otherwise. A share of 0 out of a negative total,
 // which is -0, reads 0,0 % as any 0 does. A variation has a sign of its own: see
@@ -127,6 +136,6 @@ const takesSingular = (count, language = 'fr') =>
   new Intl.PluralRules(localeOf(language)).select(count) === 'one';
 
 export {
-  localeOf, formatCurrency, formatWholeNumber, formatPercent, formatYearMonth, formatMonthLabel,
-  formatMonthName, yearMonthOf, fmtBytes, fmtMemory, takesSingular,
+  localeOf, formatCurrency, formatWholeNumber, formatDecimal, formatPercent, formatYearMonth,
+  formatMonthLabel, formatMonthName, yearMonthOf, fmtBytes, fmtMemory, takesSingular,
 };

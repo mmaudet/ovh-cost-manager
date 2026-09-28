@@ -78,6 +78,11 @@ The month a bill line pays for: the month before its bill's for the lines of a P
 Cloud project, which OVHcloud bills after use, and the month of its bill for the others.
 _Avoid_: usage month, billing month
 
+**Carbon intensity**:
+The carbon footprint of a line of OVHcloud's file per unit of the currency that the bill
+lines that it ties to cost in its month of use.
+_Avoid_: efficiency, emission factor
+
 **Covered cost**:
 The part of a month of use's cost whose bill lines the carbon footprint of that month
 names.

@@ -68,6 +68,8 @@ const emptyAnswers = {
   carbonTrend: (end) => Array.from({ length: 12 }, (_, index) => ({
     month: shiftMonths(end, index - 11).slice(0, 7), footprint: null,
   })),
+  // No line of the month's carbon footprint (#155)
+  carbonByServer: (month) => ({ month, lines: [] }),
   // No carbon footprint for the month (#147), nor for any other (#152), and for all accounts,
   // none to name without one (#153)
   carbonFootprint: (month, account) => ({
@@ -191,6 +193,9 @@ const answers = {
   // And that of the 12 months that end on a month, by that month (#154)
   fetchCarbonTrend: (data, end, account) =>
     ofAccount(data, account).carbonTrend?.[end] ?? emptyAnswers.carbonTrend(end),
+  // And the lines of a month, by that month (#155)
+  fetchCarbonByServer: (data, month, account) =>
+    ofAccount(data, account).carbonByServer?.[month] ?? emptyAnswers.carbonByServer(month),
 };
 
 // One mock per function: what setup.js hands over to the page

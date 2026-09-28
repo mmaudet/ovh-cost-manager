@@ -114,6 +114,8 @@ describe('query keys', () => {
       ['carbonFootprint', undefined],
       ['carbonFootprint', '2026-09'],
       ['carbonTrend', undefined],
+      // And its lines, which wait for the month too (#155)
+      ['carbonByServer', undefined],
     ]));
   });
 
@@ -199,6 +201,7 @@ describe('query keys', () => {
         // trend, which waits for the month that the tab shows (#154)
         ['carbonFootprint', '2026-09', 'xx1111-ovh'],
         ['carbonTrend', undefined, 'xx1111-ovh'],
+        ['carbonByServer', undefined, 'xx1111-ovh'],
       ]));
     });
 });

@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
-  localeOf, formatCurrency, formatPercent, formatYearMonth, formatMonthLabel, yearMonthOf,
-  fmtBytes, fmtMemory, takesSingular,
+  localeOf, formatCurrency, formatWholeNumber, formatDecimal, formatPercent, formatYearMonth,
+  formatMonthLabel, formatMonthName, yearMonthOf, fmtBytes, fmtMemory, takesSingular,
 } from '../../src/utils/format.js';
 import { NBSP, NNBSP } from '../support/amounts.js';
 
@@ -11,6 +11,31 @@ describe('localeOf', () => {
     expect(localeOf('en')).toBe('en-US');
     expect(localeOf('fr')).toBe('fr-FR');
     expect(localeOf(undefined)).toBe('fr-FR');
+  });
+});
+
+// The numbers of the carbon footprint (#147): a chart's axis in whole numbers (#154), and the
+// carbon intensity to three decimals (#155)
+describe('formatWholeNumber', () => {
+  it('writes a number without its decimals, the way of the language', () => {
+    expect(formatWholeNumber(2600.4, 'fr')).toBe(`2${NNBSP}600`);
+    expect(formatWholeNumber(2600.6, 'en')).toBe('2,601');
+    expect(formatWholeNumber(650)).toBe('650');
+  });
+});
+
+describe('formatDecimal', () => {
+  it('writes a number to three decimals unless told otherwise', () => {
+    expect(formatDecimal(0.5, 'fr')).toBe('0,500');
+    expect(formatDecimal(0.04762, 'en')).toBe('0.048');
+    expect(formatDecimal(0.04762, 'en', { decimals: 4 })).toBe('0.0476');
+  });
+});
+
+describe('formatMonthName', () => {
+  it('names a month in a sentence, by its long name', () => {
+    expect(formatMonthName('2026-08', 'fr')).toBe('août 2026');
+    expect(formatMonthName('2026-08', 'en')).toBe('August 2026');
   });
 });
 

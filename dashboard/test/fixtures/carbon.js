@@ -44,4 +44,30 @@ export const carbon = {
       },
     })),
   },
+  // August's lines (#155), with what their bill lines cost and their intensity, the largest
+  // footprint first: a dedicated server, instance flavors, one that nothing billed, and a
+  // volume type
+  carbonByServer: {
+    '2026-08': {
+      month: '2026-08',
+      lines: [
+        {
+          type: 'BAREMETAL', name: 'advance-2', range: 'advance gen4', datacenter: 'GRA',
+          serverDomain: 'ns1234567.ip-10-0-0.eu', footprint: 1500, cost: 3000, intensity: 0.5,
+        },
+        {
+          type: 'PCI-COMPUTE', name: 'b2-15.monthly', range: 'b2', datacenter: 'GRA',
+          serverDomain: null, footprint: 1200.5, cost: 24010, intensity: 0.05,
+        },
+        {
+          type: 'PCI-COMPUTE', name: 'r2-15', range: 'r2', datacenter: 'SBG', serverDomain: null,
+          footprint: 900, cost: null, intensity: null,
+        },
+        {
+          type: 'PCI-BLOCK-STORAGE', name: 'high-speed', range: 'high-speed', datacenter: 'GRA',
+          serverDomain: null, footprint: 436, cost: 1744, intensity: 0.25,
+        },
+      ].map(line => ({ unnamedServers: null, account: 'xx1111-ovh', ...line })),
+    },
+  },
 };
