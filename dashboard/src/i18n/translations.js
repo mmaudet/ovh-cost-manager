@@ -198,6 +198,11 @@ export const translations = {
     vpsInstances: 'VPS',
     storageServices: 'Stockage',
     cloudProjects: 'Projets Cloud',
+    // The type of a bucket without a class (#145)
+    bucketEmpty: 'Vide',
+    bucketEmptyHint: 'Un bucket vide n\'a pas de classe : OVHcloud en donne une à chaque objet',
+    bucketUnknownClass: 'Inconnu',
+    bucketUnknownClassHint: 'OVHcloud n\'a pas donné la classe de ses objets',
     totalResources: 'Total ressources',
     datacenter: 'Datacenter',
     specs: 'Spécifications',
@@ -432,6 +437,11 @@ export const translations = {
     vpsInstances: 'VPS',
     storageServices: 'Storage',
     cloudProjects: 'Cloud Projects',
+    // The type of a bucket without a class (#145)
+    bucketEmpty: 'Empty',
+    bucketEmptyHint: 'An empty bucket has no class: OVHcloud gives one to each object',
+    bucketUnknownClass: 'Unknown',
+    bucketUnknownClassHint: 'OVHcloud did not give the class of its objects',
     totalResources: 'Total resources',
     datacenter: 'Datacenter',
     specs: 'Specifications',

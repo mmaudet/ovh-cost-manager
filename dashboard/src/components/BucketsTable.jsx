@@ -1,18 +1,13 @@
 import { fmtBytes } from '../utils/format.js';
 
-// A bucket without a class (#145): OVHcloud gives a class to each object, never to a bucket,
-// so an empty one has none. Any other bucket without one is unknown: its class could not be
-// read, or it is billed but gone from the inventory.
-const isEmpty = (bucket) => bucket.inInventory !== false && bucket.objectsCount === 0;
-const noClassLabel = (bucket, language) => {
-  if (isEmpty(bucket)) return language === 'en' ? 'Empty' : 'Vide';
-  return language === 'en' ? 'Unknown' : 'Inconnu';
-};
-const noClassHint = (bucket, language) => {
-  if (!isEmpty(bucket)) return undefined;
-  return language === 'en'
-    ? 'An empty bucket has no class: OVHcloud gives one to each object'
-    : 'Un bucket vide n\'a pas de classe : OVHcloud en donne une à chaque objet';
+// What the type of a bucket without a class says, and why (#145). OVHcloud gives a class to
+// each object, never to a bucket, so an empty one has none. Any other one is unknown: the
+// class of its objects could not be read, or it is billed but gone from the inventory, which
+// its name's mark tells already.
+const withoutClass = (bucket, t) => {
+  if (bucket.inInventory === false) return { label: t('bucketUnknownClass') };
+  if (bucket.objectsCount === 0) return { label: t('bucketEmpty'), hint: t('bucketEmptyHint') };
+  return { label: t('bucketUnknownClass'), hint: t('bucketUnknownClassHint') };
 };
 
 // Bucket table, shared by the inline panel and the "show all" modal.
@@ -46,8 +41,8 @@ const BucketsTable = ({ buckets, language, t, fmt }) => (
               bucket.type === 'Public Cloud Archive' ? 'bg-indigo-100 text-indigo-700' :
               bucket.type === 'Swift' ? 'bg-sky-100 text-sky-700' :
               'bg-gray-100 text-gray-700'
-            }`} title={bucket.type ? undefined : noClassHint(bucket, language)}>
-              {bucket.type || noClassLabel(bucket, language)}
+            }`} title={bucket.type ? undefined : withoutClass(bucket, t).hint}>
+              {bucket.type || withoutClass(bucket, t).label}
             </span>
             {bucket.status && bucket.status !== 'none' && (
               <span className="ml-1 px-1.5 py-0.5 rounded text-xs bg-indigo-100 text-indigo-700">

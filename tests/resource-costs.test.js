@@ -191,7 +191,7 @@ describe('bucket type', () => {
   });
 
   // An import before #145 stored these classes as OVH gives them
-  test('names the archive classes as OVHcloud\'s guides do, as an earlier import stored them', () => {
+  test('names the archive classes that an earlier import stored as OVHcloud does', () => {
     for (const [name, storageClass] of [['cool', 'GLACIER_IR'], ['frozen', 'DEEP_ARCHIVE']]) {
       db.cloudDetails.upsertBucket({
         id: `${PROJECT}:EU-WEST-PAR:${name}`, project_id: PROJECT, name, region: 'EU-WEST-PAR',

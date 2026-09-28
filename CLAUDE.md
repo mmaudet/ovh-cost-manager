@@ -55,6 +55,8 @@ OVH API ──> data/import.js ──> SQLite (ovh-bills.db) ──> server/inde
     re-import.
   - `public-cloud-lines.js` — parses the Public Cloud bill lines of instances and volumes,
     for the ties and for `db.js`.
+  - `storage-classes.js` — pure: the names of the storage classes that OVH gives the objects
+    of a bucket, for the import and for the buckets an earlier import stored (#145).
 - **`server/`** — read-only Express API over the DB. `index.js` is the single ~1300-line
   route file. `auth/` guards the API in one of two modes. With OIDC (openid-client v6):
   PKCE sign-in bound to the browser by a signed cookie per state, SQLite-backed sessions
