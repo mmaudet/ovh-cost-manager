@@ -144,14 +144,14 @@ describe('Public Cloud tab', () => {
 
   // The cards add up to the cloud total that the month's bills give, and a card gathers the
   // products that no card of their own counts (#145)
-  it('adds its cards up to the cloud total billed in the month, the other services named', async () => {
+  it('adds its cards up to the cloud total billed in the month', async () => {
     const { user } = await renderDashboard({
       ...account,
       publicCloudStats: {
         ...account.publicCloudStats,
-        // 830,40€, the cloud total of September
+        // With the credit, 830,40€, the cloud total of September
         '2026-09': publicCloudFigures({
-          instances: { total: 683.4 },
+          instances: { total: 693.4 },
           volumes: { count: 3, total: 12.5 },
           snapshots: { count: 2, total: 6 },
           savingsPlans: { count: 2, total: 28 },
@@ -159,8 +159,11 @@ describe('Public Cloud tab', () => {
           registry: { count: 1, total: 40 },
           other: {
             total: 35.5,
-            products: [{ product: 'databases', total: 30 }, { product: 'loadBalancers', total: 5.5 }],
+            products: [
+              { product: 'databases', total: 30 }, { product: 'loadBalancers', total: 5.5 },
+            ],
           },
+          credits: { total: -10 },
         }),
       },
     });
@@ -170,22 +173,27 @@ describe('Public Cloud tab', () => {
     expect(texts(screen.getByText(/^Coûts Public Cloud facturés/))).toEqual([
       'Coûts Public Cloud facturés en septembre 2026 : 830,40€, que détaillent les cartes '
       + 'ci-dessous. OVHcloud facture la consommation à l\'heure le mois suivant : la '
-      + 'consommation en cours, en haut de la page, n\'est pas encore facturée.',
+      + 'consommation en cours, en haut de la page et dans la liste des projets, n\'est pas '
+      + 'encore facturée.',
     ]);
     expect(texts(figures()).slice(-3)).toEqual(['Autres services', '2', '35,50€']);
     expect(texts(screen.getByText(/^Autres services :/)))
       .toEqual(['Autres services : Bases de données 30,00€ · Load balancers 5,50€']);
+    expect(texts(screen.getByText(/^Crédit Cloud utilisé :/)))
+      .toEqual(['Crédit Cloud utilisé : -10,00€']);
 
     await selectLanguage(user, 'en');
 
     expect(texts(screen.getByText(/^Public Cloud costs billed/))).toEqual([
       'Public Cloud costs billed in September 2026: 830.40€, which the cards below break down. '
       + 'OVHcloud bills hourly usage the month after: the current consumption, at the top of '
-      + 'the page, is not billed yet.',
+      + 'the page and in the list of projects, is not billed yet.',
     ]);
     expect(texts(figures()).slice(-3)).toEqual(['Other services', '2', '35.50€']);
     expect(texts(screen.getByText(/^Other services:/)))
       .toEqual(['Other services: Databases 30.00€ · Load balancers 5.50€']);
+    expect(texts(screen.getByText(/^Cloud credit used:/)))
+      .toEqual(['Cloud credit used: -10.00€']);
   });
 
   describe('projects', () => {
@@ -215,6 +223,7 @@ describe('Public Cloud tab', () => {
         ['Volumes (4)', '12,50€', 'Tout afficher', 'CSV'],
         ['Snapshots (2)', '6,00€', 'Tout afficher', 'CSV'],
         ['Savings plans (2)', '28,00€', 'Tout afficher', 'CSV'],
+        ['Autres services (1)', '40,00€'],
         ['Quotas par région'],
       ]);
 
@@ -241,6 +250,14 @@ describe('Public Cloud tab', () => {
   });
 
   describe('project detail', () => {
+    // The products that no section of its own lists, from the bills of the month (#145)
+    it('names the other services of the project, its registry among them', async () => {
+      await openProduction();
+
+      const panel = panelOf(screen.getByRole('heading', { name: /^Autres services \(/ }));
+      expect(rowTextsOf(within(panel).getByRole('table'))).toEqual([['Registre', '40,00€']]);
+    });
+
     it('loads the resources of the project, for the selected month', async () => {
       await openProduction();
 
@@ -621,6 +638,7 @@ describe('Public Cloud tab', () => {
       ['Volumes (4)', '12.50€', 'Show all', 'CSV'],
       ['Snapshots (2)', '6.00€', 'Show all', 'CSV'],
       ['Savings plans (2)', '28.00€', 'Show all', 'CSV'],
+      ['Other services (1)', '40.00€'],
       ['Quotas by region'],
     ]);
     const instances = resourceTable('Instances');
@@ -756,6 +774,7 @@ describe('Public Cloud tab', () => {
         ['Volumes (4)', '12,50€', 'Tout afficher', 'CSV'],
         ['Snapshots (2)', '6,00€', 'Tout afficher', 'CSV'],
         ['Savings plans (2)', '28,00€', 'Tout afficher', 'CSV'],
+        ['Autres services (1)', '40,00€'],
         ['Quotas par région'],
       ]);
 

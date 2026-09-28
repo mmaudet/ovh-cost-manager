@@ -185,6 +185,8 @@ export const publicCloudFigures = (fields) => ({
   registry: { count: 0, total: 0 },
   // What no card of its own counts (#145)
   other: { total: 0, products: [] },
+  // The credit that the bills used, which pays for no product (#145)
+  credits: { total: 0 },
   aiml: { count: 0, total: 0 },
   loadBalancers: { count: 0, total: 0 },
   ...fields,
@@ -246,6 +248,13 @@ export const publicCloud = {
     [STAGING]: { '2026-09': { total: 180 } },
   },
   projectBuckets: { [PRODUCTION]: { '2026-09': buckets } },
+  // What its detail lists no section of its own for: its registry, which the registry card of
+  // September counts (#145)
+  projectOtherServices: {
+    [PRODUCTION]: {
+      '2026-09': { total: 40, products: [{ product: 'registry', total: 40 }], credits: 0 },
+    },
+  },
   projectVolumes: { [PRODUCTION]: { '2026-09': volumes } },
   projectSnapshots: { [PRODUCTION]: { '2026-09': snapshots } },
   projectSavingsPlans: { [PRODUCTION]: { '2026-09': savingsPlans } },

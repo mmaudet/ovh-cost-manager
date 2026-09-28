@@ -1,21 +1,19 @@
-// The label of a product of the other services card of the Public Cloud tab, as the server
-// names the products that no card of their own counts (data/public-cloud-products.js), in the
-// page's language (#145). A product the server names since reads as it is written.
-const LABELS = {
-  volumeBackups: ['Sauvegardes de volumes', 'Volume backups'],
-  databases: ['Bases de données', 'Databases'],
-  loadBalancers: ['Load balancers', 'Load balancers'],
-  floatingIps: ['Floating IP', 'Floating IPs'],
-  gateways: ['Gateways', 'Gateways'],
-  ai: ['IA', 'AI'],
-  credits: ['Crédit Cloud', 'Cloud credit'],
-  other: ['Divers', 'Miscellaneous'],
+// The label of a Public Cloud product without a card of its own (CONTEXT.md), as the server
+// names them (data/public-cloud-products.js), through the page's translations: the products of
+// the other services card, and those of a project's detail (#145). A product the server names
+// since reads as it is written.
+const KEYS = {
+  volumeBackups: 'productVolumeBackups',
+  databases: 'productDatabases',
+  loadBalancers: 'productLoadBalancers',
+  floatingIps: 'productFloatingIps',
+  gateways: 'productGateways',
+  ai: 'productAi',
+  registry: 'productRegistry',
+  kubernetes: 'productKubernetes',
+  other: 'productOther',
 };
 
-const publicCloudProductLabel = (product, language) => {
-  const labels = LABELS[product];
-  if (!labels) return product;
-  return language === 'en' ? labels[1] : labels[0];
-};
+const publicCloudProductLabel = (product, t) => (KEYS[product] ? t(KEYS[product]) : product);
 
 export { publicCloudProductLabel };

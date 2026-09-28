@@ -82,6 +82,9 @@ describe('usePublicCloudTab', () => {
       projectVolumes: expect.any(Array),
       projectSnapshots: expect.any(Array),
       projectSavingsPlans: expect.any(Array),
+      projectOtherServices: {
+        total: 40, products: [{ product: 'registry', total: 40 }], credits: 0,
+      },
     });
   });
 
@@ -119,6 +122,7 @@ describe('usePublicCloudTab', () => {
         savingsPlans: { count: 2, total: 28 },
         registry: { count: 1, total: 40 },
         other: { total: 0, products: [] },
+        credits: { total: 0 },
         aiml: { count: 0, total: 0 },
         loadBalancers: { count: 0, total: 0 },
       });
@@ -290,6 +294,7 @@ describe('usePublicCloudTab', () => {
         ['projectVolumes', undefined, '2026-09-01', '2026-09-30'],
         ['projectSnapshots', undefined, '2026-09-01', '2026-09-30'],
         ['projectSavingsPlans', undefined, '2026-09-01', '2026-09-30'],
+        ['projectOtherServices', undefined, '2026-09-01', '2026-09-30'],
       ]) {
         expect(queryClient.getQueryState(key), key[0]).toMatchObject(WAITING);
       }
@@ -371,7 +376,7 @@ describe('usePublicCloudTab', () => {
       ]);
       for (const name of [
         'projectInstances', 'projectInstanceTotal', 'projectBuckets', 'projectVolumes',
-        'projectSnapshots', 'projectSavingsPlans',
+        'projectSnapshots', 'projectSavingsPlans', 'projectOtherServices',
       ]) {
         expect(keysOf(name), name).toEqual([
           [name, undefined, '2026-09-01', '2026-09-30'],
