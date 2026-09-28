@@ -31,7 +31,7 @@ describe('Carbon tab', () => {
     const { user } = await renderDashboard();
     expect(api.fetchCarbonFootprint).not.toHaveBeenCalled();
 
-    await openTab(user, 'Carbone');
+    await openTab(user, 'Bilan carbone');
 
     // Of the month selected, for all accounts
     expect(api.fetchCarbonFootprint).toHaveBeenCalledWith('2026-09', null);
@@ -41,7 +41,7 @@ describe('Carbon tab', () => {
     const { user } = await renderDashboard();
     await selectMonth(user, 'Août 2026');
 
-    await openTab(user, 'Carbone');
+    await openTab(user, 'Bilan carbone');
 
     expect(screen.getByRole('heading', { name: 'Août 2026' })).toBeInTheDocument();
     expect(texts(footprintCards())).toEqual(AUGUST_CARDS);
@@ -57,7 +57,7 @@ describe('Carbon tab', () => {
         const { user } = await renderDashboard();
 
         // September, the current month
-        await openTab(user, 'Carbone');
+        await openTab(user, 'Bilan carbone');
 
         expect(screen.getByText("Septembre 2026 n'a pas encore d'empreinte carbone : OVHcloud "
           + 'la publie une fois le mois terminé.')).toBeInTheDocument();
@@ -73,7 +73,7 @@ describe('Carbon tab', () => {
         const { user } = await renderDashboard();
         await selectMonth(user, 'Juillet 2026');
 
-        await openTab(user, 'Carbone');
+        await openTab(user, 'Bilan carbone');
 
         expect(screen.getByText("Juillet 2026 n'a pas d'empreinte carbone.")).toBeInTheDocument();
         expect(screen.getByRole('heading', { name: 'Août 2026 · dernier mois disponible' }))
@@ -84,7 +84,7 @@ describe('Carbon tab', () => {
       const { user } = await renderDashboard(severalAccounts);
       await selectAccount(user, 'yy2222-ovh');
 
-      await openTab(user, 'Carbone');
+      await openTab(user, 'Bilan carbone');
 
       expect(api.fetchCarbonFootprint).toHaveBeenLastCalledWith('2026-08', 'yy2222-ovh');
       expect(screen.getByRole('heading', { name: 'Août 2026 · dernier mois disponible' }))
@@ -117,7 +117,7 @@ describe('Carbon tab', () => {
       const { user } = await renderDashboard(severalAccounts);
       await selectAccount(user, 'Lyon subsidiary');
 
-      await openTab(user, 'Carbone');
+      await openTab(user, 'Bilan carbone');
 
       expect(message()).toBe(HOW_TO);
       expect(screen.getByRole('link', { name: "la liste de ceux qu'il couvre" }))
@@ -128,7 +128,7 @@ describe('Carbon tab', () => {
     it('says how to get one when the only account has none', async () => {
       const { user } = await renderDashboard({ ...account, carbonFootprint: {} });
 
-      await openTab(user, 'Carbone');
+      await openTab(user, 'Bilan carbone');
 
       expect(message()).toBe(HOW_TO);
     });
@@ -136,7 +136,7 @@ describe('Carbon tab', () => {
     it('says how to get one when all accounts are shown and none has one', async () => {
       const { user } = await renderDashboard({ ...severalAccounts, carbonFootprint: {} });
 
-      await openTab(user, 'Carbone');
+      await openTab(user, 'Bilan carbone');
 
       expect(message()).toBe(HOW_TO);
     });
@@ -145,7 +145,7 @@ describe('Carbon tab', () => {
       const { user } = await renderDashboard(severalAccounts);
       await selectAccount(user, 'Compte inconnu');
 
-      await openTab(user, 'Carbone');
+      await openTab(user, 'Bilan carbone');
 
       expect(screen.getByText("Le compte inconnu n'a pas d'empreinte carbone : elle s'importe "
         + 'compte par compte.')).toBeInTheDocument();
@@ -155,7 +155,7 @@ describe('Carbon tab', () => {
       const { user } = await renderDashboard(severalAccounts);
       await selectAccount(user, 'zz3333-ovh (non configuré)');
 
-      await openTab(user, 'Carbone');
+      await openTab(user, 'Bilan carbone');
 
       expect(screen.getByText("Ce compte n'a pas d'empreinte carbone : il n'est plus importé."))
         .toBeInTheDocument();
@@ -189,7 +189,7 @@ describe('Carbon tab', () => {
       });
       await selectAccount(user, 'zz3333-ovh (non configuré)');
 
-      await openTab(user, 'Carbone');
+      await openTab(user, 'Bilan carbone');
 
       expect(screen.getByText("Août 2026 n'a pas d'empreinte carbone : ce compte n'est plus "
         + 'importé.')).toBeInTheDocument();
@@ -202,7 +202,7 @@ describe('Carbon tab', () => {
     const { user } = await renderDashboard(severalAccounts);
 
     // September, which shows August
-    await openTab(user, 'Carbone');
+    await openTab(user, 'Bilan carbone');
 
     expect(screen.getByText('Sans empreinte carbone en août 2026 : Lyon subsidiary, '
       + 'zz3333-ovh.')).toBeInTheDocument();
@@ -213,7 +213,7 @@ describe('Carbon tab', () => {
     await selectAccount(user, 'yy2222-ovh');
     await selectMonth(user, 'Août 2026');
 
-    await openTab(user, 'Carbone');
+    await openTab(user, 'Bilan carbone');
 
     expect(api.fetchCarbonFootprint).toHaveBeenLastCalledWith('2026-08', 'yy2222-ovh');
     expect(texts(footprintCards())[1]).toBe('2 600,00 kgCO₂e');
@@ -275,7 +275,7 @@ describe('Carbon tab', () => {
       const { user } = await renderDashboard();
 
       // September, which shows August
-      await openTab(user, 'Carbone');
+      await openTab(user, 'Bilan carbone');
 
       expect(api.fetchCarbonTrend).toHaveBeenCalledWith('2026-08', null);
       expect(screen.getByRole('heading', { name: 'Tendance sur 12 mois (kgCO₂e)' }))
@@ -303,7 +303,7 @@ describe('Carbon tab', () => {
       const { user } = await renderDashboard(severalAccounts);
       await selectAccount(user, 'Lyon subsidiary');
 
-      await openTab(user, 'Carbone');
+      await openTab(user, 'Bilan carbone');
 
       expect(api.fetchCarbonTrend).not.toHaveBeenCalled();
       expect(screen.queryByRole('heading', { name: /Tendance/ })).toBeNull();
@@ -313,7 +313,7 @@ describe('Carbon tab', () => {
       const { user } = await renderDashboard(severalAccounts);
       await selectAccount(user, 'yy2222-ovh');
 
-      await openTab(user, 'Carbone');
+      await openTab(user, 'Bilan carbone');
 
       expect(api.fetchCarbonTrend).toHaveBeenLastCalledWith('2026-08', 'yy2222-ovh');
       expect(rowsOf(trendTable()).at(-1))
@@ -354,7 +354,7 @@ describe('Carbon tab', () => {
       const { user } = await renderDashboard();
 
       // September, which shows August
-      await openTab(user, 'Carbone');
+      await openTab(user, 'Bilan carbone');
 
       expect(api.fetchCarbonByServer).toHaveBeenCalledWith('2026-08', null);
       expect(rowsOf(list())).toEqual([
@@ -390,7 +390,7 @@ describe('Carbon tab', () => {
         },
       });
 
-      await openTab(user, 'Carbone');
+      await openTab(user, 'Bilan carbone');
 
       expect(rowsOf(list()).slice(1)).toEqual([
         [
@@ -405,7 +405,7 @@ describe('Carbon tab', () => {
     it('names the account of each line when all accounts are shown', async () => {
       const { user } = await renderDashboard(severalAccounts);
 
-      await openTab(user, 'Carbone');
+      await openTab(user, 'Bilan carbone');
 
       // Second, as in the other lists
       const rows = rowsOf(list());
@@ -417,7 +417,7 @@ describe('Carbon tab', () => {
       const { user } = await renderDashboard(severalAccounts);
       await selectAccount(user, 'Lyon subsidiary');
 
-      await openTab(user, 'Carbone');
+      await openTab(user, 'Bilan carbone');
 
       expect(api.fetchCarbonByServer).not.toHaveBeenCalled();
       expect(screen.queryByRole('heading', { name: HEADING })).toBeNull();
@@ -427,7 +427,7 @@ describe('Carbon tab', () => {
       const { user } = await renderDashboard(severalAccounts);
       await selectAccount(user, 'yy2222-ovh');
 
-      await openTab(user, 'Carbone');
+      await openTab(user, 'Bilan carbone');
 
       expect(api.fetchCarbonByServer).toHaveBeenLastCalledWith('2026-08', 'yy2222-ovh');
       expect(rowsOf(list()).slice(1)).toEqual([
@@ -438,7 +438,7 @@ describe('Carbon tab', () => {
     // As the other lists do, from the rows the page holds (#156)
     it('exports the lines of the month it shows to CSV', async () => {
       const { user } = await renderDashboard();
-      await openTab(user, 'Carbone');
+      await openTab(user, 'Bilan carbone');
       const downloadedFiles = captureFileDownloads();
 
       await user.click(within(cardOf(screen.getByRole('heading', { name: HEADING })))
@@ -456,7 +456,7 @@ describe('Carbon tab', () => {
 
     it('names the account of each line in the CSV when all accounts are shown', async () => {
       const { user } = await renderDashboard(severalAccounts);
-      await openTab(user, 'Carbone');
+      await openTab(user, 'Bilan carbone');
       const downloadedFiles = captureFileDownloads();
 
       await user.click(within(cardOf(screen.getByRole('heading', { name: HEADING })))
@@ -494,7 +494,7 @@ describe('Carbon tab', () => {
       const { user } = await renderDashboard();
 
       // September, which shows August
-      await openTab(user, 'Carbone');
+      await openTab(user, 'Bilan carbone');
 
       expect(sentenceOf(coverage())).toBe("L'empreinte couvre 71,9 % du coût du mois. OVHcloud "
         + "ne calcule pas l'empreinte de tous ses services : voir la liste de ceux qu'il couvre.");
@@ -514,7 +514,7 @@ describe('Carbon tab', () => {
         },
       });
 
-      await openTab(user, 'Carbone');
+      await openTab(user, 'Bilan carbone');
 
       expect(sentenceOf(coverage())).toBe("L'empreinte couvre 100,0 % du coût du mois.");
     });
@@ -529,7 +529,7 @@ describe('Carbon tab', () => {
         },
       });
 
-      await openTab(user, 'Carbone');
+      await openTab(user, 'Bilan carbone');
 
       expect(screen.queryByText(/L'empreinte couvre/)).toBeNull();
     });
