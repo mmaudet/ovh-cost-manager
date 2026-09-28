@@ -20,4 +20,10 @@ function describeError(err) {
   return reason || util.inspect(err, { breakLength: Infinity });
 }
 
-module.exports = { errorStatus, describeError };
+// Whether a call failed because the key lacks the right to make it: OVH answers 403 "This
+// call has not been granted" then
+function isNotGranted(err) {
+  return errorStatus(err) === 403 && /not been granted/i.test(err?.message);
+}
+
+module.exports = { errorStatus, describeError, isNotGranted };

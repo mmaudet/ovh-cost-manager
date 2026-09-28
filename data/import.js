@@ -20,7 +20,7 @@ const util = require('util');
 const Jsonfile = require('jsonfile');
 const db = require('./db');
 const { readAccounts } = require('./accounts-config');
-const { errorStatus, describeError } = require('./ovh-errors');
+const { errorStatus, describeError, isNotGranted } = require('./ovh-errors');
 const {
   reasonOf, joinWithAnd, describeAccount, throwIfSameAccount, markOtherCurrencies, findAccount,
   failureMessage,
@@ -123,7 +123,8 @@ async function withRetry(fn, retries = MAX_RETRIES, backoff = INITIAL_BACKOFF_MS
   }
 }
 
-// The items that the import skipped after an error, bills included, for its summary
+// The items that the import skipped after an error, for its summary: bills, among others, and
+// the carbon footprint of an account (#151)
 let failedItemCount = 0;
 
 // Helper to run promises in parallel batches with retry and error logging
@@ -217,7 +218,7 @@ async function readAccount(ovh) {
   try {
     me = await withRetry(() => ovh.requestPromised('GET', '/me'));
   } catch (err) {
-    if (errorStatus(err) === 403 && /not been granted/i.test(err?.message)) {
+    if (isNotGranted(err)) {
       throw new Error('The API key lacks the right GET /me, which tells the import the account '
         + 'it imports: request a consumer key granted GET /me');
     }
@@ -1311,7 +1312,8 @@ async function importBill(ovh, billId, { nic, params, projectMap, resourceTypeMa
 // How the import waits for the carbon calculator: it asks how its task goes every 3 seconds,
 // as OVHcloud's control panel does, for 2 minutes at most, as a generation takes seconds
 const CARBON_POLL_INTERVAL_MS = 3000;
-const CARBON_WAIT_MS = 2 * 60 * 1000;
+const CARBON_WAIT_MINUTES = 2;
+const CARBON_WAIT_MS = CARBON_WAIT_MINUTES * 60 * 1000;
 
 /**
  * Imports the carbon footprint of the account: the carbon calculator generates the file of its
@@ -1326,12 +1328,16 @@ const CARBON_WAIT_MS = 2 * 60 * 1000;
  */
 async function importCarbonFootprint(ovh, nic, heartbeat) {
   console.log('\n--- Importing the carbon footprint ---');
+  // Whether the carbon calculator took the request of the file: until it has, a refusal is the
+  // key's lack of the right to make it
+  let requested = false;
   try {
     const months = footprintMonths(new Date());
     const request = { startMonth: `${months.first}-01`, endMonth: `${months.last}-01` };
     const { taskID } = await withRetry(() => ovh.requestPromised(
       'POST', '/me/carbonCalculator/csv', request,
     ));
+    requested = true;
 
     let task = { status: 'IN_PROGRESS' };
     for (let waited = 0; task.status === 'IN_PROGRESS' && waited < CARBON_WAIT_MS;
@@ -1344,7 +1350,7 @@ async function importCarbonFootprint(ovh, nic, heartbeat) {
     }
     if (task.status === 'IN_PROGRESS') {
       throw new Error(`The carbon calculator's task ${taskID} was still in progress after `
-        + `${CARBON_WAIT_MS / 60000} minutes`);
+        + `${CARBON_WAIT_MINUTES} minutes`);
     }
     if (task.status !== 'SUCCESS') {
       throw new Error(`The carbon calculator's task ${taskID} ended ${task.status}`);
@@ -1359,8 +1365,9 @@ async function importCarbonFootprint(ovh, nic, heartbeat) {
     console.log(`  Imported ${lines.length} footprint lines, `
       + `from ${months.first} to ${months.last}`);
   } catch (err) {
-    if (errorStatus(err) === 403 && /not been granted/i.test(err?.message)) {
-      console.error('  The API key lacks the right POST /me/carbonCalculator/csv, which the '
+    // Nothing failed: the key was not given that right
+    if (!requested && isNotGranted(err)) {
+      console.warn('  The API key lacks the right POST /me/carbonCalculator/csv, which the '
         + 'carbon footprint needs: add it to import the footprint');
       return;
     }

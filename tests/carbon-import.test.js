@@ -2,11 +2,11 @@
  * Tests for the import of the carbon footprint (#147, #150), against a simulated OVH API: the
  * CSV that OVHcloud's carbon calculator generates for the last 24 months, which each import
  * asks for again, downloads from the link of its task, and stores in place of the months it
- * covers.
+ * covers; and what the import does when it cannot (#151).
  */
 
 const {
-  ok, routes, files, calls, CREDENTIALS, serveAccount, useConfig, useThrowawayImport,
+  ok, fail, routes, files, calls, CREDENTIALS, serveAccount, useConfig, useThrowawayImport,
 } = require('./support/simulated-ovh');
 const { ACCOUNT, PARIS } = require('./support/accounts');
 const { footprintLine } = require('./support/carbon');
@@ -270,7 +270,8 @@ describe('failures', () => {
     routes.set('/me/bill/FR1/details', ok(['D1']));
     routes.set('/me/bill/FR1/details/D1', ok({
       domain: 'example.com', description: 'Nom de domaine example.com', quantity: '1',
-      unitPrice: { value: 10, currencyCode: 'EUR' }, totalPrice: { value: 10, currencyCode: 'EUR' },
+      unitPrice: { value: 10, currencyCode: 'EUR' },
+      totalPrice: { value: 10, currencyCode: 'EUR' },
     }));
   }
 
@@ -282,76 +283,103 @@ describe('failures', () => {
   // What the run left: its status, its failed items as its summary counts them, whether it
   // imported the bill, and the account's footprint of July
   const outcome = () => ({
-    status: db.importLog.getAll()[0].status,
+    status: db.importLog.getLatest().status,
     failedItems: console.log.mock.calls.map(([text]) => text)
       .filter(text => /^Failed items/.test(text)),
-    bills: db.getDb().prepare('SELECT id FROM bills').pluck().all(),
+    billImported: db.bills.exists('FR1'),
     july: totalsOf(ACCOUNT.nic, '2026-07'),
   });
-  // What the import wrote on its error output
-  const errors = () => console.error.mock.calls.map(([text]) => String(text));
+  // The lines that the import wrote about the carbon footprint, on its error output, and as
+  // warnings
+  const linesAboutCarbon = (output) => output.mock.calls.map(([text]) => String(text))
+    .filter(text => /carbon/i.test(text));
+
+  // The key of the account of the tests lacks the right to ask for the file
+  const refuseTheRequest = (accountRoutes = routes) => accountRoutes.set(
+    '/me/carbonCalculator/csv', fail(403, 'This call has not been granted'),
+  );
+
+  // A task that stays in progress, however long the import waits
+  function serveSlowTask() {
+    serveCarbonCalculator(routes, fileOf(), { taskID: 'slow' });
+    routes.set('/me/carbonCalculator/task/slow',
+      ok({ taskID: 'slow', status: 'IN_PROGRESS', link: null }));
+  }
 
   test('a key without the right: one line names it, and the rest is imported', async () => {
-    routes.set('/me/carbonCalculator/csv', () => Promise.reject({
-      error: 403, message: 'This call has not been granted',
-    }));
+    refuseTheRequest();
 
     await runImport({ includeCarbon: true });
 
     expect(outcome()).toEqual({
-      status: 'success', failedItems: ['Failed items: 0'], bills: ['FR1'],
+      status: 'success', failedItems: ['Failed items: 0'], billImported: true,
       july: [['2026-07', 90]],
     });
-    expect(errors().filter(text => text.includes('POST /me/carbonCalculator/csv'))).toHaveLength(1);
+    expect(linesAboutCarbon(console.warn)).toEqual([
+      expect.stringContaining('lacks the right POST /me/carbonCalculator/csv'),
+    ]);
+    expect(linesAboutCarbon(console.error)).toEqual([]);
+  });
+
+  test('a key without the right: the next account imports its footprint', async () => {
+    const paris = serveAccount({ nic: PARIS, currency: 'EUR' });
+    paris.routes.set('/cloud/project', ok([]));
+    paris.routes.set('/me/bill', ok([]));
+    useConfig({ accounts: [
+      { credentials: { ...CREDENTIALS, endpoint: 'ovh-eu' } },
+      { credentials: paris.credentials },
+    ] });
+    refuseTheRequest();
+    serveCarbonCalculator(paris.routes, fileOf(
+      line({ month: '2026-08', manufacturing: 2, electricity: [4, 3], operations: [6, 5] }),
+    ), { taskID: 'paris', link: 'https://carbon.example.net/paris.csv' });
+
+    await runImport({ includeCarbon: true });
+
+    expect(db.importLog.getLatest().status).toBe('success');
+    expect(totalsOf(ACCOUNT.nic, '2026-07', '2026-08'))
+      .toEqual([['2026-07', 90], ['2026-08', null]]);
+    expect(totalsOf(PARIS, '2026-08')).toEqual([['2026-08', 12]]);
   });
 
   // Each failure that the carbon calculator or its file can cause
-  const failures = {
-    'a task that ends in error': () => {
+  test.each([
+    ['a task that ends in error', () => {
       serveCarbonCalculator(routes, fileOf(), { taskID: 'failed' });
       routes.set('/me/carbonCalculator/task/failed',
         ok({ taskID: 'failed', status: 'ERROR', link: null }));
-    },
-    'a task still in progress after 2 minutes': () => {
-      serveCarbonCalculator(routes, fileOf(), { taskID: 'slow' });
-      routes.set('/me/carbonCalculator/task/slow',
-        ok({ taskID: 'slow', status: 'IN_PROGRESS', link: null }));
-    },
-    'a download that fails': () => {
+    }],
+    ['a task still in progress after 2 minutes', serveSlowTask],
+    ['a download that fails', () => {
       serveCarbonCalculator(routes, fileOf(), { link: 'https://carbon.example.net/expired.csv' });
       files.delete('https://carbon.example.net/expired.csv');
-    },
-    'a file without a column that OCM reads': () => {
+    }],
+    ['a file without a column that OCM reads', () => {
       serveCarbonCalculator(routes, fileOf(
         line({ month: '2026-07', manufacturing: 1, electricity: [2, 1.5], operations: [3, 2.5] }),
       ).replace('server_domain', 'domain'));
-    },
-    'a file with a line that gives no figure': () => {
+    }],
+    ['a file with a line that gives no figure', () => {
       serveCarbonCalculator(routes, fileOf(
         line({
           month: '2026-07', manufacturing: 'n/a', electricity: [2, 1.5], operations: [3, 2.5],
         }),
       ));
-    },
-  };
+    }],
+  ])('%s: it is logged and counted, and replaces nothing', async (failure, serve) => {
+    serve();
 
-  test.each(Object.keys(failures))(
-    '%s: it is logged and counted, and replaces nothing',
-    async (failure) => {
-      failures[failure]();
+    await runImport({ includeCarbon: true });
 
-      await runImport({ includeCarbon: true });
-
-      expect(outcome()).toEqual({
-        status: 'success', failedItems: ['Failed items: 1'], bills: ['FR1'],
-        july: [['2026-07', 90]],
-      });
-      expect(errors().filter(text => text.includes('carbon footprint'))).toHaveLength(1);
-    },
-  );
+    expect(outcome()).toEqual({
+      status: 'success', failedItems: ['Failed items: 1'], billImported: true,
+      july: [['2026-07', 90]],
+    });
+    expect(linesAboutCarbon(console.error)).toHaveLength(1);
+  });
 
   test('a task still in progress: it asks every 3 seconds, for 2 minutes', async () => {
-    failures['a task still in progress after 2 minutes']();
+    serveSlowTask();
 
     await runImport({ includeCarbon: true });
 
