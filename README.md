@@ -49,7 +49,7 @@ New in version 3.1.0.
 - **Multi-language Support**: French and English interface (i18n)
 - **8 navigation tabs**: Overview, Comparison, Trends, Public Cloud, Web Cloud, Infrastructure, Backup, Carbon footprint
 - **Several OVH Accounts**: one instance imports several accounts; a selector in the header narrows every tab down to one, and with all accounts shown, the lists name each row's account
-- **Sortable Tables**: every list sorts by any of its columns with a click on its header: text from A to Z, figures, sizes and dates from the largest or the latest, and a second click reverses it
+- **Sortable Tables**: the lists sort by any of their columns with a click on its header: text from A to Z, figures, sizes and dates from the largest or the latest, and a second click reverses it
 
 ### Cost Analysis
 - **Service Breakdown**: Costs by service type (Compute, Storage, Network, Database, AI/ML, Licenses, Backup, Support)
