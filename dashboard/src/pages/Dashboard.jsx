@@ -49,11 +49,17 @@ const IMPORT_TYPE_KEYS = {
   differential: 'importTypeDifferential'
 };
 
-// The value of an import of the history in each column, which the history sorts by (#146): when
-// it ended, or started while it runs, and its type and status as the history names them
+// When an import of the history ended, or started while it runs
+const importDateOf = (h) => parseSqliteDate(h.completed_at || h.started_at);
+
+// The type of an import of the history, as the history names it
+const importTypeName = (h, t) => t(IMPORT_TYPE_KEYS[h.type] || h.type);
+
+// The value of an import of the history in each column, which the history sorts by (#146): its
+// date, and its type and status as the history names them
 const importHistoryValues = (t) => ({
-  date: (h) => parseSqliteDate(h.completed_at || h.started_at),
-  type: (h) => t(IMPORT_TYPE_KEYS[h.type] || h.type),
+  date: importDateOf,
+  type: (h) => importTypeName(h, t),
   status: (h) => importStatusName(h.status, t),
   bills: (h) => h.bills_imported,
 });
@@ -864,9 +870,9 @@ export default function Dashboard() {
                   ).map((h) => (
                     <tr key={h.id} className="border-b border-gray-100">
                       <td className="py-1 px-2 text-gray-600">
-                        {parseSqliteDate(h.completed_at || h.started_at).toLocaleString(locale)}
+                        {importDateOf(h).toLocaleString(locale)}
                       </td>
-                      <td className="py-1 px-2 text-gray-600">{t(IMPORT_TYPE_KEYS[h.type] || h.type)}</td>
+                      <td className="py-1 px-2 text-gray-600">{importTypeName(h, t)}</td>
                       <td className="py-1 px-2">
                         {/* Why it failed or ended partial, which names the accounts that
                             failed (#113) */}

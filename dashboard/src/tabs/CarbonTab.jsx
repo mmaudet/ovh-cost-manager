@@ -143,6 +143,9 @@ const TYPE_LABELS = {
   'PCI-BLOCK-STORAGE': 'carbonVolume',
 };
 
+// The type of a footprint line as the list names it
+const typeLabel = (type, t) => (TYPE_LABELS[type] ? t(TYPE_LABELS[type]) : type);
+
 // What a line of the list names: a dedicated server, the servers that OVHcloud's file does not
 // name, with their number, or an instance flavor or a volume type
 const itemOf = (line, t) => (line.unnamedServers
@@ -201,7 +204,7 @@ const rowsOfList = (carbonLines, t, accountColumn) => withAccountNames(
 const listValues = (t) => ({
   item: (line) => (line.unnamedServers ? null : line.serverDomain ?? line.name),
   account: (line) => line.accountName,
-  type: (line) => (TYPE_LABELS[line.type] ? t(TYPE_LABELS[line.type]) : line.type),
+  type: (line) => typeLabel(line.type, t),
   datacenter: (line) => (line.datacenter ? datacenterLabel(line.datacenter, t) : null),
   footprint: (line) => line.footprint,
   cost: (line) => line.cost,
@@ -284,9 +287,7 @@ const ListPanel = ({
               <tr key={index} className="border-t border-gray-100">
                 <td className="py-1">{line.item}</td>
                 {accountColumn && <td className="py-1">{line.accountName}</td>}
-                <td className="py-1">
-                  {TYPE_LABELS[line.type] ? t(TYPE_LABELS[line.type]) : line.type}
-                </td>
+                <td className="py-1">{typeLabel(line.type, t)}</td>
                 <td className="py-1">{datacenterLabel(line.datacenter, t)}</td>
                 <td className="text-right py-1">{fmt(line.footprint)}</td>
                 <td className="text-right py-1">

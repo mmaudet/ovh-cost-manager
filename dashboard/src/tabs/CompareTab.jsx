@@ -34,11 +34,11 @@ const resourceTypeValues = (byResourceTypeA, byResourceTypeB) => ({
   ),
 });
 
-// The value of a row of the comparison by project in each column that sorts it (#146), and its
-// account while the Account column shows
+// The value of a row of the comparison by project in each column that sorts it (#146): its
+// account, none without the Account column
 const projectComparisonValues = (accountColumn) => ({
   name: (row) => row.projectName,
-  ...(accountColumn && { account: (row) => accountColumn.nameOf(row.account) }),
+  account: (row) => accountColumn?.nameOf(row.account),
   totalA: (row) => row.totalA,
   totalB: (row) => row.totalB,
   variation: (row) => row.variation,

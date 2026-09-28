@@ -6,20 +6,24 @@ import { SortableHeader, sortRows } from '../components/SortableHeader.jsx';
 import { accountInBrackets } from '../utils/accounts.js';
 import { formatPercent, takesSingular } from '../utils/format.js';
 
-// The value of a project of the breakdown in each column that sorts it (#146): its share of
-// the Cloud total of the month too, and its account while the Account column shows
+// The share of the Cloud total of the month that a project's amount is: 0 of a Cloud total of
+// 0 € (#87)
+const shareOf = (total, cloudTotal) => (cloudTotal ? total / cloudTotal : 0);
+
+// The value of a project of the breakdown in each column that sorts it (#146): its account,
+// none without the Account column, and its share of the Cloud total of the month
 const breakdownValues = (accountColumn, cloudTotal) => ({
   name: (p) => p.projectName,
-  ...(accountColumn && { account: (p) => accountColumn.nameOf(p.account) }),
+  account: (p) => accountColumn?.nameOf(p.account),
   total: (p) => p.total,
-  share: (p) => (cloudTotal ? p.total / cloudTotal : 0),
+  share: (p) => shareOf(p.total, cloudTotal),
 });
 
-// The value of a project of the GPU costs in each column that sorts them (#146): its GPU types
-// as the text of their list, and its account while the Account column shows
+// The value of a project of the GPU costs in each column that sorts them (#146): its account,
+// none without the Account column, and its GPU types as the text of their list
 const gpuProjectValues = (accountColumn) => ({
   name: (p) => p.project_name,
-  ...(accountColumn && { account: (p) => accountColumn.nameOf(p.account) }),
+  account: (p) => accountColumn?.nameOf(p.account),
   flavors: (p) => p.gpu_flavors,
   total: (p) => p.total,
 });
@@ -367,7 +371,7 @@ const OverviewTab = ({
                 breakdownValues(accountColumn, summary?.cloudTotal), language,
               ).map((p, i) => {
                 // With one decimal, 0,0 % of a Cloud total of 0 € included (#87)
-                const share = summary?.cloudTotal ? p.total / summary.cloudTotal : 0;
+                const share = shareOf(p.total, summary?.cloudTotal);
                 // A project billed to several accounts has a row for each (#118)
                 const key = accountColumn ? `${p.projectId} ${p.account}` : p.projectId || i;
                 return (

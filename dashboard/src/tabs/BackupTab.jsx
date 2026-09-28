@@ -78,7 +78,7 @@ const BackupTab = ({
         </div>
       </div>
 
-      {/* Backup Details */}
+      {/* Backup Details: two fixed rows and their total, nothing to sort (#146) */}
       <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
         <h3 className="font-semibold text-gray-900 mb-4">
           {language === 'en' ? 'Backup Resources' : 'Ressources Backup'}

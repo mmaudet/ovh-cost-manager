@@ -14,9 +14,9 @@ import { SortIcon } from './SortIcon.jsx';
 // The sort of a table is null until the user sorts it, unless the table sorts by one of its
 // columns from the start, or else { column, kind, direction }: the name of the column, its kind,
 // 'text', 'number' or 'date', and the direction, 'asc' or 'desc'. The hook of the table's tab
-// holds it, with useTableSorts(), so that the table keeps it while another tab is open, and the
-// "show all" modal of a table sorts it as its panel does: see
-// docs/adr/0001-tab-state-lives-in-the-dashboard-shell.md.
+// holds it, or the shell for its own table, with useTableSorts(), so that the table keeps it
+// while another tab is open, and the "show all" modal of a table sorts it as its panel does:
+// see docs/adr/0001-tab-state-lives-in-the-dashboard-shell.md.
 
 // The value a row sorts by in a column of a kind, from its raw value: null when it has none
 const sortKey = (kind, value) => {
@@ -33,10 +33,12 @@ const sortKey = (kind, value) => {
  * @param {?{ column: string, kind: string, direction: string }} sort - The table's sort, null
  *   until the user sorts it
  * @param {Object<string, function(object): *>} values - For each column that sorts the table,
- *   by name, the raw value of a row in it: a number, a date or its ISO text, or a text
+ *   by name, the raw value of a row in it: a number, a date or its ISO text, or a text. A
+ *   column that the table does not show, as the Account column with a single account shown,
+ *   gives none: the rows keep their order.
  * @param {string} language - The page's, 'fr' or 'en', whose alphabet sorts the text
- * @returns {object[]} A new list; or the rows themselves without a sort, or once the table no
- *   longer shows the column that it sorts by, such as the Account column
+ * @returns {object[]} A new list; or the rows themselves without a sort, or when the values
+ *   name no column of the sort's name
  */
 const sortRows = (rows, sort, values, language) => {
   const valueOf = sort && values[sort.column];

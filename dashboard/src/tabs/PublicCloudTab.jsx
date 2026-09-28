@@ -22,12 +22,12 @@ const openProjectAccountOf = (accountColumn, projectsEnriched, openProject) => {
   return { label: accountColumn.label, name: accountColumn.nameOf(project.account) };
 };
 
-// The value of a project in each column that sorts the list (#146): its account while the
-// Account column shows, and no consumption for a project that consumed nothing, which the list
+// The value of a project in each column that sorts the list (#146): its account, none without
+// the Account column, and no consumption for a project that consumed nothing, which the list
 // shows as "-"
 const projectValues = (accountColumn) => ({
   name: (p) => p.name || p.id,
-  ...(accountColumn && { account: (p) => accountColumn.nameOf(p.account) }),
+  account: (p) => accountColumn?.nameOf(p.account),
   state: (p) => p.status,
   instances: (p) => p.instance_count || 0,
   consumption: (p) => (p.consumption_total > 0 ? p.consumption_total : null),

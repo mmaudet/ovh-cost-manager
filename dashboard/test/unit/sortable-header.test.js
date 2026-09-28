@@ -100,13 +100,21 @@ describe('sortRows', () => {
     expect(byTotal('asc')).toEqual(['web-2', 'web-1', 'db-1']);
   });
 
-  // As the Account column, which shows with all accounts only
-  it('keeps the rows as they are once the table no longer shows the column it sorts by',
-    () => {
-      const byAccount = { column: 'account', kind: 'text', direction: 'asc' };
+  // As by the Account column once a single account is shown: none has a value in it
+  it('keeps the rows in their order by a column where none has a value', () => {
+    const byAccount = { column: 'account', kind: 'text', direction: 'desc' };
+    const withAccounts = { ...values, account: () => undefined };
 
-      expect(sortRows(buckets, byAccount, values, 'fr')).toBe(buckets);
-    });
+    expect(sortRows(buckets, byAccount, withAccounts, 'fr').map(({ name }) => name))
+      .toEqual(['logs-9', 'Archives', 'logs-10', 'éditions']);
+  });
+
+  // A sort by a column that the table does not sort by
+  it('keeps the rows as they are when no value is given for the column of the sort', () => {
+    const byAccount = { column: 'account', kind: 'text', direction: 'asc' };
+
+    expect(sortRows(buckets, byAccount, values, 'fr')).toBe(buckets);
+  });
 
   it('returns a new list, and leaves the one it sorts as it was', () => {
     const sorted = sortRows(buckets, bySize('asc'), values, 'fr');
