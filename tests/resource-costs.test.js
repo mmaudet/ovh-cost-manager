@@ -254,6 +254,81 @@ describe('Public Cloud cards', () => {
     expect(stats.kubernetes).toEqual({ count: 1, total: 12 });
     expect(stats.savingsPlans).toEqual({ count: 1, total: 90 });
   });
+
+  // Each line of a Public Cloud project counts in one card, so that the cards add up to the
+  // cloud total of the month, which adds up the lines of the projects (#145)
+  describe('with a line of each product', () => {
+    const LINES = [
+      ['Consommation à l\'heure pour les instances b3-8 gra11', 100],
+      ['Forfait mensuel pour une instance b2-30 (id 5a1c2e3d-0000-4000-8000-000000000001, region gra7) - 01 mois', 50],
+      ['Prorata de la facturation mensuelle d\'une instance b2-30 (id 5a1c2e3d-0000-4000-8000-000000000001, region gra7)', 5],
+      ['Disques supplémentaires à gra9 de type high-speed', 20],
+      ['Snapshots Public Cloud - gra9', 3],
+      ['Sauvegarde de disques - gra9', 7],
+      ['Stockage Standard - Bucket assets sur la région gra', 10],
+      ['Stockage d\'object Public Cloud - gra', 4],
+      ['Bande passante - stockage d\'objects Public Cloud - gra', 0.25],
+      ['Bande passante out Stockage Standard Infrequent Access - gra', 0.25],
+      ['Stockage Standard - Bucket registry-cache sur la région gra', 1],
+      ['Managed Private Registry - plan M', 40],
+      ['Managed Kubernetes Service - Standard plan', 12],
+      ['Savings plan (id : savings-plan-1xb3-8) pour 1 instance(s) b3-8 - Durée : 1M', 90],
+      ['Public Cloud Databases PostgreSQL business DB1-7 à gra', 30],
+      ['Octavia Loadbalancer - Small', 12],
+      ['Public Cloud Floating IP', 2],
+      ['Public Cloud Gateway Small', 3],
+      ['Public Cloud AI Notebooks stockage du workspace', 0.5],
+      ['A product that OVH launched since', 1],
+      ['Utilisation du credit cloud', -5],
+    ];
+    const CLOUD_TOTAL = LINES.reduce((sum, [, price]) => sum + price, 0);
+    const CARDS = ['instances', 'kubernetes', 'objectStorage', 'volumes', 'snapshots', 'savingsPlans', 'registry', 'other'];
+
+    beforeEach(() => {
+      for (const [description, price] of LINES) seedBillLine(description, price);
+    });
+
+    test('the cards add up to the cloud total of the month', () => {
+      const stats = db.inventory.getPublicCloudStats(FROM, TO);
+
+      const cards = CARDS.reduce((sum, card) => sum + stats[card].total, 0);
+      expect(cards).toBeCloseTo(CLOUD_TOTAL, 2);
+      expect(db.analysis.summary(FROM, TO).cloud_total).toBeCloseTo(CLOUD_TOTAL, 2);
+    });
+
+    test('the instance card counts the proratas of the monthly plans', () => {
+      expect(db.inventory.getPublicCloudStats(FROM, TO).instances.total).toBe(155);
+    });
+
+    test('the object storage card counts the Swift lines, the bandwidth and every bucket, whatever its name', () => {
+      const stats = db.inventory.getPublicCloudStats(FROM, TO);
+
+      expect(stats.objectStorage.total).toBe(15.5);
+      expect(stats.registry.total).toBe(40);
+    });
+
+    test('the other services card names what the other cards leave, the largest first', () => {
+      expect(db.inventory.getPublicCloudStats(FROM, TO).other).toEqual({
+        total: 50.5,
+        products: [
+          { product: 'databases', total: 30 },
+          { product: 'loadBalancers', total: 12 },
+          { product: 'volumeBackups', total: 7 },
+          { product: 'gateways', total: 3 },
+          { product: 'floatingIps', total: 2 },
+          { product: 'other', total: 1 },
+          { product: 'ai', total: 0.5 },
+          { product: 'credits', total: -5 },
+        ],
+      });
+    });
+  });
+
+  test('the other services card names no product that cost nothing', () => {
+    seedBillLine('A product that OVH launched since', 0);
+
+    expect(db.inventory.getPublicCloudStats(FROM, TO).other).toEqual({ total: 0, products: [] });
+  });
 });
 
 describe('savings plans', () => {
