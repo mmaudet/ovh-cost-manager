@@ -1,11 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import { useCarbonTab } from '../../src/tabs/useCarbonTab.js';
+import { account } from '../fixtures/account.js';
 import { lyonAccount, severalAccounts, unnamedAccount } from '../fixtures/accounts.js';
 import { months } from '../fixtures/calendar.js';
 import { api } from '../support/api.js';
 import { renderTabHook, TAB_IDS, WAITING } from '../support/hooks.jsx';
 
-// The data query of the Carbon tab (#147), as the dashboard shell sees it: what the hook
+// The data queries of the Carbon tab (#147), as the dashboard shell sees them: what the hook
 // requests and returns for the selected month, the active tab and the account shown. The
 // shell holds the account, which the header selects (#115): null for all accounts, undefined
 // while the page does not know it yet. And it tells whether the months of that account hold
@@ -61,14 +62,19 @@ describe('useCarbonTab', () => {
   it('returns the carbon footprint of the month, which the tab shows', async () => {
     const { result } = await renderTabHook(useCarbonTab, onTheTab);
 
-    expect(result.current).toMatchObject({
+    expect(result.current).toEqual({
       carbonFootprint: august,
       // Of the month selected
       missingMonth: null,
-      // Answered: the tab shows it (#64)
+      // Which ends on it (#154)
+      carbonTrend: account.carbonTrend['2026-08'],
+      // Answered: the tab shows them (#64)
       loadingCarbon: false,
       failedCarbon: false,
+      loadingTrend: false,
+      failedTrend: false,
     });
+    expect(api.fetchCarbonTrend).toHaveBeenCalledWith('2026-08', null);
   });
 
   // The trend ends on the month that the tab shows (#154)

@@ -1083,7 +1083,7 @@ function registerRoutes() {
 
   // The carbon footprint of a month, that OVHcloud's carbon calculator attributes to the
   // services of the account the request asks for, or of every account without one: its
-  // location-based emissions by emission source and in total, in kg CO2eq, and its market-based
+  // location-based footprint by emission source and in total, in kg CO2eq, and its market-based
   // total, null when the month has none; the latest month that has one (#152), which the
   // dashboard shows when the month has none; and, for all accounts, the accounts that have
   // none that month (#153), which their sum leaves out, null for one account
@@ -1108,7 +1108,7 @@ function registerRoutes() {
 
   // The carbon footprint of the 12 months that end on the `end` month (#154), of the account
   // the request asks for, or of every account without one: each month's location-based
-  // emissions by emission source and in total, in kg CO2eq, null for a month without one, the
+  // footprint by emission source and in total, in kg CO2eq, null for a month without one, the
   // earliest month first
   app.get('/api/carbon/trend', accountParameter, (req, res) => {
     try {

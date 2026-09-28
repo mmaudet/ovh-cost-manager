@@ -2,7 +2,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from 'recharts';
 import {
-  formatMonthLabel, formatMonthName, formatYearMonth, localeOf,
+  formatMonthLabel, formatMonthName, formatWholeNumber, formatYearMonth,
 } from '../utils/format.js';
 
 // The emission sources of a carbon footprint, in the order the tab shows them: the key of
@@ -106,8 +106,6 @@ const NoFootprint = ({ accountImport, language, t }) => {
 // The footprint of the 12 months up to the month that the tab shows (#154), stacked by
 // emission source, with the table of its figures: a month without a footprint has none, not 0
 const TrendPanel = ({ carbonTrend, loadingTrend, failedTrend, language, t, fmt }) => {
-  // The axis reads kg CO2eq as whole numbers
-  const axisNumbers = new Intl.NumberFormat(localeOf(language), { maximumFractionDigits: 0 });
   let content;
   if (loadingTrend) {
     content = <p className="text-gray-500 text-sm">{t('loading')}</p>;
@@ -137,10 +135,10 @@ const TrendPanel = ({ carbonTrend, loadingTrend, failedTrend, language, t, fmt }
               />
               <YAxis
                 tick={{ fontSize: 12 }} width={64}
-                tickFormatter={(value) => axisNumbers.format(value)}
+                tickFormatter={(value) => formatWholeNumber(value, language)}
               />
               <Tooltip
-                labelFormatter={(yearMonth) => formatMonthLabel(yearMonth, language)}
+                labelFormatter={(yearMonth) => formatYearMonth(yearMonth, language)}
                 formatter={(value, name) => [`${fmt(value)} kgCO₂e`, name]}
               />
               {EMISSION_SOURCES.map((source, index) => (
@@ -158,7 +156,7 @@ const TrendPanel = ({ carbonTrend, loadingTrend, failedTrend, language, t, fmt }
           <table className="w-full text-sm mt-2">
             <thead>
               <tr className="text-gray-500">
-                <th className="text-left font-medium py-1">{t('carbonMonth')}</th>
+                <th className="text-left font-medium py-1">{t('month')}</th>
                 {EMISSION_SOURCES.map(source => (
                   <th key={source} className="text-right font-medium py-1">{t(source)}</th>
                 ))}

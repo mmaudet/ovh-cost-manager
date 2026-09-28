@@ -167,8 +167,17 @@ test('gives the carbon footprint of the 12 months that end on a month', async ()
           footprint: { manufacturing: 1.5, electricity: 2.5, operations: 3.5, total: 7.5 },
         },
       ]);
-    // A month that is not one
-    const { status, body } = await ocm.get('/api/carbon/trend?end=2026-8');
-    expect([status, body.error]).toEqual([400, expect.stringMatching(/^Invalid 'end'/)]);
+    // The Unknown account, which never has one
+    expect((await ocm.get(`/api/carbon/trend?end=2026-08&account=${UNKNOWN_ACCOUNT}`)).body
+      .every(({ footprint }) => footprint === null)).toBe(true);
+    // A month that is not one, or none
+    for (const query of ['?end=2026-8', '']) {
+      const { status, body } = await ocm.get(`/api/carbon/trend${query}`);
+      expect([query, status, body.error])
+        .toEqual([query, 400, expect.stringMatching(/^Invalid 'end'/)]);
+    }
+    // An account that the server does not know
+    expect((await ocm.get('/api/carbon/trend?end=2026-08&account=ww4444-ovh')).status)
+      .toBe(400);
   });
 }, 30000);

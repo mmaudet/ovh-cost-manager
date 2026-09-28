@@ -44,6 +44,8 @@ describe('Carbon tab', () => {
 
     expect(screen.getByRole('heading', { name: 'Août 2026' })).toBeInTheDocument();
     expect(texts(footprintCards())).toEqual(AUGUST_CARDS);
+    // And the trend that ends on it (#154)
+    expect(api.fetchCarbonTrend).toHaveBeenCalledWith('2026-08', null);
   });
 
   // OVHcloud never gives the current month's footprint, nor the previous one's until it has

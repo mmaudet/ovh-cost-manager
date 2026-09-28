@@ -1,4 +1,4 @@
-// The Carbon tab's data query, in a hook that the dashboard shell calls on every render:
+// The Carbon tab's data queries, in a hook that the dashboard shell calls on every render:
 // see docs/adr/0001-tab-state-lives-in-the-dashboard-shell.md
 
 import { useQuery } from '@tanstack/react-query';
@@ -31,7 +31,7 @@ async function fetchShownFootprint(month, account) {
  * @param {?object} shell.selectedMonth - The month selected in the header
  * @param {boolean} shell.holdsSelectedMonth - Whether the months of the account shown hold
  *   it, as the shell checks it: the query waits until they do (#115)
- * @param {string} shell.activeTab - The tab open: the query runs on the Carbon tab only
+ * @param {string} shell.activeTab - The tab open: the queries run on the Carbon tab only
  * @param {?string|undefined} shell.selectedAccount - The account shown (useSelectedAccount()):
  *   null for all accounts, undefined while the page does not know it, which the query waits
  *   for

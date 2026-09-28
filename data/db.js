@@ -2499,6 +2499,18 @@ const webCloudOps = {
 
 // The carbon footprint of the accounts (#147): the lines of the file that OVHcloud's carbon
 // calculator generates for each account, month by month (see data/carbon-footprint.js)
+
+// What the queries of a carbon footprint select of its lines: its location-based footprint
+// by emission source and in total, in kg CO2eq, to the hundredth
+const FOOTPRINT_SUMS = `
+  ROUND(SUM(manufacturing), 2) as manufacturing,
+  ROUND(SUM(electricity_location), 2) as electricity,
+  ROUND(SUM(operations_location), 2) as operations,
+  ROUND(SUM(manufacturing + electricity_location + operations_location), 2) as total`;
+
+// How many months the trend of the carbon footprint covers (#154)
+const TREND_MONTHS = 12;
+
 const carbonOps = {
   /**
    * Replaces an account's footprint lines of some months with those of a file, in one
@@ -2544,11 +2556,7 @@ const carbonOps = {
   getMonthFootprint: (month, account = null) => {
     const ofAccount = accountCondition(account, 'account');
     const { lines, ...footprint } = getDb().prepare(`
-      SELECT COUNT(*) as lines,
-        ROUND(SUM(manufacturing), 2) as manufacturing,
-        ROUND(SUM(electricity_location), 2) as electricity,
-        ROUND(SUM(operations_location), 2) as operations,
-        ROUND(SUM(manufacturing + electricity_location + operations_location), 2) as total,
+      SELECT COUNT(*) as lines, ${FOOTPRINT_SUMS},
         ROUND(SUM(manufacturing + electricity_market + operations_market), 2)
           as marketBasedTotal
       FROM carbon_footprint_lines
@@ -2558,29 +2566,24 @@ const carbonOps = {
   },
 
   /**
-   * The carbon footprint of the months that end on a month (#154), location-based, of the
-   * account (see accountCondition()), or of every account by default: each month's emissions
+   * The carbon footprint of the 12 months that end on a month (#154), location-based, of the
+   * account (see accountCondition()), or of every account by default: each month's footprint
    * by emission source and in total, in kg CO2eq, to the hundredth.
    * @param {string} end - The last month, YYYY-MM
    * @param {?string} [account]
-   * @param {number} [months] - How many months, 12 by default
    * @returns {{month: string, footprint: ?object}[]} Each month, the earliest first, with its
    *   footprint, null for a month without one
    */
-  getTrend: (end, account = null, months = 12) => {
-    const first = shiftMonth(end, 1 - months);
+  getTrend: (end, account = null) => {
+    const first = shiftMonth(end, 1 - TREND_MONTHS);
     const ofAccount = accountCondition(account, 'account');
     const byMonth = new Map(getDb().prepare(`
-      SELECT month,
-        ROUND(SUM(manufacturing), 2) as manufacturing,
-        ROUND(SUM(electricity_location), 2) as electricity,
-        ROUND(SUM(operations_location), 2) as operations,
-        ROUND(SUM(manufacturing + electricity_location + operations_location), 2) as total
+      SELECT month, ${FOOTPRINT_SUMS}
       FROM carbon_footprint_lines
       WHERE month >= ? AND month <= ? AND ${ofAccount.sql}
       GROUP BY month
     `).all(first, end, ...ofAccount.params).map(({ month, ...footprint }) => [month, footprint]));
-    return Array.from({ length: months }, (_, index) => {
+    return Array.from({ length: TREND_MONTHS }, (_, index) => {
       const month = shiftMonth(first, index);
       return { month, footprint: byMonth.get(month) ?? null };
     });
