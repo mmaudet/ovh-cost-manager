@@ -112,8 +112,8 @@ const buckets = [
   { name: 'old-exports', type: null, region: 'SBG', status: null,
     objectsCount: null, objectsSize: null, createdAt: null,
     inInventory: false, allocated: false, total: 2 },
-  // Created this month, still empty
-  { name: 'logs-empty', type: 'Standard', region: 'GRA', status: null,
+  // Created this month, still empty: without an object, it has no class (#145)
+  { name: 'logs-empty', type: null, region: 'GRA', status: null,
     objectsCount: 0, objectsSize: 0, createdAt: '2026-09-10T08:00:00Z',
     inInventory: true, allocated: false, total: 0 },
 ];

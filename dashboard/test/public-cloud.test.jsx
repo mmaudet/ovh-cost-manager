@@ -79,7 +79,7 @@ const bucketRows = [
   ['Nom', 'Type', 'Région', 'Taille', 'Coût'],
   ['archives-2025', 'Cold Archive', 'archived', 'GRA', '1,5 To', '~', '9,00€'],
   ['assets-example-com', 'Standard', 'GRA', '4,2 Go', '14,00€'],
-  ['logs-empty', 'Standard', 'GRA', '0 o', '0,00€'],
+  ['logs-empty', 'Vide', 'GRA', '0 o', '0,00€'],
   // Billed, but gone from the inventory
   ['old-exports', '†', 'Inconnu', 'SBG', '-', '2,00€'],
 ];
@@ -370,6 +370,15 @@ describe('Public Cloud tab', () => {
       expect(costsWith(table, COLD_ARCHIVE_SHARE)).toEqual(['~9,00€']);
     });
 
+    // OVHcloud gives a class to each object: an empty bucket has none (#145)
+    it('say that an empty bucket has no class, and why', async () => {
+      await openProduction();
+
+      expect(within(resourceTable('Buckets')).getByText('Vide')).toHaveAttribute(
+        'title', "Un bucket vide n'a pas de classe : OVHcloud en donne une à chaque objet",
+      );
+    });
+
     it('are all shown in their "show all" modal, which closes with its button', async () => {
       const { user } = await openProduction();
 
@@ -398,7 +407,7 @@ describe('Public Cloud tab', () => {
         '"archives-2025";"Cold Archive";"archived";"GRA";12;1500000000000;9;1;1;'
           + '"2025-06-30T08:00:00Z"',
         '"assets-example-com";"Standard";;"GRA";1520;4200000000;14;0;1;"2025-11-03T08:00:00Z"',
-        '"logs-empty";"Standard";;"GRA";0;0;0;0;1;"2026-09-10T08:00:00Z"',
+        '"logs-empty";;;"GRA";0;0;0;0;1;"2026-09-10T08:00:00Z"',
         '"old-exports";;;"SBG";;;2;0;0;',
       ]));
     });
@@ -582,7 +591,7 @@ describe('Public Cloud tab', () => {
     expect(rowTextsOf(resourceTable('Buckets')).slice(1)).toEqual([
       ['archives-2025', 'Cold Archive', 'archived', 'GRA', '1.5 TB', '~', '9.00€'],
       ['assets-example-com', 'Standard', 'GRA', '4.2 GB', '14.00€'],
-      ['logs-empty', 'Standard', 'GRA', '0 B', '0.00€'],
+      ['logs-empty', 'Empty', 'GRA', '0 B', '0.00€'],
       ['old-exports', '†', 'Unknown', 'SBG', '-', '2.00€'],
     ]);
     expect(rowTextsOf(resourceTable('Volumes'))[4])

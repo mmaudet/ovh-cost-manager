@@ -1,5 +1,20 @@
 import { fmtBytes } from '../utils/format.js';
 
+// A bucket without a class (#145): OVHcloud gives a class to each object, never to a bucket,
+// so an empty one has none. Any other bucket without one is unknown: its class could not be
+// read, or it is billed but gone from the inventory.
+const isEmpty = (bucket) => bucket.inInventory !== false && bucket.objectsCount === 0;
+const noClassLabel = (bucket, language) => {
+  if (isEmpty(bucket)) return language === 'en' ? 'Empty' : 'Vide';
+  return language === 'en' ? 'Unknown' : 'Inconnu';
+};
+const noClassHint = (bucket, language) => {
+  if (!isEmpty(bucket)) return undefined;
+  return language === 'en'
+    ? 'An empty bucket has no class: OVHcloud gives one to each object'
+    : 'Un bucket vide n\'a pas de classe : OVHcloud en donne une à chaque objet';
+};
+
 // Bucket table, shared by the inline panel and the "show all" modal.
 // Sorted by name so the list stays stable across period changes.
 const BucketsTable = ({ buckets, language, t, fmt }) => (
@@ -26,12 +41,13 @@ const BucketsTable = ({ buckets, language, t, fmt }) => (
             <span className={`px-1.5 py-0.5 rounded text-xs ${
               bucket.type === 'High Performance' ? 'bg-orange-100 text-orange-700' :
               bucket.type === 'Standard IA' ? 'bg-blue-100 text-blue-700' :
+              bucket.type === 'Active Archive' ? 'bg-fuchsia-100 text-fuchsia-700' :
               bucket.type === 'Cold Archive' ? 'bg-purple-100 text-purple-700' :
               bucket.type === 'Public Cloud Archive' ? 'bg-indigo-100 text-indigo-700' :
               bucket.type === 'Swift' ? 'bg-sky-100 text-sky-700' :
               'bg-gray-100 text-gray-700'
-            }`}>
-              {bucket.type || (language === 'en' ? 'Unknown' : 'Inconnu')}
+            }`} title={bucket.type ? undefined : noClassHint(bucket, language)}>
+              {bucket.type || noClassLabel(bucket, language)}
             </span>
             {bucket.status && bucket.status !== 'none' && (
               <span className="ml-1 px-1.5 py-0.5 rounded text-xs bg-indigo-100 text-indigo-700">
