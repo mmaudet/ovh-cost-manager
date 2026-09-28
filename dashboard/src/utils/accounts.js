@@ -34,6 +34,22 @@ export function accountsOf(entries) {
 // installation shows the page as before.
 export const offersAccounts = (accounts) => accounts.length >= 2;
 
+/**
+ * How the account shown is imported (#153): 'unknown' for the Unknown account, whose rows no
+ * import claimed; 'removed' for an account that config.json no longer lists, which is no
+ * longer imported; 'imported' for a configured account, and for all accounts.
+ * @param {object[]|undefined} accounts - The accounts of the instance (accountsOf()),
+ *   undefined while their list loads
+ * @param {?string|undefined} selectedAccount - The account shown (useSelectedAccount())
+ * @returns {'unknown'|'removed'|'imported'}
+ */
+export function importStateOf(accounts, selectedAccount) {
+  const shown = accounts?.find(({ id }) => id === selectedAccount);
+  if (shown?.unknown) return 'unknown';
+  if (shown && !shown.configured) return 'removed';
+  return 'imported';
+}
+
 // An account as the selector names it: the Unknown account, or its name, which says when
 // config.json no longer lists it
 export function accountLabel(account, t) {

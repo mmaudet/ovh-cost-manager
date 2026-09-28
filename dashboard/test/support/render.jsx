@@ -148,6 +148,12 @@ export async function selectAccount(user, label) {
 
 const normalize = (text) => text.replace(/\s+/g, ' ').trim();
 
+// The text of an element as one reads it in a sentence, with the code and the links within it,
+// whitespace normalized
+export function sentenceOf(element) {
+  return normalize(element.textContent);
+}
+
 // A closed dropdown shows the option it holds, not the others
 const shownByDropdowns = (node) => (node.parentElement.closest('option')?.selected === false
   ? NodeFilter.FILTER_REJECT

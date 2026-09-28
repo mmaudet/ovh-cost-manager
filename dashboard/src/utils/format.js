@@ -48,6 +48,12 @@ const formatMonthLabel = (yearMonth, language = 'fr') => (
   formatMonth(yearMonth, language, { name: 'long', capitalised: true })
 );
 
+// A 'YYYY-MM' month and its year as a sentence names it, by the month's long name: août 2026 in
+// French, August 2026 in English
+const formatMonthName = (yearMonth, language = 'fr') => (
+  formatMonth(yearMonth, language, { name: 'long' })
+);
+
 // The month of a date as YYYY-MM, as the month formats above read it: in local time, as
 // they write it
 const yearMonthOf = (date) => (
@@ -116,6 +122,6 @@ const takesSingular = (count, language = 'fr') =>
   new Intl.PluralRules(localeOf(language)).select(count) === 'one';
 
 export {
-  localeOf, formatCurrency, formatPercent, formatYearMonth, formatMonthLabel, yearMonthOf,
-  fmtBytes, fmtMemory, takesSingular,
+  localeOf, formatCurrency, formatPercent, formatYearMonth, formatMonthLabel, formatMonthName,
+  yearMonthOf, fmtBytes, fmtMemory, takesSingular,
 };

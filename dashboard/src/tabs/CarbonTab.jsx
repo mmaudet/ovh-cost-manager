@@ -1,4 +1,4 @@
-import { formatMonthLabel } from '../utils/format.js';
+import { formatMonthLabel, formatMonthName } from '../utils/format.js';
 
 // The emission sources of a carbon footprint, in the order the tab shows them: the key of
 // each one's figure, and of its label in the translations (see CONTEXT.md)
@@ -19,9 +19,15 @@ const FootprintCard = ({ label, value, fmt, emphasis = false, children = null })
 );
 
 // Why the month selected shows another month's footprint (#152): OVHcloud has not published
-// a month after the latest it gave yet, while an older month without one will never have it
-function missingMonthNotice(missingMonth, shownMonth, language) {
+// a month after the latest it gave yet, while an older month without one will never have it,
+// nor any month of an account that is no longer imported (#153)
+function missingMonthNotice(missingMonth, shownMonth, accountImport, language) {
   const label = formatMonthLabel(missingMonth, language);
+  if (accountImport === 'removed') {
+    return language === 'en'
+      ? `${label} has no carbon footprint: this account is no longer imported.`
+      : `${label} n'a pas d'empreinte carbone : ce compte n'est plus importé.`;
+  }
   if (missingMonth > shownMonth) {
     return language === 'en'
       ? `${label} has no carbon footprint yet: OVHcloud publishes it once the month is over.`
@@ -33,8 +39,14 @@ function missingMonthNotice(missingMonth, shownMonth, language) {
     : `${label} n'a pas d'empreinte carbone.`;
 }
 
+// The accounts that the footprint of all accounts leaves out, as it has none for the month
+// (#153)
+const withoutFootprintSentence = (month, names, language) => (language === 'en'
+  ? `Without a carbon footprint in ${formatMonthName(month, language)}: ${names}.`
+  : `Sans empreinte carbone en ${formatMonthName(month, language)} : ${names}.`);
+
 // OVHcloud's guide to the carbon footprint, which lists the services it covers
-const GUIDE = (language) => `https://docs.ovhcloud.com/${language === 'en' ? 'en' : 'fr'}`
+const guideUrl = (language) => `https://docs.ovhcloud.com/${language === 'en' ? 'en' : 'fr'}`
   + '/guides/account-and-service-management/managing-billing-payments-and-services/'
   + 'carbon-footprint';
 
@@ -42,8 +54,8 @@ const GUIDE = (language) => `https://docs.ovhcloud.com/${language === 'en' ? 'en
 // (#153)
 const HowToGetOne = ({ language }) => {
   const code = (text) => <code className="text-xs bg-gray-100 rounded px-1">{text}</code>;
-  const guide = (text) => (
-    <a href={GUIDE(language)} className="text-blue-600 underline" target="_blank"
+  const guideLink = (text) => (
+    <a href={guideUrl(language)} className="text-blue-600 underline" target="_blank"
       rel="noreferrer">
       {text}
     </a>
@@ -54,37 +66,37 @@ const HowToGetOne = ({ language }) => {
       {code('POST /me/carbonCalculator/csv')} to the account's API key, and import with{' '}
       {code('--include-carbon')}, which{' '}
       {code('--all')} includes. OVHcloud does not compute the footprint of all its services:
-      see {guide('the list of those it covers')}.
+      see {guideLink('the list of those it covers')}.
     </>
   ) : (
     <>
       Pas encore d'empreinte carbone. Pour l'importer, ajoutez à la clé API du compte le
       droit {code('POST /me/carbonCalculator/csv')}, et importez avec{' '}
       {code('--include-carbon')}, que {code('--all')} comprend. OVHcloud ne calcule pas
-      l'empreinte de tous ses services : voir {guide("la liste de ceux qu'il couvre")}.
+      l'empreinte de tous ses services : voir {guideLink("la liste de ceux qu'il couvre")}.
     </>
   );
 };
 
-// Why the account shown has no carbon footprint at all (#153), from what the accounts route
-// says of it: the Unknown account never has one, an account that the configuration no longer
-// lists is no longer imported, and any other account, or all of them, has not imported one
-const NoFootprint = ({ accounts, selectedAccount, language, t }) => {
-  const shownAccount = accounts?.find(({ id }) => id === selectedAccount);
-  if (shownAccount?.unknown) return t('carbonUnknownAccount');
-  if (shownAccount && !shownAccount.configured) return t('carbonNoLongerImported');
+// Why the account shown has no carbon footprint at all (#153), from how it is imported
+// (importStateOf()): the Unknown account never has one, an account that the configuration no
+// longer lists is no longer imported, and any other account, or all of them, has not imported
+// one
+const NoFootprint = ({ accountImport, language, t }) => {
+  if (accountImport === 'unknown') return t('carbonUnknownAccount');
+  if (accountImport === 'removed') return t('carbonNoLongerImported');
   return <HowToGetOne language={language} />;
 };
 
 // The Carbon tab (#147), which the shell renders while it is active: what useCarbonTab()
-// returns, with the shell's language, translations (t) and amount format (fmt), the accounts
-// of the instance and the account shown (#153), and the Account column of the lists, which
-// names an account when all of them are shown: the carbon footprint that OVHcloud's carbon
-// calculator attributes to the month selected, by emission source, or, when that month has
-// none, to the latest month that has one (#152).
+// returns, with the shell's language, translations (t) and amount format (fmt), how the
+// account shown is imported (importStateOf(), #153), and the Account column of the lists,
+// which names an account when all of them are shown: the carbon footprint that OVHcloud's
+// carbon calculator attributes to the month selected, by emission source, or, when that month
+// has none, to the latest month that has one (#152).
 const CarbonTab = ({
   carbonFootprint, missingMonth, loadingCarbon, failedCarbon, language, t, fmt,
-  accounts, selectedAccount, accountColumn,
+  accountImport, accountColumn,
 }) => {
   if (loadingCarbon) {
     return <div className="text-center text-gray-500 py-8">{t('loading')}</div>;
@@ -93,13 +105,11 @@ const CarbonTab = ({
     return <div className="text-center text-red-600 py-8">{t('carbonFailed')}</div>;
   }
 
-  const { month, footprint, accountsWithout } = carbonFootprint;
+  const { month, footprint, accountsWithoutFootprint } = carbonFootprint;
   if (!footprint) {
     return (
       <div className={`${PANEL} p-8 text-center text-gray-500`}>
-        <NoFootprint
-          accounts={accounts} selectedAccount={selectedAccount} language={language} t={t}
-        />
+        <NoFootprint accountImport={accountImport} language={language} t={t} />
       </div>
     );
   }
@@ -111,7 +121,7 @@ const CarbonTab = ({
     <div className="space-y-6">
       {missingMonth && (
         <div className="bg-amber-50 border border-amber-200 text-amber-800 rounded-lg p-4 text-sm">
-          {missingMonthNotice(missingMonth, month, language)}
+          {missingMonthNotice(missingMonth, month, accountImport, language)}
         </div>
       )}
       <h3 className="text-lg font-semibold text-gray-800">
@@ -130,11 +140,10 @@ const CarbonTab = ({
         ))}
       </div>
       {/* With all accounts, their sum leaves out those without a footprint (#153) */}
-      {accountsWithout?.length > 0 && (
+      {accountsWithoutFootprint?.length > 0 && (
         <p className="text-sm text-gray-600">
-          {language === 'en' ? 'Without a carbon footprint this month: ' : 'Sans empreinte '
-            + 'carbone pour ce mois : '}
-          {accountsWithout.map(nic => accountColumn?.nameOf(nic) ?? nic).join(', ')}.
+          {withoutFootprintSentence(month, accountsWithoutFootprint
+            .map(nic => accountColumn?.nameOf(nic) ?? nic).join(', '), language)}
         </p>
       )}
     </div>

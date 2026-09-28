@@ -63,9 +63,11 @@ const emptyAnswers = {
     loadBalancers: { count: 0, total: 0 },
   }),
   backupStats: () => ({ vms: { count: 0, total: 0 }, enterprise: { count: 0, total: 0 } }),
-  // No carbon footprint for the month (#147), nor for any other (#152)
-  carbonFootprint: (month) => ({
-    month, footprint: null, latestMonth: null, accountsWithout: null,
+  // No carbon footprint for the month (#147), nor for any other (#152), and for all accounts,
+  // none to name without one (#153)
+  carbonFootprint: (month, account) => ({
+    month, footprint: null, latestMonth: null,
+    accountsWithoutFootprint: account === null ? [] : null,
   }),
   list: () => [],
 };
@@ -179,7 +181,8 @@ const answers = {
   fetchBackupStats: entryForPeriodOfAccount('backupStats', emptyAnswers.backupStats),
   // The carbon footprint of a month, by that month, of the account the page selects (#147)
   fetchCarbonFootprint: (data, month, account) =>
-    ofAccount(data, account).carbonFootprint?.[month] ?? emptyAnswers.carbonFootprint(month),
+    ofAccount(data, account).carbonFootprint?.[month]
+      ?? emptyAnswers.carbonFootprint(month, account),
 };
 
 // One mock per function: what setup.js hands over to the page

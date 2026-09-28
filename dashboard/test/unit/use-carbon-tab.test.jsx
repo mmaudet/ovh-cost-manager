@@ -54,7 +54,7 @@ describe('useCarbonTab', () => {
       marketBasedTotal: 3012.25,
     },
     latestMonth: '2026-08',
-    accountsWithout: [],
+    accountsWithoutFootprint: [],
   };
 
   it('returns the carbon footprint of the month, which the tab shows', async () => {

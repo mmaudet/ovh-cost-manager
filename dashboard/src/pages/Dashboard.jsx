@@ -15,7 +15,8 @@ import { HeaderSelect } from '../components/HeaderSelect.jsx';
 import { ImportStatus } from '../components/ImportStatus.jsx';
 import { ResyncButton } from '../components/ResyncButton.jsx';
 import {
-  accountColumnOf, accountLabel, accountQuery, accountsOf, budgetOf, offersAccounts, scopeLabel,
+  accountColumnOf, accountLabel, accountQuery, accountsOf, budgetOf, importStateOf,
+  offersAccounts, scopeLabel,
 } from '../utils/accounts.js';
 import { formatCurrency, formatMonthLabel, yearMonthOf } from '../utils/format.js';
 import { parseSqliteDate } from '../utils/sqliteDate.js';
@@ -766,8 +767,8 @@ export default function Dashboard() {
         {/* Tab Content - Carbon footprint (#147) */}
         {activeTab === 'carbon' && (
           <CarbonTab
-            {...carbonTab} language={language} t={t} fmt={fmt} accounts={accounts}
-            selectedAccount={selectedAccount} accountColumn={accountColumn}
+            {...carbonTab} language={language} t={t} fmt={fmt}
+            accountImport={importStateOf(accounts, selectedAccount)} accountColumn={accountColumn}
           />
         )}
 

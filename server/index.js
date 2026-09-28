@@ -1084,8 +1084,8 @@ function registerRoutes() {
   // services of the account the request asks for, or of every account without one: its
   // location-based emissions by emission source and in total, in kg CO2eq, and its market-based
   // total, null when the month has none; the latest month that has one (#152), which the
-  // dashboard shows when the month has none; and, for all accounts, the configured accounts
-  // that have none that month (#153), which their sum leaves out, null for one account
+  // dashboard shows when the month has none; and, for all accounts, the accounts that have
+  // none that month (#153), which their sum leaves out, null for one account
   app.get('/api/carbon/footprint', accountParameter, (req, res) => {
     try {
       const { valid, error, month } = monthFromQuery(req.query);
@@ -1096,7 +1096,9 @@ function registerRoutes() {
         month,
         footprint: db.carbon.getMonthFootprint(month, req.account),
         latestMonth: db.carbon.getLatestMonth(req.account),
-        accountsWithout: req.account === null ? db.carbon.getAccountsWithout(month) : null,
+        accountsWithoutFootprint: req.account === null
+          ? db.carbon.getAccountsWithoutFootprint(month)
+          : null,
       });
     } catch (err) {
       res.status(500).json({ error: err.message });

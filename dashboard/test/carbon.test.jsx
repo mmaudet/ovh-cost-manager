@@ -4,15 +4,13 @@ import { account } from './fixtures/account.js';
 import { severalAccounts } from './fixtures/accounts.js';
 import { api } from './support/api.js';
 import {
-  cardRowOf, openTab, renderDashboard, selectAccount, selectLanguage, selectMonth, texts,
+  cardRowOf, openTab, renderDashboard, selectAccount, selectLanguage, selectMonth, sentenceOf,
+  texts,
 } from './support/render.jsx';
 
 // The cards of the month's carbon footprint: its total, with its market-based total and what
 // separates them (#152), then its emission sources
 const footprintCards = (firstLabel = 'Empreinte carbone') => cardRowOf(firstLabel);
-
-// The text of an element as one reads it, with the code and the links within its sentences
-const readAsText = (element) => element.textContent.replace(/\s+/g, ' ').trim();
 
 // What says what separates the market-based footprint from the other (#152)
 const MARKET_BASED_SENTENCE = "L'empreinte market-based tient compte des contrats d'énergie "
@@ -110,7 +108,7 @@ describe('Carbon tab', () => {
       + 'managing-billing-payments-and-services/carbon-footprint';
 
     // What the panel that says it reads, its code and link within the sentences
-    const message = () => readAsText(screen.getByText(/empreinte carbone/, { selector: 'div' }));
+    const message = () => sentenceOf(screen.getByText(/empreinte carbone/, { selector: 'div' }));
 
     it('says how to get one for a configured account', async () => {
       const { user } = await renderDashboard(severalAccounts);
@@ -124,8 +122,16 @@ describe('Carbon tab', () => {
       expect(screen.queryByText('Empreinte carbone')).toBeNull();
     });
 
-    it('says how to get one when no account has one', async () => {
+    it('says how to get one when the only account has none', async () => {
       const { user } = await renderDashboard({ ...account, carbonFootprint: {} });
+
+      await openTab(user, 'Carbone');
+
+      expect(message()).toBe(HOW_TO);
+    });
+
+    it('says how to get one when all accounts are shown and none has one', async () => {
+      const { user } = await renderDashboard({ ...severalAccounts, carbonFootprint: {} });
 
       await openTab(user, 'Carbone');
 
@@ -153,6 +159,41 @@ describe('Carbon tab', () => {
     });
   });
 
+  // Nor will an account no longer imported ever get the footprint of a later month than its
+  // latest (#153)
+  it('says that an account no longer configured is no longer imported, for a later month',
+    async () => {
+      const removed = 'zz3333-ovh';
+      const { user } = await renderDashboard({
+        ...severalAccounts,
+        ofAccount: {
+          ...severalAccounts.ofAccount,
+          [removed]: {
+            ...severalAccounts.ofAccount[removed],
+            // Its footprint of July, its latest
+            carbonFootprint: {
+              '2026-08': {
+                month: '2026-08', footprint: null, latestMonth: '2026-07',
+                accountsWithoutFootprint: null,
+              },
+              '2026-07': {
+                ...severalAccounts.carbonFootprint['2026-08'], month: '2026-07',
+                latestMonth: '2026-07', accountsWithoutFootprint: null,
+              },
+            },
+          },
+        },
+      });
+      await selectAccount(user, 'zz3333-ovh (non configuré)');
+
+      await openTab(user, 'Carbone');
+
+      expect(screen.getByText("Août 2026 n'a pas d'empreinte carbone : ce compte n'est plus "
+        + 'importé.')).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: 'Juillet 2026 · dernier mois disponible' }))
+        .toBeInTheDocument();
+    });
+
   // With all accounts shown, their sum leaves out those without a footprint (#153)
   it('names the accounts without a carbon footprint for the month it shows', async () => {
     const { user } = await renderDashboard(severalAccounts);
@@ -160,8 +201,8 @@ describe('Carbon tab', () => {
     // September, which shows August
     await openTab(user, 'Carbone');
 
-    expect(screen.getByText('Sans empreinte carbone pour ce mois : Lyon subsidiary.'))
-      .toBeInTheDocument();
+    expect(screen.getByText('Sans empreinte carbone en août 2026 : Lyon subsidiary, '
+      + 'zz3333-ovh.')).toBeInTheDocument();
   });
 
   it('follows the account selected in the header', async () => {
@@ -201,11 +242,11 @@ describe('Carbon tab', () => {
     await selectLanguage(user, 'EN');
 
     await openTab(user, 'Carbon');
-    expect(screen.getByText('Without a carbon footprint this month: Lyon subsidiary.'))
-      .toBeInTheDocument();
+    expect(screen.getByText('Without a carbon footprint in August 2026: Lyon subsidiary, '
+      + 'zz3333-ovh.')).toBeInTheDocument();
 
     await selectAccount(user, 'Lyon subsidiary');
-    expect(readAsText(screen.getByText(/carbon footprint/, { selector: 'div' }))).toBe(
+    expect(sentenceOf(screen.getByText(/carbon footprint/, { selector: 'div' }))).toBe(
       'No carbon footprint yet. To import it, add the right POST /me/carbonCalculator/csv to '
       + "the account's API key, and import with --include-carbon, which --all includes. "
       + 'OVHcloud does not compute the footprint of all its services: see the list of those it '

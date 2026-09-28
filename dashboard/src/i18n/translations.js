@@ -373,8 +373,8 @@ export const translations = {
     marketBasedExplanation: "The market-based footprint counts OVHcloud's low-carbon energy "
       + "contracts instead of each datacenter's local electricity mix.",
     latestMonthAvailable: 'latest month available',
-    carbonUnknownAccount: 'The Unknown account has no carbon footprint: it is imported account '
-      + 'by account.',
+    carbonUnknownAccount: 'The Unknown account has no carbon footprint: the footprint is '
+      + 'imported account by account.',
     carbonNoLongerImported: 'This account has no carbon footprint: it is no longer imported.',
     webCloud: 'Web Cloud',
     domains: 'Domains',

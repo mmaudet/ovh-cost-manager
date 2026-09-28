@@ -6,7 +6,9 @@
 // latest. It gave none for July either, a month the account had nothing it covers.
 export const carbon = {
   carbonFootprint: {
-    '2026-09': { month: '2026-09', footprint: null, latestMonth: '2026-08', accountsWithout: [] },
+    '2026-09': {
+      month: '2026-09', footprint: null, latestMonth: '2026-08', accountsWithoutFootprint: [],
+    },
     '2026-08': {
       month: '2026-08',
       footprint: {
@@ -14,8 +16,10 @@ export const carbon = {
         marketBasedTotal: 3012.25,
       },
       latestMonth: '2026-08',
-      accountsWithout: [],
+      accountsWithoutFootprint: [],
     },
-    '2026-07': { month: '2026-07', footprint: null, latestMonth: '2026-08', accountsWithout: [] },
+    '2026-07': {
+      month: '2026-07', footprint: null, latestMonth: '2026-08', accountsWithoutFootprint: [],
+    },
   },
 };
