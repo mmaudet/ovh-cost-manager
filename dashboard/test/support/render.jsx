@@ -191,9 +191,19 @@ export function rowTextsOf(table) {
   return [...table.querySelectorAll('tr')].map((row) => texts(row));
 }
 
-// Sorts a table on a column, as the user does: with a click on its header
+// The header of a column of a table, found by its label
+export function columnHeader(table, column) {
+  return within(table).getByRole('columnheader', { name: column });
+}
+
+// The button of the header of a column, which sorts the table by it (#146)
+export function sortButton(table, column) {
+  return within(columnHeader(table, column)).getByRole('button');
+}
+
+// Sorts a table on a column, as the user does: with a click on the button of its header
 export async function sortTable(user, table, column) {
-  await user.click(within(table).getByRole('columnheader', { name: column }));
+  await user.click(sortButton(table, column));
 }
 
 // The header of a table: the label of each column, with its sort mark
@@ -258,6 +268,12 @@ export function gpuCosts() {
 // The Public Cloud projects, each showing its detail under it on a click
 export function cloudProjects() {
   return cardOf(screen.getByRole('heading', { name: /^(Projets Cloud|Cloud Projects)$/ }));
+}
+
+// The list of the Public Cloud projects: the first table of their card, which holds the tables
+// of the open project's detail too
+export function cloudProjectsTable() {
+  return within(cloudProjects()).getAllByRole('table')[0];
 }
 
 // The row of a Public Cloud project, found by its name

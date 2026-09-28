@@ -8,10 +8,10 @@ import { severalAccounts } from '../fixtures/accounts.js';
 import { api } from '../support/api.js';
 import { renderTabHook, WAITING } from '../support/hooks.jsx';
 
-// The state of the Overview tab, as the dashboard shell sees it: the sort order of the
-// project breakdown, and what a click on a column header does to it; and, when its lists name
-// the account of each project, their projects by account (#118). The page tests check that
-// the order survives a tab switch (overview.test.jsx).
+// The state of the Overview tab, as the dashboard shell sees it: the sort order of each of its
+// tables, which a click on a column header changes (#146); and, when its lists name the account
+// of each project, their projects by account (#118). The page tests check what a click does,
+// and that the order survives a tab switch (overview.test.jsx).
 
 const [september, august] = months;
 
@@ -98,52 +98,31 @@ describe('useOverviewTab', () => {
     }
   });
 
-  it('returns the sort order, by amount descending, its handler, and the projects by account',
-    async () => {
-      const { result } = await renderTabHook(useOverviewTab, withoutAccountColumn);
+  it('returns the sort orders of its tables and the projects by account', async () => {
+    const { result } = await renderTabHook(useOverviewTab, withoutAccountColumn);
 
-      // What the shell spreads over the tab, and nothing else: the budget is the shell's
-      expect(result.current).toEqual({
-        projectSort: { column: 'total', direction: 'desc' },
-        handleProjectSort: expect.any(Function),
-        projectsByAccount: [],
-        gpuProjectsByAccount: [],
-      });
+    // What the shell spreads over the tab, and nothing else: the budget is the shell's
+    expect(result.current).toEqual({
+      sortingOf: expect.any(Function),
+      projectsByAccount: [],
+      gpuProjectsByAccount: [],
     });
-
-  it('reverses the order on each click on the column it sorts by', async () => {
-    const { result } = await renderTabHook(useOverviewTab, withoutAccountColumn);
-
-    act(() => result.current.handleProjectSort('total'));
-    expect(result.current.projectSort).toEqual({ column: 'total', direction: 'asc' });
-
-    act(() => result.current.handleProjectSort('total'));
-    expect(result.current.projectSort).toEqual({ column: 'total', direction: 'desc' });
-  });
-
-  it('sorts on another column from its highest value on a first click', async () => {
-    const { result } = await renderTabHook(useOverviewTab, withoutAccountColumn);
-
-    // By name, from Z to A
-    act(() => result.current.handleProjectSort('name'));
-    expect(result.current.projectSort).toEqual({ column: 'name', direction: 'desc' });
-
-    act(() => result.current.handleProjectSort('name'));
-    expect(result.current.projectSort).toEqual({ column: 'name', direction: 'asc' });
-
-    // Back to the amount: most expensive first, whatever the order by name was
-    act(() => result.current.handleProjectSort('total'));
-    expect(result.current.projectSort).toEqual({ column: 'total', direction: 'desc' });
+    // The project breakdown by amount, the most expensive first, until the user sorts it; the
+    // GPU costs by project in the order of the server
+    expect(result.current.sortingOf('projects').sort)
+      .toEqual({ column: 'total', kind: 'number', direction: 'desc' });
+    expect(result.current.sortingOf('gpuProjects').sort).toBeNull();
   });
 
   it('keeps the sort order across renders', async () => {
     const { result, rerender } = await renderTabHook(useOverviewTab, withoutAccountColumn);
-    act(() => result.current.handleProjectSort('name'));
-    act(() => result.current.handleProjectSort('name'));
+    // What a second click on the header of the project names gives: from Z to A
+    const byNameFromZ = { column: 'name', kind: 'text', direction: 'desc' };
+    act(() => result.current.sortingOf('projects').onSort(byNameFromZ));
 
     // The shell renders again, and calls the hook as before
     await rerender(withoutAccountColumn);
 
-    expect(result.current.projectSort).toEqual({ column: 'name', direction: 'asc' });
+    expect(result.current.sortingOf('projects').sort).toEqual(byNameFromZ);
   });
 });

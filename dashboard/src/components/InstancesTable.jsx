@@ -1,23 +1,70 @@
+import { SortableHeader, sortRows } from './SortableHeader.jsx';
+
 // Label of the row that carries the bill lines left without an instance
 const UNALLOCATED_INSTANCES = {
   fr: 'Non attribué (instances supprimées)',
   en: 'Unallocated (deleted instances)'
 };
 
-// Cloud instances of a project, shared by the inline panel and its modal.
-const InstancesTable = ({ instances, language, t, fmt }) => (
+// The value of an instance in each column, which the table sorts by (#146). The row of the bill
+// lines left without an instance has a cost only: it sorts by its cost as an instance does, and
+// comes last by any other column.
+const INSTANCE_VALUES = {
+  name: (inst) => (inst.unallocated ? null : inst.name || inst.id),
+  flavor: (inst) => inst.plan_code || inst.flavor,
+  region: (inst) => inst.region,
+  state: (inst) => inst.status,
+  cost: (inst) => inst.total,
+};
+
+// The instances, the most expensive first, the unallocated row among them: the order of the
+// table until the user sorts it
+const mostExpensiveFirst = (instances) => (
+  [...instances].sort((a, b) => (b.total || 0) - (a.total || 0))
+);
+
+// Cloud instances of a project, shared by the inline panel and its modal, which sort it alike
+// (sorting, see SortableHeader.jsx).
+const InstancesTable = ({ instances, sorting, language, t, fmt }) => (
   <table className="w-full text-sm">
     <thead>
       <tr className="border-b bg-gray-50">
-        <th className="p-2 text-left font-medium">{language === 'en' ? 'Name' : 'Nom'}</th>
-        <th className="p-2 text-left font-medium">Flavor</th>
-        <th className="p-2 text-left font-medium">{t('region')}</th>
-        <th className="p-2 text-left font-medium">{t('state')}</th>
-        <th className="p-2 text-right font-medium">{language === 'en' ? 'Cost' : 'Coût'}</th>
+        <SortableHeader
+          column="name" kind="text" sorting={sorting} t={t}
+          className="p-2 text-left font-medium"
+        >
+          {language === 'en' ? 'Name' : 'Nom'}
+        </SortableHeader>
+        <SortableHeader
+          column="flavor" kind="text" sorting={sorting} t={t}
+          className="p-2 text-left font-medium"
+        >
+          Flavor
+        </SortableHeader>
+        <SortableHeader
+          column="region" kind="text" sorting={sorting} t={t}
+          className="p-2 text-left font-medium"
+        >
+          {t('region')}
+        </SortableHeader>
+        <SortableHeader
+          column="state" kind="text" sorting={sorting} t={t}
+          className="p-2 text-left font-medium"
+        >
+          {t('state')}
+        </SortableHeader>
+        <SortableHeader
+          column="cost" kind="number" sorting={sorting} t={t}
+          className="p-2 text-right font-medium"
+        >
+          {language === 'en' ? 'Cost' : 'Coût'}
+        </SortableHeader>
       </tr>
     </thead>
     <tbody>
-      {[...instances].sort((a, b) => (b.total || 0) - (a.total || 0)).map(inst => {
+      {sortRows(
+        mostExpensiveFirst(instances), sorting.sort, INSTANCE_VALUES, language,
+      ).map(inst => {
         if (inst.unallocated) {
           return (
             <tr key="unallocated" className="border-b hover:bg-gray-50">

@@ -1,20 +1,57 @@
 import { PRO_RATA_HINT } from '../utils/estimatedCost.js';
 import { fmtBytes } from '../utils/format.js';
+import { SortableHeader, sortRows } from './SortableHeader.jsx';
 
-// Block storage volumes of a project, shared by the inline panel and its modal.
-const VolumesTable = ({ volumes, language, t, fmt }) => (
+// The value of a volume in each column, which the table sorts by (#146): a bill line without a
+// volume behind it has no size
+const VOLUME_VALUES = {
+  name: (v) => v.name,
+  type: (v) => v.type,
+  region: (v) => v.region,
+  size: (v) => v.sizeGb,
+  cost: (v) => v.total,
+};
+
+// Block storage volumes of a project, shared by the inline panel and its modal, which sort it
+// alike (sorting, see SortableHeader.jsx).
+const VolumesTable = ({ volumes, sorting, language, t, fmt }) => (
   <table className="w-full text-sm">
     <thead>
       <tr className="border-b bg-gray-50">
-        <th className="p-2 text-left font-medium">{language === 'en' ? 'Name' : 'Nom'}</th>
-        <th className="p-2 text-left font-medium">Type</th>
-        <th className="p-2 text-left font-medium">{t('region')}</th>
-        <th className="p-2 text-right font-medium">{language === 'en' ? 'Size' : 'Taille'}</th>
-        <th className="p-2 text-right font-medium">{language === 'en' ? 'Cost' : 'Coût'}</th>
+        <SortableHeader
+          column="name" kind="text" sorting={sorting} t={t}
+          className="p-2 text-left font-medium"
+        >
+          {language === 'en' ? 'Name' : 'Nom'}
+        </SortableHeader>
+        <SortableHeader
+          column="type" kind="text" sorting={sorting} t={t}
+          className="p-2 text-left font-medium"
+        >
+          Type
+        </SortableHeader>
+        <SortableHeader
+          column="region" kind="text" sorting={sorting} t={t}
+          className="p-2 text-left font-medium"
+        >
+          {t('region')}
+        </SortableHeader>
+        <SortableHeader
+          column="size" kind="number" sorting={sorting} t={t}
+          className="p-2 text-right font-medium"
+        >
+          {language === 'en' ? 'Size' : 'Taille'}
+        </SortableHeader>
+        <SortableHeader
+          column="cost" kind="number" sorting={sorting} t={t}
+          className="p-2 text-right font-medium"
+        >
+          {language === 'en' ? 'Cost' : 'Coût'}
+        </SortableHeader>
       </tr>
     </thead>
     <tbody>
-      {volumes.map((v, i) => (
+      {sortRows(volumes, sorting.sort, VOLUME_VALUES, language).map((v, i) => (
         <tr key={v.id || i} className="border-b hover:bg-gray-50">
           <td className="p-2 font-medium text-xs truncate max-w-[200px]" title={v.name}>
             {v.name}

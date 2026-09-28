@@ -21,11 +21,12 @@ const servicesOf = (family, { webCloudItems, accountColumn }) => withAccountName
 );
 
 // The Web Cloud tab, which the shell renders while it is active: what useWebCloudTab()
-// returns, with the shell's language, translations (t) and amount format (fmt), and the
-// Account column of the lists, null when they show none (#122).
+// returns, the sort order of the table of each family included (#146), with the shell's
+// language, translations (t) and amount format (fmt), and the Account column of the lists,
+// null when they show none (#122).
 const WebCloudTab = ({
   webCloudPeriod, webCloudSummary, webCloudItems, loadingWebCloud, failedWebCloud,
-  setShowAllWebCloud, accountColumn, language, t, fmt,
+  setShowAllWebCloud, sortingOf, accountColumn, language, t, fmt,
 }) => (
   <div className="space-y-6">
     <div className="text-sm text-gray-500">
@@ -107,7 +108,8 @@ const WebCloudTab = ({
             {/* ~11 rows before scrolling, the full list is one click away */}
             <div className="overflow-auto max-h-[430px]">
               <WebCloudTable
-                items={items} accountColumn={accountColumn} language={language} fmt={fmt}
+                items={items} sorting={sortingOf(cat.key)} accountColumn={accountColumn}
+                language={language} t={t} fmt={fmt}
               />
             </div>
           </div>
@@ -119,9 +121,10 @@ const WebCloudTab = ({
 
 // The "show all" modal of a Web Cloud family, which the shell renders after the page
 // column, whatever the active tab, so that its backdrop covers the whole page: see
-// docs/adr/0001-tab-state-lives-in-the-dashboard-shell.md
+// docs/adr/0001-tab-state-lives-in-the-dashboard-shell.md. It sorts the family as its panel
+// does (#146).
 const WebCloudTabModals = ({
-  webCloudPeriod, webCloudItems, showAllWebCloud, setShowAllWebCloud,
+  webCloudPeriod, webCloudItems, showAllWebCloud, setShowAllWebCloud, sortingOf,
   accountColumn, language, t, fmt,
 }) => (
   <>
@@ -153,7 +156,8 @@ const WebCloudTabModals = ({
           )}
         >
           <WebCloudTable
-            items={items} accountColumn={accountColumn} language={language} fmt={fmt}
+            items={items} sorting={sortingOf(showAllWebCloud)} accountColumn={accountColumn}
+            language={language} t={t} fmt={fmt}
           />
         </Modal>
       );

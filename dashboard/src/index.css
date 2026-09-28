@@ -17,6 +17,15 @@
     display: none !important;
   }
 
+  /* A header that sorts its table prints as its label, without its sort mark (#146) */
+  button.sort-header {
+    display: inline !important;
+  }
+
+  .sort-mark {
+    display: none !important;
+  }
+
   select {
     appearance: none;
     border: none;

@@ -5,8 +5,8 @@ import { severalAccounts } from './fixtures/accounts.js';
 import { api } from './support/api.js';
 import { BOM, captureFileDownloads, csvFile } from './support/downloads.js';
 import {
-  cardOf, cardRowOf, disclosure, openTab, renderDashboard, rowsOf, selectAccount,
-  selectLanguage, selectMonth, sentenceOf, texts,
+  cardOf, cardRowOf, disclosure, firstColumnOf, headerOf, openTab, renderDashboard, rowsOf,
+  selectAccount, selectLanguage, selectMonth, sentenceOf, sortTable, texts,
 } from './support/render.jsx';
 
 // The cards of the month's carbon footprint: its total, with its market-based total and what
@@ -285,7 +285,7 @@ describe('Carbon tab', () => {
       expect(texts(legend())).toEqual(['Fabrication', 'Électricité', 'Opérations']);
       // With each month's covered share (#157)
       expect(rowsOf(trendTable())).toEqual([
-        ['Mois', 'Fabrication', 'Électricité', 'Opérations', 'Total', 'Part couverte'],
+        ['Mois○', 'Fabrication○', 'Électricité○', 'Opérations○', 'Total○', 'Part couverte○'],
         none('Septembre 2025'), none('Octobre 2025'), none('Novembre 2025'),
         ['Décembre 2025', '1 100,00', '2 100,00', '400,00', '3 600,00', '80,0 %'],
         ['Janvier 2026', '1 150,00', '2 200,00', '420,00', '3 770,00', '79,0 %'],
@@ -299,6 +299,33 @@ describe('Carbon tab', () => {
       ]);
       expect(screen.getByText('Sous chaque mois, la part de son coût que son empreinte couvre.'))
         .toBeInTheDocument();
+    });
+
+    // Its months without a footprint last, whichever way (#146)
+    it('sorts its months by date or by any figure', async () => {
+      const { user } = await renderDashboard();
+      await openTab(user, 'Bilan carbone');
+      await user.click(screen.getByText('Voir les chiffres'));
+
+      await sortTable(user, trendTable(), /^Total/);
+
+      expect(headerOf(trendTable())).toEqual([
+        'Mois○', 'Fabrication○', 'Électricité○', 'Opérations○', 'Total▼', 'Part couverte○',
+      ]);
+      expect(firstColumnOf(trendTable())).toEqual([
+        'Août 2026', 'Juin 2026', 'Avril 2026', 'Mai 2026', 'Mars 2026', 'Janvier 2026',
+        'Février 2026', 'Décembre 2025',
+        'Septembre 2025', 'Octobre 2025', 'Novembre 2025', 'Juillet 2026',
+      ]);
+
+      await sortTable(user, trendTable(), /^Mois/);
+
+      // The latest month first
+      expect(firstColumnOf(trendTable())).toEqual([
+        'Août 2026', 'Juillet 2026', 'Juin 2026', 'Mai 2026', 'Avril 2026', 'Mars 2026',
+        'Février 2026', 'Janvier 2026', 'Décembre 2025', 'Novembre 2025', 'Octobre 2025',
+        'Septembre 2025',
+      ]);
     });
 
     it('asks for no trend without any carbon footprint', async () => {
@@ -334,7 +361,7 @@ describe('Carbon tab', () => {
         .toEqual(['Manufacturing', 'Electricity', 'Operations']);
       const rows = rowsOf(trendTable('See the figures'));
       expect(rows[0]).toEqual([
-        'Month', 'Manufacturing', 'Electricity', 'Operations', 'Total', 'Covered share',
+        'Month○', 'Manufacturing○', 'Electricity○', 'Operations○', 'Total○', 'Covered share○',
       ]);
       expect(rows.at(-1)).toEqual([
         'August 2026', '1,234.50', '2,345.25', '456.75', '4,036.50', '71.9%',
@@ -348,8 +375,8 @@ describe('Carbon tab', () => {
     const list = (heading = HEADING) =>
       within(cardOf(screen.getByRole('heading', { name: heading }))).getByRole('table');
     const HEADER = [
-      'Élément', 'Type', 'Datacenter', 'Empreinte (kgCO₂e)', 'Coût',
-      'Intensité (kgCO₂e/€)',
+      'Élément○', 'Type○', 'Datacenter○', 'Empreinte (kgCO₂e)○', 'Coût○',
+      'Intensité (kgCO₂e/€)○',
     ];
 
     it('lists the lines of the month it shows, with their cost and intensity', async () => {
@@ -404,6 +431,74 @@ describe('Carbon tab', () => {
       ]);
     });
 
+    // What its bill lines cost, then what they cost for their footprint (#146)
+    it('sorts the lines by any column, those without a cost last', async () => {
+      const { user } = await renderDashboard();
+      await openTab(user, 'Bilan carbone');
+
+      await sortTable(user, list(), /^Coût/);
+
+      expect(headerOf(list())).toEqual([
+        'Élément○', 'Type○', 'Datacenter○', 'Empreinte (kgCO₂e)○', 'Coût▼',
+        'Intensité (kgCO₂e/€)○',
+      ]);
+      expect(firstColumnOf(list()))
+        .toEqual(['b2-15.monthly', 'ns1234567.ip-10-0-0.eu', 'high-speed', 'r2-15']);
+
+      await sortTable(user, list(), /^Coût/);
+
+      expect(firstColumnOf(list()))
+        .toEqual(['high-speed', 'ns1234567.ip-10-0-0.eu', 'b2-15.monthly', 'r2-15']);
+
+      await sortTable(user, list(), /^Intensité/);
+
+      expect(firstColumnOf(list()))
+        .toEqual(['ns1234567.ip-10-0-0.eu', 'high-speed', 'b2-15.monthly', 'r2-15']);
+    });
+
+    // As the unallocated row of the instances: by its figures, it takes its place; it has no
+    // name nor datacenter of its own, which puts it last by them, whichever way (#146)
+    it('sorts the servers that the file does not name by their figures only', async () => {
+      const { user } = await renderDashboard({
+        ...account,
+        carbonByServer: {
+          '2026-08': {
+            month: '2026-08',
+            lines: [
+              {
+                type: 'BAREMETAL', name: null, range: null, datacenter: null, serverDomain: null,
+                unnamedServers: 26, account: 'xx1111-ovh', footprint: 941.83, cost: 7149.72,
+                intensity: 0.1317,
+              },
+              {
+                type: 'PCI-COMPUTE', name: 'b3-64', range: 'b3', datacenter: 'ALL',
+                serverDomain: null, unnamedServers: null, account: 'xx1111-ovh', footprint: 1,
+                cost: 10, intensity: 0.1,
+              },
+            ],
+          },
+        },
+      });
+      await openTab(user, 'Bilan carbone');
+      const unnamed = 'Serveurs dédiés non nommés par OVHcloud (26)';
+
+      for (const column of [/^Élément/, /^Datacenter/]) {
+        await sortTable(user, list(), column);
+        expect(firstColumnOf(list())).toEqual(['b3-64', unnamed]);
+        await sortTable(user, list(), column);
+        expect(firstColumnOf(list())).toEqual(['b3-64', unnamed]);
+      }
+
+      await sortTable(user, list(), /^Empreinte/);
+      await sortTable(user, list(), /^Empreinte/);
+
+      expect(firstColumnOf(list())).toEqual(['b3-64', unnamed]);
+
+      await sortTable(user, list(), /^Coût/);
+
+      expect(firstColumnOf(list())).toEqual([unnamed, 'b3-64']);
+    });
+
     it('names the account of each line when all accounts are shown', async () => {
       const { user } = await renderDashboard(severalAccounts);
 
@@ -411,7 +506,7 @@ describe('Carbon tab', () => {
 
       // Second, as in the other lists
       const rows = rowsOf(list());
-      expect(rows[0]).toEqual([HEADER[0], 'Compte', ...HEADER.slice(1)]);
+      expect(rows[0]).toEqual([HEADER[0], 'Compte○', ...HEADER.slice(1)]);
       expect(rows.slice(1).map((row) => row[1])).toEqual(Array(4).fill('yy2222-ovh'));
     });
 
@@ -456,6 +551,21 @@ describe('Carbon tab', () => {
       ])]);
     });
 
+    // As the other exports (#146)
+    it('exports the lines in the order of the route, whatever the order it shows', async () => {
+      const { user } = await renderDashboard();
+      await openTab(user, 'Bilan carbone');
+      await sortTable(user, list(), /^Coût/);
+      const downloadedFiles = captureFileDownloads();
+
+      await user.click(within(cardOf(screen.getByRole('heading', { name: HEADING })))
+        .getByRole('button', { name: 'CSV' }));
+
+      const [{ content }] = await downloadedFiles();
+      expect(content.slice(BOM.length).split('\n').slice(1).map((line) => line.split(';')[0]))
+        .toEqual(['"ns1234567.ip-10-0-0.eu"', '"b2-15.monthly"', '"r2-15"', '"high-speed"']);
+    });
+
     it('names the account of each line in the CSV when all accounts are shown', async () => {
       const { user } = await renderDashboard(severalAccounts);
       await openTab(user, 'Bilan carbone');
@@ -480,7 +590,10 @@ describe('Carbon tab', () => {
 
       const rows = rowsOf(list('Footprint and cost of each item'));
       expect(rows.slice(0, 2)).toEqual([
-        ['Item', 'Type', 'Datacenter', 'Footprint (kgCO₂e)', 'Cost', 'Intensity (kgCO₂e/€)'],
+        [
+          'Item○', 'Type○', 'Datacenter○', 'Footprint (kgCO₂e)○', 'Cost○',
+          'Intensity (kgCO₂e/€)○',
+        ],
         ['ns1234567.ip-10-0-0.eu', 'Dedicated server', 'GRA', '1,500.00', '3,000.00€', '0.500'],
       ]);
     });

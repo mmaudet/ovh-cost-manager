@@ -3,12 +3,17 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { useTableSorts } from '../components/SortableHeader.jsx';
 import {
   fetchSummary, fetchByProject, fetchByService, fetchByResourceType, fetchBackupStats,
 } from '../services/api.js';
 import { accountQuery } from '../utils/accounts.js';
 import { holdsMonth } from '../utils/months.js';
 import { projectsByAccountQuery } from './projectsByAccountQueries.js';
+
+// The comparison by project sorts by month A, the most expensive first, until the user sorts
+// it by another column (#146)
+const BY_MONTH_A = { column: 'totalA', kind: 'number', direction: 'desc' };
 
 /**
  * The state and data queries of the Compare tab, which compares two months of the account
@@ -26,20 +31,15 @@ import { projectsByAccountQuery } from './projectsByAccountQueries.js';
  * @param {?{ label: string, nameOf: function(?string): string }} shell.accountColumn - The
  *   Account column of the lists (accountColumnOf()), null when they name no account: while
  *   it shows, the comparison by project names the account of each project
- * @returns {object} Months A and B and their setters, the sort order of the comparison by
- *   project and its handler, and the figures of both months, which the tab shows
+ * @returns {object} Months A and B and their setters, the sort order of the tab's tables
+ *   (sortingOf(), see useTableSorts()), and the figures of both months, which the tab shows
  */
 const useCompareTab = ({ months, activeTab, selectedAccount, accountColumn }) => {
   const [compareMonthA, setCompareMonthA] = useState(null);
   const [compareMonthB, setCompareMonthB] = useState(null);
-  const [compareSort, setCompareSort] = useState({ column: 'totalA', direction: 'desc' });
-
-  const handleCompareSort = (column) => {
-    setCompareSort(prev => ({
-      column,
-      direction: prev.column === column && prev.direction === 'desc' ? 'asc' : 'desc'
-    }));
-  };
+  // The sort order of its tables, by table (#146): the comparison by project, the
+  // infrastructure comparison, and the comparison of what each project consumed, by project
+  const sortingOf = useTableSorts({ projects: BY_MONTH_A });
 
   // Whether the months list holds each month compared: not before months A and B have their
   // defaults, nor while the list of the account just selected loads, nor when that account
@@ -125,8 +125,7 @@ const useCompareTab = ({ months, activeTab, selectedAccount, accountColumn }) =>
     setCompareMonthA,
     compareMonthB,
     setCompareMonthB,
-    compareSort,
-    handleCompareSort,
+    sortingOf,
     compareDataA,
     compareDataB,
     byServiceA,

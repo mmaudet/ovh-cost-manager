@@ -1,25 +1,81 @@
 import { accountCsvColumns } from '../utils/accounts.js';
 import { fmtMemory } from '../utils/format.js';
+import { SortableHeader, sortRows } from './SortableHeader.jsx';
 
-// Dedicated servers inventory, shared by the inline panel and its modal. With the Account
-// column of the lists, null when they show none, each server's account too (#123): the
-// servers then carry its name, accountName.
-const ServersTable = ({ servers, accountColumn, language, t }) => (
+// The value of a server in each column, which the table sorts by (#146): none for a RAM that
+// the API did not give, which the import stores as 0 and the table shows as "-"
+const SERVER_VALUES = {
+  id: (s) => s.display_name || s.id,
+  account: (s) => s.accountName,
+  datacenter: (s) => s.datacenter,
+  cpu: (s) => s.cpu,
+  ram: (s) => s.ram_size || null,
+  state: (s) => s.state,
+  expiration: (s) => s.expiration_date,
+  renewal: (s) => s.renewal_type,
+};
+
+// Dedicated servers inventory, shared by the inline panel and its modal, which sort it alike
+// (sorting, see SortableHeader.jsx). With the Account column of the lists, null when they
+// show none, each server's account too (#123): the servers then carry its name, accountName.
+const ServersTable = ({ servers, sorting, accountColumn, language, t }) => (
   <table className="w-full text-sm">
     <thead>
       <tr className="border-b bg-gray-50">
-        <th className="p-3 text-left font-medium">ID</th>
-        {accountColumn && <th className="p-3 text-left font-medium">{accountColumn.label}</th>}
-        <th className="p-3 text-left font-medium">{t('datacenter')}</th>
-        <th className="p-3 text-left font-medium">CPU</th>
-        <th className="p-3 text-left font-medium">{t('ram')}</th>
-        <th className="p-3 text-left font-medium">{t('state')}</th>
-        <th className="p-3 text-left font-medium">{t('expirationDate')}</th>
-        <th className="p-3 text-left font-medium">{t('renewal')}</th>
+        <SortableHeader
+          column="id" kind="text" sorting={sorting} t={t}
+          className="p-3 text-left font-medium"
+        >
+          ID
+        </SortableHeader>
+        {accountColumn && (
+          <SortableHeader
+            column="account" kind="text" sorting={sorting} t={t}
+            className="p-3 text-left font-medium"
+          >
+            {accountColumn.label}
+          </SortableHeader>
+        )}
+        <SortableHeader
+          column="datacenter" kind="text" sorting={sorting} t={t}
+          className="p-3 text-left font-medium"
+        >
+          {t('datacenter')}
+        </SortableHeader>
+        <SortableHeader
+          column="cpu" kind="text" sorting={sorting} t={t}
+          className="p-3 text-left font-medium"
+        >
+          CPU
+        </SortableHeader>
+        <SortableHeader
+          column="ram" kind="number" sorting={sorting} t={t}
+          className="p-3 text-left font-medium"
+        >
+          {t('ram')}
+        </SortableHeader>
+        <SortableHeader
+          column="state" kind="text" sorting={sorting} t={t}
+          className="p-3 text-left font-medium"
+        >
+          {t('state')}
+        </SortableHeader>
+        <SortableHeader
+          column="expiration" kind="date" sorting={sorting} t={t}
+          className="p-3 text-left font-medium"
+        >
+          {t('expirationDate')}
+        </SortableHeader>
+        <SortableHeader
+          column="renewal" kind="text" sorting={sorting} t={t}
+          className="p-3 text-left font-medium"
+        >
+          {t('renewal')}
+        </SortableHeader>
       </tr>
     </thead>
     <tbody>
-      {servers.map(s => (
+      {sortRows(servers, sorting.sort, SERVER_VALUES, language).map(s => (
         <tr key={s.id} className="border-b hover:bg-gray-50">
           <td className="p-3 font-medium">{s.display_name || s.id}</td>
           {accountColumn && <td className="p-3 text-gray-600">{s.accountName}</td>}

@@ -77,8 +77,10 @@ describe('useInfrastructureTab', () => {
   it('returns the inventory, and the "show all" modal of the servers closed', async () => {
     const { result } = await renderTabHook(useInfrastructureTab, onInfrastructure);
 
-    // What the shell spreads over the tab and its modal, and nothing else
+    // What the shell spreads over the tab and its modal, and nothing else: the sort order of
+    // its tables too (#146)
     expect(result.current).toEqual({
+      sortingOf: expect.any(Function),
       inventoryServers: expect.any(Array),
       inventoryVps: expect.any(Array),
       inventoryStorage: expect.any(Array),

@@ -7,6 +7,7 @@
 
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { useTableSorts } from '../components/SortableHeader.jsx';
 import {
   fetchInventoryServers, fetchInventoryVps, fetchInventoryStorage, fetchResourceTypeDetails,
   fetchResourceTypeDetailsByAccount,
@@ -34,6 +35,9 @@ const useInfrastructureTab = ({
   accountColumn,
 }) => {
   const [showAllServers, setShowAllServers] = useState(false);
+  // The sort order of its tables, by table (#146): that of the servers is shared by their
+  // panel and their "show all" modal
+  const sortingOf = useTableSorts();
 
   // The inventory of the account shown: the servers, VPS and storage services that exist now,
   // whatever the month
@@ -77,6 +81,7 @@ const useInfrastructureTab = ({
     }));
 
   return {
+    sortingOf,
     inventoryServers,
     inventoryVps,
     inventoryStorage,

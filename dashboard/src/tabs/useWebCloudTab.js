@@ -3,6 +3,7 @@
 
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { useTableSorts } from '../components/SortableHeader.jsx';
 import { fetchWebCloudSummary, fetchWebCloudItems } from '../services/api.js';
 import { accountQuery } from '../utils/accounts.js';
 import { webCloudPeriodEndingOn } from '../utils/webCloudPeriod.js';
@@ -15,6 +16,9 @@ import { webCloudPeriodEndingOn } from '../utils/webCloudPeriod.js';
 // month the account lacks would never show (#120).
 const useWebCloudTab = ({ selectedMonth, holdsSelectedMonth, activeTab, selectedAccount }) => {
   const [showAllWebCloud, setShowAllWebCloud] = useState(null); // category key, null when closed
+  // The sort order of the table of each family, by family key (#146), which its panel and its
+  // "show all" modal share
+  const sortingOf = useTableSorts();
 
   const webCloudPeriod = webCloudPeriodEndingOn(selectedMonth);
   // The queries run once the tab is open, on a month that the account shown has
@@ -46,6 +50,7 @@ const useWebCloudTab = ({ selectedMonth, holdsSelectedMonth, activeTab, selected
     failedWebCloud: summaryFailed || itemsFailed,
     showAllWebCloud,
     setShowAllWebCloud,
+    sortingOf,
   };
 };
 

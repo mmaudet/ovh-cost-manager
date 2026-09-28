@@ -241,6 +241,21 @@ describe('useWebCloudTab', () => {
     });
   });
 
+  // Of the table of each family, which its panel and its "show all" modal share (#146)
+  it('returns the sort order of each family, none until the user sorts it', async () => {
+    const { result, rerender } = await renderTabHook(useWebCloudTab,
+      shellProps({ selectedMonth: september, activeTab: 'webcloud' }));
+    expect(result.current.sortingOf('domain').sort).toBeNull();
+    // What a click on the header of the cost gives: the most expensive first
+    const byCost = { column: 'cost', kind: 'number', direction: 'desc' };
+
+    act(() => result.current.sortingOf('domain').onSort(byCost));
+    await rerender(shellProps({ selectedMonth: september, activeTab: 'overview' }));
+
+    expect(result.current.sortingOf('domain').sort).toEqual(byCost);
+    expect(result.current.sortingOf('email').sort).toBeNull();
+  });
+
   it('keeps the family of the "show all" modal when another tab opens', async () => {
     const { result, rerender } = await renderTabHook(useWebCloudTab,
       shellProps({ selectedMonth: september, activeTab: 'webcloud' }));

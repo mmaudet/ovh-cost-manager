@@ -15,6 +15,8 @@ import {
   cardRowOf,
   cloudProjectRow,
   cloudProjects,
+  cloudProjectsTable,
+  headerOf,
   openTab,
   panelOf,
   renderDashboard,
@@ -24,6 +26,7 @@ import {
   selectLanguage,
   selectMonth,
   settle,
+  sortTable,
   texts,
 } from './support/render.jsx';
 
@@ -42,6 +45,8 @@ const detailHeadings = () => within(cloudProjects())
 const resourcePanel = (kind) =>
   panelOf(screen.getByRole('heading', { name: new RegExp(`^${kind} \\(`) }));
 const resourceTable = (kind) => within(resourcePanel(kind)).getByRole('table');
+// The name of each row of a table, in the order shown: the first text of its first cell
+const namesIn = (table) => rowTextsOf(table).slice(1).map(([name]) => name);
 const resourceButton = (kind, name) => within(resourcePanel(kind)).getByRole('button', { name });
 const showAll = async (user, kind) => {
   await user.click(resourceButton(kind, 'Tout afficher'));
@@ -65,7 +70,7 @@ const costsWith = (table, tooltip) =>
   within(table).getAllByTitle(tooltip).map((cell) => cell.textContent);
 
 const instanceRows = [
-  ['Nom', 'Flavor', 'Région', 'État', 'Coût'],
+  ['Nom○', 'Flavor○', 'Région○', 'État○', 'Coût○'],
   ['inference-1', 'l4-90.consumption', 'GRA11', 'ACTIVE', '~420,50€'],
   ['db-1', 'r3-32.monthly.postpaid', 'SBG5', 'ACTIVE', '64,00€'],
   ['web-1', 'b3-8.consumption', 'GRA11', 'ACTIVE', '~24,00€'],
@@ -77,7 +82,7 @@ const instanceRows = [
 ];
 // Sizes in French units, with a decimal comma (#70)
 const bucketRows = [
-  ['Nom', 'Type', 'Région', 'Taille', 'Coût'],
+  ['Nom', '○', 'Type', '○', 'Région', '○', 'Taille', '○', 'Coût', '○'],
   ['archives-2025', 'Cold Archive', 'archived', 'GRA', '1,5 To', '~', '9,00€'],
   ['assets-example-com', 'Standard', 'GRA', '4,2 Go', '14,00€'],
   ['logs-empty', 'Vide', 'GRA', '0 o', '0,00€'],
@@ -86,7 +91,7 @@ const bucketRows = [
 ];
 // Sizes in French units, as those of the buckets (#70)
 const volumeRows = [
-  ['Nom', 'Type', 'Région', 'Taille', 'Coût'],
+  ['Nom', '○', 'Type', '○', 'Région', '○', 'Taille', '○', 'Coût', '○'],
   ['db-data', 'high-speed', 'SBG5', '200 Go', '~', '6,50€'],
   ['web-shared', 'classic', 'GRA11', '100 Go', '~', '3,00€'],
   // A bill line with no volume left behind it
@@ -94,12 +99,12 @@ const volumeRows = [
   ['old-backup', 'détaché', 'classic', 'GRA11', '50 Go', '~', '1,50€'],
 ];
 const snapshotRows = [
-  ['Nom', 'Région', 'Créé le', 'Taille', 'Coût'],
+  ['Nom○', 'Région○', 'Créé le○', 'Taille○', 'Coût○'],
   ['db-1-before-upgrade', 'SBG5', '28/08/2026', '40 Go', '~4,00€'],
   ['web-1-golden', 'GRA11', '14/02/2026', '10 Go', '~2,00€'],
 ];
 const savingsPlanRows = [
-  ['Plan', 'Flavor', 'Couvert', 'Dernière facture', 'Coût'],
+  ['Plan○', 'Flavor○', 'Couvert○', 'Dernière facture○', 'Coût○'],
   ['savings-plan-b3-8-web', 'b3-8', '2 / 2', '2026-09-01', '20,00€'],
   ['savings-plan-c3-4-legacy', 'c3-4', '1 / 0', '2026-09-01', '8,00€'],
 ];
@@ -203,7 +208,7 @@ describe('Public Cloud tab', () => {
       await openTab(user, 'Public Cloud');
 
       expect(rowTextsOf(within(cloudProjects()).getByRole('table'))).toEqual([
-        ['Nom', 'État', 'Instances', 'Consommation en cours'],
+        ['Nom', '○', 'État', '○', 'Instances', '○', 'Consommation en cours', '○'],
         ['Production', 'Customer-facing services', 'ok', '5', '350,00€', '▼'],
         ['Staging', 'ok', '0', '52,35€', '▼'],
         // Nothing consumed
@@ -244,6 +249,32 @@ describe('Public Cloud tab', () => {
         ['Consommation par ressource'],
         ['Instances (0)', '180,00€', 'Tout afficher', 'CSV'],
       ]);
+    });
+
+    it('sort by any column, the detail of the open project under it (#146)', async () => {
+      const { user } = await renderDashboard();
+      await openTab(user, 'Public Cloud');
+
+      await sortTable(user, cloudProjectsTable(), /^Consommation en cours/);
+      await sortTable(user, cloudProjectsTable(), /^Consommation en cours/);
+
+      // The least consuming first, and last the project that consumed nothing
+      expect(rowTextsOf(cloudProjectsTable())).toEqual([
+        ['Nom', '○', 'État', '○', 'Instances', '○', 'Consommation en cours', '▲'],
+        ['Staging', 'ok', '0', '52,35€', '▼'],
+        ['Production', 'Customer-facing services', 'ok', '5', '350,00€', '▼'],
+        ['Sandbox', 'ok', '0', '-', '▼'],
+      ]);
+
+      await openProject(user, 'Production');
+      // By the header of the list, rather than one of the tables of the project's detail
+      await sortTable(user, cloudProjectsTable().tHead, /^Nom/);
+
+      expect(headerOf(cloudProjectsTable()))
+        .toEqual(['Nom▲', 'État○', 'Instances○', 'Consommation en cours○', '']);
+      // Each row by its first text: Production, its detail, then the other projects
+      expect([...cloudProjectsTable().tBodies[0].rows].map((row) => texts(row)[0]))
+        .toEqual(['Production', 'Consommation par ressource', 'Sandbox', 'Staging']);
     });
 
     // Which ways of moving around the page keep the open project: see navigation.test.jsx (#56)
@@ -299,7 +330,7 @@ describe('Public Cloud tab', () => {
         .toHaveBeenCalledWith('project-production', '2026-08-01', '2026-08-31');
       expect(detailHeadings()[1]).toEqual(['Instances (5)', '440,60€', 'Tout afficher', 'CSV']);
       expect(rowsOf(resourceTable('Instances'))).toEqual([
-        ['Nom', 'Flavor', 'Région', 'État', 'Coût'],
+        ['Nom○', 'Flavor○', 'Région○', 'État○', 'Coût○'],
         ['inference-1', 'l4-90.consumption', 'GRA11', 'ACTIVE', '~310,00€'],
         ['db-1', 'r3-32.monthly.postpaid', 'SBG5', 'ACTIVE', '64,00€'],
         ['web-1', 'b3-8.consumption', 'GRA11', 'ACTIVE', '~24,00€'],
@@ -359,8 +390,44 @@ describe('Public Cloud tab', () => {
       await openProject(user, 'Staging');
 
       expect(rowsOf(resourceTable('Instances'))).toEqual([
-        ['Nom', 'Flavor', 'Région', 'État', 'Coût'],
+        ['Nom○', 'Flavor○', 'Région○', 'État○', 'Coût○'],
         ['Non attribué (instances supprimées)', '180,00€'],
+      ]);
+    });
+
+    // The row of the bill lines of the deleted instances has a cost, but no name, flavor,
+    // region or state: it sorts by its cost as an instance does, and comes last by any other
+    // column, as any row without a value there (#146)
+    it('sort by any column, the unallocated row by its cost only', async () => {
+      const { user } = await openProduction();
+      const table = () => resourceTable('Instances');
+
+      await sortTable(user, table(), /^Nom/);
+
+      expect(headerOf(table())).toEqual(['Nom▲', 'Flavor○', 'Région○', 'État○', 'Coût○']);
+      expect(namesIn(table())).toEqual([
+        'batch-1', 'db-1', 'inference-1', 'web-1', 'web-2', 'Non attribué (instances supprimées)',
+      ]);
+
+      await sortTable(user, table(), /^Nom/);
+
+      expect(namesIn(table())).toEqual([
+        'web-2', 'web-1', 'inference-1', 'db-1', 'batch-1', 'Non attribué (instances supprimées)',
+      ]);
+
+      await sortTable(user, table(), /^Coût/);
+      await sortTable(user, table(), /^Coût/);
+
+      // The least expensive first, the instances of the same cost in their order, and last the
+      // instance that nothing billed
+      expect(rowsOf(table())).toEqual([
+        ['Nom○', 'Flavor○', 'Région○', 'État○', 'Coût▲'],
+        ['Non attribué (instances supprimées)', '6,40€'],
+        ['web-1', 'b3-8.consumption', 'GRA11', 'ACTIVE', '~24,00€'],
+        ['web-2', 'b3-8.consumption', 'GRA11', 'ACTIVE', '~24,00€'],
+        ['db-1', 'r3-32.monthly.postpaid', 'SBG5', 'ACTIVE', '64,00€'],
+        ['inference-1', 'l4-90.consumption', 'GRA11', 'ACTIVE', '~420,50€'],
+        ['batch-1', 'd2-4', 'GRA11', 'SHUTOFF', '-'],
       ]);
     });
 
@@ -460,6 +527,75 @@ describe('Public Cloud tab', () => {
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     });
 
+    // The issue's example (#146): the largest or the most expensive buckets first, a click on a
+    // header away
+    it('sort by size or by cost, the largest first, then the smallest', async () => {
+      const { user } = await openProduction();
+      const table = () => resourceTable('Buckets');
+
+      await sortTable(user, table(), /^Taille/);
+
+      // 1,5 To, 4,2 Go, 0 o, and last the bucket gone from the inventory, without a size
+      expect(headerOf(table())).toEqual(['Nom○', 'Type○', 'Région○', 'Taille▼', 'Coût○']);
+      expect(namesIn(table()))
+        .toEqual(['archives-2025', 'assets-example-com', 'logs-empty', 'old-exports']);
+
+      await sortTable(user, table(), /^Taille/);
+
+      expect(headerOf(table())).toEqual(['Nom○', 'Type○', 'Région○', 'Taille▲', 'Coût○']);
+      expect(namesIn(table()))
+        .toEqual(['logs-empty', 'assets-example-com', 'archives-2025', 'old-exports']);
+
+      await sortTable(user, table(), /^Coût/);
+
+      // 14 €, ~9 €, 2 €, 0 €
+      expect(headerOf(table())).toEqual(['Nom○', 'Type○', 'Région○', 'Taille○', 'Coût▼']);
+      expect(namesIn(table()))
+        .toEqual(['assets-example-com', 'archives-2025', 'old-exports', 'logs-empty']);
+
+      await sortTable(user, table(), /^Coût/);
+
+      expect(headerOf(table())).toEqual(['Nom○', 'Type○', 'Région○', 'Taille○', 'Coût▲']);
+      expect(namesIn(table()))
+        .toEqual(['logs-empty', 'old-exports', 'archives-2025', 'assets-example-com']);
+    });
+
+    it('show in the order of their panel in the "show all" modal, and back', async () => {
+      const { user } = await openProduction();
+      await sortTable(user, resourceTable('Buckets'), /^Coût/);
+
+      const dialog = await showAll(user, 'Buckets');
+      const tableOfDialog = () => within(dialog).getByRole('table');
+
+      expect(headerOf(tableOfDialog())).toEqual(['Nom○', 'Type○', 'Région○', 'Taille○', 'Coût▼']);
+      expect(namesIn(tableOfDialog()))
+        .toEqual(['assets-example-com', 'archives-2025', 'old-exports', 'logs-empty']);
+
+      // From Z to A
+      await sortTable(user, tableOfDialog(), /^Nom/);
+      await sortTable(user, tableOfDialog(), /^Nom/);
+      await user.click(within(dialog).getByRole('button', { name: 'Close' }));
+
+      expect(headerOf(resourceTable('Buckets')))
+        .toEqual(['Nom▼', 'Type○', 'Région○', 'Taille○', 'Coût○']);
+      expect(namesIn(resourceTable('Buckets')))
+        .toEqual(['old-exports', 'logs-empty', 'assets-example-com', 'archives-2025']);
+    });
+
+    it('keep their sort order when the user comes back to the tab', async () => {
+      const { user } = await openProduction();
+      await sortTable(user, resourceTable('Buckets'), /^Taille/);
+
+      await openTab(user, "Vue d'ensemble");
+      await openTab(user, 'Public Cloud');
+
+      // The project is still open (#56)
+      expect(headerOf(resourceTable('Buckets')))
+        .toEqual(['Nom○', 'Type○', 'Région○', 'Taille▼', 'Coût○']);
+      expect(namesIn(resourceTable('Buckets')))
+        .toEqual(['archives-2025', 'assets-example-com', 'logs-empty', 'old-exports']);
+    });
+
     it('are downloaded as CSV by name, from the panel and the modal', async () => {
       const { user } = await openProduction();
 
@@ -477,6 +613,19 @@ describe('Public Cloud tab', () => {
         '"old-exports";;;"SBG";;;2;0;0;',
       ]));
     });
+
+    // As the other exports, whatever the order the table shows (#146)
+    it('are downloaded as CSV by name whatever the order they show in', async () => {
+      const { user } = await openProduction();
+      await sortTable(user, resourceTable('Buckets'), /^Coût/);
+
+      const [fromPanel, fromModal] =
+        await downloadFromPanelAndModal(user, resourcePanel('Buckets'));
+
+      expect(fromModal).toEqual(fromPanel);
+      expect(fromPanel.content.split('\n').slice(1).map((line) => line.split(';')[0]))
+        .toEqual(['"archives-2025"', '"assets-example-com"', '"logs-empty"', '"old-exports"']);
+    });
   });
 
   describe('volumes', () => {
@@ -487,6 +636,21 @@ describe('Public Cloud tab', () => {
       expect(rowTextsOf(table)).toEqual(volumeRows);
       expect(within(table).getByTitle('Attaché à aucune instance')).toHaveTextContent('détaché');
       expect(costsWith(table, PRO_RATA_SHARE)).toEqual(['~6,50€', '~3,00€', '~1,50€', '~1,50€']);
+    });
+
+    it('sort by any column, the one without a size last (#146)', async () => {
+      const { user } = await openProduction();
+      const table = () => resourceTable('Volumes');
+
+      await sortTable(user, table(), /^Taille/);
+      await sortTable(user, table(), /^Taille/);
+
+      // 50 Go, 100 Go, 200 Go, and last the bill line without a volume behind it
+      expect(rowTextsOf(table())[0])
+        .toEqual(['Nom', '○', 'Type', '○', 'Région', '○', 'Taille', '▲', 'Coût', '○']);
+      expect(namesIn(table())).toEqual([
+        'old-backup', 'web-shared', 'db-data', 'Disques supplémentaires à bhs5 de type classic',
+      ]);
     });
 
     it('are all shown in their "show all" modal, which closes with its button', async () => {
@@ -533,6 +697,20 @@ describe('Public Cloud tab', () => {
       expect(costsWith(table, PRO_RATA_SHARE)).toEqual(['~4,00€', '~2,00€']);
     });
 
+    it('sort by creation date, the latest first, then the oldest (#146)', async () => {
+      const { user } = await openProduction();
+      const table = () => resourceTable('Snapshots');
+
+      await sortTable(user, table(), /^Créé le/);
+
+      expect(headerOf(table())).toEqual(['Nom○', 'Région○', 'Créé le▼', 'Taille○', 'Coût○']);
+      expect(namesIn(table())).toEqual(['db-1-before-upgrade', 'web-1-golden']);
+
+      await sortTable(user, table(), /^Créé le/);
+
+      expect(namesIn(table())).toEqual(['web-1-golden', 'db-1-before-upgrade']);
+    });
+
     it('are all shown in their "show all" modal, which closes with its button', async () => {
       const { user } = await openProduction();
 
@@ -577,6 +755,21 @@ describe('Public Cloud tab', () => {
         + "instances de ce flavor dans l'inventaire")).toHaveTextContent('2 / 2');
     });
 
+    // By the instances that the plans of their flavor pay for (#146)
+    it('sort by coverage, the plans that cover the most first, then the fewest', async () => {
+      const { user } = await openProduction();
+      const table = () => resourceTable('Savings plans');
+
+      await sortTable(user, table(), /^Couvert/);
+      await sortTable(user, table(), /^Couvert/);
+
+      expect(rowsOf(table())).toEqual([
+        ['Plan○', 'Flavor○', 'Couvert▲', 'Dernière facture○', 'Coût○'],
+        ['savings-plan-c3-4-legacy', 'c3-4', '1 / 0', '2026-09-01', '8,00€'],
+        ['savings-plan-b3-8-web', 'b3-8', '2 / 2', '2026-09-01', '20,00€'],
+      ]);
+    });
+
     it('are all shown in their "show all" modal, which closes with its button', async () => {
       const { user } = await openProduction();
 
@@ -608,6 +801,24 @@ describe('Public Cloud tab', () => {
     });
   });
 
+  // The panel and the "show all" modal of each resource table share its order (#146)
+  it.each(['Instances', 'Buckets', 'Volumes', 'Snapshots', 'Savings plans'])(
+    'shows the %s in their "show all" modal in the order of their panel',
+    async (kind) => {
+      const { user } = await openProduction();
+      // The least expensive first
+      await sortTable(user, resourceTable(kind), /^Coût/);
+      await sortTable(user, resourceTable(kind), /^Coût/);
+      const panelOrder = namesIn(resourceTable(kind));
+
+      const dialog = await showAll(user, kind);
+
+      const tableOfDialog = within(dialog).getByRole('table');
+      expect(headerOf(tableOfDialog).at(-1)).toBe('Coût▲');
+      expect(namesIn(tableOfDialog)).toEqual(panelOrder);
+    },
+  );
+
   it('shows only its figures when there is no Public Cloud project', async () => {
     const { user } = await renderDashboard({ ...account, projectsEnriched: [] });
 
@@ -624,7 +835,7 @@ describe('Public Cloud tab', () => {
     await selectLanguage(user, 'en');
     await openTab(user, 'Public Cloud');
     expect(rowTextsOf(within(cloudProjects()).getByRole('table'))[0])
-      .toEqual(['Name', 'State', 'Instances', 'Current consumption']);
+      .toEqual(['Name', '○', 'State', '○', 'Instances', '○', 'Current consumption', '○']);
 
     await openProject(user, 'Production');
 
@@ -651,7 +862,7 @@ describe('Public Cloud tab', () => {
       ['Quotas by region'],
     ]);
     const instances = resourceTable('Instances');
-    expect(rowsOf(instances)[0]).toEqual(['Name', 'Flavor', 'Region', 'State', 'Cost']);
+    expect(rowsOf(instances)[0]).toEqual(['Name○', 'Flavor○', 'Region○', 'State○', 'Cost○']);
     expect(rowsOf(instances)[5]).toEqual(['Unallocated (deleted instances)', '6.40€']);
     expect(costsWith(instances, 'Even share of the aggregated hourly line for this flavor: '
       + 'the API exposes no per-instance runtime')).toEqual(['~420.50€', '~24.00€', '~24.00€']);
@@ -667,7 +878,7 @@ describe('Public Cloud tab', () => {
     expect(rowsOf(resourceTable('Snapshots'))[1])
       .toEqual(['db-1-before-upgrade', 'SBG5', '8/28/2026', '40 GB', '~4.00€']);
     expect(rowsOf(resourceTable('Savings plans'))[0])
-      .toEqual(['Plan', 'Flavor', 'Covered', 'Last billed', 'Cost']);
+      .toEqual(['Plan○', 'Flavor○', 'Covered○', 'Last billed○', 'Cost○']);
     const downloadedFiles = captureFileDownloads();
 
     await user.click(resourceButton('Instances', 'CSV'));
@@ -836,8 +1047,9 @@ describe('Public Cloud tab', () => {
       });
 
     describe('account column', () => {
-      const projectsTable = () => within(cloudProjects()).getByRole('table');
-      const WITHOUT_ACCOUNT = ['Nom', 'État', 'Instances', 'Consommation en cours'];
+      const WITHOUT_ACCOUNT = [
+        'Nom', '○', 'État', '○', 'Instances', '○', 'Consommation en cours', '○',
+      ];
 
       it('names the account of each project when all accounts are shown', async () => {
         const { user } = await renderDashboard(severalAccounts);
@@ -845,8 +1057,8 @@ describe('Public Cloud tab', () => {
         await openTab(user, 'Public Cloud');
 
         // Its name, or else its NIC handle, and the Unknown account for a project without one
-        expect(rowTextsOf(projectsTable())).toEqual([
-          ['Nom', 'Compte', 'État', 'Instances', 'Consommation en cours'],
+        expect(rowTextsOf(cloudProjectsTable())).toEqual([
+          ['Nom', '○', 'Compte', '○', 'État', '○', 'Instances', '○', 'Consommation en cours', '○'],
           ['Production', 'Customer-facing services', 'Lyon subsidiary', 'ok', '5', '350,00€',
             '▼'],
           ['Staging', 'yy2222-ovh', 'ok', '0', '52,35€', '▼'],
@@ -855,9 +1067,10 @@ describe('Public Cloud tab', () => {
 
         await selectLanguage(user, 'en');
 
-        expect(rowTextsOf(projectsTable())[0])
-          .toEqual(['Name', 'Account', 'State', 'Instances', 'Current consumption']);
-        expect(rowTextsOf(projectsTable())[3])
+        expect(rowTextsOf(cloudProjectsTable())[0]).toEqual([
+          'Name', '○', 'Account', '○', 'State', '○', 'Instances', '○', 'Current consumption', '○',
+        ]);
+        expect(rowTextsOf(cloudProjectsTable())[3])
           .toEqual(['Sandbox', 'Unknown account', 'ok', '0', '-', '▼']);
       });
 
@@ -865,12 +1078,12 @@ describe('Public Cloud tab', () => {
         async () => {
           const { user } = await openOnAccount('Lyon subsidiary');
 
-          expect(rowTextsOf(projectsTable())[0]).toEqual(WITHOUT_ACCOUNT);
+          expect(rowTextsOf(cloudProjectsTable())[0]).toEqual(WITHOUT_ACCOUNT);
 
           await selectAccount(user, 'Tous les comptes');
 
-          expect(rowTextsOf(projectsTable())[0]).toEqual([
-            'Nom', 'Compte', 'État', 'Instances', 'Consommation en cours',
+          expect(rowTextsOf(cloudProjectsTable())[0]).toEqual([
+            'Nom', '○', 'Compte', '○', 'État', '○', 'Instances', '○', 'Consommation en cours', '○',
           ]);
         });
 
@@ -884,7 +1097,7 @@ describe('Public Cloud tab', () => {
 
         await openTab(user, 'Public Cloud');
 
-        expect(rowTextsOf(projectsTable())[0]).toEqual(WITHOUT_ACCOUNT);
+        expect(rowTextsOf(cloudProjectsTable())[0]).toEqual(WITHOUT_ACCOUNT);
       });
     });
 

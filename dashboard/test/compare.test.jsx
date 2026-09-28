@@ -241,21 +241,24 @@ describe('Compare tab', () => {
 
       await sortTable(user, projectTable(), /^Projet/);
 
-      expect(header()).toEqual(['Projet▼', 'Août 2026○', 'Septembre 2026○', 'Variation○']);
-      expect(projects()).toEqual(['Staging', 'Sandbox', 'Production']);
+      // From A to Z first, as every text column (#146)
+      expect(header()).toEqual(['Projet▲', 'Août 2026○', 'Septembre 2026○', 'Variation○']);
+      expect(projects()).toEqual(['Production', 'Sandbox', 'Staging']);
 
       await sortTable(user, projectTable(), /^Projet/);
 
-      expect(header()).toEqual(['Projet▲', 'Août 2026○', 'Septembre 2026○', 'Variation○']);
-      expect(projects()).toEqual(['Production', 'Sandbox', 'Staging']);
+      expect(header()).toEqual(['Projet▼', 'Août 2026○', 'Septembre 2026○', 'Variation○']);
+      expect(projects()).toEqual(['Staging', 'Sandbox', 'Production']);
       // The comparisons of each project follow the same order
       expect(projectComparisons())
-        .toEqual(['Production (Projet)', 'Sandbox (Projet)', 'Staging (Projet)']);
+        .toEqual(['Staging (Projet)', 'Sandbox (Projet)', 'Production (Projet)']);
     });
 
     it('keeps its sort order when the user comes back to the tab', async () => {
       const { user } = await renderDashboard();
       await openTab(user, 'Comparaison');
+      // From Z to A, the second way (#146)
+      await sortTable(user, projectTable(), /^Projet/);
       await sortTable(user, projectTable(), /^Projet/);
 
       await openTab(user, "Vue d'ensemble");
@@ -290,7 +293,7 @@ describe('Compare tab', () => {
       expect(api.fetchProjectConsumption)
         .toHaveBeenCalledWith('project-staging', '2026-07-01', '2026-07-31');
       expect(rowsOf(comparisonTable(/^Staging \(Projet\)/))).toEqual([
-        ['Produit/Type', 'Juillet 2026', 'Septembre 2026', 'Variation'],
+        ['Produit/Type○', 'Juillet 2026○', 'Septembre 2026○', 'Variation○'],
         ['Instances', '0,00€', '52,35€', '—'],
       ]);
 
@@ -374,7 +377,13 @@ describe('Compare tab', () => {
       expect(header()).toEqual(['Projet○', 'Juillet 2026○', 'Septembre 2026○', 'Variation▼']);
       expect(projects()).toEqual(['Production', 'Staging', 'Sandbox']);
 
-      await sortTable(user, projectTable(), /^Projet/);
+      await sortTable(user, projectTable(), /^Variation/);
+
+      // Whichever way, as any value that the page cannot show (#146)
+      expect(header()).toEqual(['Projet○', 'Juillet 2026○', 'Septembre 2026○', 'Variation▲']);
+      expect(projects()).toEqual(['Production', 'Staging', 'Sandbox']);
+
+      // From A to Z first, as every text column (#146)
       await sortTable(user, projectTable(), /^Projet/);
 
       expect(header()).toEqual(['Projet▲', 'Juillet 2026○', 'Septembre 2026○', 'Variation○']);
@@ -417,7 +426,7 @@ describe('Compare tab', () => {
       // and 30 € then 35 € of domains: nothing else these rows list (#32).
       // A variation from 0 € cannot be computed (#65).
       expect(rowTextsOf(comparisonTable(INFRASTRUCTURE))).toEqual([
-        ['Type', 'Août 2026', 'Septembre 2026', 'Variation'],
+        ['Type', '○', 'Août 2026', '○', 'Septembre 2026', '○', 'Variation', '○'],
         // With the servers of the inventory, though the Infrastructure tab
         // never opened (#35)
         [
@@ -463,7 +472,7 @@ describe('Compare tab', () => {
       expect(api.fetchByResourceType).toHaveBeenCalledWith('2026-07-01', '2026-07-31', null);
       expect(api.fetchBackupStats).toHaveBeenCalledWith('2026-07-01', '2026-07-31', null);
       expect(rowTextsOf(comparisonTable(INFRASTRUCTURE))).toEqual([
-        ['Type', 'Septembre 2026', 'Juillet 2026', 'Variation'],
+        ['Type', '○', 'Septembre 2026', '○', 'Juillet 2026', '○', 'Variation', '○'],
         // With the servers of the inventory (#35)
         [
           'Liste des Serveurs dédiés présents au 15/09/2026',
@@ -488,6 +497,36 @@ describe('Compare tab', () => {
         ['Hôtes Private Cloud', '1 450,00€', '0,00€', '-100,0 %'],
         ['Datastores Private Cloud', '380,00€', '0,00€', '-100,0 %'],
       ]);
+    });
+
+    // The resource types without a variation last, whichever way (#146)
+    it('sort the resource types of the infrastructure comparison by any column', async () => {
+      const { user } = await renderDashboard();
+      await openTab(user, 'Comparaison');
+      await openComparison(user, INFRASTRUCTURE);
+      const types = () => rowTextsOf(comparisonTable(INFRASTRUCTURE)).slice(1)
+        .map(([type]) => type);
+
+      await sortTable(user, comparisonTable(INFRASTRUCTURE), /^Variation/);
+
+      expect(headerOf(comparisonTable(INFRASTRUCTURE)))
+        .toEqual(['Type○', 'Août 2026○', 'Septembre 2026○', 'Variation▼']);
+      // +16,7 %, 0,0 %, then the resource types at 0 € in month A
+      expect(types()).toEqual([
+        'Noms de domaine', 'Liste des Serveurs dédiés présents au 15/09/2026', 'VPS', 'Stockage',
+        'Load Balancer', 'Adresses IP', 'Hôtes Private Cloud', 'Datastores Private Cloud',
+      ]);
+
+      await sortTable(user, comparisonTable(INFRASTRUCTURE), /^Type/);
+
+      expect(types()).toEqual([
+        'Adresses IP', 'Datastores Private Cloud', 'Hôtes Private Cloud',
+        'Liste des Serveurs dédiés présents au 15/09/2026', 'Load Balancer', 'Noms de domaine',
+        'Stockage', 'VPS',
+      ]);
+      // The Backup and Private Cloud comparisons have two rows each: nothing to sort
+      await openComparison(user, BACKUP);
+      expect(within(comparisonTable(BACKUP)).queryAllByRole('button')).toEqual([]);
     });
 
     it('list the dedicated servers as soon as the tab opens (#35)', async () => {
@@ -590,7 +629,7 @@ describe('Compare tab', () => {
       // Nothing stored for August, as when the upgrade that keeps each month's
       // consumption came in September (#54): no variation to compute (#65)
       expect(rowsOf(comparisonTable(PRODUCTION_CONSUMPTION))).toEqual([
-        ['Produit/Type', 'Août 2026', 'Septembre 2026', 'Variation'],
+        ['Produit/Type○', 'Août 2026○', 'Septembre 2026○', 'Variation○'],
         ['Instances', '0,00€', '234,25€', '—'],
         ['Instances (forfait mensuel)', '0,00€', '64,00€', '—'],
         ['Volumes', '0,00€', '7,50€', '—'],
@@ -599,6 +638,36 @@ describe('Compare tab', () => {
       ]);
       expect(within(comparisonTable(PRODUCTION_CONSUMPTION))
         .getAllByTitle('non calculable : mois A à 0 € ou moins')).toHaveLength(5);
+    });
+
+    // Each on its own, and still sorted once opened again (#146)
+    it('sort what a project consumed by any column, each project on its own', async () => {
+      const { user } = await renderDashboard();
+      await openTab(user, 'Comparaison');
+      await openComparison(user, PRODUCTION_CONSUMPTION);
+      await openComparison(user, /^Staging \(Projet\)/);
+
+      await sortTable(user, comparisonTable(PRODUCTION_CONSUMPTION), /^Septembre 2026/);
+
+      expect(rowsOf(comparisonTable(PRODUCTION_CONSUMPTION))).toEqual([
+        ['Produit/Type○', 'Août 2026○', 'Septembre 2026▼', 'Variation○'],
+        ['Instances', '0,00€', '234,25€', '—'],
+        ['Instances (forfait mensuel)', '0,00€', '64,00€', '—'],
+        ['Stockage objet', '0,00€', '41,00€', '—'],
+        ['Volumes', '0,00€', '7,50€', '—'],
+        ['Snapshots', '0,00€', '3,25€', '—'],
+      ]);
+      expect(headerOf(comparisonTable(/^Staging \(Projet\)/)))
+        .toEqual(['Produit/Type○', 'Août 2026○', 'Septembre 2026○', 'Variation○']);
+
+      await sortTable(user, comparisonTable(PRODUCTION_CONSUMPTION), /^Produit/);
+      await openComparison(user, PRODUCTION_CONSUMPTION);
+      await openComparison(user, PRODUCTION_CONSUMPTION);
+
+      // By the name of each kind, as the table gives it
+      expect(firstColumnOf(comparisonTable(PRODUCTION_CONSUMPTION))).toEqual([
+        'Instances', 'Instances (forfait mensuel)', 'Snapshots', 'Stockage objet', 'Volumes',
+      ]);
     });
 
     it('show a variation of -100% to a month without any consumption stored (#54)', async () => {
@@ -612,7 +681,7 @@ describe('Compare tab', () => {
       // Nothing stored for July, month B, which came before the upgrade that keeps
       // each month's consumption (#54): every cloud resource kind drops to nothing
       expect(rowsOf(comparisonTable(PRODUCTION_CONSUMPTION))).toEqual([
-        ['Produit/Type', 'Septembre 2026', 'Juillet 2026', 'Variation'],
+        ['Produit/Type○', 'Septembre 2026○', 'Juillet 2026○', 'Variation○'],
         ['Instances', '234,25€', '0,00€', '-100,0 %'],
         ['Instances (forfait mensuel)', '64,00€', '0,00€', '-100,0 %'],
         ['Volumes', '7,50€', '0,00€', '-100,0 %'],
@@ -792,7 +861,7 @@ describe('Compare tab', () => {
 
     // Months A and B head the other comparisons too, in English (#33)
     expect(headerOf(comparisonTable(/^Infrastructure Comparison/)))
-      .toEqual(['Type', 'August 2026', 'September 2026', 'Variation']);
+      .toEqual(['Type○', 'August 2026○', 'September 2026○', 'Variation○']);
     expect(headerOf(comparisonTable(/^Private Cloud Comparison/)))
       .toEqual(['Type', 'August 2026', 'September 2026', 'Variation']);
     // The label of each row, its first text: the row of the dedicated servers
@@ -817,7 +886,7 @@ describe('Compare tab', () => {
     expect(rowsOf(comparisonTable(/^Private Cloud Comparison/)).map(([type]) => type))
       .toEqual(['Type', 'Private Cloud Hosts', 'Private Cloud Datastores']);
     expect(rowsOf(comparisonTable(/^Production \(Project\)/)).slice(0, 2)).toEqual([
-      ['Product/Type', 'August 2026', 'September 2026', 'Variation'],
+      ['Product/Type○', 'August 2026○', 'September 2026○', 'Variation○'],
       ['Instances', '0.00€', '234.25€', '—'],
     ]);
   });
@@ -1065,7 +1134,7 @@ describe('Compare tab', () => {
         await openTab(user, 'Comparaison');
 
         expect(projectRows()).toEqual([
-          ['Projet○', 'Compte', 'Août 2026▼', 'Septembre 2026○', 'Variation○'],
+          ['Projet○', 'Compte○', 'Août 2026▼', 'Septembre 2026○', 'Variation○'],
           ['Production', 'Lyon subsidiary', '512,00€', '610,40€', '+19,2 %'],
           ['Staging', 'yy2222-ovh', '190,00€', '220,00€', '+15,8 %'],
         ]);
@@ -1085,7 +1154,7 @@ describe('Compare tab', () => {
 
           // (170 - 190) / 190
           expect(projectRows()).toEqual([
-            ['Projet○', 'Compte', 'Août 2026▼', 'Septembre 2026○', 'Variation○'],
+            ['Projet○', 'Compte○', 'Août 2026▼', 'Septembre 2026○', 'Variation○'],
             ['Production', 'Lyon subsidiary', '512,00€', '610,40€', '+19,2 %'],
             ['Staging', 'yy2222-ovh', '190,00€', '170,00€', '-10,5 %'],
             ['Staging', 'Lyon subsidiary', '0,00€', '50,00€', '—'],
@@ -1115,7 +1184,7 @@ describe('Compare tab', () => {
           await selectAccount(user, 'Tous les comptes');
 
           expect(headerOf(comparisonTable(PROJECTS)))
-            .toEqual(['Projet○', 'Compte', 'Août 2026▼', 'Septembre 2026○', 'Variation○']);
+            .toEqual(['Projet○', 'Compte○', 'Août 2026▼', 'Septembre 2026○', 'Variation○']);
         });
 
       // As the page shows it before an instance could import several accounts, whatever the
@@ -1154,7 +1223,7 @@ describe('Compare tab', () => {
         await selectLanguage(user, 'en');
 
         expect(rowsOf(comparisonTable(/^Comparison by project/))).toEqual([
-          ['Project○', 'Account', 'August 2026▼', 'September 2026○', 'Variation○'],
+          ['Project○', 'Account○', 'August 2026▼', 'September 2026○', 'Variation○'],
           ['Production', 'Lyon subsidiary', '512.00€', '610.40€', '+19.2%'],
           ['Staging', 'yy2222-ovh', '190.00€', '0.00€', '-100.0%'],
           ['Legacy', 'Unknown account', '0.00€', '20.00€', '—'],

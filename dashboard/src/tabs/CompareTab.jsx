@@ -2,12 +2,13 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
 } from 'recharts';
 import Accordion from '../components/Accordion.jsx';
-import { SortIcon } from '../components/SortIcon.jsx';
+import { SortableHeader, sortRows } from '../components/SortableHeader.jsx';
 import ProjectProductComparison from '../components/ProjectProductComparison.jsx';
 import { Variation } from '../components/Variation.jsx';
 import { accountInBrackets } from '../utils/accounts.js';
 import { formatMonthLabel } from '../utils/format.js';
 import { firstRowOfEachProject, projectComparisonRows } from '../utils/projectComparison.js';
+import { variationPercent } from '../utils/variation.js';
 
 // The cost of a resource type in a month, from its costs by resource type (#32)
 const costOfType = (byResourceType, type) => (
@@ -21,17 +22,38 @@ const backupsOf = (backupStats, kind) => ({
   total: backupStats?.[kind]?.total || 0,
 });
 
+// The value of a resource type of the infrastructure comparison in each column that sorts it
+// (#146), from the costs by resource type of months A and B: its label, its cost in each month,
+// and the variation from one to the other, none from 0 € or less
+const resourceTypeValues = (byResourceTypeA, byResourceTypeB) => ({
+  type: ({ label }) => label,
+  totalA: ({ key }) => costOfType(byResourceTypeA, key),
+  totalB: ({ key }) => costOfType(byResourceTypeB, key),
+  variation: ({ key }) => variationPercent(
+    costOfType(byResourceTypeA, key), costOfType(byResourceTypeB, key),
+  ),
+});
+
+// The value of a row of the comparison by project in each column that sorts it (#146): its
+// account, none without the Account column
+const projectComparisonValues = (accountColumn) => ({
+  name: (row) => row.projectName,
+  account: (row) => accountColumn?.nameOf(row.account),
+  totalA: (row) => row.totalA,
+  totalB: (row) => row.totalB,
+  variation: (row) => row.variation,
+});
+
 // The Compare tab, which the shell renders while it is active: what useCompareTab() returns,
-// with the shell's language, translations (t), amount format (fmt) and months list, and the
-// dedicated servers of the inventory, which the Infrastructure hook loads, on its own tab
-// and on this one (#35). The months and their figures are those of the account selected in
-// the header (#119). The comparison by project names the account of each project in the
-// Account column of the shell (accountColumn), when it shows one: it then compares the
-// projects by account that the hook requests, a project billed to several accounts once for
-// each.
+// the sort order of its tables included (#146), with the shell's language, translations (t),
+// amount format (fmt) and months list, and the dedicated servers of the inventory, which the
+// Infrastructure hook loads, on its own tab and on this one (#35). The months and their
+// figures are those of the account selected in the header (#119). The comparison by project
+// names the account of each project in the Account column of the shell (accountColumn), when
+// it shows one: it then compares the projects by account that the hook requests, a project
+// billed to several accounts once for each.
 const CompareTab = ({
-  compareMonthA, setCompareMonthA, compareMonthB, setCompareMonthB,
-  compareSort, handleCompareSort,
+  compareMonthA, setCompareMonthA, compareMonthB, setCompareMonthB, sortingOf,
   compareDataA, compareDataB, byServiceA, byServiceB, byProjectA, byProjectB,
   byResourceTypeA, byResourceTypeB, backupStatsA, backupStatsB,
   language, t, fmt, months, inventoryServers, accountColumn,
@@ -40,32 +62,13 @@ const CompareTab = ({
   const monthALabel = formatMonthLabel(compareMonthA?.value, language);
   const monthBLabel = formatMonthLabel(compareMonthB?.value, language);
 
-  // Merge and sort comparison data: the projects of months A and B, paired by id (#55), and
-  // by account in the Account column (#119)
-  const getSortedCompareProjects = () => {
-    const merged = projectComparisonRows(byProjectA, byProjectB);
-    return merged.sort((a, b) => {
-      let aVal, bVal;
-      if (compareSort.column === 'name') {
-        aVal = a.projectName?.toLowerCase() || '';
-        bVal = b.projectName?.toLowerCase() || '';
-      } else if (compareSort.column === 'totalA') {
-        aVal = a.totalA || 0;
-        bVal = b.totalA || 0;
-      } else if (compareSort.column === 'totalB') {
-        aVal = a.totalB || 0;
-        bVal = b.totalB || 0;
-      } else if (compareSort.column === 'diff') {
-        aVal = a.variation ?? -Infinity;
-        bVal = b.variation ?? -Infinity;
-      }
-      if (aVal < bVal) return compareSort.direction === 'asc' ? -1 : 1;
-      if (aVal > bVal) return compareSort.direction === 'asc' ? 1 : -1;
-      return 0;
-    });
-  };
-
-  const compareProjects = getSortedCompareProjects();
+  // The projects of months A and B, paired by id (#55), and by account in the Account column
+  // (#119), in the order the user sorts them, by month A until then (#146)
+  const projectSorting = sortingOf('projects');
+  const compareProjects = sortRows(
+    projectComparisonRows(byProjectA, byProjectB), projectSorting.sort,
+    projectComparisonValues(accountColumn), language,
+  );
   // The projects whose consumption the tab compares, once each, in the order of their first
   // rows: in the Account column, a project billed to several accounts has a row for each (#119)
   const consumptionProjects = firstRowOfEachProject(compareProjects);
@@ -91,6 +94,41 @@ const CompareTab = ({
       label: language === 'en' ? 'Private Cloud Datastores' : 'Datastores Private Cloud',
     },
   ];
+
+  // The rows of the infrastructure comparison, which ends with those of the Private Cloud
+  // comparison, in the order the user sorts them, in this order until then (#146)
+  const infrastructureSorting = sortingOf('infrastructure');
+  const infrastructureTypes = sortRows([
+    { key: 'dedicated_server', label: language === 'en'
+      ? `List of Dedicated Servers present on ${new Date().toLocaleDateString('en-GB')}`
+      : `Liste des Serveurs dédiés présents au ${new Date().toLocaleDateString('fr-FR')}`,
+      // Those of the account shown, each with its account in the Account column of
+      // the shell (accountColumn), when it shows one (#123)
+      details: inventoryServers.length > 0 && (
+        <ul className="text-xs text-gray-500 mt-1">
+          {inventoryServers.map(srv => (
+            <li key={srv.id}>
+              {srv.display_name || srv.id}
+              {accountColumn && (
+                <>
+                  {' '}
+                  <span className="text-gray-400">
+                    {accountInBrackets(accountColumn, srv.account)}
+                  </span>
+                </>
+              )}
+            </li>
+          ))}
+        </ul>
+      ),
+    },
+    { key: 'vps', label: 'VPS' },
+    { key: 'storage', label: language === 'en' ? 'Storage' : 'Stockage' },
+    { key: 'load_balancer', label: language === 'en' ? 'Load Balancer' : 'Load Balancer' },
+    { key: 'ip_service', label: language === 'en' ? 'IP Addresses' : 'Adresses IP' },
+    { key: 'domain', label: language === 'en' ? 'Domains' : 'Noms de domaine' },
+    ...privateCloudTypes,
+  ], infrastructureSorting.sort, resourceTypeValues(byResourceTypeA, byResourceTypeB), language);
 
   // A row of the infrastructure or Private Cloud comparison: the cost of a resource type in
   // months A and B (#32), and what shows under its label, if anything
@@ -196,33 +234,38 @@ const CompareTab = ({
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b text-left bg-gray-50">
-              <th
-                className="p-3 font-medium rounded-tl-lg cursor-pointer hover:bg-gray-100 select-none"
-                onClick={() => handleCompareSort('name')}
+              <SortableHeader
+                column="name" kind="text" sorting={projectSorting} t={t}
+                className="p-3 font-medium rounded-tl-lg"
               >
-                {t('project')}<SortIcon column="name" current={compareSort} />
-              </th>
+                {t('project')}
+              </SortableHeader>
               {accountColumn && (
-                <th className="p-3 font-medium">{accountColumn.label}</th>
+                <SortableHeader
+                  column="account" kind="text" sorting={projectSorting} t={t}
+                  className="p-3 font-medium"
+                >
+                  {accountColumn.label}
+                </SortableHeader>
               )}
-              <th
-                className="p-3 font-medium text-right cursor-pointer hover:bg-gray-100 select-none"
-                onClick={() => handleCompareSort('totalA')}
+              <SortableHeader
+                column="totalA" kind="number" sorting={projectSorting} t={t}
+                className="p-3 font-medium text-right"
               >
-                {monthALabel}<SortIcon column="totalA" current={compareSort} />
-              </th>
-              <th
-                className="p-3 font-medium text-right cursor-pointer hover:bg-gray-100 select-none"
-                onClick={() => handleCompareSort('totalB')}
+                {monthALabel}
+              </SortableHeader>
+              <SortableHeader
+                column="totalB" kind="number" sorting={projectSorting} t={t}
+                className="p-3 font-medium text-right"
               >
-                {monthBLabel}<SortIcon column="totalB" current={compareSort} />
-              </th>
-              <th
-                className="p-3 font-medium text-right rounded-tr-lg cursor-pointer hover:bg-gray-100 select-none"
-                onClick={() => handleCompareSort('diff')}
+                {monthBLabel}
+              </SortableHeader>
+              <SortableHeader
+                column="variation" kind="number" sorting={projectSorting} t={t}
+                className="p-3 font-medium text-right rounded-tr-lg"
               >
-                {t('variation')}<SortIcon column="diff" current={compareSort} />
-              </th>
+                {t('variation')}
+              </SortableHeader>
             </tr>
           </thead>
           <tbody>
@@ -253,51 +296,41 @@ const CompareTab = ({
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b text-left bg-gray-50">
-              <th className="p-3 font-medium rounded-tl-lg">{language === 'en' ? 'Type' : 'Type'}</th>
-              <th className="p-3 font-medium text-right">{monthALabel}</th>
-              <th className="p-3 font-medium text-right">{monthBLabel}</th>
-              <th className="p-3 font-medium text-right rounded-tr-lg">{t('variation')}</th>
+              <SortableHeader
+                column="type" kind="text" sorting={infrastructureSorting} t={t}
+                className="p-3 font-medium rounded-tl-lg"
+              >
+                {language === 'en' ? 'Type' : 'Type'}
+              </SortableHeader>
+              <SortableHeader
+                column="totalA" kind="number" sorting={infrastructureSorting} t={t}
+                className="p-3 font-medium text-right"
+              >
+                {monthALabel}
+              </SortableHeader>
+              <SortableHeader
+                column="totalB" kind="number" sorting={infrastructureSorting} t={t}
+                className="p-3 font-medium text-right"
+              >
+                {monthBLabel}
+              </SortableHeader>
+              <SortableHeader
+                column="variation" kind="number" sorting={infrastructureSorting} t={t}
+                className="p-3 font-medium text-right rounded-tr-lg"
+              >
+                {t('variation')}
+              </SortableHeader>
             </tr>
           </thead>
           <tbody>
-            {[
-              { key: 'dedicated_server', label: language === 'en'
-                ? `List of Dedicated Servers present on ${new Date().toLocaleDateString('en-GB')}`
-                : `Liste des Serveurs dédiés présents au ${new Date().toLocaleDateString('fr-FR')}`,
-                // Those of the account shown, each with its account in the Account column of
-                // the shell (accountColumn), when it shows one (#123)
-                details: inventoryServers.length > 0 && (
-                  <ul className="text-xs text-gray-500 mt-1">
-                    {inventoryServers.map(srv => (
-                      <li key={srv.id}>
-                        {srv.display_name || srv.id}
-                        {accountColumn && (
-                          <>
-                            {' '}
-                            <span className="text-gray-400">
-                              {accountInBrackets(accountColumn, srv.account)}
-                            </span>
-                          </>
-                        )}
-                      </li>
-                    ))}
-                  </ul>
-                ),
-              },
-              { key: 'vps', label: 'VPS' },
-              { key: 'storage', label: language === 'en' ? 'Storage' : 'Stockage' },
-              { key: 'load_balancer', label: language === 'en' ? 'Load Balancer' : 'Load Balancer' },
-              { key: 'ip_service', label: language === 'en' ? 'IP Addresses' : 'Adresses IP' },
-              { key: 'domain', label: language === 'en' ? 'Domains' : 'Noms de domaine' },
-              ...privateCloudTypes,
-            ].map(resourceTypeRow)}
+            {infrastructureTypes.map(resourceTypeRow)}
           </tbody>
         </table>
       </Accordion>
 
       {/* Accordion for the backup */}
       <Accordion title={language === 'en' ? 'Backup Comparison' : 'Comparaison Backup'}>
-        {/* Backup comparison table */}
+        {/* Backup comparison table, of two fixed rows: nothing to sort (#146) */}
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b text-left bg-gray-50">
@@ -341,7 +374,7 @@ const CompareTab = ({
 
       {/* Accordion for the Private Cloud */}
       <Accordion title={language === 'en' ? 'Private Cloud Comparison' : 'Comparaison Private Cloud'}>
-        {/* Private Cloud comparison table */}
+        {/* Private Cloud comparison table, of two fixed rows: nothing to sort (#146) */}
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b text-left bg-gray-50">
@@ -361,6 +394,7 @@ const CompareTab = ({
         <Accordion key={proj.projectId} title={`${proj.projectName} (${t('project')})`}>
           <ProjectProductComparison
             projectId={proj.projectId} monthA={compareMonthA} monthB={compareMonthB}
+            sorting={sortingOf(`consumption ${proj.projectId}`)}
             fmt={fmt} language={language} t={t}
           />
         </Accordion>

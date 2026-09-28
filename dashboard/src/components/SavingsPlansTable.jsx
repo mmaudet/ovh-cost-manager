@@ -1,18 +1,57 @@
+import { SortableHeader, sortRows } from './SortableHeader.jsx';
+
+// The value of a savings plan in each column, which the table sorts by (#146): the instances
+// it covers as the table shows them first, those that all the plans of its flavor pay for when
+// the inventory tells how many the project runs
+const SAVINGS_PLAN_VALUES = {
+  plan: (plan) => plan.id,
+  flavor: (plan) => plan.flavor,
+  covered: (plan) => (plan.inventory !== null ? plan.flavorCovered : plan.covered),
+  lastDate: (plan) => plan.lastDate,
+  cost: (plan) => plan.total,
+};
+
 // Savings plans of a project, read from the bills: there is no savings plan
-// route under /cloud/project in the v6 API.
-const SavingsPlansTable = ({ plans, language, fmt }) => (
+// route under /cloud/project in the v6 API. Shared by the inline panel and its modal, which
+// sort it alike (sorting, see SortableHeader.jsx).
+const SavingsPlansTable = ({ plans, sorting, language, t, fmt }) => (
   <table className="w-full text-sm">
     <thead>
       <tr className="border-b bg-gray-50">
-        <th className="p-2 text-left font-medium">{language === 'en' ? 'Plan' : 'Plan'}</th>
-        <th className="p-2 text-left font-medium">Flavor</th>
-        <th className="p-2 text-right font-medium">{language === 'en' ? 'Covered' : 'Couvert'}</th>
-        <th className="p-2 text-left font-medium">{language === 'en' ? 'Last billed' : 'Dernière facture'}</th>
-        <th className="p-2 text-right font-medium">{language === 'en' ? 'Cost' : 'Coût'}</th>
+        <SortableHeader
+          column="plan" kind="text" sorting={sorting} t={t}
+          className="p-2 text-left font-medium"
+        >
+          {language === 'en' ? 'Plan' : 'Plan'}
+        </SortableHeader>
+        <SortableHeader
+          column="flavor" kind="text" sorting={sorting} t={t}
+          className="p-2 text-left font-medium"
+        >
+          Flavor
+        </SortableHeader>
+        <SortableHeader
+          column="covered" kind="number" sorting={sorting} t={t}
+          className="p-2 text-right font-medium"
+        >
+          {language === 'en' ? 'Covered' : 'Couvert'}
+        </SortableHeader>
+        <SortableHeader
+          column="lastDate" kind="date" sorting={sorting} t={t}
+          className="p-2 text-left font-medium"
+        >
+          {language === 'en' ? 'Last billed' : 'Dernière facture'}
+        </SortableHeader>
+        <SortableHeader
+          column="cost" kind="number" sorting={sorting} t={t}
+          className="p-2 text-right font-medium"
+        >
+          {language === 'en' ? 'Cost' : 'Coût'}
+        </SortableHeader>
       </tr>
     </thead>
     <tbody>
-      {plans.map((plan, i) => {
+      {sortRows(plans, sorting.sort, SAVINGS_PLAN_VALUES, language).map((plan, i) => {
         // Coverage is per flavor: all the plans of that flavor, summed
         const over = plan.inventory !== null && plan.flavorCovered > plan.inventory;
         return (

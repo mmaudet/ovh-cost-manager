@@ -13,6 +13,8 @@ import {
   backdropOf,
   cardOf,
   cardRowOf,
+  firstColumnOf,
+  headerOf,
   openTab,
   renderDashboard,
   rowsOf,
@@ -20,6 +22,7 @@ import {
   selectLanguage,
   selectMonth,
   settle,
+  sortTable,
   texts,
 } from './support/render.jsx';
 
@@ -34,10 +37,13 @@ const billLines = () => within(costsByResourceType()).queryByRole('table');
 const inventoryPanel = (heading) => cardOf(screen.getByRole('heading', { name: heading }));
 const serversPanel = (heading = /^Serveurs dédiés \(/) => inventoryPanel(heading);
 const serversButton = (name) => within(serversPanel()).getByRole('button', { name });
+const serversTable = () => within(serversPanel()).getByRole('table');
+const vpsTable = () => within(inventoryPanel('VPS')).getByRole('table');
+const storageTable = () => within(inventoryPanel('Stockage')).getByRole('table');
 
 // The RAM in French units, and in powers of 1024 as OVH names it: its 65536 MB (#88)
 const serverRows = [
-  ['ID', 'Datacenter', 'CPU', 'RAM', 'État', "Date d'expiration", 'Renouvellement'],
+  ['ID○', 'Datacenter○', 'CPU○', 'RAM○', 'État○', "Date d'expiration○", 'Renouvellement○'],
   ['backup-server', 'rbx8', 'Intel Xeon-E 2388G', '64 Go', 'ok', '2026-09-20', 'automatic'],
   // Just delivered: its RAM, expiration and renewal are not known yet
   ['ns3000002.ip-198-51-100.eu', 'gra3', 'AMD EPYC 4344P', '-', 'error', '-', '-'],
@@ -105,7 +111,7 @@ describe('Infrastructure tab', () => {
       expect(api.fetchResourceTypeDetails)
         .toHaveBeenCalledWith('dedicated_server', '2026-09-01', '2026-09-30', null);
       expect(rowsOf(billLines())).toEqual([
-        ['Service', 'Description', 'Montant'],
+        ['Service○', 'Description○', 'Montant○'],
         ['ns3000001.ip-203-0-113.eu',
           'Location du serveur RISE-1 ns3000001.ip-203-0-113.eu - 1 mois', '270,00€'],
       ]);
@@ -148,7 +154,7 @@ describe('Infrastructure tab', () => {
       expect(texts(costsByResourceType())).toEqual([
         'Coûts par type de ressource', '(Septembre 2026)',
         'Dedicated Servers', '270,00€', '▲',
-        'Service', 'Description', 'Montant',
+        'Service', '○', 'Description', '○', 'Montant', '○',
         'ns3000001.ip-203-0-113.eu',
         'Location du serveur RISE-1 ns3000001.ip-203-0-113.eu - 1 mois', '270,00€',
         'Backup', '90,00€', '▼',
@@ -173,7 +179,7 @@ describe('Infrastructure tab', () => {
 
       // Most expensive service first
       expect(rowsOf(billLines())).toEqual([
-        ['Service', 'Description', 'Montant'],
+        ['Service○', 'Description○', 'Montant○'],
         ['vm-app-1.example.com', 'Veeam Managed Backup - vm-app-1.example.com', '40,00€'],
         ['vm-db-1.example.com', 'Veeam Managed Backup - vm-db-1.example.com', '30,00€'],
         ['vm-files-1.example.com', 'Veeam Managed Backup - vm-files-1.example.com', '20,00€'],
@@ -195,10 +201,35 @@ describe('Infrastructure tab', () => {
         'Coûts par type de ressource', '(Août 2026)',
         'Dedicated Servers', '270,00€', '▼',
         'Backup', '40,00€', '▲',
-        'Service', 'Description', 'Montant',
+        'Service', '○', 'Description', '○', 'Montant', '○',
         'vm-app-1.example.com', 'Veeam Managed Backup - vm-app-1.example.com', '25,00€',
         'vm-db-1.example.com', 'Veeam Managed Backup - vm-db-1.example.com', '15,00€',
       ]);
+    });
+
+    it('sort the bill lines of a resource type by any column (#146)', async () => {
+      const { user } = await renderDashboard();
+      await openTab(user, 'Infrastructure');
+      await user.click(resourceType('Backup'));
+      await settle();
+
+      await sortTable(user, billLines(), /^Montant/);
+      await sortTable(user, billLines(), /^Montant/);
+
+      // The least expensive service first
+      expect(rowsOf(billLines())).toEqual([
+        ['Service○', 'Description○', 'Montant▲'],
+        ['vm-files-1.example.com', 'Veeam Managed Backup - vm-files-1.example.com', '20,00€'],
+        ['vm-db-1.example.com', 'Veeam Managed Backup - vm-db-1.example.com', '30,00€'],
+        ['vm-app-1.example.com', 'Veeam Managed Backup - vm-app-1.example.com', '40,00€'],
+      ]);
+
+      await sortTable(user, billLines(), /^Service/);
+      await sortTable(user, billLines(), /^Service/);
+
+      // From Z to A
+      expect(firstColumnOf(billLines()))
+        .toEqual(['vm-files-1.example.com', 'vm-db-1.example.com', 'vm-app-1.example.com']);
     });
 
     // Which ways of moving around the page keep the open resource type: see
@@ -285,14 +316,52 @@ describe('Infrastructure tab', () => {
     // The sizes in French units and number format, as the Public Cloud tab writes them (#88):
     // the RAM in powers of 1024, the disk and the storage in powers of 1000
     expect(rowsOf(within(inventoryPanel('VPS')).getByRole('table'))).toEqual([
-      ['ID', 'Modèle', 'Région', 'Spécifications', 'État', "Date d'expiration"],
+      ['ID○', 'Modèle○', 'Région○', 'Spécifications○', 'État○', "Date d'expiration○"],
       ['vps-0a1b2c3d.vps.ovh.net', 'vps-le-2-2-40', 'Region OpenStack: os-gra7',
         '2 vCPU / 2,0 Go / 40 Go', 'running', '2026-10-10'],
     ]);
     expect(rowsOf(within(inventoryPanel('Stockage')).getByRole('table'))).toEqual([
-      ['ID', 'Type', 'Région', 'Taille', 'Shares', "Date d'expiration"],
+      ['ID○', 'Type○', 'Région○', 'Taille○', 'Shares○', "Date d'expiration○"],
       ['shared-files', 'netapp', 'eu-west-gra', '1,0 To', '3', '2027-03-01'],
     ]);
+  });
+
+  // The VPS by their number of vCPUs, which their specifications start with (#146)
+  it('sorts the VPS and the file storage services by any column', async () => {
+    const [vps] = account.inventoryVps;
+    const [storage] = account.inventoryStorage;
+    const { user } = await renderDashboard({
+      ...account,
+      inventoryVps: [vps, {
+        ...vps, id: 'vps-9e8d7c6b.vps.ovh.net', display_name: 'vps-9e8d7c6b.vps.ovh.net',
+        model: 'vps-le-4-8-160', vcpus: 4, ram_mb: 8192, disk_gb: 160,
+        expiration_date: '2026-11-02',
+      }],
+      // Its size unknown: "-"
+      inventoryStorage: [
+        { ...storage, id: 'netapp-1a2b3c4d', display_name: 'archives', total_size_gb: 0 },
+        storage,
+      ],
+    });
+    await openTab(user, 'Infrastructure');
+
+    await sortTable(user, vpsTable(), /^Spécifications/);
+
+    expect(rowsOf(vpsTable())).toEqual([
+      ['ID○', 'Modèle○', 'Région○', 'Spécifications▼', 'État○', "Date d'expiration○"],
+      ['vps-9e8d7c6b.vps.ovh.net', 'vps-le-4-8-160', 'Region OpenStack: os-gra7',
+        '4 vCPU / 8,0 Go / 160 Go', 'running', '2026-11-02'],
+      ['vps-0a1b2c3d.vps.ovh.net', 'vps-le-2-2-40', 'Region OpenStack: os-gra7',
+        '2 vCPU / 2,0 Go / 40 Go', 'running', '2026-10-10'],
+    ]);
+
+    await sortTable(user, storageTable(), /^Taille/);
+    await sortTable(user, storageTable(), /^Taille/);
+
+    // The smallest first, and last the one of unknown size
+    expect(headerOf(storageTable()))
+      .toEqual(['ID○', 'Type○', 'Région○', 'Taille▲', 'Shares○', "Date d'expiration○"]);
+    expect(firstColumnOf(storageTable())).toEqual(['shared-files', 'archives']);
   });
 
   // The import stores 0 for a size the API did not give: "-", as for the RAM of a server,
@@ -367,22 +436,22 @@ describe('Infrastructure tab', () => {
     await settle();
 
     expect(rowsOf(within(costs()).getByRole('table'))[0])
-      .toEqual(['Service', 'Description', 'Amount']);
+      .toEqual(['Service○', 'Description○', 'Amount○']);
     expect(texts(screen.getByRole('heading', { name: /^Dedicated Servers \(/ })))
       .toEqual(['Dedicated Servers (2)', 'Show all', 'CSV']);
     const servers = serversPanel(/^Dedicated Servers \(/);
     // The sizes in English units and number format (#88)
     expect(rowsOf(within(servers).getByRole('table')).slice(0, 2)).toEqual([
-      ['ID', 'Datacenter', 'CPU', 'RAM', 'State', 'Expiration date', 'Renewal'],
+      ['ID○', 'Datacenter○', 'CPU○', 'RAM○', 'State○', 'Expiration date○', 'Renewal○'],
       ['backup-server', 'rbx8', 'Intel Xeon-E 2388G', '64 GB', 'ok', '2026-09-20', 'automatic'],
     ]);
     expect(rowsOf(within(inventoryPanel('VPS')).getByRole('table'))).toEqual([
-      ['ID', 'Model', 'Region', 'Specifications', 'State', 'Expiration date'],
+      ['ID○', 'Model○', 'Region○', 'Specifications○', 'State○', 'Expiration date○'],
       ['vps-0a1b2c3d.vps.ovh.net', 'vps-le-2-2-40', 'Region OpenStack: os-gra7',
         '2 vCPU / 2.0 GB / 40 GB', 'running', '2026-10-10'],
     ]);
     expect(rowsOf(within(inventoryPanel('Storage')).getByRole('table'))).toEqual([
-      ['ID', 'Type', 'Region', 'Size', 'Shares', 'Expiration date'],
+      ['ID○', 'Type○', 'Region○', 'Size○', 'Shares○', 'Expiration date○'],
       ['shared-files', 'netapp', 'eu-west-gra', '1.0 TB', '3', '2027-03-01'],
     ]);
     const downloadedFiles = captureFileDownloads();
@@ -416,7 +485,7 @@ describe('Infrastructure tab with several accounts', () => {
       ['ns3000002.ip-198-51-100.eu', 'gra3', 'AMD EPYC 4344P', '-', 'error', '-', '-'],
     ]);
     expect(rowsOf(within(inventoryPanel('VPS')).getByRole('table'))).toEqual([
-      ['ID', 'Modèle', 'Région', 'Spécifications', 'État', "Date d'expiration"],
+      ['ID○', 'Modèle○', 'Région○', 'Spécifications○', 'État○', "Date d'expiration○"],
       ['staging-vps', 'vps-le-2-2-40', 'Region OpenStack: os-sbg5', '2 vCPU / 2,0 Go / 40 Go',
         'running', '2026-10-12'],
     ]);
@@ -440,7 +509,7 @@ describe('Infrastructure tab with several accounts', () => {
       ['legacy-server', 'sbg3', 'Intel Xeon E3-1245v5', '32 Go', 'ok', '-', 'manual'],
     ]);
     expect(rowsOf(within(inventoryPanel('Stockage')).getByRole('table'))).toEqual([
-      ['ID', 'Type', 'Région', 'Taille', 'Shares', "Date d'expiration"],
+      ['ID○', 'Type○', 'Région○', 'Taille○', 'Shares○', "Date d'expiration○"],
       ['old-nas', 'netapp', 'eu-west-gra', '512 Go', '3', '2026-09-10'],
     ]);
     expect(screen.queryByRole('heading', { name: 'VPS' })).not.toBeInTheDocument();
@@ -457,7 +526,7 @@ describe('Infrastructure tab with several accounts', () => {
     expect(api.fetchResourceTypeDetails)
       .toHaveBeenCalledWith('backup', '2026-09-01', '2026-09-30', 'yy2222-ovh');
     expect(rowsOf(billLines())).toEqual([
-      ['Service', 'Description', 'Montant'],
+      ['Service○', 'Description○', 'Montant○'],
       ['vm-app-1.example.com', 'Veeam Managed Backup - vm-app-1.example.com', '40,00€'],
       ['vm-db-1.example.com', 'Veeam Managed Backup - vm-db-1.example.com', '30,00€'],
       ['vm-files-1.example.com', 'Veeam Managed Backup - vm-files-1.example.com', '20,00€'],
@@ -488,7 +557,10 @@ describe('Infrastructure tab with several accounts', () => {
     // handle, as that of the account removed from config.json, and the Unknown account for a
     // server that no account claimed
     const serverRowsWithAccount = [
-      ['ID', 'Compte', 'Datacenter', 'CPU', 'RAM', 'État', "Date d'expiration", 'Renouvellement'],
+      [
+        'ID○', 'Compte○', 'Datacenter○', 'CPU○', 'RAM○', 'État○', "Date d'expiration○",
+        'Renouvellement○',
+      ],
       ['backup-server', 'Lyon subsidiary', 'rbx8', 'Intel Xeon-E 2388G', '64 Go', 'ok',
         '2026-09-20', 'automatic'],
       ['db-server', 'zz3333-ovh', 'rbx8', 'Intel Xeon-E 2388G', '64 Go', 'ok', '2026-09-17',
@@ -506,19 +578,64 @@ describe('Infrastructure tab with several accounts', () => {
 
       expect(rowsOf(within(serversPanel()).getByRole('table'))).toEqual(serverRowsWithAccount);
       expect(rowsOf(within(inventoryPanel('VPS')).getByRole('table'))).toEqual([
-        ['ID', 'Compte', 'Modèle', 'Région', 'Spécifications', 'État', "Date d'expiration"],
+        [
+          'ID○', 'Compte○', 'Modèle○', 'Région○', 'Spécifications○', 'État○',
+          "Date d'expiration○",
+        ],
         ['staging-vps', 'yy2222-ovh', 'vps-le-2-2-40', 'Region OpenStack: os-sbg5',
           '2 vCPU / 2,0 Go / 40 Go', 'running', '2026-10-12'],
         ['vps-0a1b2c3d.vps.ovh.net', 'Lyon subsidiary', 'vps-le-2-2-40',
           'Region OpenStack: os-gra7', '2 vCPU / 2,0 Go / 40 Go', 'running', '2026-10-10'],
       ]);
       expect(rowsOf(within(inventoryPanel('Stockage')).getByRole('table'))).toEqual([
-        ['ID', 'Compte', 'Type', 'Région', 'Taille', 'Shares', "Date d'expiration"],
+        ['ID○', 'Compte○', 'Type○', 'Région○', 'Taille○', 'Shares○', "Date d'expiration○"],
         ['old-nas', 'Compte inconnu', 'netapp', 'eu-west-gra', '512 Go', '3', '2026-09-10'],
         ['shared-files', 'Lyon subsidiary', 'netapp', 'eu-west-gra', '1,0 To', '3',
           '2027-03-01'],
       ]);
     });
+
+    // Their panel and their "show all" modal alike (#146)
+    it('sorts the servers by any column, the account included, those without a value last',
+      async () => {
+        const { user } = await renderDashboard(severalAccounts);
+        await openTab(user, 'Infrastructure');
+
+        await sortTable(user, serversTable(), /^Date d'expiration/);
+
+        // The latest to expire first, and last, whichever way, the servers without a date
+        expect(headerOf(serversTable())).toEqual([
+          'ID○', 'Compte○', 'Datacenter○', 'CPU○', 'RAM○', 'État○', "Date d'expiration▼",
+          'Renouvellement○',
+        ]);
+        expect(firstColumnOf(serversTable())).toEqual([
+          'backup-server', 'db-server', 'legacy-server', 'ns3000002.ip-198-51-100.eu',
+        ]);
+
+        await sortTable(user, serversTable(), /^Date d'expiration/);
+
+        expect(firstColumnOf(serversTable())).toEqual([
+          'db-server', 'backup-server', 'legacy-server', 'ns3000002.ip-198-51-100.eu',
+        ]);
+
+        await sortTable(user, serversTable(), /^Compte/);
+
+        const byAccount = [
+          ['legacy-server', 'Compte inconnu'],
+          ['backup-server', 'Lyon subsidiary'],
+          ['ns3000002.ip-198-51-100.eu', 'yy2222-ovh'],
+          ['db-server', 'zz3333-ovh'],
+        ];
+        const serversAndAccounts = (table) => rowsOf(table).slice(1)
+          .map(([server, name]) => [server, name]);
+        expect(serversAndAccounts(serversTable())).toEqual(byAccount);
+
+        await user.click(serversButton('Tout afficher'));
+
+        const tableOfDialog = within(screen.getByRole('dialog')).getByRole('table');
+        expect(headerOf(tableOfDialog)[1]).toBe('Compte▲');
+        expect(serversAndAccounts(tableOfDialog)).toEqual(byAccount);
+      });
 
     it('names the account of each server in the "show all" modal too', async () => {
       const { user } = await renderDashboard(severalAccounts);
@@ -577,7 +694,7 @@ describe('Infrastructure tab with several accounts', () => {
         expect(api.fetchResourceTypeDetailsByAccount)
           .toHaveBeenCalledWith('backup', '2026-09-01', '2026-09-30');
         expect(rowsOf(billLines())).toEqual([
-          ['Service', 'Compte', 'Description', 'Montant'],
+          ['Service○', 'Compte○', 'Description○', 'Montant○'],
           ['vm-app-1.example.com', 'yy2222-ovh', 'Veeam Managed Backup - vm-app-1.example.com',
             '40,00€'],
           ['vm-db-1.example.com', 'yy2222-ovh', 'Veeam Managed Backup - vm-db-1.example.com',
@@ -618,7 +735,7 @@ describe('Infrastructure tab with several accounts', () => {
 
       expect(api.fetchResourceTypeDetailsByAccount).not.toHaveBeenCalled();
       expect(rowsOf(billLines())).toEqual([
-        ['Service', 'Description', 'Montant'],
+        ['Service○', 'Description○', 'Montant○'],
         ['ns3000001.ip-203-0-113.eu',
           'Location du serveur RISE-1 ns3000001.ip-203-0-113.eu - 1 mois', '270,00€'],
       ]);
@@ -639,9 +756,9 @@ describe('Infrastructure tab with several accounts', () => {
       await settle();
 
       expect(rowsOf(within(serversPanel()).getByRole('table'))[0]).toEqual(serverRows[0]);
-      expect(rowsOf(within(inventoryPanel('VPS')).getByRole('table'))[0][1]).toBe('Modèle');
-      expect(rowsOf(within(inventoryPanel('Stockage')).getByRole('table'))[0][1]).toBe('Type');
-      expect(rowsOf(billLines())[0]).toEqual(['Service', 'Description', 'Montant']);
+      expect(rowsOf(within(inventoryPanel('VPS')).getByRole('table'))[0][1]).toBe('Modèle○');
+      expect(rowsOf(within(inventoryPanel('Stockage')).getByRole('table'))[0][1]).toBe('Type○');
+      expect(rowsOf(billLines())[0]).toEqual(['Service○', 'Description○', 'Montant○']);
       expect(api.fetchResourceTypeDetailsByAccount).not.toHaveBeenCalled();
       const [file] = await downloadedFiles();
       expect(file.content.slice(BOM.length).split('\n')[0]).toBe(
@@ -660,7 +777,7 @@ describe('Infrastructure tab with several accounts', () => {
         .getByRole('button', { name: 'CSV' }));
 
       expect(rowsOf(within(inventoryPanel('Storage')).getByRole('table'))).toEqual([
-        ['ID', 'Account', 'Type', 'Region', 'Size', 'Shares', 'Expiration date'],
+        ['ID○', 'Account○', 'Type○', 'Region○', 'Size○', 'Shares○', 'Expiration date○'],
         ['old-nas', 'Unknown account', 'netapp', 'eu-west-gra', '512 GB', '3', '2026-09-10'],
         ['shared-files', 'Lyon subsidiary', 'netapp', 'eu-west-gra', '1.0 TB', '3',
           '2027-03-01'],

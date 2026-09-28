@@ -5,13 +5,15 @@ import { translations } from '../../src/i18n/translations.js';
 
 // The page's translations in French, as useLanguage() gives them
 const t = (key) => translations.fr[key] || key;
+// The table's sort as its tab gives it until the user sorts it: none (#146)
+const unsorted = { sort: null, onSort: () => {} };
 
 // OVHcloud gives a class to each object, never to a bucket (#145)
 describe('BucketsTable', () => {
   it('says why a bucket has no class', () => {
     render(
       <BucketsTable
-        language="fr" t={t} fmt={(amount) => String(amount)}
+        language="fr" t={t} fmt={(amount) => String(amount)} sorting={unsorted}
         buckets={[
           { name: 'empty', type: null, objectsCount: 0, inInventory: true, total: 0 },
           { name: 'unread', type: null, objectsCount: 4, inInventory: true, total: 1 },

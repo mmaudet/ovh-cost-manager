@@ -27,7 +27,7 @@ const breakdownLink = (name) => within(resourceTypeBreakdown()).getByRole('butto
 const withServerBillLines = [
   'Coûts par type de ressource', '(Septembre 2026)',
   'Dedicated Servers', '270,00€', '▲',
-  'Service', 'Description', 'Montant',
+  'Service', '○', 'Description', '○', 'Montant', '○',
   'ns3000001.ip-203-0-113.eu',
   'Location du serveur RISE-1 ns3000001.ip-203-0-113.eu - 1 mois', '270,00€',
   'Backup', '90,00€', '▼',

@@ -83,6 +83,10 @@ OVH API ──> data/import.js ──> SQLite (ovh-bills.db) ──> server/inde
   (`src/i18n/translations.js`). The page, `src/pages/Dashboard.jsx`, is a shell: each tab
   lives in `src/tabs/` as a `useXxxTab` hook plus an `XxxTab` component, per ADR 0001
   (`docs/adr/`). Shared components are in `src/components/`, helpers in `src/utils/`.
+  The tables that list rows all sort one way, through `src/components/SortableHeader.jsx`
+  (#146): a `SortableHeader` per column, `sortRows()` for the rows, by their raw values,
+  and the order in the tab's hook, with `useTableSorts()`; a table keeps its own order
+  until a header is clicked, and its CSV export keeps it whatever the order shown.
 
 ### Accounts
 

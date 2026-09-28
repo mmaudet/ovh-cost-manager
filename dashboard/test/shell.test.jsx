@@ -13,8 +13,10 @@ import {
   dropdown,
   emptyState,
   fakeTimers,
+  firstColumnOf,
   footer,
   headerBadge,
+  headerOf,
   importStatusesOf,
   importToneOf,
   lastSyncLines,
@@ -29,6 +31,7 @@ import {
   selectLanguage,
   selectMonth,
   settle,
+  sortTable,
   texts,
   toneOf,
 } from './support/render.jsx';
@@ -535,11 +538,36 @@ describe('dashboard shell', () => {
 
       expect(importHistory()).toBeVisible();
       expect(rowsOf(importHistory())).toEqual([
-        ['Date', 'Type', 'Statut', 'Factures'],
+        ['Date○', 'Type○', 'Statut○', 'Factures○'],
         ['14/09/2026 06:02:30', 'différentiel', 'réussi', '3'],
         ['13/09/2026 06:00:12', 'différentiel', 'échoué', '0'],
         ['01/07/2026 10:05:00', 'complet', 'réussi', '7'],
       ]);
+    });
+
+    // By its status as it reads, or the number of its bills (#146)
+    it('sorts the import history by any column', async () => {
+      const { user } = await renderDashboard();
+      await user.click(screen.getByText('Historique des imports'));
+
+      await sortTable(user, importHistory(), /^Factures/);
+
+      expect(headerOf(importHistory())).toEqual(['Date○', 'Type○', 'Statut○', 'Factures▼']);
+      expect(firstColumnOf(importHistory()))
+        .toEqual(['01/07/2026 10:05:00', '14/09/2026 06:02:30', '13/09/2026 06:00:12']);
+
+      await sortTable(user, importHistory(), /^Statut/);
+
+      // échoué, then the two that succeeded, in their order
+      expect(firstColumnOf(importHistory()))
+        .toEqual(['13/09/2026 06:00:12', '14/09/2026 06:02:30', '01/07/2026 10:05:00']);
+
+      await sortTable(user, importHistory(), /^Date/);
+      await sortTable(user, importHistory(), /^Date/);
+
+      // The oldest first
+      expect(firstColumnOf(importHistory()))
+        .toEqual(['01/07/2026 10:05:00', '13/09/2026 06:00:12', '14/09/2026 06:02:30']);
     });
 
     it('shows an import in progress', async () => {
@@ -571,7 +599,7 @@ describe('dashboard shell', () => {
       await user.click(screen.getByText('Historique des imports'));
 
       expect(rowsOf(importHistory())).toEqual([
-        ['Date', 'Type', 'Statut', 'Factures'],
+        ['Date○', 'Type○', 'Statut○', 'Factures○'],
         // Not over yet: the date is the start
         ['15/09/2026 11:55:00', 'période', 'en cours', '0'],
         ['15/09/2026 10:20:00', 'complet', 'partiel', '5'],
