@@ -14,7 +14,40 @@ sections were written afterwards from the git history.
 
 ## 3.1.0 - 2026-09-28
 
-<!-- Upgrade notes and highlights of this release, if any. -->
+OVH Cost Manager now imports the carbon footprint that OVHcloud's carbon
+calculator attributes to each account's services, and shows it next to what
+those services cost, in a new Carbon footprint tab (« Bilan carbone » in
+French). The tab shows each month's footprint by emission source, its trend
+over 12 months, and each dedicated server, instance flavor and volume type
+with its cost and carbon intensity. It also shows the share of the month's
+cost that the footprint covers, as OVHcloud does not compute the footprint of
+all its services. The figures are OVHcloud's estimates, in kgCO2e: OCM
+computes none of its own. See
+[Carbon Footprint](https://github.com/mmaudet/ovh-cost-manager/blob/v3.1.0/README.md#carbon-footprint)
+in the README.
+
+### Upgrade notes
+
+- **Nothing changes until you enable it.** The first start adds the
+  footprint's table to the database. The other tabs, routes and exports are
+  unchanged.
+- **Enabling it takes a new consumer key for each account.** A key keeps the
+  rules it was created with: request one with the command of
+  [Generate Consumer Key](https://github.com/mmaudet/ovh-cost-manager/blob/v3.1.0/README.md#2-generate-consumer-key),
+  which now lists `POST /me/carbonCalculator/csv`, and replace the account's
+  `consumerKey` in `config.json`. With Docker, do it before you start 3.1.0,
+  or restart the container afterwards: the compose files mount `config.json`
+  as a single file.
+- **The imports then fetch it.** `--include-carbon` imports it, and `--all`
+  includes it: `--all` is the Docker containers' default `IMPORT_FLAGS`, which
+  the dashboard's resync button uses too. Each import asks OVHcloud for the
+  last 24 months again, and keeps the older months, even with `--full`.
+- **Without the rule,** the import writes one line that names it and imports
+  the rest, and the run's status does not change. The tab then says how to
+  enable the footprint.
+- **API.** `GET /api/carbon/footprint`, `/api/carbon/trend`,
+  `/api/carbon/by-server` and `/api/export/carbon` are new. They take the
+  `account` parameter, as the other data routes do.
 
 ### New features
 * feat: import the carbon footprint and show a month's footprint by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/160
