@@ -37,6 +37,11 @@ The screenshots show anonymised data.
 ### Web Cloud
 ![Web Cloud - Domains, DNS zones, hosting and email over 12 rolling months](docs/screenshots/web-cloud.png)
 
+### Carbon Footprint Tab
+New in version 3.1.0.
+
+![Carbon footprint - Each month's footprint by emission source, each server, flavor and volume type with its cost, and the 12-month trend](docs/screenshots/carbon-footprint.png)
+
 ## Features
 
 ### Dashboard
@@ -69,7 +74,7 @@ The screenshots show anonymised data.
 - **Expiring Services**: Lists the services expired or expiring within 30 days, soonest first
 
 ### Environmental Impact
-- **Carbon Footprint**: OVHcloud's estimate of each month's carbon footprint, by emission source, location-based with the market-based footprint, next to what the same services cost (see [Carbon Footprint](#carbon-footprint))
+- **Carbon Footprint** (new in version 3.1.0): OVHcloud's estimate of each month's carbon footprint, by emission source, location-based with the market-based footprint, next to what the same services cost (see [Carbon Footprint](#carbon-footprint))
 - **Carbon Intensity**: each dedicated server, instance flavor and volume type with its footprint, its cost and its kgCO2e per unit of the currency, exportable to CSV
 - **Covered Share**: the share of each month's cost that the footprint covers, as OVHcloud does not compute the footprint of all its services, with its 12-month trend
 
@@ -444,7 +449,7 @@ npm run bills -- --month 2025-12 --format md         # Markdown output
 
 ## Carbon Footprint
 
-OCM imports the carbon footprint that OVHcloud's carbon calculator attributes to each account's services, and shows it in the Carbon footprint tab next to what those services cost.
+Since version 3.1.0, OCM imports the carbon footprint that OVHcloud's carbon calculator attributes to each account's services, and shows it in the Carbon footprint tab next to what those services cost.
 
 ### What the Figures Are
 
