@@ -1,5 +1,6 @@
 import Modal from '../components/Modal.jsx';
 import TableActions from '../components/TableActions.jsx';
+import { SortableHeader, sortRows } from '../components/SortableHeader.jsx';
 import { ServersTable, serverCsvColumns } from '../components/ServersTable.jsx';
 import { withAccountNames } from '../utils/accounts.js';
 import { downloadCSV } from '../utils/csv.js';
@@ -12,26 +13,79 @@ import { fmtBytes, fmtMemory, formatMonthLabel } from '../utils/format.js';
 // hide non Web Cloud lines.
 const INFRA_EXCLUDED_TYPES = ['cloud_project', 'domain', 'web_cloud'];
 
+// The value of a service among the bill lines in each column, which they sort by (#146)
+const BILL_LINE_VALUES = {
+  service: (item) => item.domain,
+  account: (item) => item.accountName,
+  description: (item) => item.description,
+  amount: (item) => item.total,
+};
+
+// The value of a VPS in each column, which the table sorts by (#146): its specifications by its
+// number of vCPUs, which they start with
+const VPS_VALUES = {
+  id: (v) => v.display_name || v.id,
+  account: (v) => v.accountName,
+  model: (v) => v.model,
+  region: (v) => v.zone,
+  specs: (v) => v.vcpus,
+  state: (v) => v.state,
+  expiration: (v) => v.expiration_date,
+};
+
+// The value of a storage service in each column, which the table sorts by (#146): none for a
+// size that the API did not give, which the import stores as 0 and the table shows as "-"
+const STORAGE_VALUES = {
+  id: (s) => s.display_name || s.id,
+  account: (s) => s.accountName,
+  type: (s) => s.service_type,
+  region: (s) => s.region,
+  size: (s) => s.total_size_gb || null,
+  shares: (s) => s.share_count,
+  expiration: (s) => s.expiration_date,
+};
+
 // The bill lines of the open resource type by service, under it: with the Account column of
 // the lists, null when they show none, each service's account too, the services then carrying
-// its name, accountName (#123)
-const BillLinesTable = ({ services, accountColumn, language, fmt }) => (
+// its name, accountName (#123). In the order the user sorts them, whatever the resource type
+// open (#146).
+const BillLinesTable = ({ services, sorting, accountColumn, language, t, fmt }) => (
   <div className="ml-6 mt-2 mb-3">
     <div className="overflow-x-auto max-h-64 overflow-y-auto rounded-lg border border-gray-200">
       <table className="w-full text-sm">
         <thead className="sticky top-0 bg-gray-50">
           <tr className="border-b">
-            <th className="p-2 text-left font-medium">Service</th>
-            {accountColumn && <th className="p-2 text-left font-medium">{accountColumn.label}</th>}
-            <th className="p-2 text-left font-medium">Description</th>
-            <th className="p-2 text-right font-medium">
+            <SortableHeader
+              column="service" kind="text" sorting={sorting} t={t}
+              className="p-2 text-left font-medium"
+            >
+              Service
+            </SortableHeader>
+            {accountColumn && (
+              <SortableHeader
+                column="account" kind="text" sorting={sorting} t={t}
+                className="p-2 text-left font-medium"
+              >
+                {accountColumn.label}
+              </SortableHeader>
+            )}
+            <SortableHeader
+              column="description" kind="text" sorting={sorting} t={t}
+              className="p-2 text-left font-medium"
+            >
+              Description
+            </SortableHeader>
+            <SortableHeader
+              column="amount" kind="number" sorting={sorting} t={t}
+              className="p-2 text-right font-medium"
+            >
               {language === 'en' ? 'Amount' : 'Montant'}
-            </th>
+            </SortableHeader>
           </tr>
         </thead>
         <tbody>
           {/* A service billed to several accounts has a row for each (#123) */}
-          {services.map((item, i) => (
+          {sortRows(services, sorting.sort, BILL_LINE_VALUES, language).map((item, i) => (
             <tr key={i} className="border-b hover:bg-gray-50">
               <td className="p-2 font-mono text-xs text-gray-600">{item.domain}</td>
               {accountColumn && <td className="p-2 text-xs text-gray-600">{item.accountName}</td>}
@@ -48,20 +102,23 @@ const BillLinesTable = ({ services, accountColumn, language, fmt }) => (
 );
 
 // The Infrastructure tab, which the shell renders while it is active: what
-// useInfrastructureTab() returns, with the shell's language, translations (t), amount format
-// (fmt) and selected month, the month's costs by resource type, which load at page start,
-// and the resource type whose bill lines are open, with its setter: shared state, see
+// useInfrastructureTab() returns, the sort order of its tables included (#146), with the
+// shell's language, translations (t), amount format (fmt) and selected month, the month's
+// costs by resource type, which load at page start, and the resource type whose bill lines are
+// open, with its setter: shared state, see
 // docs/adr/0001-tab-state-lives-in-the-dashboard-shell.md. Its lists name the account of each
 // service in the Account column of the shell (accountColumn), when it shows one (#123).
 const InfrastructureTab = ({
   inventoryServers, inventoryVps, inventoryStorage, resourceTypeDetails, setShowAllServers,
-  accountColumn, language, t, fmt, selectedMonth, byResourceType,
+  sortingOf, accountColumn, language, t, fmt, selectedMonth, byResourceType,
   selectedResourceType, setSelectedResourceType,
 }) => {
   const servers = withAccountNames(inventoryServers, accountColumn);
   const vpsInstances = withAccountNames(inventoryVps, accountColumn);
   const storageServices = withAccountNames(inventoryStorage, accountColumn);
   const billedServices = withAccountNames(resourceTypeDetails, accountColumn);
+  const vpsSorting = sortingOf('vps');
+  const storageSorting = sortingOf('storage');
 
   return (
     <div className="space-y-6">
@@ -154,8 +211,8 @@ const InfrastructureTab = ({
                   </div>
                   {isSelected && billedServices.length > 0 && (
                     <BillLinesTable
-                      services={billedServices} accountColumn={accountColumn}
-                      language={language} fmt={fmt}
+                      services={billedServices} sorting={sortingOf('billLines')}
+                      accountColumn={accountColumn} language={language} t={t} fmt={fmt}
                     />
                   )}
                 </div>
@@ -181,7 +238,8 @@ const InfrastructureTab = ({
           {/* ~11 rows before scrolling, the full list is one click away */}
           <div className="overflow-auto max-h-[430px]">
             <ServersTable
-              servers={servers} accountColumn={accountColumn} language={language} t={t}
+              servers={servers} sorting={sortingOf('servers')} accountColumn={accountColumn}
+              language={language} t={t}
             />
           </div>
         </div>
@@ -195,21 +253,54 @@ const InfrastructureTab = ({
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b bg-gray-50">
-                  <th className="p-3 text-left font-medium">ID</th>
+                  <SortableHeader
+                    column="id" kind="text" sorting={vpsSorting} t={t}
+                    className="p-3 text-left font-medium"
+                  >
+                    ID
+                  </SortableHeader>
                   {accountColumn && (
-                    <th className="p-3 text-left font-medium">{accountColumn.label}</th>
+                    <SortableHeader
+                      column="account" kind="text" sorting={vpsSorting} t={t}
+                      className="p-3 text-left font-medium"
+                    >
+                      {accountColumn.label}
+                    </SortableHeader>
                   )}
-                  <th className="p-3 text-left font-medium">
+                  <SortableHeader
+                    column="model" kind="text" sorting={vpsSorting} t={t}
+                    className="p-3 text-left font-medium"
+                  >
                     {language === 'en' ? 'Model' : 'Modèle'}
-                  </th>
-                  <th className="p-3 text-left font-medium">{t('region')}</th>
-                  <th className="p-3 text-left font-medium">{t('specs')}</th>
-                  <th className="p-3 text-left font-medium">{t('state')}</th>
-                  <th className="p-3 text-left font-medium">{t('expirationDate')}</th>
+                  </SortableHeader>
+                  <SortableHeader
+                    column="region" kind="text" sorting={vpsSorting} t={t}
+                    className="p-3 text-left font-medium"
+                  >
+                    {t('region')}
+                  </SortableHeader>
+                  <SortableHeader
+                    column="specs" kind="number" sorting={vpsSorting} t={t}
+                    className="p-3 text-left font-medium"
+                  >
+                    {t('specs')}
+                  </SortableHeader>
+                  <SortableHeader
+                    column="state" kind="text" sorting={vpsSorting} t={t}
+                    className="p-3 text-left font-medium"
+                  >
+                    {t('state')}
+                  </SortableHeader>
+                  <SortableHeader
+                    column="expiration" kind="date" sorting={vpsSorting} t={t}
+                    className="p-3 text-left font-medium"
+                  >
+                    {t('expirationDate')}
+                  </SortableHeader>
                 </tr>
               </thead>
               <tbody>
-                {vpsInstances.map(v => (
+                {sortRows(vpsInstances, vpsSorting.sort, VPS_VALUES, language).map(v => (
                   <tr key={v.id} className="border-b hover:bg-gray-50">
                     <td className="p-3 font-medium">{v.display_name || v.id}</td>
                     {accountColumn && <td className="p-3 text-gray-600">{v.accountName}</td>}
@@ -251,21 +342,56 @@ const InfrastructureTab = ({
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b bg-gray-50">
-                  <th className="p-3 text-left font-medium">ID</th>
+                  <SortableHeader
+                    column="id" kind="text" sorting={storageSorting} t={t}
+                    className="p-3 text-left font-medium"
+                  >
+                    ID
+                  </SortableHeader>
                   {accountColumn && (
-                    <th className="p-3 text-left font-medium">{accountColumn.label}</th>
+                    <SortableHeader
+                      column="account" kind="text" sorting={storageSorting} t={t}
+                      className="p-3 text-left font-medium"
+                    >
+                      {accountColumn.label}
+                    </SortableHeader>
                   )}
-                  <th className="p-3 text-left font-medium">Type</th>
-                  <th className="p-3 text-left font-medium">{t('region')}</th>
-                  <th className="p-3 text-right font-medium">
+                  <SortableHeader
+                    column="type" kind="text" sorting={storageSorting} t={t}
+                    className="p-3 text-left font-medium"
+                  >
+                    Type
+                  </SortableHeader>
+                  <SortableHeader
+                    column="region" kind="text" sorting={storageSorting} t={t}
+                    className="p-3 text-left font-medium"
+                  >
+                    {t('region')}
+                  </SortableHeader>
+                  <SortableHeader
+                    column="size" kind="number" sorting={storageSorting} t={t}
+                    className="p-3 text-right font-medium"
+                  >
                     {language === 'en' ? 'Size' : 'Taille'}
-                  </th>
-                  <th className="p-3 text-right font-medium">Shares</th>
-                  <th className="p-3 text-left font-medium">{t('expirationDate')}</th>
+                  </SortableHeader>
+                  <SortableHeader
+                    column="shares" kind="number" sorting={storageSorting} t={t}
+                    className="p-3 text-right font-medium"
+                  >
+                    Shares
+                  </SortableHeader>
+                  <SortableHeader
+                    column="expiration" kind="date" sorting={storageSorting} t={t}
+                    className="p-3 text-left font-medium"
+                  >
+                    {t('expirationDate')}
+                  </SortableHeader>
                 </tr>
               </thead>
               <tbody>
-                {storageServices.map(s => (
+                {sortRows(
+                  storageServices, storageSorting.sort, STORAGE_VALUES, language,
+                ).map(s => (
                   <tr key={s.id} className="border-b hover:bg-gray-50">
                     <td className="p-3 font-medium">{s.display_name || s.id}</td>
                     {accountColumn && <td className="p-3 text-gray-600">{s.accountName}</td>}
@@ -292,9 +418,9 @@ const InfrastructureTab = ({
 // The "show all" modal of the dedicated servers, which the shell renders after the page
 // column, whatever the active tab, so that its backdrop covers the whole page: see
 // docs/adr/0001-tab-state-lives-in-the-dashboard-shell.md. It names the account of each
-// server as the panel does (#123).
+// server as the panel does (#123), and sorts them as the panel does (#146).
 const InfrastructureTabModals = ({
-  inventoryServers, showAllServers, setShowAllServers,
+  inventoryServers, showAllServers, setShowAllServers, sortingOf,
   accountColumn, language, t,
 }) => {
   const servers = withAccountNames(inventoryServers, accountColumn);
@@ -313,7 +439,10 @@ const InfrastructureTabModals = ({
         />
       }
     >
-      <ServersTable servers={servers} accountColumn={accountColumn} language={language} t={t} />
+      <ServersTable
+        servers={servers} sorting={sortingOf('servers')} accountColumn={accountColumn}
+        language={language} t={t}
+      />
     </Modal>
   );
 };
