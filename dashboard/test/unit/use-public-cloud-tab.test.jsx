@@ -118,6 +118,7 @@ describe('usePublicCloudTab', () => {
         snapshots: { count: 2, total: 6 },
         savingsPlans: { count: 2, total: 28 },
         registry: { count: 1, total: 40 },
+        other: { total: 0, products: [] },
         aiml: { count: 0, total: 0 },
         loadBalancers: { count: 0, total: 0 },
       });

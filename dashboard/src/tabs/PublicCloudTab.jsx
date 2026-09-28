@@ -10,7 +10,8 @@ import {
   InstancesTable, instanceCsvColumns, instanceCsvRows
 } from '../components/InstancesTable.jsx';
 import { downloadCSV } from '../utils/csv.js';
-import { formatMonthLabel } from '../utils/format.js';
+import { formatMonthLabel, formatMonthName } from '../utils/format.js';
+import { publicCloudProductLabel } from '../utils/publicCloudProducts.js';
 
 // The Account column of the CSV files of the open project's resources (#121): when the lists
 // show the column, its label and the name of the project's account, as the list gives it; a
@@ -41,19 +42,35 @@ const downloadResources = (openProjectAccount, rows, columns, filename) => {
 // returns, the open project included, with the shell's language, translations (t), amount
 // format (fmt) and locale, the selected month, the setter of the selected project, and two of
 // its queries that load at page start: the month's costs by resource type and its GPU costs.
-// And the Account column of the lists, null when they show none (#121).
+// And the Account column of the lists, null when they show none (#121), and the cloud total
+// of the selected month, which the cards add up to (#145).
 const PublicCloudTab = ({
   projectsEnriched, publicCloudStats, projectConsumption, projectInstances, instanceCount,
   projectInstanceTotal, projectBuckets, projectVolumes, projectSnapshots, projectSavingsPlans,
   projectQuotas, setShowAllInstances, setShowAllBuckets, setShowAllVolumes,
   setShowAllSnapshots, setShowAllSavingsPlans,
   language, t, fmt, locale, selectedMonth, openProject, setSelectedProject,
-  byResourceType, gpuSummary, accountColumn,
+  byResourceType, gpuSummary, accountColumn, cloudTotal,
 }) => {
   // The Account column of the CSV files of the open project's resources, for all of them
   const openProjectAccount = openProjectAccountOf(accountColumn, projectsEnriched, openProject);
   return (
     <div className="space-y-6">
+      {/* What the cards add up to, and why it is not the current consumption (#145) */}
+      {selectedMonth?.value && cloudTotal !== undefined && (
+        <p className="text-sm text-gray-600">
+          {language === 'en'
+            ? `Public Cloud costs billed in ${formatMonthName(selectedMonth.value, language)}: `
+              + `${fmt(cloudTotal)}€, which the cards below break down. OVHcloud bills hourly `
+              + 'usage the month after: the current consumption, at the top of the page, is not '
+              + 'billed yet.'
+            : `Coûts Public Cloud facturés en ${formatMonthName(selectedMonth.value, language)} : `
+              + `${fmt(cloudTotal)}€, que détaillent les cartes ci-dessous. OVHcloud facture la `
+              + 'consommation à l\'heure le mois suivant : la consommation en cours, en haut de la '
+              + 'page, n\'est pas encore facturée.'}
+        </p>
+      )}
+
       {/* Cloud Summary Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
         <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
@@ -115,7 +132,23 @@ const PublicCloudTab = ({
             <p className="text-xs text-gray-400">{fmt(publicCloudStats.registry.total)}€</p>
           )}
         </div>
+        {/* What no card of its own counts: its products, and their cost (#145) */}
+        <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
+          <span className="text-gray-500 text-sm">{language === 'en' ? 'Other services' : 'Autres services'}</span>
+          <div className="text-3xl font-bold text-slate-600 mt-2">{publicCloudStats?.other?.products?.length || 0}</div>
+          {publicCloudStats?.other?.products?.length > 0 && (
+            <p className="text-xs text-gray-400">{fmt(publicCloudStats.other.total)}€</p>
+          )}
+        </div>
       </div>
+      {publicCloudStats?.other?.products?.length > 0 && (
+        <p className="text-sm text-gray-600">
+          {`${language === 'en' ? 'Other services' : 'Autres services'}${language === 'en' ? ':' : ' :'} `}
+          {publicCloudStats.other.products
+            .map(({ product, total }) => `${publicCloudProductLabel(product, language)} ${fmt(total)}€`)
+            .join(' · ')}
+        </p>
+      )}
 
       {/* Cloud Projects Table with inline detail */}
       {projectsEnriched.length > 0 && (

@@ -183,6 +183,8 @@ export const publicCloudFigures = (fields) => ({
   savingsPlans: { count: 0, total: 0 },
   objectStorage: { count: 0, total: 0 },
   registry: { count: 0, total: 0 },
+  // What no card of its own counts (#145)
+  other: { total: 0, products: [] },
   aiml: { count: 0, total: 0 },
   loadBalancers: { count: 0, total: 0 },
   ...fields,
