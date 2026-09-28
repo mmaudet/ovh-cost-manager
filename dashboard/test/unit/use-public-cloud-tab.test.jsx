@@ -56,10 +56,11 @@ describe('usePublicCloudTab', () => {
     const { result } = await renderTabHook(usePublicCloudTab,
       { ...onTheTab, selectedProject: production });
 
-    // What the shell spreads over the tab and its modals: the "show all" modals, closed,
-    // the projects and the figures of the month, the open project and its resources, whose
-    // lists the tests below read
+    // What the shell spreads over the tab and its modals: the sort order of its tables (#146),
+    // the "show all" modals, closed, the projects and the figures of the month, the open
+    // project and its resources, whose lists the tests below read
     expect(result.current).toEqual({
+      sortingOf: expect.any(Function),
       showAllBuckets: false,
       setShowAllBuckets: expect.any(Function),
       showAllInstances: false,

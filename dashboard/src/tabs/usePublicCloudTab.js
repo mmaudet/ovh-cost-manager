@@ -3,6 +3,7 @@
 
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { useTableSorts } from '../components/SortableHeader.jsx';
 import {
   fetchProjectsEnriched, fetchProjectConsumption, fetchProjectInstances, fetchProjectQuotas,
   fetchProjectVolumes, fetchProjectSnapshots, fetchProjectSavingsPlans, fetchProjectBuckets,
@@ -21,6 +22,9 @@ import { accountQuery } from '../utils/accounts.js';
 const usePublicCloudTab = ({
   selectedMonth, holdsSelectedMonth, activeTab, selectedProject, selectedAccount,
 }) => {
+  // The sort order of its tables, by table (#146): those of the open project's resources are
+  // shared by their panel and their "show all" modal, and stay when another project opens
+  const sortingOf = useTableSorts();
   const [showAllBuckets, setShowAllBuckets] = useState(false);
   const [showAllInstances, setShowAllInstances] = useState(false);
   const [showAllVolumes, setShowAllVolumes] = useState(false);
@@ -103,6 +107,7 @@ const usePublicCloudTab = ({
   }));
 
   return {
+    sortingOf,
     showAllBuckets,
     setShowAllBuckets,
     showAllInstances,

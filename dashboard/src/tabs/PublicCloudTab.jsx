@@ -2,6 +2,7 @@ import { Fragment } from 'react';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
 import Modal from '../components/Modal.jsx';
 import TableActions from '../components/TableActions.jsx';
+import { SortableHeader, sortRows } from '../components/SortableHeader.jsx';
 import { BucketsTable, bucketCsvColumns, sortBucketsByName } from '../components/BucketsTable.jsx';
 import { SavingsPlansTable, savingsPlanCsvColumns } from '../components/SavingsPlansTable.jsx';
 import { VolumesTable, volumeCsvColumns, volumeCsvRows } from '../components/VolumesTable.jsx';
@@ -21,6 +22,17 @@ const openProjectAccountOf = (accountColumn, projectsEnriched, openProject) => {
   return { label: accountColumn.label, name: accountColumn.nameOf(project.account) };
 };
 
+// The value of a project in each column that sorts the list (#146): its account while the
+// Account column shows, and no consumption for a project that consumed nothing, which the list
+// shows as "-"
+const projectValues = (accountColumn) => ({
+  name: (p) => p.name || p.id,
+  ...(accountColumn && { account: (p) => accountColumn.nameOf(p.account) }),
+  state: (p) => p.status,
+  instances: (p) => p.instance_count || 0,
+  consumption: (p) => (p.consumption_total > 0 ? p.consumption_total : null),
+});
+
 // Downloads resources of the open project as a CSV file, with the Account column of the open
 // project after the name of each resource, when there is one: the file leaves the project's
 // row, which shows its account, behind.
@@ -38,20 +50,26 @@ const downloadResources = (openProjectAccount, rows, columns, filename) => {
 };
 
 // The Public Cloud tab, which the shell renders while it is active: what usePublicCloudTab()
-// returns, the open project included, with the shell's language, translations (t), amount
-// format (fmt) and locale, the selected month, the setter of the selected project, and two of
-// its queries that load at page start: the month's costs by resource type and its GPU costs.
-// And the Account column of the lists, null when they show none (#121).
+// returns, the open project and the sort order of its tables included (#146), with the shell's
+// language, translations (t), amount format (fmt) and locale, the selected month, the setter of
+// the selected project, and two of its queries that load at page start: the month's costs by
+// resource type and its GPU costs. And the Account column of the lists, null when they show
+// none (#121).
 const PublicCloudTab = ({
   projectsEnriched, publicCloudStats, projectConsumption, projectInstances, instanceCount,
   projectInstanceTotal, projectBuckets, projectVolumes, projectSnapshots, projectSavingsPlans,
   projectQuotas, setShowAllInstances, setShowAllBuckets, setShowAllVolumes,
-  setShowAllSnapshots, setShowAllSavingsPlans,
+  setShowAllSnapshots, setShowAllSavingsPlans, sortingOf,
   language, t, fmt, locale, selectedMonth, openProject, setSelectedProject,
   byResourceType, gpuSummary, accountColumn,
 }) => {
   // The Account column of the CSV files of the open project's resources, for all of them
   const openProjectAccount = openProjectAccountOf(accountColumn, projectsEnriched, openProject);
+  // The projects in the order the user sorts them, in the server's until then (#146)
+  const projectSorting = sortingOf('projects');
+  const projects = sortRows(
+    projectsEnriched, projectSorting.sort, projectValues(accountColumn), language,
+  );
   return (
     <div className="space-y-6">
       {/* Cloud Summary Cards */}
@@ -125,18 +143,44 @@ const PublicCloudTab = ({
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b bg-gray-50">
-                  <th className="p-3 text-left font-medium">{language === 'en' ? 'Name' : 'Nom'}</th>
+                  <SortableHeader
+                    column="name" kind="text" sorting={projectSorting} t={t}
+                    className="p-3 text-left font-medium"
+                  >
+                    {language === 'en' ? 'Name' : 'Nom'}
+                  </SortableHeader>
                   {accountColumn && (
-                    <th className="p-3 text-left font-medium">{accountColumn.label}</th>
+                    <SortableHeader
+                      column="account" kind="text" sorting={projectSorting} t={t}
+                      className="p-3 text-left font-medium"
+                    >
+                      {accountColumn.label}
+                    </SortableHeader>
                   )}
-                  <th className="p-3 text-left font-medium">{t('state')}</th>
-                  <th className="p-3 text-right font-medium">{t('instances')}</th>
-                  <th className="p-3 text-right font-medium">{language === 'en' ? 'Current consumption' : 'Consommation en cours'}</th>
+                  <SortableHeader
+                    column="state" kind="text" sorting={projectSorting} t={t}
+                    className="p-3 text-left font-medium"
+                  >
+                    {t('state')}
+                  </SortableHeader>
+                  <SortableHeader
+                    column="instances" kind="number" sorting={projectSorting} t={t}
+                    className="p-3 text-right font-medium"
+                  >
+                    {t('instances')}
+                  </SortableHeader>
+                  <SortableHeader
+                    column="consumption" kind="number" sorting={projectSorting} t={t}
+                    className="p-3 text-right font-medium"
+                  >
+                    {language === 'en' ? 'Current consumption' : 'Consommation en cours'}
+                  </SortableHeader>
                   <th className="p-3 text-center font-medium"></th>
                 </tr>
               </thead>
               <tbody>
-                {projectsEnriched.map(p => (
+                {/* A project's detail shows right under it, whatever the order */}
+                {projects.map(p => (
                   <Fragment key={p.id}>
                     <tr
                       className={`border-b hover:bg-gray-50 cursor-pointer ${openProject?.id === p.id ? 'bg-blue-50' : ''}`}
@@ -237,7 +281,11 @@ const PublicCloudTab = ({
                                 </h4>
                                 {projectInstances.length > 0 ? (
                                   <div className="overflow-y-auto max-h-52 bg-white rounded-lg">
-                                    <InstancesTable instances={projectInstances} language={language} t={t} fmt={fmt} />
+                                    <InstancesTable
+                                      instances={projectInstances}
+                                      sorting={sortingOf('instances')}
+                                      language={language} t={t} fmt={fmt}
+                                    />
                                   </div>
                                 ) : (
                                   <div className="flex items-center justify-center h-16 text-gray-400 text-sm">
@@ -270,7 +318,8 @@ const PublicCloudTab = ({
                                   {/* ~11 rows before scrolling */}
                                   <div className="overflow-y-auto max-h-[400px] bg-white rounded-lg">
                                     <BucketsTable
-                                      buckets={projectBuckets} language={language} t={t} fmt={fmt}
+                                      buckets={projectBuckets} sorting={sortingOf('buckets')}
+                                      language={language} t={t} fmt={fmt}
                                     />
                                   </div>
                                 </div>
@@ -298,7 +347,10 @@ const PublicCloudTab = ({
                                     />
                                   </h4>
                                   <div className="overflow-y-auto max-h-[400px] bg-white rounded-lg">
-                                    <VolumesTable volumes={projectVolumes} language={language} t={t} fmt={fmt} />
+                                    <VolumesTable
+                                      volumes={projectVolumes} sorting={sortingOf('volumes')}
+                                      language={language} t={t} fmt={fmt}
+                                    />
                                   </div>
                                 </div>
                               )}
@@ -325,7 +377,11 @@ const PublicCloudTab = ({
                                     />
                                   </h4>
                                   <div className="overflow-y-auto max-h-[400px] bg-white rounded-lg">
-                                    <SnapshotsTable snapshots={projectSnapshots} language={language} t={t} fmt={fmt} locale={locale} />
+                                    <SnapshotsTable
+                                      snapshots={projectSnapshots}
+                                      sorting={sortingOf('snapshots')}
+                                      language={language} t={t} fmt={fmt} locale={locale}
+                                    />
                                   </div>
                                 </div>
                               )}
@@ -352,7 +408,11 @@ const PublicCloudTab = ({
                                     />
                                   </h4>
                                   <div className="overflow-y-auto max-h-[400px] bg-white rounded-lg">
-                                    <SavingsPlansTable plans={projectSavingsPlans} language={language} fmt={fmt} />
+                                    <SavingsPlansTable
+                                      plans={projectSavingsPlans}
+                                      sorting={sortingOf('savingsPlans')}
+                                      language={language} t={t} fmt={fmt}
+                                    />
                                   </div>
                                 </div>
                               )}
@@ -409,9 +469,10 @@ const PublicCloudTab = ({
 
 // The "show all" modals of the resources of the selected project, which the shell renders
 // after the page column, whatever the active tab, so that their backdrop covers the whole
-// page: see docs/adr/0001-tab-state-lives-in-the-dashboard-shell.md
+// page: see docs/adr/0001-tab-state-lives-in-the-dashboard-shell.md. Each sorts its table as
+// the panel of the tab does (#146).
 const PublicCloudTabModals = ({
-  showAllBuckets, setShowAllBuckets, showAllInstances, setShowAllInstances,
+  sortingOf, showAllBuckets, setShowAllBuckets, showAllInstances, setShowAllInstances,
   showAllVolumes, setShowAllVolumes, showAllSnapshots, setShowAllSnapshots,
   showAllSavingsPlans, setShowAllSavingsPlans,
   projectBuckets, projectInstances, instanceCount, projectInstanceTotal, projectVolumes,
@@ -453,7 +514,10 @@ const PublicCloudTabModals = ({
           </button>
         }
       >
-        <BucketsTable buckets={projectBuckets} language={language} t={t} fmt={fmt} />
+        <BucketsTable
+          buckets={projectBuckets} sorting={sortingOf('buckets')}
+          language={language} t={t} fmt={fmt}
+        />
       </Modal>
 
       <Modal
@@ -483,7 +547,10 @@ const PublicCloudTabModals = ({
           />
         }
       >
-        <InstancesTable instances={projectInstances} language={language} t={t} fmt={fmt} />
+        <InstancesTable
+          instances={projectInstances} sorting={sortingOf('instances')}
+          language={language} t={t} fmt={fmt}
+        />
       </Modal>
 
       <Modal
@@ -510,7 +577,10 @@ const PublicCloudTabModals = ({
           />
         }
       >
-        <VolumesTable volumes={projectVolumes} language={language} t={t} fmt={fmt} />
+        <VolumesTable
+          volumes={projectVolumes} sorting={sortingOf('volumes')}
+          language={language} t={t} fmt={fmt}
+        />
       </Modal>
 
       <Modal
@@ -537,7 +607,10 @@ const PublicCloudTabModals = ({
           />
         }
       >
-        <SnapshotsTable snapshots={projectSnapshots} language={language} t={t} fmt={fmt} locale={locale} />
+        <SnapshotsTable
+          snapshots={projectSnapshots} sorting={sortingOf('snapshots')}
+          language={language} t={t} fmt={fmt} locale={locale}
+        />
       </Modal>
 
       <Modal
@@ -564,7 +637,10 @@ const PublicCloudTabModals = ({
           />
         }
       >
-        <SavingsPlansTable plans={projectSavingsPlans} language={language} fmt={fmt} />
+        <SavingsPlansTable
+          plans={projectSavingsPlans} sorting={sortingOf('savingsPlans')}
+          language={language} t={t} fmt={fmt}
+        />
       </Modal>
     </>
   );
