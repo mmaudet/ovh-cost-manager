@@ -65,6 +65,8 @@ OVH API ──> data/import.js ──> SQLite (ovh-bills.db) ──> server/inde
     other services, so that the cards and the credit add up to the month's cloud total (#145).
     **Products are read when the server reads the bills**, like the ties: changing the rules
     needs no re-import.
+  - `storage-classes.js` — pure: the names of the storage classes that OVH gives the objects
+    of a bucket, for the import and for the buckets an earlier import stored (#145).
 - **`server/`** — read-only Express API over the DB. `index.js` is the single ~1300-line
   route file. `auth/` guards the API in one of two modes. With OIDC (openid-client v6):
   PKCE sign-in bound to the browser by a signed cookie per state, SQLite-backed sessions

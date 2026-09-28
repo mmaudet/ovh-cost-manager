@@ -29,6 +29,7 @@ const { classifyService, classifyResourceTypeFromDomain } = require('./classify'
 const { footprintMonths, readFootprintFile } = require('./carbon-footprint');
 const { beyondTotal, usageRows } = require('./cloud-usage');
 const { monthBounds } = require('./months');
+const { storageClassLabel } = require('./storage-classes');
 
 // Skip this run if another import (cron or manual resync) is in progress.
 // Checked first, before --full clears the database.
@@ -919,13 +920,8 @@ function buildResourceTypeMap(projectMap) {
 
 // OVH reports the storage class per object, never per bucket. The class is
 // picked at bucket creation and applies to everything written to it, so
-// sampling a single object identifies the bucket's class.
-const STORAGE_CLASS_LABELS = {
-  STANDARD: 'Standard',
-  STANDARD_IA: 'Standard IA',
-  HIGH_PERFORMANCE: 'High Performance',
-  HIGH_PERF: 'High Performance'
-};
+// sampling a single object identifies the bucket's class; an empty bucket has
+// none (data/storage-classes.js names them).
 
 async function detectStorageClass(ovh, projectId, regionName, bucketName) {
   try {
@@ -935,7 +931,7 @@ async function detectStorageClass(ovh, projectId, regionName, bucketName) {
       { limit: 1 }
     ));
     const raw = objects?.[0]?.storageClass;
-    return raw ? (STORAGE_CLASS_LABELS[raw] || raw) : null;
+    return raw ? storageClassLabel(raw) : null;
   } catch (err) {
     return null; // empty bucket or listing not permitted: leave the class unknown
   }

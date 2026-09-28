@@ -6,6 +6,7 @@ const {
 const { tieFootprint } = require('./carbon-ties');
 const { MONTHLY_KINDS } = require('./cloud-usage');
 const { productFigures } = require('./public-cloud-products');
+const { storageClassLabel } = require('./storage-classes');
 const { monthsOfWindow, shiftMonth } = require('./months');
 const ownership = require('./ownership');
 // The conditions of the queries that keep one account's rows (#115), or a list of ids
@@ -1859,7 +1860,7 @@ const cloudDetailOps = {
       return {
         name: b.name,
         region: b.region,
-        storage_class: b.storage_class || null,
+        storage_class: storageClassLabel(b.storage_class),
         status: b.status,
         objects_count: b.objects_count,
         objects_size: b.objects_size,

@@ -189,6 +189,24 @@ describe('bucket type', () => {
       ['gone', null, 0.5]
     ]);
   });
+
+  // An import before #145 stored these classes as OVH gives them
+  test('names the archive classes that an earlier import stored as OVHcloud does', () => {
+    for (const [name, storageClass] of [['cool', 'GLACIER_IR'], ['frozen', 'DEEP_ARCHIVE']]) {
+      db.cloudDetails.upsertBucket({
+        id: `${PROJECT}:EU-WEST-PAR:${name}`, project_id: PROJECT, name, region: 'EU-WEST-PAR',
+        storage_class: storageClass, status: null, objects_count: 1, objects_size: 10,
+        created_at: '2025-01-01T00:00:00Z',
+      });
+    }
+
+    const buckets = db.cloudDetails.getBucketsByProject(PROJECT, FROM, TO);
+
+    expect(buckets.map(b => [b.name, b.storage_class])).toEqual([
+      ['cool', 'Active Archive'],
+      ['frozen', 'Cold Archive'],
+    ]);
+  });
 });
 
 describe('instance cost', () => {
