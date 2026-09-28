@@ -174,7 +174,7 @@ curl -X POST \
   https://eu.api.ovh.com/1.0/auth/credential
 ```
 
-> **Minimum permissions**: `GET /me`, `/me/*` and `/cloud/*` are required. Every import reads the account it imports from `GET /me`, which `/me/*` does not cover: a key without it fails every import. The additional paths (`/dedicated/server/*`, `/dedicatedCloud/*`, `/vps/*`, `/storage/*`, `/ip/*`, `/ipLoadbalancing/*`) enable the full infrastructure inventory. The dashboard works without them but inventory data will be limited. The optional `POST /me/carbonCalculator/csv` lets the import ask OVHcloud's carbon calculator for the account's carbon footprint (`--include-carbon`, which `--all` includes): it only asks OVHcloud to generate the file, which `GET /me/*` then reads. Without it, the import logs OVHcloud's refusal and imports the rest.
+> **Minimum permissions**: `GET /me`, `/me/*` and `/cloud/*` are required. Every import reads the account it imports from `GET /me`, which `/me/*` does not cover: a key without it fails every import. The additional paths (`/dedicated/server/*`, `/dedicatedCloud/*`, `/vps/*`, `/storage/*`, `/ip/*`, `/ipLoadbalancing/*`) enable the full infrastructure inventory. The dashboard works without them but inventory data will be limited. The optional `POST /me/carbonCalculator/csv` lets the import ask OVHcloud's carbon calculator for the account's carbon footprint (`--include-carbon`, which `--all` includes): it only asks OVHcloud to generate the file, which `GET /me/*` then reads. Without it, the import says that the key lacks it, and imports the rest; a footprint that cannot be imported otherwise counts among the failed items, and replaces nothing.
 
 Visit the `validationUrl` in the response to authorize the application.
 

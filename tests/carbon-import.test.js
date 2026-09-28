@@ -50,7 +50,10 @@ function line({
 }) {
   const [electricityLocation, electricityMarket] = electricity;
   const [operationsLocation, operationsMarket] = operations;
-  const total = (...parts) => parts.reduce((sum, part) => sum + part, 0).toFixed(2);
+  // Blank when a part is not a number, as for a line that gives no figure
+  const total = (...parts) => (parts.every(part => typeof part === 'number')
+    ? parts.reduce((sum, part) => sum + part, 0).toFixed(2)
+    : '');
   return [
     type, datacenter, range, name, domain, month, manufacturing,
     electricityLocation, electricityMarket, operationsLocation, operationsMarket,
@@ -247,5 +250,111 @@ describe('several accounts', () => {
 
     expect(totalsOf(ACCOUNT.nic, '2026-08')).toEqual([['2026-08', null]]);
     expect(totalsOf(PARIS, '2026-08')).toEqual([['2026-08', 12]]);
+  });
+});
+
+// When the carbon footprint cannot be imported (#151): the import says why, replaces nothing
+// and carries on, the run's status unchanged
+describe('failures', () => {
+  // The account's footprint that an earlier import stored, which a failure leaves as it is
+  const EARLIER = [storedLine('2026-07', 90)];
+
+  // A bill of September, which the rest of the import imports all the same
+  function serveABill() {
+    routes.set('/me/bill', ok(['FR1']));
+    routes.set('/me/bill/FR1', ok({
+      billId: 'FR1', date: '2026-09-03T00:00:00+02:00',
+      priceWithoutTax: { value: 10, currencyCode: 'EUR' },
+      priceWithTax: { value: 12, currencyCode: 'EUR' }, tax: { value: 2, currencyCode: 'EUR' },
+    }));
+    routes.set('/me/bill/FR1/details', ok(['D1']));
+    routes.set('/me/bill/FR1/details/D1', ok({
+      domain: 'example.com', description: 'Nom de domaine example.com', quantity: '1',
+      unitPrice: { value: 10, currencyCode: 'EUR' }, totalPrice: { value: 10, currencyCode: 'EUR' },
+    }));
+  }
+
+  beforeEach(() => {
+    storeFootprint(ACCOUNT.nic, ...EARLIER);
+    serveABill();
+  });
+
+  // What the run left: its status, its failed items as its summary counts them, whether it
+  // imported the bill, and the account's footprint of July
+  const outcome = () => ({
+    status: db.importLog.getAll()[0].status,
+    failedItems: console.log.mock.calls.map(([text]) => text)
+      .filter(text => /^Failed items/.test(text)),
+    bills: db.getDb().prepare('SELECT id FROM bills').pluck().all(),
+    july: totalsOf(ACCOUNT.nic, '2026-07'),
+  });
+  // What the import wrote on its error output
+  const errors = () => console.error.mock.calls.map(([text]) => String(text));
+
+  test('a key without the right: one line names it, and the rest is imported', async () => {
+    routes.set('/me/carbonCalculator/csv', () => Promise.reject({
+      error: 403, message: 'This call has not been granted',
+    }));
+
+    await runImport({ includeCarbon: true });
+
+    expect(outcome()).toEqual({
+      status: 'success', failedItems: ['Failed items: 0'], bills: ['FR1'],
+      july: [['2026-07', 90]],
+    });
+    expect(errors().filter(text => text.includes('POST /me/carbonCalculator/csv'))).toHaveLength(1);
+  });
+
+  // Each failure that the carbon calculator or its file can cause
+  const failures = {
+    'a task that ends in error': () => {
+      serveCarbonCalculator(routes, fileOf(), { taskID: 'failed' });
+      routes.set('/me/carbonCalculator/task/failed',
+        ok({ taskID: 'failed', status: 'ERROR', link: null }));
+    },
+    'a task still in progress after 2 minutes': () => {
+      serveCarbonCalculator(routes, fileOf(), { taskID: 'slow' });
+      routes.set('/me/carbonCalculator/task/slow',
+        ok({ taskID: 'slow', status: 'IN_PROGRESS', link: null }));
+    },
+    'a download that fails': () => {
+      serveCarbonCalculator(routes, fileOf(), { link: 'https://carbon.example.net/expired.csv' });
+      files.delete('https://carbon.example.net/expired.csv');
+    },
+    'a file without a column that OCM reads': () => {
+      serveCarbonCalculator(routes, fileOf(
+        line({ month: '2026-07', manufacturing: 1, electricity: [2, 1.5], operations: [3, 2.5] }),
+      ).replace('server_domain', 'domain'));
+    },
+    'a file with a line that gives no figure': () => {
+      serveCarbonCalculator(routes, fileOf(
+        line({
+          month: '2026-07', manufacturing: 'n/a', electricity: [2, 1.5], operations: [3, 2.5],
+        }),
+      ));
+    },
+  };
+
+  test.each(Object.keys(failures))(
+    '%s: it is logged and counted, and replaces nothing',
+    async (failure) => {
+      failures[failure]();
+
+      await runImport({ includeCarbon: true });
+
+      expect(outcome()).toEqual({
+        status: 'success', failedItems: ['Failed items: 1'], bills: ['FR1'],
+        july: [['2026-07', 90]],
+      });
+      expect(errors().filter(text => text.includes('carbon footprint'))).toHaveLength(1);
+    },
+  );
+
+  test('a task still in progress: it asks every 3 seconds, for 2 minutes', async () => {
+    failures['a task still in progress after 2 minutes']();
+
+    await runImport({ includeCarbon: true });
+
+    expect(carbonCalls().filter(([method]) => method === 'GET')).toHaveLength(40);
   });
 });

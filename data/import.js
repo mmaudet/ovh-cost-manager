@@ -1317,7 +1317,9 @@ const CARBON_WAIT_MS = 2 * 60 * 1000;
  * Imports the carbon footprint of the account: the carbon calculator generates the file of its
  * last 24 months, which the import downloads from the link of its task, and whose lines
  * replace those of these months (see data/carbon-footprint.js). A footprint that cannot be
- * imported replaces nothing, and the rest of the import goes on.
+ * imported replaces nothing, and the rest of the import goes on, the run's status unchanged
+ * (#151): a key without the right to ask for it gets one line that names the right, and any
+ * other failure counts among the failed items.
  * @param {object} ovh - The OVH API client of the account
  * @param {string} nic - The NIC handle of the account, which every line it stores carries
  * @param {Function} heartbeat - Keeps the run's lock while the import waits for the task
@@ -1340,6 +1342,10 @@ async function importCarbonFootprint(ovh, nic, heartbeat) {
       ));
       heartbeat();
     }
+    if (task.status === 'IN_PROGRESS') {
+      throw new Error(`The carbon calculator's task ${taskID} was still in progress after `
+        + `${CARBON_WAIT_MS / 60000} minutes`);
+    }
     if (task.status !== 'SUCCESS') {
       throw new Error(`The carbon calculator's task ${taskID} ended ${task.status}`);
     }
@@ -1353,6 +1359,12 @@ async function importCarbonFootprint(ovh, nic, heartbeat) {
     console.log(`  Imported ${lines.length} footprint lines, `
       + `from ${months.first} to ${months.last}`);
   } catch (err) {
+    if (errorStatus(err) === 403 && /not been granted/i.test(err?.message)) {
+      console.error('  The API key lacks the right POST /me/carbonCalculator/csv, which the '
+        + 'carbon footprint needs: add it to import the footprint');
+      return;
+    }
+    failedItemCount += 1;
     console.error(`  Error importing the carbon footprint: ${describeError(err)}`);
   }
 }
