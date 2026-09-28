@@ -1,5 +1,6 @@
 const Database = require('better-sqlite3');
 const { classifyWebCloud, WEB_CLOUD_FAMILIES } = require('./classify');
+const { instanceLineCondition, readInstanceLine } = require('./instance-lines');
 const { monthsOfWindow } = require('./months');
 const ownership = require('./ownership');
 // The conditions of the queries that keep one account's rows (#115), or a list of ids
@@ -1516,16 +1517,15 @@ function computeInstanceCosts(db, projectId, fromDate, toDate) {
   const costs = new Map();
   let unmatched = 0;
 
+  const ofInstanceLines = instanceLineCondition('d.description');
   const lines = db.prepare(`
     SELECT d.description as description, d.total_price as price
     FROM bill_details d
     JOIN bills b ON d.bill_id = b.id
     WHERE d.project_id = ?
       AND b.date >= ? AND b.date <= ?
-      AND (d.description LIKE 'Forfait mensuel pour une instance%'
-           OR d.description LIKE 'Prorata de la facturation mensuelle d%une instance%'
-           OR d.description LIKE 'Consommation à l%heure pour les instances%')
-  `).all(projectId, fromDate, toDate);
+      AND ${ofInstanceLines.sql}
+  `).all(projectId, fromDate, toDate, ...ofInstanceLines.params);
 
   // An instance created after the period did not run during it, so it takes
   // no share of that period's lines (same rule as the buckets)
@@ -1546,30 +1546,34 @@ function computeInstanceCosts(db, projectId, fromDate, toDate) {
   const known = new Set(instances.map(i => i.id));
 
   for (const line of lines) {
+    const instanceLine = readInstanceLine(line.description);
+
     // Monthly fee or its prorata: charged to the instance named by its id
-    const monthly = line.description.match(/\(id ([0-9a-f-]{36})/i);
-    if (monthly) {
-      if (known.has(monthly[1])) add(monthly[1], line.price, false);
+    if (instanceLine?.instanceId) {
+      if (known.has(instanceLine.instanceId)) add(instanceLine.instanceId, line.price, false);
       else unmatched += line.price;
       continue;
     }
 
     // "Consommation à l'heure pour les instances <flavor> [<region>]"
-    const rest = line.description.replace(/^Consommation à l.heure pour les instances\s*/i, '').trim();
-    if (!rest) { unmatched += line.price; continue; }
+    if (!instanceLine || instanceLine.monthly || !instanceLine.flavor) {
+      unmatched += line.price;
+      continue;
+    }
+    const { flavor: named, region: namedRegion } = instanceLine;
 
-    const tokens = rest.split(/\s+/);
     const candidates = [];
-    if (tokens.length > 1) {
-      const region = tokens[tokens.length - 1].toLowerCase();
-      const flavor = normalizeFlavor(tokens.slice(0, -1).join('-'));
+    if (namedRegion) {
+      const region = namedRegion.toLowerCase();
+      const flavor = normalizeFlavor(named);
       candidates.push(...hourly.filter(i =>
         (i.region || '').toLowerCase() === region &&
         (normalizeFlavor(i.plan_code) === flavor || normalizeFlavor(i.flavor) === flavor)
       ));
     }
+    // Or the last word was part of the flavor, which the line names without a region
     if (!candidates.length) {
-      const flavor = normalizeFlavor(rest.replace(/\s+/g, '-'));
+      const flavor = normalizeFlavor(namedRegion ? `${named}-${namedRegion}` : named);
       candidates.push(...hourly.filter(i =>
         normalizeFlavor(i.plan_code) === flavor || normalizeFlavor(i.flavor) === flavor
       ));
