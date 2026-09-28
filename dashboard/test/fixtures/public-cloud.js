@@ -54,7 +54,7 @@ const productionUsage = [
     resource_name: 'classic', quantity: 33600, unit: 'GiBh', total_price: 2.25, region: 'GRA11' }),
   usage({ id: 7, project_id: PRODUCTION, resource_type: 'snapshot', resource_id: '',
     resource_name: 'SBG5', quantity: 16800, unit: 'GiBh', total_price: 3.25, region: 'SBG5' }),
-  usage({ id: 8, project_id: PRODUCTION, resource_type: 'objectStorage', resource_id: '',
+  usage({ id: 8, project_id: PRODUCTION, resource_type: 'storage', resource_id: '',
     resource_name: 'GRA', quantity: 1920000, unit: 'GiBh', total_price: 41, region: 'GRA' }),
 ];
 

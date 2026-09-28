@@ -179,7 +179,8 @@ const PublicCloudTab = ({
                                 });
                                 const chartData = Object.entries(byType)
                                   .map(([kind, value]) => ({
-                                    name: cloudKindLabel(kind, language), value: Math.round(value * 100) / 100,
+                                    name: cloudKindLabel(kind, t),
+                                    value: Math.round(value * 100) / 100,
                                   }))
                                   .sort((a, b) => b.value - a.value);
                                 const typeColors = ['#3b82f6', '#ef4444', '#f59e0b', '#10b981', '#8b5cf6', '#ec4899', '#6b7280'];
