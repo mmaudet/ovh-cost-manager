@@ -12,8 +12,9 @@ import { useSelectedAccount } from '../hooks/useSelectedAccount.js';
 import Logo from '../components/Logo';
 import { AccountSelector } from '../components/AccountSelector.jsx';
 import { HeaderSelect } from '../components/HeaderSelect.jsx';
-import { ImportStatus } from '../components/ImportStatus.jsx';
+import { ImportStatus, importStatusName } from '../components/ImportStatus.jsx';
 import { ResyncButton } from '../components/ResyncButton.jsx';
+import { SortableHeader, sortRows, useTableSorts } from '../components/SortableHeader.jsx';
 import {
   accountColumnOf, accountLabel, accountQuery, accountsOf, budgetOf, importStateOf,
   offersAccounts, scopeLabel,
@@ -48,6 +49,15 @@ const IMPORT_TYPE_KEYS = {
   differential: 'importTypeDifferential'
 };
 
+// The value of an import of the history in each column, which the history sorts by (#146): when
+// it ended, or started while it runs, and its type and status as the history names them
+const importHistoryValues = (t) => ({
+  date: (h) => parseSqliteDate(h.completed_at || h.started_at),
+  type: (h) => t(IMPORT_TYPE_KEYS[h.type] || h.type),
+  status: (h) => importStatusName(h.status, t),
+  bills: (h) => h.bills_imported,
+});
+
 // The age, in days, beyond which the banner warns of a synchronisation
 const SYNC_WARNING_DAYS = 30;
 const DAY_MS = 1000 * 60 * 60 * 24;
@@ -70,6 +80,9 @@ export default function Dashboard() {
   const [syncWarningDismissed, setSyncWarningDismissed] = useState(false);
   const [selectedProject, setSelectedProject] = useState(null);
   const [selectedResourceType, setSelectedResourceType] = useState(null);
+  // The sort order of the shell's own table, the import history of the footer (#146), in the
+  // order of the server, the latest first, until the user sorts it
+  const sortingOf = useTableSorts();
 
   // Helper to format currency with current language
   const fmt = (value) => formatCurrency(value, language);
@@ -393,6 +406,7 @@ export default function Dashboard() {
   // 30 s whether it is over (#51).
   const showsLatestImport = Boolean(importStatus?.latest)
     && (syncedAccounts === null || !importStatus.latest.completed_at);
+  const importHistorySorting = sortingOf('importHistory');
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 p-4 md:p-6">
@@ -817,14 +831,37 @@ export default function Dashboard() {
               <table className="w-full mt-2 text-xs border-collapse">
                 <thead>
                   <tr className="text-gray-500 border-b border-gray-200">
-                    <th className="text-left py-1 px-2">{t('importDate')}</th>
-                    <th className="text-left py-1 px-2">{t('importType')}</th>
-                    <th className="text-left py-1 px-2">{t('importStatusLabel')}</th>
-                    <th className="text-right py-1 px-2">{t('importBills')}</th>
+                    <SortableHeader
+                      column="date" kind="date" sorting={importHistorySorting} t={t}
+                      className="text-left py-1 px-2"
+                    >
+                      {t('importDate')}
+                    </SortableHeader>
+                    <SortableHeader
+                      column="type" kind="text" sorting={importHistorySorting} t={t}
+                      className="text-left py-1 px-2"
+                    >
+                      {t('importType')}
+                    </SortableHeader>
+                    <SortableHeader
+                      column="status" kind="text" sorting={importHistorySorting} t={t}
+                      className="text-left py-1 px-2"
+                    >
+                      {t('importStatusLabel')}
+                    </SortableHeader>
+                    <SortableHeader
+                      column="bills" kind="number" sorting={importHistorySorting} t={t}
+                      className="text-right py-1 px-2"
+                    >
+                      {t('importBills')}
+                    </SortableHeader>
                   </tr>
                 </thead>
                 <tbody>
-                  {importStatus.history.map((h) => (
+                  {sortRows(
+                    importStatus.history, importHistorySorting.sort, importHistoryValues(t),
+                    language,
+                  ).map((h) => (
                     <tr key={h.id} className="border-b border-gray-100">
                       <td className="py-1 px-2 text-gray-600">
                         {parseSqliteDate(h.completed_at || h.started_at).toLocaleString(locale)}

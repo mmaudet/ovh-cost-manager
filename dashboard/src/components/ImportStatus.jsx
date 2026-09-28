@@ -15,6 +15,16 @@ const importStatusOf = (status) =>
   IMPORT_STATUSES[status] || { key: status, tone: IMPORT_STATUSES.failed.tone };
 
 /**
+ * The name of the status of an import, as the import history shows it, and sorts it by (#146).
+ * @param {string} status - How the import ended, or 'running'
+ * @param {function(string): string} t
+ * @returns {string}
+ */
+export function importStatusName(status, t) {
+  return t(importStatusOf(status).key);
+}
+
+/**
  * The status of an import in its colour, with why it failed or ended partial over it, which
  * names the accounts that failed (#113).
  * @param {object} props
@@ -26,6 +36,10 @@ const importStatusOf = (status) =>
  * @returns {JSX.Element}
  */
 export function ImportStatus({ status, error, t, children }) {
-  const { key, tone } = importStatusOf(status);
-  return <span className={tone} title={error || undefined}>{children ?? t(key)}</span>;
+  const { tone } = importStatusOf(status);
+  return (
+    <span className={tone} title={error || undefined}>
+      {children ?? importStatusName(status, t)}
+    </span>
+  );
 }
