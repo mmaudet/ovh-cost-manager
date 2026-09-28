@@ -46,19 +46,23 @@ describe('useCarbonTab', () => {
     expect(api.fetchCarbonFootprint).toHaveBeenCalledWith('2026-08', null);
   });
 
+  // August's answer, as the route gives it
+  const august = {
+    month: '2026-08',
+    footprint: {
+      manufacturing: 1234.5, electricity: 2345.25, operations: 456.75, total: 4036.5,
+      marketBasedTotal: 3012.25,
+    },
+    latestMonth: '2026-08',
+  };
+
   it('returns the carbon footprint of the month, which the tab shows', async () => {
     const { result } = await renderTabHook(useCarbonTab, onTheTab);
 
-    const august = {
-      month: '2026-08',
-      footprint: {
-        manufacturing: 1234.5, electricity: 2345.25, operations: 456.75, total: 4036.5,
-        marketBasedTotal: 3012.25,
-      },
-      latestMonth: '2026-08',
-    };
     expect(result.current).toEqual({
-      carbonFootprint: { ...august, shown: august },
+      carbonFootprint: august,
+      // Of the month selected
+      missingMonth: null,
       // Answered: the tab shows it (#64)
       loadingCarbon: false,
       failedCarbon: false,
@@ -71,15 +75,11 @@ describe('useCarbonTab', () => {
       { ...onTheTab, selectedMonth: september });
 
     expect(api.fetchCarbonFootprint.mock.calls).toEqual([['2026-09', null], ['2026-08', null]]);
-    expect(result.current.carbonFootprint).toMatchObject({
-      month: '2026-09', footprint: null, latestMonth: '2026-08',
-      shown: { month: '2026-08', footprint: { total: 4036.5 } },
-    });
+    expect(result.current).toMatchObject({ carbonFootprint: august, missingMonth: '2026-09' });
     // Both under the key of the month selected: the tab shows them together
     expect(keysOf('carbonFootprint')).toEqual([['carbonFootprint', '2026-09']]);
   });
 
-  // Until then, the tab shows that it is loading, not figures that change once it arrives (#64)
   it('says it is loading until the answer for the month arrives', async () => {
     const { result, rerender } = await renderTabHook(useCarbonTab,
       { ...onAugust, activeTab: 'overview' });
@@ -118,14 +118,16 @@ describe('useCarbonTab', () => {
   });
 
   it('follows the selected month', async () => {
-    const { result, rerender } = await renderTabHook(useCarbonTab, onTheTab);
+    const { result, rerender } = await renderTabHook(useCarbonTab,
+      { ...onTheTab, selectedMonth: september });
+
+    // July has none either: August, the latest, again
+    await rerender(onTheTab);
+    expect(result.current).toMatchObject({ carbonFootprint: august, missingMonth: null });
 
     await rerender({ ...onTheTab, selectedMonth: july });
-
     expect(api.fetchCarbonFootprint).toHaveBeenCalledWith('2026-07', null);
-    expect(result.current.carbonFootprint.shown).toMatchObject({
-      month: '2026-07', footprint: { total: 3950 },
-    });
+    expect(result.current).toMatchObject({ carbonFootprint: august, missingMonth: '2026-07' });
   });
 
   // Several accounts in the instance: see fixtures/accounts.js
@@ -137,7 +139,7 @@ describe('useCarbonTab', () => {
         { ...onTheTab, selectedAccount: unnamed }, severalAccounts);
 
       expect(api.fetchCarbonFootprint).toHaveBeenCalledWith('2026-08', unnamed);
-      expect(result.current.carbonFootprint.shown.footprint.total).toBe(2600);
+      expect(result.current.carbonFootprint.footprint.total).toBe(2600);
       expect(keysOf('carbonFootprint')).toEqual([['carbonFootprint', '2026-08', unnamed]]);
     });
 
@@ -147,12 +149,14 @@ describe('useCarbonTab', () => {
       // Without any footprint: what the server answers then, which the tab shows
       await rerender({ ...onTheTab, selectedAccount: lyonAccount.id });
 
-      const none = { month: '2026-08', footprint: null, latestMonth: null };
-      expect(result.current.carbonFootprint).toEqual({ ...none, shown: none });
+      expect(result.current).toMatchObject({
+        carbonFootprint: { month: '2026-08', footprint: null, latestMonth: null },
+        missingMonth: null,
+      });
 
       await rerender(onTheTab);
 
-      expect(result.current.carbonFootprint.shown.footprint.total).toBe(4036.5);
+      expect(result.current.carbonFootprint.footprint.total).toBe(4036.5);
     });
 
     // While the months of the account just selected load, or when it lacks the month selected,

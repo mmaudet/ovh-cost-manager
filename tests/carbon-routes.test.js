@@ -11,11 +11,11 @@ const {
 const { footprintLine } = require('./support/carbon');
 
 // A footprint line of a month, a dedicated server, with its emissions in kg CO2eq:
-// manufacturing, electricity and operations, location-based. Its market-based electricity is
-// half its location-based one.
+// manufacturing, electricity and operations, location-based. Its market-based electricity and
+// operations are half its location-based ones.
 const lineOf = (month, [manufacturing, electricity, operations]) => footprintLine({
   month, manufacturing, electricity: [electricity, electricity / 2],
-  operations: [operations, operations],
+  operations: [operations, operations / 2],
 });
 
 // The months that the imports of the seed asked for
@@ -26,7 +26,7 @@ const MONTHS = { first: '2024-09', last: '2026-08' };
 function seed(db) {
   recordAccounts(db, { nic: LYON }, { nic: PARIS }, { nic: NEW_ACCOUNT });
   db.carbon.replaceMonths(LYON, MONTHS, [
-    lineOf('2026-08', [1, 2, 3]), lineOf('2026-08', [0.5, 0.5, 0.25]),
+    lineOf('2026-08', [1, 2, 3]), lineOf('2026-08', [0.5, 0.5, 0.5]),
   ]);
   db.carbon.replaceMonths(PARIS, MONTHS, [lineOf('2026-08', [2, 4, 6])]);
   db.carbon.replaceMonths(NEW_ACCOUNT, MONTHS, [lineOf('2026-06', [1, 1, 1])]);
@@ -44,15 +44,15 @@ async function withOcm(use) {
 
 test('gives the carbon footprint of a month, by emission source and in total', async () => {
   await withOcm(async (ocm) => {
-    // All accounts, with the market-based total, which counts the market-based electricity,
-    // half the location-based one here (#152)
+    // All accounts, with the market-based total, which counts the market-based electricity
+    // and operations, half the location-based ones here (#152)
     expect(await ocm.get('/api/carbon/footprint?month=2026-08')).toEqual({
       status: 200,
       body: {
         month: '2026-08',
         footprint: {
-          manufacturing: 3.5, electricity: 6.5, operations: 9.25, total: 19.25,
-          marketBasedTotal: 16,
+          manufacturing: 3.5, electricity: 6.5, operations: 9.5, total: 19.5,
+          marketBasedTotal: 11.5,
         },
         latestMonth: '2026-08',
       },
@@ -61,8 +61,8 @@ test('gives the carbon footprint of a month, by emission source and in total', a
     expect((await ocm.get(`/api/carbon/footprint?month=2026-08&account=${LYON}`)).body).toEqual({
       month: '2026-08',
       footprint: {
-        manufacturing: 1.5, electricity: 2.5, operations: 3.25, total: 7.25,
-        marketBasedTotal: 6,
+        manufacturing: 1.5, electricity: 2.5, operations: 3.5, total: 7.5,
+        marketBasedTotal: 4.5,
       },
       latestMonth: '2026-08',
     });

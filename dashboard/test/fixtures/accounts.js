@@ -233,7 +233,8 @@ export const severalAccounts = {
       },
       // Every Veeam backup of account.js
       backupStats: account.backupStats,
-      // Its carbon footprint in August, part of account.js's (#147), its latest
+      // Its carbon footprint (#147): none yet in September, and August's, its latest, part of
+      // account.js's (#152)
       carbonFootprint: {
         '2026-09': { month: '2026-09', footprint: null, latestMonth: '2026-08' },
         '2026-08': {

@@ -18,26 +18,36 @@ const FootprintCard = ({ label, value, fmt, emphasis = false, children = null })
   </div>
 );
 
+// Why the month selected shows another month's footprint (#152): OVHcloud has not published
+// a month after the latest it gave yet, while an older month without one will never have it
+function missingMonthNotice(missingMonth, shownMonth, language) {
+  const label = formatMonthLabel(missingMonth, language);
+  if (missingMonth > shownMonth) {
+    return language === 'en'
+      ? `${label} has no carbon footprint yet: OVHcloud publishes it once the month is over.`
+      : `${label} n'a pas encore d'empreinte carbone : OVHcloud la publie une fois le mois `
+        + 'terminé.';
+  }
+  return language === 'en'
+    ? `${label} has no carbon footprint.`
+    : `${label} n'a pas d'empreinte carbone.`;
+}
+
 // The Carbon tab (#147), which the shell renders while it is active: what useCarbonTab()
 // returns, with the shell's language, translations (t) and amount format (fmt): the carbon
 // footprint that OVHcloud's carbon calculator attributes to the month selected, by emission
 // source, or, when that month has none, to the latest month that has one (#152).
-const CarbonTab = ({ carbonFootprint, loadingCarbon, failedCarbon, language, t, fmt }) => {
+const CarbonTab = ({
+  carbonFootprint, missingMonth, loadingCarbon, failedCarbon, language, t, fmt,
+}) => {
   if (loadingCarbon) {
     return <div className="text-center text-gray-500 py-8">{t('loading')}</div>;
   }
   if (failedCarbon) {
-    return (
-      <div className="text-center text-red-600 py-8">
-        {language === 'en'
-          ? 'Could not load the carbon footprint.'
-          : "Impossible de charger l'empreinte carbone."}
-      </div>
-    );
+    return <div className="text-center text-red-600 py-8">{t('carbonFailed')}</div>;
   }
 
-  const { month, shown } = carbonFootprint;
-  const { footprint } = shown;
+  const { month, footprint } = carbonFootprint;
   if (!footprint) {
     return (
       <div className={`${PANEL} p-8 text-center text-gray-500`}>
@@ -48,47 +58,31 @@ const CarbonTab = ({ carbonFootprint, loadingCarbon, failedCarbon, language, t, 
     );
   }
 
-  // Whether the tab shows the latest month that has a footprint, as the month selected has none
-  const fallsBack = shown.month !== month;
-  const monthLabel = formatMonthLabel(month, language);
-  const shownLabel = formatMonthLabel(shown.month, language);
+  // French puts a space before a colon, English none
+  const colon = language === 'en' ? ':' : ' :';
 
   return (
     <div className="space-y-6">
-      {fallsBack && (
+      {missingMonth && (
         <div className="bg-amber-50 border border-amber-200 text-amber-800 rounded-lg p-4 text-sm">
-          {language === 'en'
-            ? `${monthLabel} has no carbon footprint yet: OVHcloud publishes it once the month is `
-              + 'over.'
-            : `${monthLabel} n'a pas encore d'empreinte carbone : OVHcloud la publie une fois le `
-              + 'mois terminé.'}
+          {missingMonthNotice(missingMonth, month, language)}
         </div>
       )}
       <h3 className="text-lg font-semibold text-gray-800">
-        {fallsBack
-          ? `${shownLabel} · ${language === 'en'
-            ? 'latest month available'
-            : 'dernier mois disponible'}`
-          : shownLabel}
+        {formatMonthLabel(month, language)}
+        {missingMonth && ` · ${t('latestMonthAvailable')}`}
       </h3>
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <FootprintCard label={t('carbonFootprint')} value={footprint.total} fmt={fmt} emphasis>
           <p className="text-xs text-gray-500 mt-1">
-            {language === 'en' ? 'Market-based: ' : 'Market-based : '}
-            {fmt(footprint.marketBasedTotal)} kgCO₂e
+            {t('marketBased')}{colon} {fmt(footprint.marketBasedTotal)} kgCO₂e
           </p>
+          <p className="text-xs text-gray-400 mt-1">{t('marketBasedExplanation')}</p>
         </FootprintCard>
         {EMISSION_SOURCES.map(source => (
           <FootprintCard key={source} label={t(source)} value={footprint[source]} fmt={fmt} />
         ))}
       </div>
-      <p className="text-xs text-gray-500">
-        {language === 'en'
-          ? "The market-based total counts OVHcloud's low-carbon energy contracts instead of each "
-            + "datacenter's local electricity mix."
-          : "Le total market-based tient compte des contrats d'énergie bas carbone d'OVHcloud, au "
-            + 'lieu du mix électrique local de chaque datacenter.'}
-      </p>
     </div>
   );
 };

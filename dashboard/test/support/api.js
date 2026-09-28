@@ -63,7 +63,7 @@ const emptyAnswers = {
     loadBalancers: { count: 0, total: 0 },
   }),
   backupStats: () => ({ vms: { count: 0, total: 0 }, enterprise: { count: 0, total: 0 } }),
-  // No carbon footprint for the month, nor for any other (#147)
+  // No carbon footprint for the month (#147), nor for any other (#152)
   carbonFootprint: (month) => ({ month, footprint: null, latestMonth: null }),
   list: () => [],
 };
