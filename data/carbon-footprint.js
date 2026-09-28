@@ -113,7 +113,8 @@ function readFootprintFile(text) {
       line[field] = (row[names.indexOf(column)] ?? '').trim();
     }
     if (!/^\d{4}-\d{2}$/.test(line.month)) {
-      throw new Error(`Line ${lineNumber} of the carbon footprint file has no month: ${line.month}`);
+      throw new Error(`Line ${lineNumber} of the carbon footprint file has no month: `
+        + line.month);
     }
     for (const field of EMISSIONS) {
       const value = Number(line[field]);

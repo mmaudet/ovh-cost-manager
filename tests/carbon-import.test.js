@@ -9,6 +9,7 @@ const {
   ok, routes, files, calls, CREDENTIALS, serveAccount, useConfig, useThrowawayImport,
 } = require('./support/simulated-ovh');
 const { ACCOUNT, PARIS } = require('./support/accounts');
+const { footprintLine } = require('./support/carbon');
 
 jest.mock('ovh', () => require('./support/simulated-ovh').ovh);
 jest.mock('jsonfile', () => require('./support/simulated-ovh').jsonfile);
@@ -86,7 +87,9 @@ const carbonCalls = () => calls
 
 test('imports the carbon footprint of the last 24 months with --include-carbon', async () => {
   serveCarbonCalculator(routes, fileOf(
-    line({ month: '2026-08', manufacturing: 5.12, electricity: [15.41, 15.06], operations: [6.98, 6.96] }),
+    line({
+      month: '2026-08', manufacturing: 5.12, electricity: [15.41, 15.06], operations: [6.98, 6.96],
+    }),
     line({
       type: 'PCI-COMPUTE', range: 'b2', name: 'b2-7.monthly', domain: '', month: '2026-08',
       manufacturing: 2.97, electricity: [2.22, 1.42], operations: [2.28, 2.27],
@@ -112,11 +115,9 @@ test('imports the carbon footprint of the last 24 months with --include-carbon',
 // A footprint line of an account for a month, as an earlier import stored it, whose emissions
 // add up to `total` location-based: a third manufacturing, a third electricity, a third
 // operations
-const storedLine = (month, total) => ({
-  month, type: 'BAREMETAL', datacenter: 'GRA', product_range: 'advance gen4', name: 'advance-2',
-  server_domain: 'ns1234567.ip-10-0-0.eu', manufacturing: total / 3,
-  electricity_location: total / 3, electricity_market: total / 3,
-  operations_location: total / 3, operations_market: total / 3,
+const storedLine = (month, total) => footprintLine({
+  month, manufacturing: total / 3, electricity: [total / 3, total / 3],
+  operations: [total / 3, total / 3],
 });
 
 // Stores these lines for the account, as an earlier import did
@@ -179,11 +180,13 @@ test('waits for the task until the carbon calculator has generated the file', as
     line({ month: '2026-08', manufacturing: 1, electricity: [2, 1.5], operations: [3, 2.5] }),
   ), { taskID: 'task-1', link: 'https://carbon.example.net/task-1.csv' });
   // In progress when first asked
-  const done = ok({ taskID: 'task-1', status: 'SUCCESS', link: 'https://carbon.example.net/task-1.csv' });
+  const link = 'https://carbon.example.net/task-1.csv';
+  const inProgress = ok({ taskID: 'task-1', status: 'IN_PROGRESS', link: null });
+  const done = ok({ taskID: 'task-1', status: 'SUCCESS', link });
   let asked = 0;
   routes.set('/me/carbonCalculator/task/task-1', () => {
     asked += 1;
-    return asked === 1 ? Promise.resolve({ taskID: 'task-1', status: 'IN_PROGRESS', link: null }) : done();
+    return asked === 1 ? inProgress() : done();
   });
 
   await runImport({ includeCarbon: true });
@@ -199,7 +202,9 @@ test('reads the columns of the file by their names, and ignores the others', asy
   const reorder = (fields) => [...fields.slice(6), '12.5', ...fields.slice(0, 6)].join(',');
   serveCarbonCalculator(routes, [
     reordered.join(','),
-    reorder(line({ month: '2026-08', manufacturing: 1, electricity: [2, 1.5], operations: [3, 2.5] }).split(',')),
+    reorder(line({
+      month: '2026-08', manufacturing: 1, electricity: [2, 1.5], operations: [3, 2.5],
+    }).split(',')),
   ].join('\r\n'));
 
   await runImport({ includeCarbon: true });

@@ -124,9 +124,9 @@ useDefaultConfig();
 // OVH authentication. Their content, or the error that downloading them rejects with.
 const files = new Map();
 
-// What the import downloads a link with, the global fetch, which the tests replace with this
-// one: it serves `files`, and answers 404 to any other link, as an expired link does
-const fetch = async (url) => {
+// What the import downloads a link with, in place of the global fetch: it serves `files`, and
+// answers 404 to any other link, as an expired link does
+const simulatedFetch = async (url) => {
   const content = files.get(String(url));
   if (content instanceof Error) throw content;
   return content === undefined
@@ -208,7 +208,7 @@ function useThrowawayImport(prefix) {
     jest.spyOn(console, 'warn').mockImplementation(() => {});
     jest.spyOn(console, 'error').mockImplementation(() => {});
     jest.spyOn(process, 'exit').mockImplementation(() => {});
-    jest.spyOn(global, 'fetch').mockImplementation(fetch);
+    jest.spyOn(global, 'fetch').mockImplementation(simulatedFetch);
     files.clear();
     routes.clear();
     routes.set('/me', me(ACCOUNT));

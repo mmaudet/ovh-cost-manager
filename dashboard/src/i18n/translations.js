@@ -152,6 +152,11 @@ export const translations = {
     infrastructure: 'Infrastructure',
     backup: 'Backup',
     carbon: 'Carbone',
+    // The carbon footprint and its emission sources (#147)
+    carbonFootprint: 'Empreinte carbone',
+    manufacturing: 'Fabrication',
+    electricity: 'Électricité',
+    operations: 'Opérations',
     webCloud: 'Web Cloud',
     domains: 'Domaines',
     dnsZones: 'Zones DNS',
@@ -350,6 +355,11 @@ export const translations = {
     infrastructure: 'Infrastructure',
     backup: 'Backup',
     carbon: 'Carbon',
+    // The carbon footprint and its emission sources (#147)
+    carbonFootprint: 'Carbon footprint',
+    manufacturing: 'Manufacturing',
+    electricity: 'Electricity',
+    operations: 'Operations',
     webCloud: 'Web Cloud',
     domains: 'Domains',
     dnsZones: 'DNS zones',

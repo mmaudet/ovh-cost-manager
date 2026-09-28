@@ -1326,15 +1326,18 @@ async function importCarbonFootprint(ovh, nic, heartbeat) {
   console.log('\n--- Importing the carbon footprint ---');
   try {
     const months = footprintMonths(new Date());
+    const request = { startMonth: `${months.first}-01`, endMonth: `${months.last}-01` };
     const { taskID } = await withRetry(() => ovh.requestPromised(
-      'POST', '/me/carbonCalculator/csv', { startMonth: `${months.first}-01`, endMonth: `${months.last}-01` },
+      'POST', '/me/carbonCalculator/csv', request,
     ));
 
     let task = { status: 'IN_PROGRESS' };
     for (let waited = 0; task.status === 'IN_PROGRESS' && waited < CARBON_WAIT_MS;
       waited += CARBON_POLL_INTERVAL_MS) {
       await new Promise(resolve => setTimeout(resolve, CARBON_POLL_INTERVAL_MS));
-      task = await withRetry(() => ovh.requestPromised('GET', `/me/carbonCalculator/task/${taskID}`));
+      task = await withRetry(() => ovh.requestPromised(
+        'GET', `/me/carbonCalculator/task/${taskID}`,
+      ));
       heartbeat();
     }
     if (task.status !== 'SUCCESS') {
@@ -1347,7 +1350,8 @@ async function importCarbonFootprint(ovh, nic, heartbeat) {
     }
     const lines = readFootprintFile(await response.text());
     db.carbon.replaceMonths(nic, months, lines);
-    console.log(`  Imported ${lines.length} footprint lines, from ${months.first} to ${months.last}`);
+    console.log(`  Imported ${lines.length} footprint lines, `
+      + `from ${months.first} to ${months.last}`);
   } catch (err) {
     console.error(`  Error importing the carbon footprint: ${describeError(err)}`);
   }

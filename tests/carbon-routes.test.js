@@ -6,15 +6,14 @@
 
 const { startOcm } = require('./support/ocm-server');
 const { LYON, PARIS, UNKNOWN_ACCOUNT, recordAccounts } = require('./support/accounts');
+const { footprintLine } = require('./support/carbon');
 
 // A footprint line of a month, a dedicated server, with its emissions in kg CO2eq:
 // manufacturing, electricity and operations, location-based. Its market-based electricity is
 // half its location-based one.
-const lineOf = (month, [manufacturing, electricity, operations]) => ({
-  month, type: 'BAREMETAL', datacenter: 'GRA', product_range: 'advance gen4', name: 'advance-2',
-  server_domain: 'ns1234567.ip-10-0-0.eu', manufacturing,
-  electricity_location: electricity, electricity_market: electricity / 2,
-  operations_location: operations, operations_market: operations,
+const lineOf = (month, [manufacturing, electricity, operations]) => footprintLine({
+  month, manufacturing, electricity: [electricity, electricity / 2],
+  operations: [operations, operations],
 });
 
 // The months that the imports of the seed asked for
@@ -23,7 +22,9 @@ const MONTHS = { first: '2024-09', last: '2026-08' };
 // Two accounts, whose footprint an import stored: Lyon's August of two lines, Paris's of one
 function seed(db) {
   recordAccounts(db, { nic: LYON }, { nic: PARIS });
-  db.carbon.replaceMonths(LYON, MONTHS, [lineOf('2026-08', [1, 2, 3]), lineOf('2026-08', [0.5, 0.25, 0.25])]);
+  db.carbon.replaceMonths(LYON, MONTHS, [
+    lineOf('2026-08', [1, 2, 3]), lineOf('2026-08', [0.5, 0.25, 0.25]),
+  ]);
   db.carbon.replaceMonths(PARIS, MONTHS, [lineOf('2026-08', [2, 4, 6])]);
 }
 

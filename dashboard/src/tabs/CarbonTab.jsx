@@ -1,15 +1,15 @@
 import { formatMonthLabel } from '../utils/format.js';
 
-// The emission sources of a carbon footprint, in the order the tab shows them (see CONTEXT.md)
-const EMISSION_SOURCES = [
-  { key: 'manufacturing', fr: 'Fabrication', en: 'Manufacturing' },
-  { key: 'electricity', fr: 'Électricité', en: 'Electricity' },
-  { key: 'operations', fr: 'Opérations', en: 'Operations' },
-];
+// The emission sources of a carbon footprint, in the order the tab shows them: the key of
+// each one's figure, and of its label in the translations (see CONTEXT.md)
+const EMISSION_SOURCES = ['manufacturing', 'electricity', 'operations'];
+
+// The white block that the tab shows a card or a message in
+const PANEL = 'bg-white rounded-xl shadow-sm border border-gray-100';
 
 // A card of the footprint: its label, and its emissions in kg CO2eq
 const FootprintCard = ({ label, value, fmt, emphasis = false }) => (
-  <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
+  <div className={`${PANEL} p-5`}>
     <span className="text-gray-500 text-sm">{label}</span>
     <div className={`text-3xl font-bold mt-2 ${emphasis ? 'text-green-700' : 'text-gray-800'}`}>
       {fmt(value)} kgCO₂e
@@ -38,7 +38,7 @@ const CarbonTab = ({ carbonFootprint, loadingCarbon, failedCarbon, language, t, 
   const { month, footprint } = carbonFootprint;
   if (!footprint) {
     return (
-      <div className="bg-white rounded-xl p-8 shadow-sm border border-gray-100 text-center text-gray-500">
+      <div className={`${PANEL} p-8 text-center text-gray-500`}>
         {language === 'en'
           ? `${formatMonthLabel(month, language)}: no carbon footprint.`
           : `${formatMonthLabel(month, language)} : pas d'empreinte carbone.`}
@@ -49,15 +49,9 @@ const CarbonTab = ({ carbonFootprint, loadingCarbon, failedCarbon, language, t, 
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <FootprintCard
-          label={language === 'en' ? 'Carbon footprint' : 'Empreinte carbone'}
-          value={footprint.total} fmt={fmt} emphasis
-        />
+        <FootprintCard label={t('carbonFootprint')} value={footprint.total} fmt={fmt} emphasis />
         {EMISSION_SOURCES.map(source => (
-          <FootprintCard
-            key={source.key} label={source[language === 'en' ? 'en' : 'fr']}
-            value={footprint[source.key]} fmt={fmt}
-          />
+          <FootprintCard key={source} label={t(source)} value={footprint[source]} fmt={fmt} />
         ))}
       </div>
     </div>
