@@ -60,6 +60,8 @@ const emptyAnswers = {
     savingsPlans: { count: 0, total: 0 },
     objectStorage: { count: 0, total: 0 },
     registry: { count: 0, total: 0 },
+    other: { total: 0, products: [] },
+    credits: { total: 0 },
     aiml: { count: 0, total: 0 },
     loadBalancers: { count: 0, total: 0 },
   }),
@@ -180,6 +182,8 @@ const answers = {
   fetchWebCloudItems: entryForPeriodOfAccount('webCloudItems', emptyAnswers.list),
   fetchProjectQuotas: (data, projectId) => data.projectQuotas?.[projectId] ?? emptyAnswers.list(),
   fetchProjectBuckets: entryForProject('projectBuckets', emptyAnswers.list),
+  fetchProjectOtherServices: entryForProject('projectOtherServices',
+    () => ({ total: 0, products: [], credits: 0 })),
   fetchProjectInstanceTotal: entryForProject('projectInstanceTotal', emptyAnswers.instanceTotal),
   // The GPU costs of a period, of the account the page selects (#120)
   fetchGpuSummary: entryForPeriodOfAccount('gpuSummary', emptyAnswers.gpuSummary),
