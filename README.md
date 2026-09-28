@@ -42,7 +42,7 @@ The screenshots show anonymised data.
 ### Dashboard
 - **Interactive Dashboard**: React-based SPA with Recharts visualizations
 - **Multi-language Support**: French and English interface (i18n)
-- **8 navigation tabs**: Overview, Comparison, Trends, Public Cloud, Web Cloud, Infrastructure, Backup, Carbon
+- **8 navigation tabs**: Overview, Comparison, Trends, Public Cloud, Web Cloud, Infrastructure, Backup, Carbon footprint
 - **Several OVH Accounts**: one instance imports several accounts; a selector in the header narrows every tab down to one, and with all accounts shown, the lists name each row's account
 
 ### Cost Analysis
@@ -444,7 +444,7 @@ npm run bills -- --month 2025-12 --format md         # Markdown output
 
 ## Carbon Footprint
 
-OCM imports the carbon footprint that OVHcloud's carbon calculator attributes to each account's services, and shows it in the Carbon tab next to what those services cost.
+OCM imports the carbon footprint that OVHcloud's carbon calculator attributes to each account's services, and shows it in the Carbon footprint tab next to what those services cost.
 
 ### What the Figures Are
 
@@ -456,7 +456,7 @@ OCM imports the carbon footprint that OVHcloud's carbon calculator attributes to
 
 ### What OVHcloud Covers
 
-OVHcloud does not compute the footprint of all its services: its [guide](https://docs.ovhcloud.com/en/guides/account-and-service-management/managing-billing-payments-and-services/carbon-footprint) lists those that it covers, such as dedicated servers, Public Cloud instances and their Block Storage volumes. The Carbon tab says what share of each month's cost the footprint covers (see [What the Carbon Tab Shows](#what-the-carbon-tab-shows)).
+OVHcloud does not compute the footprint of all its services: its [guide](https://docs.ovhcloud.com/en/guides/account-and-service-management/managing-billing-payments-and-services/carbon-footprint) lists those that it covers, such as dedicated servers, Public Cloud instances and their Block Storage volumes. The Carbon footprint tab says what share of each month's cost the footprint covers (see [What the Carbon Footprint Tab Shows](#what-the-carbon-footprint-tab-shows)).
 
 ### The Months OCM Keeps
 
@@ -467,7 +467,7 @@ OVHcloud's carbon calculator gives the last 24 months. Each import that includes
 1. Give each account a consumer key with the rule `POST /me/carbonCalculator/csv`: request one with the command of [Generate Consumer Key](#2-generate-consumer-key), which lists the rule and says what an import does without it, and replace the old key in `config.json`.
 2. Import with `--include-carbon`, which `--all` includes: `npm run import -- --diff --include-carbon`. The Docker containers import with `--all` by default (`IMPORT_FLAGS`).
 
-### What the Carbon Tab Shows
+### What the Carbon Footprint Tab Shows
 
 The tab follows the month and the account selected in the header:
 
@@ -588,7 +588,7 @@ or none when none of them has a bill.
 
 The carbon footprint is what OVHcloud's carbon calculator attributes to the accounts' services: `footprint` gives its `manufacturing`, `electricity`, `operations` and `total`, location-based, and its `marketBasedTotal`, which counts OVHcloud's low-carbon energy contracts instead of the local electricity mix; it is `null` for a month without one, such as the current month. `latestMonth` is the latest month that has one, or `null` when none has. Without the `account` parameter, `accountsWithoutFootprint` names the accounts without a footprint that month, which the sum leaves out: the configured ones, in the configuration's order, then those no longer configured that were billed that month. It is `null` with the parameter.
 
-`/api/carbon/by-server` gives the `lines` of a month: each dedicated server (by its `serverDomain`), instance flavor (`name`, with `.monthly` for a monthly plan) and volume type that OVHcloud's file names, per `datacenter`, and, before July 2026, when the file names no server, one line for the dedicated servers with their number in `unnamedServers`. Each gives its `footprint` in kg CO2eq, its `cost`, what the bill lines that tie to it cost in the month of use (see [What the Carbon Tab Shows](#what-the-carbon-tab-shows)), `null` when none does, and its `intensity`, the footprint per unit of the currency. `coveredCost` is what the bill lines that tie to the lines cost, the dedicated servers that the file does not name included, and `coveredShare` its share of what all the bill lines of the month of use cost, those of the accounts without a footprint included, as OVHcloud does not compute the footprint of all its services. Both count the bill lines before their credits and discounts, the lines of a negative price, as a credit pays for no service in particular. `coveredShare` is `null` without a footprint, or when the month of use costs nothing. Each month of `/api/carbon/trend` gives its `coveredShare`, `null` without a footprint, so that a step due to OVHcloud covering a new service is not taken for an increase.
+`/api/carbon/by-server` gives the `lines` of a month: each dedicated server (by its `serverDomain`), instance flavor (`name`, with `.monthly` for a monthly plan) and volume type that OVHcloud's file names, per `datacenter`, and, before July 2026, when the file names no server, one line for the dedicated servers with their number in `unnamedServers`. Each gives its `footprint` in kg CO2eq, its `cost`, what the bill lines that tie to it cost in the month of use (see [What the Carbon Footprint Tab Shows](#what-the-carbon-footprint-tab-shows)), `null` when none does, and its `intensity`, the footprint per unit of the currency. `coveredCost` is what the bill lines that tie to the lines cost, the dedicated servers that the file does not name included, and `coveredShare` its share of what all the bill lines of the month of use cost, those of the accounts without a footprint included, as OVHcloud does not compute the footprint of all its services. Both count the bill lines before their credits and discounts, the lines of a negative price, as a credit pays for no service in particular. `coveredShare` is `null` without a footprint, or when the month of use costs nothing. Each month of `/api/carbon/trend` gives its `coveredShare`, `null` without a footprint, so that a step due to OVHcloud covering a new service is not taken for an increase.
 
 ### Inventory
 

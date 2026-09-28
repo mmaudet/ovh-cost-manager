@@ -223,28 +223,30 @@ describe('Carbon tab', () => {
     const { user } = await renderDashboard();
     await selectLanguage(user, 'EN');
 
-    await openTab(user, 'Carbon');
+    await openTab(user, 'Carbon footprint');
     expect(screen.getByText('September 2026 has no carbon footprint yet: OVHcloud publishes '
       + 'it once the month is over.')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'August 2026 · latest month available' }))
       .toBeInTheDocument();
 
     await selectMonth(user, 'August 2026');
-    expect(texts(footprintCards('Carbon footprint'))).toEqual([
-      'Carbon footprint', '4,036.50 kgCO₂e', 'Market-based: 3,012.25 kgCO₂e',
-      "The market-based footprint counts OVHcloud's low-carbon energy contracts instead of "
-        + "each datacenter's local electricity mix.",
-      'Manufacturing', '1,234.50 kgCO₂e',
-      'Electricity', '2,345.25 kgCO₂e',
-      'Operations', '456.75 kgCO₂e',
-    ]);
+    // The card's label, as the tab has the same name
+    expect(texts(footprintCards(screen.getByText('Carbon footprint', { selector: 'span' }))))
+      .toEqual([
+        'Carbon footprint', '4,036.50 kgCO₂e', 'Market-based: 3,012.25 kgCO₂e',
+        "The market-based footprint counts OVHcloud's low-carbon energy contracts instead of "
+          + "each datacenter's local electricity mix.",
+        'Manufacturing', '1,234.50 kgCO₂e',
+        'Electricity', '2,345.25 kgCO₂e',
+        'Operations', '456.75 kgCO₂e',
+      ]);
   });
 
   it('says in English how to get a footprint, and which accounts have none', async () => {
     const { user } = await renderDashboard(severalAccounts);
     await selectLanguage(user, 'EN');
 
-    await openTab(user, 'Carbon');
+    await openTab(user, 'Carbon footprint');
     expect(screen.getByText('Without a carbon footprint in August 2026: Lyon subsidiary, '
       + 'zz3333-ovh.')).toBeInTheDocument();
 
@@ -324,7 +326,7 @@ describe('Carbon tab', () => {
       const { user } = await renderDashboard();
       await selectLanguage(user, 'EN');
 
-      await openTab(user, 'Carbon');
+      await openTab(user, 'Carbon footprint');
 
       expect(screen.getByRole('heading', { name: '12-month trend (kgCO₂e)' }))
         .toBeInTheDocument();
@@ -474,7 +476,7 @@ describe('Carbon tab', () => {
       const { user } = await renderDashboard();
       await selectLanguage(user, 'EN');
 
-      await openTab(user, 'Carbon');
+      await openTab(user, 'Carbon footprint');
 
       const rows = rowsOf(list('Footprint and cost of each item'));
       expect(rows.slice(0, 2)).toEqual([
@@ -539,7 +541,7 @@ describe('Carbon tab', () => {
       await selectLanguage(user, 'EN');
       await selectAccount(user, 'yy2222-ovh');
 
-      await openTab(user, 'Carbon');
+      await openTab(user, 'Carbon footprint');
 
       expect(sentenceOf(coverage())).toBe("The footprint covers 75.0% of the month's cost. "
         + 'OVHcloud does not compute the footprint of all its services: see the list of those '
