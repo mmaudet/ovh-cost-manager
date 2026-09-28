@@ -12,6 +12,28 @@ sections were written afterwards from the git history.
 
 <!-- scripts/release.sh inserts each new version above the first version heading. -->
 
+## 3.1.0 - 2026-09-28
+
+<!-- Upgrade notes and highlights of this release, if any. -->
+
+### New features
+* feat: import the carbon footprint and show a month's footprint by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/160
+* feat: say why the carbon footprint could not be imported by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/161
+* feat: show the latest carbon footprint and the market-based total by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/162
+* feat: say why an account has no carbon footprint by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/163
+* feat: show the carbon footprint's 12-month trend by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/164
+* feat: list the carbon footprint's lines with their cost by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/165
+* feat: export the carbon footprint's list to CSV by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/166
+* feat: show the carbon footprint's covered cost by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/167
+* feat: name the carbon tab "Bilan carbone" in French by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/169
+* feat: name the carbon tab "Carbon footprint" in English by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/170
+### Maintenance
+* docs: add the carbon footprint vocabulary and ADR 0003 by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/148
+* refactor: read Public Cloud instance lines in one place by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/159
+* docs: document the carbon footprint by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/168
+
+**Full Changelog**: https://github.com/mmaudet/ovh-cost-manager/compare/v3.0.0...v3.1.0
+
 ## 3.0.0 - 2026-09-27
 
 OVH Cost Manager now imports several OVH accounts into one instance (#106).
