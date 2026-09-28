@@ -285,3 +285,18 @@ export const fetchCarbonFootprint = async (month, account = null) => {
   });
   return data;
 };
+
+/**
+ * The carbon footprint of the 12 months that end on a month (#154), location-based
+ * @param {string} end - The last month, 'YYYY-MM'
+ * @param {?string} [account] - The account whose footprint to ask for, as the functions above
+ *   take it: null for all accounts
+ * @returns {Promise<{ month: string, footprint: ?object }[]>} Each month, the earliest first,
+ *   with its manufacturing, electricity, operations and total, null for a month without one
+ */
+export const fetchCarbonTrend = async (end, account = null) => {
+  const { data } = await api.get('/carbon/trend', {
+    params: { end, ...accountParams(account) },
+  });
+  return data;
+};

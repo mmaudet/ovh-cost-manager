@@ -10,6 +10,11 @@ const formatCurrency = (value, language = 'fr') => {
   }).format(value);
 };
 
+// A number without its decimals, as a chart's axis reads it: 2 600 in French, 2,600 in English
+const formatWholeNumber = (value, language = 'fr') => (
+  new Intl.NumberFormat(localeOf(language), { maximumFractionDigits: 0 }).format(value)
+);
+
 // Format a share (0.092) as a percentage, based on language: 9,2 % in French, 9.2% in
 // English, with one decimal unless told otherwise. A share of 0 out of a negative total,
 // which is -0, reads 0,0 % as any 0 does. A variation has a sign of its own: see
@@ -122,6 +127,6 @@ const takesSingular = (count, language = 'fr') =>
   new Intl.PluralRules(localeOf(language)).select(count) === 'one';
 
 export {
-  localeOf, formatCurrency, formatPercent, formatYearMonth, formatMonthLabel, formatMonthName,
-  yearMonthOf, fmtBytes, fmtMemory, takesSingular,
+  localeOf, formatCurrency, formatWholeNumber, formatPercent, formatYearMonth, formatMonthLabel,
+  formatMonthName, yearMonthOf, fmtBytes, fmtMemory, takesSingular,
 };

@@ -109,9 +109,11 @@ describe('query keys', () => {
       // The Backup tab's
       ['backupStats', undefined, undefined],
       ['backupStats', '2026-09-01', '2026-09-30'],
-      // The Carbon tab's carbon footprint of the month (#147)
+      // The Carbon tab's carbon footprint of the month (#147), and its trend, which waits for
+      // the month that the tab shows (#154)
       ['carbonFootprint', undefined],
       ['carbonFootprint', '2026-09'],
+      ['carbonTrend', undefined],
     ]));
   });
 
@@ -193,8 +195,10 @@ describe('query keys', () => {
         ['inventoryVps', 'xx1111-ovh'],
         ['inventoryStorage', 'xx1111-ovh'],
         ['resourceTypeDetails', null, '2026-09-01', '2026-09-30', 'xx1111-ovh'],
-        // The Carbon tab's footprint of the month, which waits for the tab (#147)
+        // The Carbon tab's footprint of the month, which waits for the tab (#147), and its
+        // trend, which waits for the month that the tab shows (#154)
         ['carbonFootprint', '2026-09', 'xx1111-ovh'],
+        ['carbonTrend', undefined, 'xx1111-ovh'],
       ]));
     });
 });

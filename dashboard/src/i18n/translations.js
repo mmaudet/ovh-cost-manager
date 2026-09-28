@@ -165,6 +165,12 @@ export const translations = {
     carbonUnknownAccount: "Le compte inconnu n'a pas d'empreinte carbone : elle s'importe "
       + 'compte par compte.',
     carbonNoLongerImported: "Ce compte n'a pas d'empreinte carbone : il n'est plus importé.",
+    // The trend of the carbon footprint over 12 months (#154)
+    carbonTrend: 'Tendance sur 12 mois',
+    carbonTrendFailed: 'Impossible de charger la tendance.',
+    emissionSources: "Postes d'émission",
+    month: 'Mois',
+    seeFigures: 'Voir les chiffres',
     webCloud: 'Web Cloud',
     domains: 'Domaines',
     dnsZones: 'Zones DNS',
@@ -376,6 +382,12 @@ export const translations = {
     carbonUnknownAccount: 'The Unknown account has no carbon footprint: the footprint is '
       + 'imported account by account.',
     carbonNoLongerImported: 'This account has no carbon footprint: it is no longer imported.',
+    // The trend of the carbon footprint over 12 months (#154)
+    carbonTrend: '12-month trend',
+    carbonTrendFailed: 'Could not load the trend.',
+    emissionSources: 'Emission sources',
+    month: 'Month',
+    seeFigures: 'See the figures',
     webCloud: 'Web Cloud',
     domains: 'Domains',
     dnsZones: 'DNS zones',

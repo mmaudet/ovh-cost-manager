@@ -1,8 +1,8 @@
-// The Carbon tab's data query, in a hook that the dashboard shell calls on every render:
+// The Carbon tab's data queries, in a hook that the dashboard shell calls on every render:
 // see docs/adr/0001-tab-state-lives-in-the-dashboard-shell.md
 
 import { useQuery } from '@tanstack/react-query';
-import { fetchCarbonFootprint } from '../services/api.js';
+import { fetchCarbonFootprint, fetchCarbonTrend } from '../services/api.js';
 import { accountQuery } from '../utils/accounts.js';
 
 /**
@@ -24,21 +24,23 @@ async function fetchShownFootprint(month, account) {
 }
 
 /**
- * The data query of the Carbon tab (#147): the carbon footprint of the month selected, for the
- * account shown in the header, or that of the latest month that has one (#152).
+ * The data queries of the Carbon tab (#147): the carbon footprint of the month selected, for
+ * the account shown in the header, or that of the latest month that has one (#152), and that
+ * of the 12 months that end on the month it shows (#154).
  * @param {object} shell - What the dashboard shell passes on, on every render
  * @param {?object} shell.selectedMonth - The month selected in the header
  * @param {boolean} shell.holdsSelectedMonth - Whether the months of the account shown hold
  *   it, as the shell checks it: the query waits until they do (#115)
- * @param {string} shell.activeTab - The tab open: the query runs on the Carbon tab only
+ * @param {string} shell.activeTab - The tab open: the queries run on the Carbon tab only
  * @param {?string|undefined} shell.selectedAccount - The account shown (useSelectedAccount()):
  *   null for all accounts, undefined while the page does not know it, which the query waits
  *   for
  * @returns {{ carbonFootprint: (object|undefined), missingMonth: ?string,
- *   loadingCarbon: boolean, failedCarbon: boolean }} The footprint that the tab shows, as
+ *   carbonTrend: (object[]|undefined), loadingCarbon: boolean, failedCarbon: boolean,
+ *   loadingTrend: boolean, failedTrend: boolean }} The footprint that the tab shows, as
  *   /api/carbon/footprint gives it; the month selected when that footprint is another month's,
- *   as the month selected has none, null otherwise; and whether the tab shows that it loads,
- *   or that it could not load
+ *   as the month selected has none, null otherwise; the trend, as /api/carbon/trend gives it;
+ *   and whether the tab shows that each loads, or that it could not load
  */
 const useCarbonTab = ({ selectedMonth, holdsSelectedMonth, activeTab, selectedAccount }) => {
   const { data, isPending, isError } = useQuery(accountQuery(selectedAccount, {
@@ -47,12 +49,24 @@ const useCarbonTab = ({ selectedMonth, holdsSelectedMonth, activeTab, selectedAc
     enabled: holdsSelectedMonth && activeTab === 'carbon',
   }));
 
+  // The month that the tab shows, once it knows that it has a footprint: the trend ends on it
+  // (#154). None without any footprint, as there is no trend to draw then.
+  const shownMonth = data?.shown.footprint ? data.shown.month : undefined;
+  const trend = useQuery(accountQuery(selectedAccount, {
+    key: ['carbonTrend', shownMonth],
+    fetch: (account) => fetchCarbonTrend(shownMonth, account),
+    enabled: activeTab === 'carbon' && shownMonth !== undefined,
+  }));
+
   return {
     carbonFootprint: data?.shown,
     missingMonth: data?.missingMonth ?? null,
+    carbonTrend: trend.data,
     // As the other tabs do (#64)
     loadingCarbon: isPending,
     failedCarbon: isError,
+    loadingTrend: trend.isPending,
+    failedTrend: trend.isError,
   };
 };
 

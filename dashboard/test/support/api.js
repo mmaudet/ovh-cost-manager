@@ -1,4 +1,5 @@
 import { vi } from 'vitest';
+import { shiftMonths } from '../../src/utils/monthWindow.js';
 
 // Stand-in for src/services/api.js, the only module of the page the tests
 // replace. setup.js installs it for every test file, and renderDashboard()
@@ -63,6 +64,10 @@ const emptyAnswers = {
     loadBalancers: { count: 0, total: 0 },
   }),
   backupStats: () => ({ vms: { count: 0, total: 0 }, enterprise: { count: 0, total: 0 } }),
+  // No carbon footprint for any of the 12 months that end on a month (#154)
+  carbonTrend: (end) => Array.from({ length: 12 }, (_, index) => ({
+    month: shiftMonths(end, index - 11).slice(0, 7), footprint: null,
+  })),
   // No carbon footprint for the month (#147), nor for any other (#152), and for all accounts,
   // none to name without one (#153)
   carbonFootprint: (month, account) => ({
@@ -183,6 +188,9 @@ const answers = {
   fetchCarbonFootprint: (data, month, account) =>
     ofAccount(data, account).carbonFootprint?.[month]
       ?? emptyAnswers.carbonFootprint(month, account),
+  // And that of the 12 months that end on a month, by that month (#154)
+  fetchCarbonTrend: (data, end, account) =>
+    ofAccount(data, account).carbonTrend?.[end] ?? emptyAnswers.carbonTrend(end),
 };
 
 // One mock per function: what setup.js hands over to the page
