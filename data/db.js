@@ -2569,6 +2569,28 @@ const carbonOps = {
       SELECT MAX(month) FROM carbon_footprint_lines WHERE ${ofAccount.sql}
     `).pluck().get(...ofAccount.params);
   },
+
+  /**
+   * The accounts that have no carbon footprint for a month (#153), which the footprint of all
+   * accounts leaves out: the configured accounts, and those that the configuration no longer
+   * lists but that were billed that month, whose costs the page adds up with the others'. In
+   * the order of accountsOps.getAll(). The Unknown account, which never has a footprint, is
+   * not an account of the accounts table.
+   * @param {string} month - YYYY-MM
+   * @returns {string[]} Their NIC handles
+   */
+  getAccountsWithoutFootprint: (month) => {
+    const db = getDb();
+    const withFootprint = new Set(db.prepare(`
+      SELECT DISTINCT account FROM carbon_footprint_lines WHERE month = ?
+    `).pluck().all(month));
+    const billed = new Set(db.prepare(`
+      SELECT DISTINCT account FROM bills WHERE substr(date, 1, 7) = ? AND account IS NOT NULL
+    `).pluck().all(month));
+    return accountsOps.getAll()
+      .filter(({ nic, configured }) => !withFootprint.has(nic) && (configured || billed.has(nic)))
+      .map(({ nic }) => nic);
+  },
 };
 
 module.exports = {

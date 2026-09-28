@@ -32,9 +32,10 @@ function seed(db) {
   db.carbon.replaceMonths(NEW_ACCOUNT, MONTHS, [lineOf('2026-06', [1, 1, 1])]);
 }
 
-// The server over the seeded database, for the time of `use`
-async function withOcm(use) {
-  const ocm = await startOcm(() => ({}), { seed });
+// The server over the database that seedWith() seeds, the seed above by default, for the time
+// of `use`
+async function withOcm(use, seedWith = seed) {
+  const ocm = await startOcm(() => ({}), { seed: seedWith });
   try {
     await use(ocm);
   } finally {
@@ -55,6 +56,8 @@ test('gives the carbon footprint of a month, by emission source and in total', a
           marketBasedTotal: 11.5,
         },
         latestMonth: '2026-08',
+        // The configured account that has none that month (#153)
+        accountsWithoutFootprint: [NEW_ACCOUNT],
       },
     });
     // One account
@@ -65,10 +68,14 @@ test('gives the carbon footprint of a month, by emission source and in total', a
         marketBasedTotal: 4.5,
       },
       latestMonth: '2026-08',
+      // Only with all accounts
+      accountsWithoutFootprint: null,
     });
     // The Unknown account, which has none, as the footprint is imported account by account
     expect((await ocm.get(`/api/carbon/footprint?month=2026-08&account=${UNKNOWN_ACCOUNT}`)).body)
-      .toEqual({ month: '2026-08', footprint: null, latestMonth: null });
+      .toEqual({
+        month: '2026-08', footprint: null, latestMonth: null, accountsWithoutFootprint: null,
+      });
   });
 }, 30000);
 
@@ -77,11 +84,15 @@ test('gives the carbon footprint of a month, by emission source and in total', a
 test('gives the latest month that has a carbon footprint, for the accounts asked', async () => {
   await withOcm(async (ocm) => {
     // A month without a footprint, for all accounts
-    expect((await ocm.get('/api/carbon/footprint?month=2026-09')).body)
-      .toEqual({ month: '2026-09', footprint: null, latestMonth: '2026-08' });
+    expect((await ocm.get('/api/carbon/footprint?month=2026-09')).body).toEqual({
+      month: '2026-09', footprint: null, latestMonth: '2026-08',
+      accountsWithoutFootprint: [LYON, PARIS, NEW_ACCOUNT],
+    });
     // For an account whose latest footprint is older
     expect((await ocm.get(`/api/carbon/footprint?month=2026-08&account=${NEW_ACCOUNT}`)).body)
-      .toEqual({ month: '2026-08', footprint: null, latestMonth: '2026-06' });
+      .toEqual({
+        month: '2026-08', footprint: null, latestMonth: '2026-06', accountsWithoutFootprint: null,
+      });
   });
 }, 30000);
 
@@ -95,5 +106,30 @@ test('refuses a month that is not one, and an account that it does not know', as
     }
     expect((await ocm.get('/api/carbon/footprint?month=2026-08&account=ww4444-ovh')).status)
       .toBe(400);
+  });
+}, 30000);
+
+// With all accounts, the tab names the accounts that have no footprint for the month it shows
+// (#153): the configured accounts, and an account that the configuration no longer lists but
+// that was billed that month; not the Unknown account, which never has one
+test('names the accounts without a carbon footprint, in their order', async () => {
+  await withOcm(async (ocm) => {
+    // June: the third account has its footprint, no longer configured
+    expect((await ocm.get('/api/carbon/footprint?month=2026-06')).body.accountsWithoutFootprint)
+      .toEqual([LYON, PARIS]);
+    // August: the third account, billed, has none
+    expect((await ocm.get('/api/carbon/footprint?month=2026-08')).body.accountsWithoutFootprint)
+      .toEqual([NEW_ACCOUNT]);
+    // July: nobody billed it, nor any footprint
+    expect((await ocm.get('/api/carbon/footprint?month=2026-07')).body.accountsWithoutFootprint)
+      .toEqual([LYON, PARIS]);
+  }, (db) => {
+    seed(db);
+    // The third account no longer configured, billed in August
+    db.accounts.recordConfiguration([LYON, PARIS]);
+    db.bills.upsert({
+      id: 'FR3', date: '2026-08-10', price_without_tax: 10, price_with_tax: 12, tax: 2,
+      currency: 'EUR', pdf_url: null, html_url: null, account: NEW_ACCOUNT,
+    });
   });
 }, 30000);
