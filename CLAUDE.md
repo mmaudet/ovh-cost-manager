@@ -64,13 +64,18 @@ OVH API ──> data/import.js ──> SQLite (ovh-bills.db) ──> server/inde
     project's other services, and the products of a project that the Compare tab compares
     month by month (#181). Each line has one; those without a card of their own go to the
     other services, so that the cards and the credit add up to the month's cloud total (#145).
-    **Products are read when the server reads the bills**, like the ties: changing the rules
-    needs no re-import.
-  - `ai-endpoints.js` — pure: the AI Endpoints model of a bill line (`CONTEXT.md`), and what
-    the line counts, the model's input or output tokens or its cost only, and what lines add
-    up to by model (`modelFigures()`), for `/api/analysis/ai-endpoints` and the Public Cloud
-    tab's table of the models (#193), and month by month, for the Trends tab's chart (#196).
-    **Models are read when the server reads the bills**, like the products: no re-import.
+    And the charge of a line (`chargeOf()`, `CONTEXT.md`): its description without the period
+    that ends it in brackets on some accounts' bills, its apostrophes straight, so that the
+    lines of one charge name it alike in every month; each product gives its charges, what its
+    lines add up to by charge, which the Compare tab unfolds the product into (#195). The
+    credit has none. **Products and charges are read when the server reads the bills**, like
+    the ties: changing the rules needs no re-import.
+  - `ai-endpoints.js` — pure: the AI Endpoints model of a bill line (`CONTEXT.md`), read from
+    its charge (`chargeOf()`), and what the line counts, the model's input or output tokens or
+    its cost only, and what lines add up to by model (`modelFigures()`), for
+    `/api/analysis/ai-endpoints` and the Public Cloud tab's table of the models (#193), and
+    month by month, for the Trends tab's chart (#196). **Models are read when the server reads
+    the bills**, like the products: no re-import.
   - `storage-classes.js` — pure: the names of the storage classes that OVH gives the objects
     of a bucket, for the import and for the buckets an earlier import stored (#145).
 - **`server/`** — read-only Express API over the DB. `index.js` is the single ~1300-line

@@ -57,7 +57,8 @@ const projectComparisonValues = (accountColumn) => ({
 
 // The Compare tab, which the shell renders while it is active: what useCompareTab() returns,
 // the sort order of its tables, the query of a project's products, the rows unfolded into their
-// services and the query of those services included (#146, #181, #192), with the shell's
+// services and the query of those services, and a project's products unfolded into their
+// charges, which come with the products, included (#146, #181, #192, #195), with the shell's
 // language, translations (t), amount format (fmt) and months list. The months and their figures
 // are those of the account selected in the header (#119). The comparison by project names the
 // account of each project in the Account column of the shell (accountColumn), when it shows
