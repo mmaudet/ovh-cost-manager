@@ -12,6 +12,15 @@ sections were written afterwards from the git history.
 
 <!-- scripts/release.sh inserts each new version above the first version heading. -->
 
+## 3.3.1 - 2026-09-29
+
+<!-- Upgrade notes and highlights of this release, if any. -->
+
+### New features
+* feat: show the version of OCM in the dashboard's footer by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/210
+
+**Full Changelog**: https://github.com/mmaudet/ovh-cost-manager/compare/v3.3.0...v3.3.1
+
 ## 3.3.0 - 2026-09-29
 
 Two features, which a user of 3.2.0 asked for:
