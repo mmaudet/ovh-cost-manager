@@ -1,11 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import { screen, within } from '@testing-library/react';
 import { account } from './fixtures/account.js';
+import { aiEndpoints, publicCloudFigures } from './fixtures/public-cloud.js';
 import {
-  aiEndpoints, aiEndpointsFigures, publicCloudFigures,
-} from './fixtures/public-cloud.js';
-import {
-  lyonAccount, removedAccount, severalAccounts, unnamedAccount,
+  lyonAccount, removedAccount, severalAccounts, severalAccountsWithAiEndpoints,
 } from './fixtures/accounts.js';
 import { api, holdBack } from './support/api.js';
 import {
@@ -230,36 +228,6 @@ describe('Public Cloud tab', () => {
   describe('AI Endpoints models', () => {
     // The synthetic account, whose projects called AI Endpoints models
     const withAiEndpoints = { ...account, aiEndpoints };
-    // Its accounts (#121): the Lyon subsidiary's projects called the language and embedding
-    // models in September, the unnamed account's the speech-to-text and image models, and
-    // the Unknown account's none, in July, its only month
-    const severalWithAiEndpoints = {
-      ...severalAccounts,
-      aiEndpoints,
-      ofAccount: {
-        ...severalAccounts.ofAccount,
-        [lyonAccount.id]: {
-          ...severalAccounts.ofAccount[lyonAccount.id],
-          aiEndpoints: {
-            '2026-09': aiEndpointsFigures(20.45, [
-              ['gpt-oss-120b', 48260000, 12480000, 17.46],
-              ['gpt-oss-20b', 15500000, 4800000, 2.68],
-              ['bge-m3', 30000000, null, 0.3],
-              ['Mistral-7B-Instruct-v0.3', 45000, 12300, 0.01],
-            ]),
-          },
-        },
-        [unnamedAccount.id]: {
-          ...severalAccounts.ofAccount[unnamedAccount.id],
-          aiEndpoints: {
-            '2026-09': aiEndpointsFigures(0.37, [
-              ['whisper-large-v3', null, null, 0.37],
-              ['stable-diffusion-xl-base-v10', null, null, 0],
-            ]),
-          },
-        },
-      },
-    };
     const AI_ENDPOINTS = /^(AI Endpoints par modèle|AI Endpoints by model)$/;
     // The table of the models, found by its heading
     const aiEndpointsTable = () =>
@@ -364,7 +332,7 @@ describe('Public Cloud tab', () => {
         expect(texts(aiEndpointsTable().tFoot)).toEqual(['Total AI Endpoints', '20,82€']);
       });
 
-    // The billing month that the tab's sentence names, as the cards above
+    // The month of the bills that the tab's sentence names, as the cards above do
     it('follow the month selected', async () => {
       const { user } = await renderDashboard(withAiEndpoints);
       await openTab(user, 'Public Cloud');
@@ -412,7 +380,7 @@ describe('Public Cloud tab', () => {
 
     // As the cards, each model once, adding up every account's lines when all are shown
     it('are those of the account selected', async () => {
-      const { user } = await renderDashboard(severalWithAiEndpoints);
+      const { user } = await renderDashboard(severalAccountsWithAiEndpoints);
       await openTab(user, 'Public Cloud');
 
       expect(firstColumnOf(aiEndpointsTable())).toEqual([
@@ -446,7 +414,7 @@ describe('Public Cloud tab', () => {
     // The month selected stays until the months list of the account loads, and says it lacks
     // it: the header then selects the account's latest month, August (#115, #120)
     it('ask for none of a month that the account selected lacks', async () => {
-      const { user } = await renderDashboard(severalWithAiEndpoints);
+      const { user } = await renderDashboard(severalAccountsWithAiEndpoints);
       await openTab(user, 'Public Cloud');
 
       await selectAccount(user, 'zz3333-ovh (non configuré)');

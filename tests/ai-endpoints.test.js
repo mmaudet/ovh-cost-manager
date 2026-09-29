@@ -24,24 +24,24 @@ const line = (id, billId, projectId, description, [quantity, unitPrice, price]) 
   service_type: classifyService(description), resource_type: 'cloud_project',
 });
 
-// The French wordings of the lines of a model's tokens
+// The French descriptions of the lines of a model's tokens, which end with the model
 const INPUT_TOKENS = 'Nombre de tokens d\'entrée pour le modèle AI Endpoints';
 const OUTPUT_TOKENS = 'Nombre de tokens de sortie pour le modèle AI Endpoints';
-// And their English wordings, as OVHcloud's public order catalog gives them
+// And their English descriptions, as OVHcloud's public order catalog gives them
 const inputTokensOf = (model) => `Amount of input tokens for AI Endpoints ${model} model`;
 const outputTokensOf = (model) => `Amount of output tokens for AI Endpoints ${model} model`;
 
 // Two accounts whose projects called AI Endpoints models in September, and a third, recorded
 // without a bill:
 // - the Lyon subsidiary, whose bills are in French: a language model and an embedding model,
-//   besides a notebook of AI Notebooks, which names no model, and instances; and in August,
-//   the language model's input tokens alone;
+//   besides a notebook of AI Notebooks and a service fee of AI Endpoints, which name no model,
+//   and instances; and in August, the language model's input tokens alone;
 // - Paris, whose bills are in English: the same language model, a speech-to-text model, billed
 //   by the second of audio, and an image model, whose calls are free;
 // - and the Unknown account, whose bills end each description with its period in brackets:
 //   the same language model.
-// Every NIC handle, name, identifier and amount is made up; the models and the wordings of
-// their lines are OVHcloud's.
+// Every NIC handle, name, identifier and amount is made up; the models and the descriptions
+// of their lines are OVHcloud's.
 function seed(db) {
   db.accounts.upsert({ nic: LYON, currency: 'EUR', name: 'Lyon subsidiary' });
   db.accounts.upsert({ nic: PARIS, currency: 'EUR' });
@@ -71,7 +71,9 @@ function seed(db) {
       [30000000, 0.00000001, 0.3]),
     line('FR1001-4', 'FR1001', 'project-production', 'AI Notebooks l4-1-gpu gra',
       [10, 1.93, 19.3]),
-    line('FR1001-5', 'FR1001', 'project-production',
+    line('FR1001-5', 'FR1001', 'project-production', 'Frais de service AI Endpoints',
+      [1, 5, 5]),
+    line('FR1001-6', 'FR1001', 'project-production',
       'Consommation à l\'heure pour les instances b3-8 gra11', [312, 0.0385, 12.01]),
     line('FR1002-1', 'FR1002', 'project-production', `${INPUT_TOKENS} gpt-oss-20b`,
       [8000000, 0.00000008, 0.64]),
@@ -123,7 +125,7 @@ describe('GET /api/analysis/ai-endpoints', () => {
       .toEqual(modelRow('gpt-oss-20b', 12500000, 4000000, 2.2));
   });
 
-  test('reads them from English lines, as OVHcloud\'s catalog words them', async () => {
+  test('reads them from English lines, as OVHcloud\'s catalog describes them', async () => {
     expect(rowOf(await aiEndpointsOf(SEPTEMBER, PARIS), 'gpt-oss-20b'))
       .toEqual(modelRow('gpt-oss-20b', 2000000, 500000, 0.31));
   });
@@ -153,7 +155,9 @@ describe('GET /api/analysis/ai-endpoints', () => {
   });
 
   // AI Notebooks, AI Training and AI Deploy name no model: they stay in the AI product of the
-  // Public Cloud tab's other services
+  // Public Cloud tab's other services. Nor does a line that names AI Endpoints alone, such as
+  // a service fee, which the query's prefilter keeps, as it names AI Endpoints: the reader
+  // leaves it out.
   test('adds up the cost of the models, and of no line that names none', async () => {
     expect(await aiEndpointsOf(SEPTEMBER, LYON)).toEqual({
       status: 200,
@@ -181,7 +185,7 @@ describe('GET /api/analysis/ai-endpoints', () => {
     });
   });
 
-  // Those of the month that the Public Cloud tab shows: its billing month
+  // Those of the month that the Public Cloud tab shows: the month of its bills
   test('counts the bills of the period alone', async () => {
     expect(await aiEndpointsOf(AUGUST, LYON)).toEqual({
       status: 200,
