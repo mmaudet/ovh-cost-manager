@@ -377,9 +377,14 @@ describe('Public Cloud cards', () => {
 });
 
 // The Compare tab compares a project's products month by month, from the bills of each month
-// (#181): every product, those with a card of their own included, and the credit apart
+// (#181): every product, those with a card of their own included, each with its charges (#195),
+// and the credit apart
 describe("a project's products", () => {
   const APRIL = ['2026-04-01', '2026-04-30'];
+  // A product whose lines pay for a single charge, which costs what the product costs
+  const singleCharge = (product, total, charge) => ({
+    product, total, charges: [{ charge, total }],
+  });
 
   beforeEach(() => {
     // Billed in March, with the credit that its bill used
@@ -405,10 +410,10 @@ describe("a project's products", () => {
     expect(db.cloudDetails.getProductsByProject(PROJECT, FROM, TO)).toEqual({
       total: 180,
       products: [
-        { product: 'instances', total: 100 },
-        { product: 'registry', total: 40 },
-        { product: 'databases', total: 30 },
-        { product: 'objectStorage', total: 10 },
+        singleCharge('instances', 100, 'Consommation à l\'heure pour les instances b3-8 gra11'),
+        singleCharge('registry', 40, 'Managed Private Registry - plan M'),
+        singleCharge('databases', 30, 'Public Cloud Databases PostgreSQL business DB1-7 à gra'),
+        singleCharge('objectStorage', 10, 'Stockage Standard - Bucket assets sur la région gra'),
       ],
       credits: -5,
     });
@@ -418,9 +423,9 @@ describe("a project's products", () => {
     expect(db.cloudDetails.getProductsByProject(PROJECT, ...APRIL)).toEqual({
       total: 152,
       products: [
-        { product: 'instances', total: 120 },
-        { product: 'volumes', total: 20 },
-        { product: 'kubernetes', total: 12 },
+        singleCharge('instances', 120, 'Consommation à l\'heure pour les instances b3-8 gra11'),
+        singleCharge('volumes', 20, 'Disques supplémentaires à gra9 de type high-speed'),
+        singleCharge('kubernetes', 12, 'Managed Kubernetes Service - Standard plan'),
       ],
       credits: 0,
     });
