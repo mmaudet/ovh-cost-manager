@@ -168,6 +168,12 @@ export const severalAccounts = {
     (projects) => withAccounts(projects, (project) => project.projectId)),
   gpuProjectsByAccount: mapPeriods(account.gpuSummary,
     (gpu) => withAccounts(gpu.byProject, (project) => project.project_id)),
+  // The services of the Veeam backups by account, for the lists that name the account of each
+  // service (#197): every one of them the unnamed account's
+  backupServicesByAccount: mapPeriods(account.backupServices, ({ vms, enterprise }) => {
+    const billedToUnnamed = (service) => ({ ...service, account: unnamedAccount.nic });
+    return { vms: vms.map(billedToUnnamed), enterprise: enterprise.map(billedToUnnamed) };
+  }),
   ofAccount: {
     [lyonAccount.id]: {
       byService: {
@@ -258,8 +264,9 @@ export const severalAccounts = {
         ],
         '2026-08': [publicCloud(190, 9), resourceType('Backup', 'backup', '#059669', 40, 2, 2)],
       },
-      // Every Veeam backup of account.js
+      // Every Veeam backup of account.js, and their services (#197)
       backupStats: account.backupStats,
+      backupServices: account.backupServices,
       // Its carbon footprint (#147): none yet in September, and August's, its latest, part of
       // account.js's (#152)
       carbonFootprint: {

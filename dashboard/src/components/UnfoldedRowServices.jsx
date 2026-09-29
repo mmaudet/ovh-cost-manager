@@ -17,40 +17,38 @@ const serviceRows = (servicesA, servicesB) => pairMonths(
 });
 
 /**
- * The services of a resource type in months A and B, right under its unfolded row in a
- * comparison of the Compare tab (#192), one row each, indented, in the comparison's columns:
- * the services that the Infrastructure tab lists for each month, as it shows them, their costs
- * and the variation. They follow the comparison's sort, within their row, and come by month A,
- * the most expensive first, then by month B, until the user sorts it (sortUnfolded()). While the
+ * The services of an unfolded row of a comparison of the Compare tab in months A and B, right
+ * under the row, one row each, indented, in the comparison's columns, with their costs and the
+ * variation: those of a resource type (#192), which the Infrastructure tab lists for each month,
+ * as it shows them, or those of a row of the backup comparison, its Veeam VMs or its Enterprise
+ * licences (#197). They follow the comparison's sort, within their row, and come by month A, the
+ * most expensive first, then by month B, until the user sorts it (sortUnfolded()). While the
  * lists name the account of each service, each names its account in brackets, and a service
  * billed to several accounts has a row for each (#194).
  * @param {object} props
- * @param {string} props.resourceType
- * @param {function(string, ?object): object} props.resourceTypeServicesQuery - The options of
- *   the query of a resource type's services in a month, for useQuery (useCompareTab()'s)
+ * @param {function(?object): object} props.servicesQueryOf - The options of the query of the
+ *   row's services in a month, for useQuery: useCompareTab()'s resourceTypeServicesQuery() or
+ *   backupServicesQuery(), for the row
  * @param {?object} props.monthA
  * @param {?object} props.monthB
  * @param {?object} props.sort - The sort of the comparison, by its columns (see
  *   SortableHeader.jsx): null until the user sorts it, as for a comparison that does not sort
  * @param {Object<string, function(object): *>} props.values - The value of a service in each
- *   column of the comparison, by the column's name, as sortRows() takes them, those of months A
- *   and B (totalA, totalB) included: a service has its identifier, its description, and its
- *   cost in each month, valA and valB
+ *   column of the comparison, by the column's name, as comparisonValues() gives them, those of
+ *   months A and B (totalA, totalB) included: a service has its identifier, its description,
+ *   and its cost in each month, valA and valB
  * @param {number} props.columnCount - The comparison's number of columns
  * @param {?{ nameOf: function(?string): string }} props.accountColumn - The Account column of
  *   the lists (accountColumnOf()), null when they name no account: while it shows, each service
- *   names its account, which the query gives it then (resourceTypeServicesQueries.js)
+ *   names its account, which the query gives it then (useCompareTab())
  * @returns {JSX.Element|JSX.Element[]} A single row, across the comparison's columns, that says
  *   that the services load, until both months answered, or that they could not load, when one
  *   failed; else a row for each service
  */
-const ResourceTypeServices = ({
-  resourceType, resourceTypeServicesQuery, monthA, monthB, sort, values, columnCount,
-  accountColumn, fmt, language, t,
+const UnfoldedRowServices = ({
+  servicesQueryOf, monthA, monthB, sort, values, columnCount, accountColumn, fmt, language, t,
 }) => {
-  const { status, dataA, dataB } = useMonthAnswers(
-    (month) => resourceTypeServicesQuery(resourceType, month), monthA, monthB,
-  );
+  const { status, dataA, dataB } = useMonthAnswers(servicesQueryOf, monthA, monthB);
   // Until both months' answers arrive, or when one failed, rather than a month at 0 €, in line
   // with the services
   if (status !== 'answered') {
@@ -88,4 +86,4 @@ const ResourceTypeServices = ({
   ));
 };
 
-export { ResourceTypeServices };
+export { UnfoldedRowServices };

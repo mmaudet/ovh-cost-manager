@@ -66,6 +66,8 @@ const emptyAnswers = {
     loadBalancers: { count: 0, total: 0 },
   }),
   backupStats: () => ({ vms: { count: 0, total: 0 }, enterprise: { count: 0, total: 0 } }),
+  // No service of the Veeam backups over the period (#197)
+  backupServices: () => ({ vms: [], enterprise: [] }),
   // No AI Endpoints model over the period (#193), nor any month of them (#196)
   aiEndpoints: () => ({ total: 0, models: [], monthlyTrend: [] }),
   // Nothing billed to the project over the period (#181)
@@ -201,6 +203,11 @@ const answers = {
   fetchAiEndpoints: entryForPeriodOfAccount('aiEndpoints', emptyAnswers.aiEndpoints),
   // And the Veeam backups of a month, which the Compare and Backup tabs show (#119)
   fetchBackupStats: entryForPeriodOfAccount('backupStats', emptyAnswers.backupStats),
+  // And their services, which the Compare tab's backup comparison unfolds into (#197), and
+  // those by account, for all accounts only
+  fetchBackupServices: entryForPeriodOfAccount('backupServices', emptyAnswers.backupServices),
+  fetchBackupServicesByAccount:
+    entryForPeriod('backupServicesByAccount', emptyAnswers.backupServices),
   // The carbon footprint of a month, by that month, of the account the page selects (#147)
   fetchCarbonFootprint: (data, month, account) =>
     ofAccount(data, account).carbonFootprint?.[month]

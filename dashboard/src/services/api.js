@@ -308,6 +308,31 @@ export const fetchBackupStats = async (from, to, account = null) => {
 };
 
 /**
+ * The services of the Veeam backups of a period, billed to the account (#197): the VMs backed
+ * up and the Enterprise licences, which the Compare tab's backup comparison unfolds its rows
+ * into, as the bill lines of a resource type by service give them
+ * @param {string} from
+ * @param {string} to
+ * @param {?string} [account] - The account, null for all accounts
+ * @returns {Promise<{ vms: object[], enterprise: object[] }>}
+ */
+export const fetchBackupServices = async (from, to, account = null) => {
+  const { data } = await api.get('/analysis/backup-services', {
+    params: { from, to, ...accountParams(account) },
+  });
+  return data;
+};
+
+// The same for all accounts, for the lists that name the account of each service: each
+// service once for each account whose bills billed it, with that account, rather than once
+export const fetchBackupServicesByAccount = async (from, to) => {
+  const { data } = await api.get('/analysis/backup-services', {
+    params: { from, to, byAccount: true },
+  });
+  return data;
+};
+
+/**
  * The carbon footprint of a month (#147): what OVHcloud's carbon calculator attributes to the
  * services, location-based, by emission source and in total, in kg CO2eq
  * @param {string} month - The month, 'YYYY-MM'

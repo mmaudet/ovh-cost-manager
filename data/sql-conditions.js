@@ -1,10 +1,10 @@
 /**
  * The conditions that the queries of the data layer join with AND to their WHERE clause, with
- * their parameters: those that keep the rows of an account (#115, ADR 0002), and those that
- * keep the rows of a list of ids that the OVH API gives. data/db.js, which re-exports
- * UNKNOWN_ACCOUNT, and data/ownership.js build their queries with them. This module has no
- * side effect: a test can load it without data/db.js, which reads config.json when it loads
- * without DATA_DIR.
+ * their parameters: those that keep the rows of an account (#115, ADR 0002), those that keep
+ * the rows of a list of ids that the OVH API gives, and those that keep the bill lines of the
+ * Veeam backups (#32, #197). data/db.js, which re-exports UNKNOWN_ACCOUNT, and
+ * data/ownership.js build their queries with them. This module has no side effect: a test can
+ * load it without data/db.js, which reads config.json when it loads without DATA_DIR.
  */
 
 // The value that selects the Unknown account (see CONTEXT.md), the rows without an account,
@@ -59,6 +59,20 @@ function idInList(column, ids) {
   };
 }
 
+// The conditions that keep the bill lines of the Veeam backups, by what they pay for, each for
+// the alias of the bill lines' table in the query, to join with AND to its WHERE clause, with
+// their parameters: the VMs backed up, the lines of the backup resource type, and the
+// Enterprise licences, the lines whose description names Veeam and Enterprise. The Veeam
+// backups count their services (#32), which the Compare tab's backup comparison unfolds its
+// two rows into (#197).
+const ofBackupLines = {
+  vms: (alias) => ({ sql: `${alias}.resource_type = ?`, params: ['backup'] }),
+  enterprise: (alias) => ({
+    sql: `(LOWER(${alias}.description) LIKE ? AND LOWER(${alias}.description) LIKE ?)`,
+    params: ['%veeam%', '%enterprise%'],
+  }),
+};
+
 module.exports = {
-  UNKNOWN_ACCOUNT, accountCondition, configuredAccountsCondition, idInList,
+  UNKNOWN_ACCOUNT, accountCondition, configuredAccountsCondition, idInList, ofBackupLines,
 };

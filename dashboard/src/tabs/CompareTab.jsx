@@ -4,7 +4,7 @@ import {
 import Accordion from '../components/Accordion.jsx';
 import { SortableHeader, sortRows } from '../components/SortableHeader.jsx';
 import ProjectProductComparison from '../components/ProjectProductComparison.jsx';
-import { ResourceTypeServices } from '../components/ResourceTypeServices.jsx';
+import { UnfoldedRowServices } from '../components/UnfoldedRowServices.jsx';
 import { UnfoldingRow } from '../components/UnfoldingRow.jsx';
 import { Variation } from '../components/Variation.jsx';
 import { formatMonthLabel } from '../utils/format.js';
@@ -38,12 +38,14 @@ const resourceTypeValues = (byResourceTypeA, byResourceTypeB) => ({
 
 // The value of a service in the same columns, which sort the services of each row of the
 // infrastructure comparison as they sort the rows (#192): its identifier, its cost in each
-// month, and the variation from one to the other
+// month, and the variation from one to the other. The comparisons that do not sort, of the
+// Private Cloud and of the backups (#197), order their services by their costs in months A and
+// B alone.
 const SERVICE_VALUES = comparisonValues('type', (service) => service.identifier);
 
-// The columns of the infrastructure and Private Cloud comparisons: the resource type, the cost
-// in months A and B, and the variation
-const RESOURCE_TYPE_COLUMNS = 4;
+// The columns of the infrastructure, Private Cloud and backup comparisons: the row, the cost in
+// months A and B, and the variation
+const COMPARISON_COLUMNS = 4;
 
 // The value of a row of the comparison by project in each column that sorts it (#146): its
 // account, none without the Account column
@@ -57,18 +59,18 @@ const projectComparisonValues = (accountColumn) => ({
 
 // The Compare tab, which the shell renders while it is active: what useCompareTab() returns,
 // the sort order of its tables, the query of a project's products, the rows unfolded into their
-// services and the query of those services, and a project's products unfolded into their
-// charges, which come with the products, included (#146, #181, #192, #195), with the shell's
-// language, translations (t), amount format (fmt) and months list. The months and their figures
-// are those of the account selected in the header (#119). The comparison by project names the
-// account of each project in the Account column of the shell (accountColumn), when it shows
-// one: it then compares the projects by account that the hook requests, a project billed to
-// several accounts once for each.
+// services and the queries of those services, and a project's products unfolded into their
+// charges, which come with the products, included (#146, #181, #192, #195, #197), with the
+// shell's language, translations (t), amount format (fmt) and months list. The months and their
+// figures are those of the account selected in the header (#119). The comparison by project
+// names the account of each project in the Account column of the shell (accountColumn), when it
+// shows one: it then compares the projects by account that the hook requests, a project billed
+// to several accounts once for each.
 const CompareTab = ({
   compareMonthA, setCompareMonthA, compareMonthB, setCompareMonthB, sortingOf, unfoldingOf,
   compareDataA, compareDataB, byServiceA, byServiceB, byProjectA, byProjectB,
   byResourceTypeA, byResourceTypeB, backupStatsA, backupStatsB, projectProductsQuery,
-  resourceTypeServicesQuery, language, t, fmt, months, accountColumn,
+  resourceTypeServicesQuery, backupServicesQuery, language, t, fmt, months, accountColumn,
 }) => {
   // Months A and B as the page names them, in its language (#33)
   const monthALabel = formatMonthLabel(compareMonthA?.value, language);
@@ -121,36 +123,47 @@ const CompareTab = ({
     ...privateCloudTypes,
   ], infrastructureSorting.sort, resourceTypeValues(byResourceTypeA, byResourceTypeB), language);
 
+  // Draws a row of the infrastructure, backup or Private Cloud comparison, by the comparison's
+  // name: its label, its amounts in months A and B, as its cells show them, a cost by default,
+  // and the variation from one to the other. It unfolds when either month billed it more than
+  // 0 €, into its services, which the query of its services in a month gives
+  // (servicesQueryOf) and which follow the comparison's sort; each comparison's rows unfold on
+  // their own (#192, #197).
+  const drawServicesRow = (comparison, {
+    key, label, valA, valB, shownA = `${fmt(valA)}€`, shownB = `${fmt(valB)}€`, servicesQueryOf,
+  }) => (
+    <UnfoldingRow
+      key={key}
+      unfolding={valA > 0 || valB > 0 ? unfoldingOf(comparison, key) : null}
+      chevronLabel={`${t('servicesOf')} ${label}`}
+      label={label}
+      detail={(
+        <UnfoldedRowServices
+          servicesQueryOf={servicesQueryOf}
+          monthA={compareMonthA} monthB={compareMonthB} sort={sortingOf(comparison).sort}
+          values={SERVICE_VALUES} columnCount={COMPARISON_COLUMNS}
+          accountColumn={accountColumn} fmt={fmt} language={language} t={t}
+        />
+      )}
+    >
+      <td className="p-3 text-right font-medium">{shownA}</td>
+      <td className="p-3 text-right text-gray-500">{shownB}</td>
+      <td className="p-3 text-right">
+        <Variation from={valA} to={valB} language={language} t={t} />
+      </td>
+    </UnfoldingRow>
+  );
+
   // Draws a row of the infrastructure or Private Cloud comparison, by the comparison's name: the
-  // cost of a resource type in months A and B (#32). It unfolds into its services when either
-  // month billed it more than 0 €, as each service that it lists, and they follow the
-  // comparison's sort; each comparison's rows unfold on their own (#192).
-  const drawResourceTypeRow = (comparison, { key, label }) => {
-    const valA = costOfType(byResourceTypeA, key);
-    const valB = costOfType(byResourceTypeB, key);
-    return (
-      <UnfoldingRow
-        key={key}
-        unfolding={valA > 0 || valB > 0 ? unfoldingOf(comparison, key) : null}
-        chevronLabel={`${t('servicesOf')} ${label}`}
-        label={label}
-        detail={(
-          <ResourceTypeServices
-            resourceType={key} resourceTypeServicesQuery={resourceTypeServicesQuery}
-            monthA={compareMonthA} monthB={compareMonthB} sort={sortingOf(comparison).sort}
-            values={SERVICE_VALUES} columnCount={RESOURCE_TYPE_COLUMNS}
-            accountColumn={accountColumn} fmt={fmt} language={language} t={t}
-          />
-        )}
-      >
-        <td className="p-3 text-right font-medium">{fmt(valA)}€</td>
-        <td className="p-3 text-right text-gray-500">{fmt(valB)}€</td>
-        <td className="p-3 text-right">
-          <Variation from={valA} to={valB} language={language} t={t} />
-        </td>
-      </UnfoldingRow>
-    );
-  };
+  // cost of a resource type in months A and B (#32), which unfolds into each service that it
+  // lists (#192)
+  const drawResourceTypeRow = (comparison, { key, label }) => drawServicesRow(comparison, {
+    key,
+    label,
+    valA: costOfType(byResourceTypeA, key),
+    valB: costOfType(byResourceTypeB, key),
+    servicesQueryOf: (month) => resourceTypeServicesQuery(key, month),
+  });
 
   return (
     <div className="space-y-6">
@@ -347,7 +360,9 @@ const CompareTab = ({
           </thead>
           <tbody>
             {/* The number and the cost of the Veeam VMs and Enterprise licences of months A
-                and B, as the Backup tab shows them for the selected month (#32) */}
+                and B, as the Backup tab shows them for the selected month (#32). A row that
+                either month billed unfolds into its services (#197), which come by month A,
+                then by month B: the comparison's sort stays null, as no header sorts it. */}
             {[
               {
                 key: 'backup_vms',
@@ -359,19 +374,18 @@ const CompareTab = ({
                 kind: 'enterprise',
                 label: language === 'en' ? 'Veeam Enterprise License' : 'Licence Veeam Enterprise',
               },
-            ].map(row => {
-              const a = backupsOf(backupStatsA, row.kind);
-              const b = backupsOf(backupStatsB, row.kind);
-              return (
-                <tr key={row.key} className="border-b hover:bg-gray-50 transition-colors">
-                  <td className="p-3 font-medium">{row.label}</td>
-                  <td className="p-3 text-right font-medium">{a.count} / {fmt(a.total)}€</td>
-                  <td className="p-3 text-right text-gray-500">{b.count} / {fmt(b.total)}€</td>
-                  <td className="p-3 text-right">
-                    <Variation from={a.total} to={b.total} language={language} t={t} />
-                  </td>
-                </tr>
-              );
+            ].map(({ key, kind, label }) => {
+              const a = backupsOf(backupStatsA, kind);
+              const b = backupsOf(backupStatsB, kind);
+              return drawServicesRow('backup', {
+                key,
+                label,
+                valA: a.total,
+                valB: b.total,
+                shownA: `${a.count} / ${fmt(a.total)}€`,
+                shownB: `${b.count} / ${fmt(b.total)}€`,
+                servicesQueryOf: (month) => backupServicesQuery(kind, month),
+              });
             })}
           </tbody>
         </table>
