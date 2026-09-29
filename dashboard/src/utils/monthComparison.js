@@ -29,4 +29,15 @@ const pairMonths = (rowsA, rowsB, keyOf) => {
   });
 };
 
-export { BY_MONTH_A, BY_MONTH_B, pairMonths };
+/**
+ * What makes a row of month A and one of month B the same, for pairMonths(): what it names, a
+ * project or a service, and its account. The rows that the lists ask for by account, while
+ * they name the account of each row, give the NIC handle of theirs, null for the Unknown
+ * account: a project or a service that two accounts billed has a row for each (#119, #194).
+ * The others give none, which reads as null: they pair by what they name alone.
+ * @param {function(object): *} nameOf - What a row names
+ * @returns {function(object): string} The key of a row
+ */
+const byNameAndAccount = (nameOf) => (row) => JSON.stringify([nameOf(row), row.account ?? null]);
+
+export { BY_MONTH_A, BY_MONTH_B, byNameAndAccount, pairMonths };

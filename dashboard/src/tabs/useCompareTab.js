@@ -140,16 +140,13 @@ const useCompareTab = ({ months, activeTab, selectedAccount, accountColumn }) =>
   });
 
   // The options of the query of a resource type's services in month A or B, for useQuery: those
-  // that the Infrastructure tab lists for the resource type in the month, under the same key:
-  // the services of the account shown (#192), or, while the lists name the account of each
-  // service, with all accounts shown, those of every account by account, a service billed to
-  // several accounts once for each (#194). The row of the resource type runs it once unfolded,
-  // as the other figures of the month run: on the tab, for a month of the months list.
-  const resourceTypeServicesQuery = (resourceType, month) => (accountColumn
-    ? servicesQueries.resourceTypeServicesByAccountQuery(resourceType, month, asksFor(month))
-    : servicesQueries.resourceTypeServicesQuery(
-      selectedAccount, resourceType, month, asksFor(month),
-    ));
+  // that the Infrastructure tab lists for the resource type in the month, as it asks for them,
+  // under the same key: the services of the account shown (#192), or, while the lists name the
+  // account of each service, those of every account by account (#194). The row of the resource
+  // type runs it once unfolded, as the other figures of the month run: on the tab, for a month
+  // of the months list.
+  const resourceTypeServicesQuery = (resourceType, month) => servicesQueries
+    .resourceTypeServicesQuery(selectedAccount, accountColumn, resourceType, month, asksFor(month));
 
   return {
     compareMonthA,

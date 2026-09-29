@@ -1,3 +1,4 @@
+import { byNameAndAccount } from './monthComparison.js';
 import { variationPercent } from './variation.js';
 
 // The rows of the project comparison of the Compare tab, from the projects of months A and B
@@ -24,8 +25,8 @@ const projectOf = ({ projectId, projectName }) => (
 );
 
 // What makes a project of month A and one of month B the same: the same project, and the same
-// account when they name one
-const identity = (project) => JSON.stringify([projectOf(project), project.account ?? null]);
+// account when they name one, as the other comparisons of the tab pair their rows
+const identity = byNameAndAccount(projectOf);
 
 // The row of a project, as month A lists it, or as month B does when month A does not
 const row = (projectA, projectB) => {

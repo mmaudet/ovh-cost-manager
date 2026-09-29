@@ -1,5 +1,7 @@
 import { accountInBrackets } from '../utils/accounts.js';
-import { BY_MONTH_A, BY_MONTH_B, pairMonths } from '../utils/monthComparison.js';
+import {
+  BY_MONTH_A, BY_MONTH_B, byNameAndAccount, pairMonths,
+} from '../utils/monthComparison.js';
 import { MonthAnswersMessage, useMonthAnswers } from './MonthAnswers.jsx';
 import { sortRows } from './SortableHeader.jsx';
 import { Variation } from './Variation.jsx';
@@ -13,20 +15,14 @@ const inOrder = (services, sort, values, language) => sortRows(
   sort, values, language,
 );
 
-// What makes a service of month A and one of month B the same: its identifier, which the server
-// gives as `domain`, whatever the service, and its account while the lists name the account of
-// each service (#194), the NIC handle that the server gives each service by account, null for
-// the Unknown account: a service billed to two accounts is two services, one for each
-const serviceKeyOf = (accountColumn) => (accountColumn
-  ? ({ domain, account }) => JSON.stringify([domain, account ?? null])
-  : ({ domain }) => domain);
-
-// The services of months A and B, paired by their identifier, and by their account while the
-// lists name it: each service that either month billed, with its account, the description of
-// its most expensive bill line, month B's when month B billed it, and its cost in each month,
-// 0 € in a month that did not bill it
-const serviceRows = (servicesA, servicesB, accountColumn) => pairMonths(
-  servicesA, servicesB, serviceKeyOf(accountColumn),
+// The services of months A and B, paired by their identifier, which the server gives as
+// `domain`, whatever the service, and by their account, which the server gives while the lists
+// name the account of each service (#194): a service billed to two accounts has a row for each.
+// Each service that either month billed, with its account, the description of its most
+// expensive bill line, month B's when month B billed it, and its cost in each month, 0 € in a
+// month that did not bill it.
+const serviceRows = (servicesA, servicesB) => pairMonths(
+  servicesA, servicesB, byNameAndAccount(({ domain }) => domain),
 ).map(({ key, rowA, rowB, valA, valB }) => {
   const { domain, account, description } = rowB ?? rowA;
   return { key, identifier: domain, account, description, valA, valB };
@@ -53,8 +49,8 @@ const serviceRows = (servicesA, servicesB, accountColumn) => pairMonths(
  *   cost in each month, valA and valB
  * @param {number} props.columnCount - The comparison's number of columns
  * @param {?{ nameOf: function(?string): string }} props.accountColumn - The Account column of
- *   the lists (accountColumnOf()), null when they name no account: while it shows, the query
- *   gives the services by account (useCompareTab())
+ *   the lists (accountColumnOf()), null when they name no account: while it shows, each service
+ *   names its account, which the query gives it then (resourceTypeServicesQueries.js)
  * @returns {JSX.Element|JSX.Element[]} A single row, across the comparison's columns, that says
  *   that the services load, until both months answered, or that they could not load, when one
  *   failed; else a row for each service
@@ -78,7 +74,7 @@ const ResourceTypeServices = ({
     );
   }
   return inOrder(
-    serviceRows(dataA ?? [], dataB ?? [], accountColumn), sort, values, language,
+    serviceRows(dataA ?? [], dataB ?? []), sort, values, language,
   ).map(({
     key, identifier, account, description, valA, valB,
   }) => (

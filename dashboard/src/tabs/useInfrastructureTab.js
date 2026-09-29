@@ -8,9 +8,7 @@ import {
   fetchInventoryServers, fetchInventoryVps, fetchInventoryStorage,
 } from '../services/api.js';
 import { accountQuery } from '../utils/accounts.js';
-import {
-  resourceTypeServicesByAccountQuery, resourceTypeServicesQuery,
-} from './resourceTypeServicesQueries.js';
+import { resourceTypeServicesQuery } from './resourceTypeServicesQueries.js';
 
 /**
  * The inventory and the bill lines of the account shown (#123), for the Infrastructure tab.
@@ -57,17 +55,15 @@ const useInfrastructureTab = ({
   ));
 
   // The bill lines of the open resource type in the month selected, by service, whatever the
-  // tab (#56): the services of the account shown, under the key of those that the Compare tab
-  // lists for the same resource type, month and account (#192), or, while the lists name the
-  // account of each service, those of all accounts by account, a service billed to several
-  // accounts once for each. One query or the other, so that a single-account installation
-  // keeps the queries it had.
+  // tab (#56), as the Compare tab asks for the services of a row it unfolds, under the same key
+  // (#192, #194): the services of the account shown, or, while the lists name the account of
+  // each service, those of all accounts by account, a service billed to several accounts once
+  // for each. One query or the other, so that a single-account installation keeps the queries
+  // it had.
   const servicesEnabled = !!selectedResourceType && holdsSelectedMonth;
-  const { data: resourceTypeDetails = [] } = useQuery(accountColumn
-    ? resourceTypeServicesByAccountQuery(selectedResourceType, selectedMonth, servicesEnabled)
-    : resourceTypeServicesQuery(
-      selectedAccount, selectedResourceType, selectedMonth, servicesEnabled,
-    ));
+  const { data: resourceTypeDetails = [] } = useQuery(resourceTypeServicesQuery(
+    selectedAccount, accountColumn, selectedResourceType, selectedMonth, servicesEnabled,
+  ));
 
   return {
     sortingOf,
