@@ -79,9 +79,12 @@ const ResourceTypeServices = ({ servicesQueryOf, monthA, monthB, sort, fmt, lang
     domain, description, valA, valB,
   }) => (
     <tr key={domain} className="border-b text-gray-600">
-      <td className="py-2 pr-3 pl-12">
-        <div className="font-mono text-xs">{domain}</div>
-        <div className="truncate max-w-xs text-xs text-gray-500" title={description}>
+      {/* A cell that asks the table for no width of its own (max-w-0): the description is cut
+          to the column of the rows' labels, whatever the page's width, rather than widen the
+          table, and the identifier wraps to it, at its hyphens first */}
+      <td className="max-w-0 py-2 pr-3 pl-12">
+        <div className="font-mono text-xs break-words">{domain}</div>
+        <div className="truncate text-xs text-gray-500" title={description}>
           {description}
         </div>
       </td>
