@@ -74,9 +74,12 @@ describe('query keys', () => {
       ['monthlyTrend', 3, '2026-09'],
       ['monthlyTrendByCategory', 3, undefined],
       ['monthlyTrendByCategory', 3, '2026-09'],
-      // And the GPU trend over those months, which only runs on the tab
+      // And the GPU trend over those months, which only runs on the tab, as does the cost of
+      // each AI Endpoints model month by month over them (#196)
       ['gpuTrend', undefined, undefined],
       ['gpuTrend', '2026-07-01', '2026-09-30'],
+      ['aiEndpointsTrend', undefined, undefined],
+      ['aiEndpointsTrend', '2026-07-01', '2026-09-30'],
       // The Public Cloud tab's, while no project is selected
       ['projectsEnriched'],
       ['projectConsumption', undefined],
@@ -184,11 +187,12 @@ describe('query keys', () => {
         ['byResourceType', '2026-08-01', '2026-08-31', 'xx1111-ovh'],
         ['backupStats', '2026-08-01', '2026-08-31', 'xx1111-ovh'],
         ['backupStats', '2026-09-01', '2026-09-30', 'xx1111-ovh'],
-        // Over the 3 months up to September that its months allow, and the GPU trend over
-        // them, which only runs on the tab
+        // Over the 3 months up to September that its months allow, and the GPU and AI Endpoints
+        // trends over them (#196), which only run on the tab
         ['monthlyTrend', 3, '2026-09', 'xx1111-ovh'],
         ['monthlyTrendByCategory', 3, '2026-09', 'xx1111-ovh'],
         ['gpuTrend', '2026-07-01', '2026-09-30', 'xx1111-ovh'],
+        ['aiEndpointsTrend', '2026-07-01', '2026-09-30', 'xx1111-ovh'],
         // The Public Cloud tab's projects and figures of the month (#121), and its AI Endpoints
         // models (#193), which wait for the tab. The resources of a project follow the project,
         // which belongs to one account.

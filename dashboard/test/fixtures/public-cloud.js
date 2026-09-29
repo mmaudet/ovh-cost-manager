@@ -181,37 +181,75 @@ export const billedProducts = (total, products, credits = 0) => ({
   credits,
 });
 
-// The AI Endpoints models that the bills of a month name, as
+// The AI Endpoints models that the bills of a period name, as
 // /api/analysis/ai-endpoints answers them (#193): what they cost in all, and
 // each model as [model, input tokens, output tokens, cost], the most expensive
-// first, a token figure null when none of the model's lines counts those tokens
-export const aiEndpointsFigures = (total, models) => ({
+// first, a token figure null when none of the model's lines counts those
+// tokens. And each month of the bills that name a model, the earliest first,
+// as [month, costs], with the cost of each model in it, in the order of the
+// models: every model in every month (#196).
+export const aiEndpointsFigures = (total, models, months) => ({
   total,
   models: models.map(([model, inputTokens, outputTokens, cost]) => ({
     model, inputTokens, outputTokens, total: cost,
   })),
+  monthlyTrend: months.map(([month, costs]) => ({
+    month,
+    costs: Object.fromEntries(models.map(([model], index) => [model, costs[index]])),
+  })),
 });
 
+// The AI Endpoints models of a single month, which its trend holds alone, with
+// the cost of each model
+export const aiEndpointsOfMonth = (month, total, models) => aiEndpointsFigures(
+  total, models, [[month, models.map(([, , , cost]) => cost)]],
+);
+
 // The AI Endpoints models that the projects of the synthetic account called,
-// by month, which its figures above leave out, so that they stay as they are:
-// the tests of the table of the models give them to the page. In September,
-// language models billed in input and output tokens, one of them little used,
-// an embedding model, which counts its input tokens alone, a speech-to-text
-// model, billed by the second of audio, and an image model, whose calls are
-// free; in August, two of them; none in July.
+// which its figures above leave out, so that they stay as they are: the tests
+// of the table of the models and of their trend give them to the page. In
+// September, language models billed in input and output tokens, one of them
+// little used, an embedding model, which counts its input tokens alone, a
+// speech-to-text model, billed by the second of audio, and an image model,
+// whose calls are free; in August, two of them; none before.
+const september = aiEndpointsOfMonth('2026-09', 20.82, [
+  ['gpt-oss-120b', 48260000, 12480000, 17.46],
+  ['gpt-oss-20b', 15500000, 4800000, 2.68],
+  ['whisper-large-v3', null, null, 0.37],
+  ['bge-m3', 30000000, null, 0.3],
+  ['Mistral-7B-Instruct-v0.3', 45000, 12300, 0.01],
+  ['stable-diffusion-xl-base-v10', null, null, 0],
+]);
+const august = aiEndpointsOfMonth('2026-08', 1.47, [
+  ['gpt-oss-20b', 9000000, 2100000, 1.35],
+  ['bge-m3', 12000000, null, 0.12],
+]);
+// August's and September's together, as a period that holds both gives them
+const augustAndSeptember = aiEndpointsFigures(22.29, [
+  ['gpt-oss-120b', 48260000, 12480000, 17.46],
+  ['gpt-oss-20b', 24500000, 6900000, 4.03],
+  ['bge-m3', 42000000, null, 0.42],
+  ['whisper-large-v3', null, null, 0.37],
+  ['Mistral-7B-Instruct-v0.3', 45000, 12300, 0.01],
+  ['stable-diffusion-xl-base-v10', null, null, 0],
+], [
+  ['2026-08', [0, 1.35, 0.12, 0, 0, 0]],
+  ['2026-09', [17.46, 2.68, 0.3, 0.37, 0.01, 0]],
+]);
+
+// By the period asked for: a month, as the Public Cloud tab asks for it, or the
+// months of the Trends tab's period (#196), up to the month selected
 export const aiEndpoints = {
-  '2026-09': aiEndpointsFigures(20.82, [
-    ['gpt-oss-120b', 48260000, 12480000, 17.46],
-    ['gpt-oss-20b', 15500000, 4800000, 2.68],
-    ['whisper-large-v3', null, null, 0.37],
-    ['bge-m3', 30000000, null, 0.3],
-    ['Mistral-7B-Instruct-v0.3', 45000, 12300, 0.01],
-    ['stable-diffusion-xl-base-v10', null, null, 0],
-  ]),
-  '2026-08': aiEndpointsFigures(1.47, [
-    ['gpt-oss-20b', 9000000, 2100000, 1.35],
-    ['bge-m3', 12000000, null, 0.12],
-  ]),
+  '2026-09': september,
+  '2026-08': august,
+  // The 3 months up to September, and the longer periods that a longer
+  // history offers (see trends.js): August's and September's models
+  '2026-07/2026-09': augustAndSeptember,
+  '2026-04/2026-09': augustAndSeptember,
+  '2025-10/2026-09': augustAndSeptember,
+  '2024-10/2026-09': augustAndSeptember,
+  // Up to August: August's alone, a single month of models
+  '2026-06/2026-08': august,
 };
 
 // The figures of the Public Cloud cards, as /api/analysis/public-cloud-stats
