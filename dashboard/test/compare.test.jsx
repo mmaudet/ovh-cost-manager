@@ -7,6 +7,7 @@ import {
 import {
   lyonAccount, removedAccount, severalAccounts, unknownAccount, unnamedAccount,
 } from './fixtures/accounts.js';
+import { enterpriseLicence } from './fixtures/backup.js';
 import { months } from './fixtures/calendar.js';
 import { api, failFor, holdBack } from './support/api.js';
 import {
@@ -529,9 +530,11 @@ describe('Compare tab', () => {
         'Adresses IP', 'Datastores Private Cloud', 'Hôtes Private Cloud', 'Load Balancer',
         'Noms de domaine', 'Serveurs dédiés', 'Stockage', 'VPS',
       ]);
-      // The Backup and Private Cloud comparisons have two rows each: nothing to sort
+      // The Backup and Private Cloud comparisons have two rows each: nothing to sort, no header
+      // that sorts, whatever buttons their rows have to unfold (#197)
       await openComparison(user, BACKUP);
-      expect(within(comparisonTable(BACKUP)).queryAllByRole('button')).toEqual([]);
+      expect(within(comparisonTable(BACKUP)).getAllByRole('columnheader')
+        .flatMap((header) => within(header).queryAllByRole('button'))).toEqual([]);
     });
 
     // The servers that the inventory holds today have nothing to do with months A and B: the
@@ -1110,6 +1113,195 @@ describe('Compare tab', () => {
       ]);
       expect(within(within(comparisonTable(title)).getByText('example.net').closest('tr'))
         .getByTitle('cannot be computed: month A at €0 or below')).toHaveTextContent('—');
+    });
+  });
+
+  // The two rows of the backup comparison unfold into their services, month A against month B,
+  // as the infrastructure comparison's rows do (#197): the Veeam VMs backed up and the Veeam
+  // Enterprise licences
+  describe('backup rows unfolded into their services (#197)', () => {
+    // The rows of the backup comparison, each as the texts it shows, header left out
+    const backupRows = () => rowTextsOf(comparisonTable(BACKUP)).slice(1);
+    const VMS = 'VMs Veeam Backup';
+    const LICENCES = 'Licence Veeam Enterprise';
+    // The licence under it, by its identifier
+    const LICENCE = enterpriseLicence.domain;
+    // The VMs of August and September, as many as the row counts in each month, adding up to its
+    // cost: (40 - 25) / 25, (30 - 15) / 15, and one from nothing in August
+    const vms = [
+      ['vm-app-1.example.com', 'Veeam Managed Backup - vm-app-1.example.com',
+        '25,00€', '40,00€', '+60,0 %'],
+      ['vm-db-1.example.com', 'Veeam Managed Backup - vm-db-1.example.com',
+        '15,00€', '30,00€', '+100,0 %'],
+      ['vm-files-1.example.com', 'Veeam Managed Backup - vm-files-1.example.com',
+        '0,00€', '20,00€', '—'],
+    ];
+
+    it('unfold into their VMs and licences, asked for once a month for both rows', async () => {
+      const { user } = await renderDashboard();
+      await openTab(user, 'Comparaison');
+      await openComparison(user, BACKUP);
+      // Folded, as before
+      expect(rowsOf(comparisonTable(BACKUP))).toEqual([
+        ['Catégorie', 'Août 2026', 'Septembre 2026', 'Variation'],
+        [VMS, '2 / 40,00€', '3 / 90,00€', '+125,0 %'],
+        [LICENCES, '0 / 0,00€', '1 / 25,00€', '—'],
+      ]);
+      expect(chevron(BACKUP, VMS)).toHaveAttribute('aria-expanded', 'false');
+      expect(api.fetchBackupServices).not.toHaveBeenCalled();
+
+      await toggleRow(user, BACKUP, VMS);
+
+      for (const { from, to } of [months[1], months[0]]) {
+        expect(api.fetchBackupServices).toHaveBeenCalledWith(from, to, null);
+      }
+      expect(backupRows()).toEqual([
+        [VMS, '2 / 40,00€', '3 / 90,00€', '+125,0 %'],
+        ...vms,
+        [LICENCES, '0 / 0,00€', '1 / 25,00€', '—'],
+      ]);
+
+      await toggleRow(user, BACKUP, LICENCES);
+
+      // The services of both rows came in the same answers
+      expect(api.fetchBackupServices).toHaveBeenCalledTimes(2);
+      expect(backupRows().slice(-2)).toEqual([
+        [LICENCES, '0 / 0,00€', '1 / 25,00€', '—'],
+        [LICENCE, 'Veeam Enterprise Plus licence', '0,00€', '25,00€', '—'],
+      ]);
+
+      await toggleRow(user, BACKUP, VMS);
+
+      expect(backupRows().map(([label]) => label)).toEqual([VMS, LICENCES, LICENCE]);
+    });
+
+    // As the rows of a comparison by project, until the user sorts it: vm-app-1 and vm-db-1
+    // cost 20 € each in August, whose answer gives vm-db-1 first, by service, the last first, as
+    // the server gives services of the same cost; vm-app-1 the more in September; then
+    // vm-files-1, from nothing in August
+    it('list the services of a row by month A, the most expensive first, then by month B',
+      async () => {
+        const [app, db] = account.backupServices['2026-08'].vms;
+        const { user } = await renderDashboard({
+          ...account,
+          backupServices: {
+            ...account.backupServices,
+            '2026-08': { vms: [{ ...db, total: 20 }, { ...app, total: 20 }], enterprise: [] },
+          },
+        });
+        await openTab(user, 'Comparaison');
+        await openComparison(user, BACKUP);
+
+        await toggleRow(user, BACKUP, VMS);
+
+        expect(backupRows().map(([label]) => label)).toEqual([
+          VMS, 'vm-app-1.example.com', 'vm-db-1.example.com', 'vm-files-1.example.com', LICENCES,
+        ]);
+      });
+
+    // July backed nothing up, and August no licence
+    it('offer no chevron on a row that neither month billed', async () => {
+      const { user } = await renderDashboard();
+      await openTab(user, 'Comparaison');
+      await pickMonth(user, 'Août 2026', 'Juillet 2026');
+      await pickMonth(user, 'Septembre 2026', 'Août 2026');
+
+      await openComparison(user, BACKUP);
+
+      expect(backupRows()).toEqual([
+        [VMS, '0 / 0,00€', '2 / 40,00€', '—'],
+        [LICENCES, '0 / 0,00€', '0 / 0,00€', '—'],
+      ]);
+      expect(chevron(BACKUP, VMS)).toHaveAttribute('aria-expanded', 'false');
+      expect(within(comparisonTable(BACKUP))
+        .queryByRole('button', { name: `Services : ${LICENCES}` })).not.toBeInTheDocument();
+    });
+
+    // Several accounts in the instance: every Veeam backup is yy2222-ovh's. See
+    // fixtures/accounts.js.
+    describe('with several accounts', () => {
+      it('name the account of each service with all accounts shown, asked for by account',
+        async () => {
+          const { user } = await renderDashboard(severalAccounts);
+          await openTab(user, 'Comparaison');
+          await openComparison(user, BACKUP);
+
+          await toggleRow(user, BACKUP, VMS);
+
+          for (const { from, to } of [months[1], months[0]]) {
+            expect(api.fetchBackupServicesByAccount).toHaveBeenCalledWith(from, to);
+          }
+          expect(api.fetchBackupServices).not.toHaveBeenCalled();
+          expect(backupRows().slice(1, 4)).toEqual(vms.map(
+            ([identifier, ...rest]) => [identifier, '(yy2222-ovh)', ...rest],
+          ));
+        });
+
+      // vm-db-1 moved from Lyon to yy2222-ovh during September: 10 € for Lyon, then 20 € for
+      // yy2222-ovh, which the server gives after vm-files-1, of the same cost, by service, the
+      // last first. The row counts three VMs in September, as the Veeam backups do, and lists
+      // four (getBackupServices() in data/db.js).
+      it('list a VM that two accounts backed up once for each, which the row counts once',
+        async () => {
+          const september = severalAccounts.backupServicesByAccount['2026-09'];
+          const [app, db, files] = september.vms;
+          const { user } = await renderDashboard({
+            ...severalAccounts,
+            backupServicesByAccount: {
+              ...severalAccounts.backupServicesByAccount,
+              '2026-09': {
+                ...september,
+                vms: [
+                  app, files, { ...db, total: 20 }, { ...db, total: 10, account: lyonAccount.nic },
+                ],
+              },
+            },
+          });
+          await openTab(user, 'Comparaison');
+          await openComparison(user, BACKUP);
+
+          await toggleRow(user, BACKUP, VMS);
+
+          const description = (vm) => `Veeam Managed Backup - ${vm}`;
+          expect(backupRows().slice(0, 6)).toEqual([
+            [VMS, '2 / 40,00€', '3 / 90,00€', '+125,0 %'],
+            ['vm-app-1.example.com', '(yy2222-ovh)', description('vm-app-1.example.com'),
+              '25,00€', '40,00€', '+60,0 %'],
+            ['vm-db-1.example.com', '(yy2222-ovh)', description('vm-db-1.example.com'),
+              '15,00€', '20,00€', '+33,3 %'],
+            ['vm-files-1.example.com', '(yy2222-ovh)', description('vm-files-1.example.com'),
+              '0,00€', '20,00€', '—'],
+            ['vm-db-1.example.com', '(Lyon subsidiary)', description('vm-db-1.example.com'),
+              '0,00€', '10,00€', '—'],
+            [LICENCES, '0 / 0,00€', '1 / 25,00€', '—'],
+          ]);
+        });
+
+      it('list the services of the account selected, and none of an account without backups',
+        async () => {
+          const { user } = await renderDashboard(severalAccounts);
+          await openTab(user, 'Comparaison');
+          await selectAccount(user, 'yy2222-ovh');
+          await openComparison(user, BACKUP);
+
+          await toggleRow(user, BACKUP, LICENCES);
+
+          for (const { from, to } of [months[1], months[0]]) {
+            expect(api.fetchBackupServices).toHaveBeenCalledWith(from, to, unnamedAccount.id);
+          }
+          expect(backupRows().slice(-1)).toEqual([
+            [LICENCE, 'Veeam Enterprise Plus licence', '0,00€', '25,00€', '—'],
+          ]);
+
+          await selectAccount(user, 'Lyon subsidiary');
+          await openComparison(user, BACKUP);
+
+          expect(backupRows()).toEqual([
+            [VMS, '0 / 0,00€', '0 / 0,00€', '—'],
+            [LICENCES, '0 / 0,00€', '0 / 0,00€', '—'],
+          ]);
+          expect(within(comparisonTable(BACKUP)).queryAllByRole('button')).toEqual([]);
+        });
     });
   });
 

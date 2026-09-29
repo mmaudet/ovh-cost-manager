@@ -10,9 +10,10 @@ const { productFigures } = require('./public-cloud-products');
 const { storageClassLabel } = require('./storage-classes');
 const { monthsOfWindow, shiftMonth } = require('./months');
 const ownership = require('./ownership');
-// The conditions of the queries that keep one account's rows (#115), or a list of ids
+// The conditions of the queries that keep one account's rows (#115), a list of ids, or the
+// bill lines of the Veeam backups (#197)
 const {
-  UNKNOWN_ACCOUNT, accountCondition, configuredAccountsCondition, idInList,
+  UNKNOWN_ACCOUNT, accountCondition, configuredAccountsCondition, idInList, ofBackupLines,
 } = require('./sql-conditions');
 // What brings a database that an earlier version created to schema.sql's form
 const {
@@ -104,6 +105,56 @@ function costGrouping(column, byAccount) {
     groupBy: `${column}, b.account`,
     orderBy: `${byCost}, ${accountOrder('b.account')}`,
   };
+}
+
+/**
+ * The services of the bill lines that a condition selects between two dates, on the bills of
+ * the account (see accountCondition()), every account's by default: for each service (bill
+ * `domain` field), the description of the most expensive of its lines, what they cost and how
+ * many they are, as the lists of bill lines by service show them (#123). One row per service;
+ * or, with byAccount, per service and account, with the NIC handle of its account, null for
+ * the Unknown account, and the description of that account's own lines (see costGrouping()).
+ * Only the services whose lines add up to more than 0 €, in the order of costGrouping().
+ * @param {function(string): { sql: string, params: Array }} linesOf - The condition that
+ *   selects the lines, for the alias of their table
+ * @param {string} fromDate
+ * @param {string} toDate
+ * @param {?string} account
+ * @param {boolean} byAccount - Whether to give a row to each service and account
+ * @returns {object[]}
+ */
+function servicesOfLines(linesOf, fromDate, toDate, account, byAccount) {
+  const ofAccount = accountCondition(account, 'b.account');
+  const ofLineAccount = accountCondition(account, 'b2.account');
+  const grouping = costGrouping('d.domain', byAccount);
+  // By account, the description of the row's account's own lines
+  const sameAccount = byAccount ? 'AND b2.account IS b.account' : '';
+  const ofLines = linesOf('d');
+  const ofServiceLines = linesOf('d2');
+  return getDb().prepare(`
+    SELECT
+      d.domain,
+      (SELECT d2.description FROM bill_details d2
+       JOIN bills b2 ON d2.bill_id = b2.id
+       WHERE d2.domain = d.domain AND ${ofServiceLines.sql}
+         AND b2.date >= ? AND b2.date <= ?
+         AND ${ofLineAccount.sql} ${sameAccount}
+       ORDER BY d2.total_price DESC LIMIT 1
+      ) as description,
+      ROUND(SUM(d.total_price), 2) as total,
+      COUNT(d.id) as line_count${grouping.select}
+    FROM bill_details d
+    JOIN bills b ON d.bill_id = b.id
+    WHERE ${ofLines.sql}
+      AND b.date >= ? AND b.date <= ?
+      AND ${ofAccount.sql}
+    GROUP BY ${grouping.groupBy}
+    HAVING total > 0
+    ORDER BY ${grouping.orderBy}
+  `).all(
+    ...ofServiceLines.params, fromDate, toDate, ...ofLineAccount.params,
+    ...ofLines.params, fromDate, toDate, ...ofAccount.params,
+  );
 }
 
 let db = null;
@@ -1245,12 +1296,12 @@ const inventoryOps = {
   /**
    * The bill lines of a resource type between two dates, by service (bill `domain` field), on
    * the bills of the account (see accountCondition()), every account's by default (#123). Each
-   * row gives the wording of the most expensive of its lines, what they cost and how many they
-   * are. One row per service, as before the accounts; or, with byAccount, for the list that
-   * names the account of each service, per service and account, with the NIC handle of its
+   * row gives the description of the most expensive of its lines, what they cost and how many
+   * they are. One row per service, as before the accounts; or, with byAccount, for the list
+   * that names the account of each service, per service and account, with the NIC handle of its
    * account, null for the Unknown account: a service billed to several accounts, such as a
-   * server moved from an account to another, then has a row for each, with the wording of its
-   * own lines, as a bill line belongs to the account of its bill (ADR 0002).
+   * server moved from an account to another, then has a row for each, with the description of
+   * its own lines, as a bill line belongs to the account of its bill (ADR 0002).
    *
    * In the order of costGrouping(), as the costs by project (#118).
    * @param {string} resourceType
@@ -1262,38 +1313,10 @@ const inventoryOps = {
    * @returns {object[]}
    */
   byResourceTypeDetails: (resourceType, fromDate, toDate, account = null,
-    { byAccount = false } = {}) => {
-    const db = getDb();
-    const ofAccount = accountCondition(account, 'b.account');
-    const ofLineAccount = accountCondition(account, 'b2.account');
-    const grouping = costGrouping('d.domain', byAccount);
-    // By account, the wording of the row's account's own lines
-    const sameAccount = byAccount ? 'AND b2.account IS b.account' : '';
-    return db.prepare(`
-      SELECT
-        d.domain,
-        (SELECT d2.description FROM bill_details d2
-         JOIN bills b2 ON d2.bill_id = b2.id
-         WHERE d2.domain = d.domain AND COALESCE(d2.resource_type, 'other') = ?
-           AND b2.date >= ? AND b2.date <= ?
-           AND ${ofLineAccount.sql} ${sameAccount}
-         ORDER BY d2.total_price DESC LIMIT 1
-        ) as description,
-        ROUND(SUM(d.total_price), 2) as total,
-        COUNT(d.id) as line_count${grouping.select}
-      FROM bill_details d
-      JOIN bills b ON d.bill_id = b.id
-      WHERE COALESCE(d.resource_type, 'other') = ?
-        AND b.date >= ? AND b.date <= ?
-        AND ${ofAccount.sql}
-      GROUP BY ${grouping.groupBy}
-      HAVING total > 0
-      ORDER BY ${grouping.orderBy}
-    `).all(
-      resourceType, fromDate, toDate, ...ofLineAccount.params,
-      resourceType, fromDate, toDate, ...ofAccount.params,
-    );
-  },
+    { byAccount = false } = {}) => servicesOfLines(
+    (alias) => ({ sql: `COALESCE(${alias}.resource_type, 'other') = ?`, params: [resourceType] }),
+    fromDate, toDate, account, byAccount,
+  ),
 
   /**
    * The figures of the Public Cloud cards over a period, for the account (see
@@ -1398,36 +1421,62 @@ const inventoryOps = {
   },
 
   // Backup stats (Veeam etc), on the bills of the account (see accountCondition()), every
-  // account's by default: those of the Compare tab's months and of the Backup tab (#119)
+  // account's by default: those of the Compare tab's months and of the Backup tab (#119). Each
+  // kind counts the identifiers of its lines, once whatever the accounts that billed them and
+  // whatever the lines add up to, and adds up what all its lines cost. It counts as many
+  // services as getBackupServices() lists, which the Compare tab unfolds its rows into, but in
+  // three cases, which the tab shows as they are (#197): a VM that a refund brings to 0 € or
+  // less is counted, but not listed, as the Infrastructure tab leaves such a service out; a
+  // line without an identifier is listed, but not counted; and, while the lists name the
+  // account of each service, with all accounts shown, a VM that two accounts billed is counted
+  // once, but listed once for each account.
   getBackupStats: (fromDate, toDate, account = null) => {
-    const db = getDb();
     const ofAccount = accountCondition(account, 'b.account');
-
-    // Count Veeam backup VMs
-    const vms = db.prepare(`
-      SELECT COUNT(DISTINCT domain) as count, ROUND(SUM(total_price), 2) as total
-      FROM bill_details d
-      JOIN bills b ON d.bill_id = b.id
-      WHERE b.date >= ? AND b.date <= ?
-        AND resource_type = 'backup'
-        AND ${ofAccount.sql}
-    `).get(fromDate, toDate, ...ofAccount.params);
-
-    // Veeam Enterprise licenses (from descriptions)
-    const enterprise = db.prepare(`
-      SELECT COUNT(DISTINCT domain) as count, ROUND(SUM(total_price), 2) as total
-      FROM bill_details d
-      JOIN bills b ON d.bill_id = b.id
-      WHERE b.date >= ? AND b.date <= ?
-        AND (LOWER(description) LIKE '%veeam%' AND LOWER(description) LIKE '%enterprise%')
-        AND ${ofAccount.sql}
-    `).get(fromDate, toDate, ...ofAccount.params);
+    // The number of services of the lines that a condition keeps, and what they cost
+    const figuresOf = (ofLines) => {
+      const figures = getDb().prepare(`
+        SELECT COUNT(DISTINCT domain) as count, ROUND(SUM(total_price), 2) as total
+        FROM bill_details d
+        JOIN bills b ON d.bill_id = b.id
+        WHERE b.date >= ? AND b.date <= ?
+          AND ${ofLines.sql}
+          AND ${ofAccount.sql}
+      `).get(fromDate, toDate, ...ofLines.params, ...ofAccount.params);
+      return { count: figures?.count || 0, total: figures?.total || 0 };
+    };
 
     return {
-      vms: { count: vms?.count || 0, total: vms?.total || 0 },
-      enterprise: { count: enterprise?.count || 0, total: enterprise?.total || 0 }
+      // The Veeam VMs backed up
+      vms: figuresOf(ofBackupLines.vms('d')),
+      // The Veeam Enterprise licences, from the descriptions of their lines
+      enterprise: figuresOf(ofBackupLines.enterprise('d')),
     };
   },
+
+  /**
+   * The services of the Veeam backups between two dates, on the bills of the account (see
+   * accountCondition()), every account's by default (#197): the services of the very lines
+   * that getBackupStats() counts, the VMs backed up and the Enterprise licences, which the
+   * Compare tab's backup comparison unfolds its two rows into. Each service as the bill lines
+   * of a resource type by service give it, and with byAccount, once for each account that
+   * billed it, with that account (see servicesOfLines()).
+   *
+   * They are as many as getBackupStats() counts, but in three cases, which the Compare tab
+   * shows as they are: a VM that a refund brings to 0 € or less is counted, but not listed, as
+   * the Infrastructure tab leaves such a service out; a line without an identifier is listed,
+   * but not counted; and, with byAccount, a VM that two accounts billed is counted once, but
+   * listed once for each account.
+   * @param {string} fromDate
+   * @param {string} toDate
+   * @param {?string} [account]
+   * @param {object} [options]
+   * @param {boolean} [options.byAccount] - Whether to give a row to each service and account
+   * @returns {{ vms: object[], enterprise: object[] }}
+   */
+  getBackupServices: (fromDate, toDate, account = null, { byAccount = false } = {}) => ({
+    vms: servicesOfLines(ofBackupLines.vms, fromDate, toDate, account, byAccount),
+    enterprise: servicesOfLines(ofBackupLines.enterprise, fromDate, toDate, account, byAccount),
+  }),
 
   clearAll: () => {
     const db = getDb();
