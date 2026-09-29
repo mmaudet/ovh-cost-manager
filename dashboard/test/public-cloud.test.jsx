@@ -12,11 +12,11 @@ import {
 } from './support/downloads.js';
 import {
   backdropOf,
-  cardOf,
   cardRowOf,
   cloudProjectRow,
   cloudProjects,
   cloudProjectsTable,
+  cloudTotalCard,
   headerOf,
   monthSelector,
   openTab,
@@ -29,6 +29,7 @@ import {
   selectMonth,
   settle,
   sortTable,
+  tabButton,
   texts,
 } from './support/render.jsx';
 
@@ -48,11 +49,6 @@ const billedColumn = () => {
     .findIndex((cell) => /^(Facturé en|Billed in) /.test(cell.textContent));
   return [...table.tBodies[0].rows].map((row) => texts(row.cells[column]).join(' '));
 };
-// The KPI card of the month's Cloud total, which the bill lines of the month that name a
-// project add up to
-const cloudTotalCard = (label = 'Total Cloud', monthCost = 'Coût total du mois') => cardOf(
-  within(cardRowOf(monthCost)).getByText(label),
-);
 const openProject = async (user, name) => {
   await user.click(within(cloudProjects()).getByText(name));
   await settle();
@@ -371,7 +367,8 @@ describe('Public Cloud tab', () => {
 
       await openTab(user, 'Public Cloud');
 
-      // 610,40€ + 220,00€
+      expect(billedColumn()).toEqual(['610,40€', '220,00€', '-']);
+      // 610,40€ + 220,00€, the Cloud total of the KPI card
       expect(projectListTotal()).toEqual(['Total Cloud', '830,40€']);
       expect(texts(cloudTotalCard())).toEqual(['Total Cloud', '830,40€', 'Public Cloud']);
     });
@@ -446,9 +443,9 @@ describe('Public Cloud tab', () => {
       it('wait for the list of projects to load', async () => {
         const { user } = await renderDashboard();
         const release = holdBack(api.fetchProjectsEnriched);
-        const tabBar = screen.getByRole('button', { name: "Vue d'ensemble" }).parentElement;
 
-        await user.click(within(tabBar).getByRole('button', { name: 'Public Cloud' }));
+        // Without openTab(), which would wait for the list held back
+        await user.click(tabButton('Public Cloud'));
 
         expect(screen.queryByRole('heading', { name: 'Projets Cloud' })).not.toBeInTheDocument();
         expect(screen.queryByTitle(NOT_IN_INVENTORY)).not.toBeInTheDocument();
