@@ -306,7 +306,9 @@ export const infrastructureOfSeveralAccounts = {
       inventoryServers: [removedServer],
       expiringServices: [expiring('dedicated_server', removedServer)],
       resourceTypeDetails: {
-        dedicated_server: { '2026-08': [removedServerRental], '2026-07': [removedServerJulyRental] },
+        dedicated_server: {
+          '2026-08': [removedServerRental], '2026-07': [removedServerJulyRental],
+        },
       },
     },
     // Up to July, its only month

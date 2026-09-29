@@ -54,7 +54,9 @@ describe('pairMonths', () => {
       { product: 'instances', total: instances }, { product: 'object_storage', total: storage },
     ];
 
-    expect(amounts(pairMonths(products(440.6, 24.9), products(538.9, 25), ({ product }) => product)))
+    const byProduct = ({ product }) => product;
+
+    expect(amounts(pairMonths(products(440.6, 24.9), products(538.9, 25), byProduct)))
       .toEqual([['instances', 440.6, 538.9], ['object_storage', 24.9, 25]]);
     expect(amounts(pairMonths(
       [{ id: 'vm-1', account: 'xx1111-ovh', total: 10 }],

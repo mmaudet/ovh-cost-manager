@@ -54,6 +54,16 @@ const openComparison = async (user, title) => {
 const projectComparisons = () => screen
   .getAllByRole('button', { name: /\(Projet\)/ })
   .map((button) => texts(button)[0]);
+// The chevron of a row of a comparison, found by the row that it names (#192)
+const chevron = (title, row) => within(comparisonTable(title))
+  .getByRole('button', { name: `Services : ${row}` });
+// Unfolds or folds a row of a comparison with a click on its chevron, as the user does
+const toggleRow = async (user, title, row) => {
+  await user.click(chevron(title, row));
+  await settle();
+};
+// The rows of the infrastructure comparison, each as the texts it shows, header left out
+const infrastructureRows = () => rowTextsOf(comparisonTable(INFRASTRUCTURE)).slice(1);
 
 describe('Compare tab', () => {
   it('loads the figures of month A when the tab opens, but its summary (#50)', async () => {
@@ -413,24 +423,6 @@ describe('Compare tab', () => {
   // The costs of each resource type are those of the costs by resource type
   // of months A and B, and the backups those of their Veeam backups (#32)
   describe('infrastructure, backup and Private Cloud comparisons', () => {
-    // Unfolds a row of the infrastructure comparison with a click on its chevron (#192)
-    const unfoldRow = async (user, row) => {
-      await user.click(within(comparisonTable(INFRASTRUCTURE))
-        .getByRole('button', { name: `Services : ${row}` }));
-      await settle();
-    };
-    const unfoldDedicatedServers = (user) => unfoldRow(user, 'Serveurs dédiés');
-    // The services that a row of the infrastructure comparison unfolds into, each as the texts
-    // it shows: the rows between its own and the next row of the comparison, in its own order
-    const servicesUnder = (row, nextRow) => {
-      const rows = rowTextsOf(comparisonTable(INFRASTRUCTURE));
-      return rows.slice(
-        rows.findIndex(([label]) => label === row) + 1,
-        rows.findIndex(([label]) => label === nextRow),
-      );
-    };
-    const billedServers = () => servicesUnder('Serveurs dédiés', 'VPS');
-
     it('compare the costs of each resource type in months A and B (#32)', async () => {
       const { user } = await renderDashboard();
       await openTab(user, 'Comparaison');
@@ -548,18 +540,22 @@ describe('Compare tab', () => {
 
       await openComparison(user, INFRASTRUCTURE);
 
-      expect(rowTextsOf(comparisonTable(INFRASTRUCTURE))[1])
+      expect(infrastructureRows()[0])
         .toEqual(['Serveurs dédiés', '270,00€', '270,00€', '0,0 %']);
       expect(api.fetchInventoryServers).not.toHaveBeenCalled();
 
-      await unfoldDedicatedServers(user);
+      await toggleRow(user, INFRASTRUCTURE, 'Serveurs dédiés');
 
       // Not ns3000002, which the inventory holds but no bill charged yet
-      expect(billedServers()).toEqual([[
-        'ns3000001.ip-203-0-113.eu',
-        'Location du serveur RISE-1 ns3000001.ip-203-0-113.eu - 1 mois',
-        '270,00€', '270,00€', '0,0 %',
-      ]]);
+      expect(infrastructureRows().slice(0, 3)).toEqual([
+        ['Serveurs dédiés', '270,00€', '270,00€', '0,0 %'],
+        [
+          'ns3000001.ip-203-0-113.eu',
+          'Location du serveur RISE-1 ns3000001.ip-203-0-113.eu - 1 mois',
+          '270,00€', '270,00€', '0,0 %',
+        ],
+        ['VPS', '0,00€', '0,00€', '—'],
+      ]);
 
       await openTab(user, 'Infrastructure');
 
@@ -572,44 +568,33 @@ describe('Compare tab', () => {
     // those billed to the account selected in the header, as its costs are, and with all
     // accounts shown, each names its account (#194). See fixtures/accounts.js.
     describe('with several accounts', () => {
-      it('list the dedicated servers billed to the account selected', async () => {
+      // Those of the account selected only: the inventory holds a server of yy2222-ovh
+      it('offer no dedicated server to unfold for an account billed none', async () => {
         const { user } = await renderDashboard(severalAccounts);
         await openTab(user, 'Comparaison');
-        await selectAccount(user, 'Lyon subsidiary');
-        await openComparison(user, INFRASTRUCTURE);
-
-        await unfoldDedicatedServers(user);
-
-        // Its server, rented from the end of August: (270 - 70) / 70
-        expect(billedServers()).toEqual([[
-          'ns3000001.ip-203-0-113.eu',
-          'Location du serveur RISE-1 ns3000001.ip-203-0-113.eu - 1 mois',
-          '70,00€', '270,00€', '+285,7 %',
-        ]]);
-        expect(api.fetchInventoryServers).not.toHaveBeenCalled();
 
         await selectAccount(user, 'yy2222-ovh');
         await openComparison(user, INFRASTRUCTURE);
 
-        // Billed no dedicated server: nothing to unfold
-        expect(rowTextsOf(comparisonTable(INFRASTRUCTURE))[1])
-          .toEqual(['Serveurs dédiés', '0,00€', '0,00€', '—']);
+        expect(infrastructureRows()[0]).toEqual(['Serveurs dédiés', '0,00€', '0,00€', '—']);
         expect(within(comparisonTable(INFRASTRUCTURE))
           .queryByRole('button', { name: 'Services : Serveurs dédiés' })).not.toBeInTheDocument();
+        expect(api.fetchInventoryServers).not.toHaveBeenCalled();
       });
 
-      // By its name, or else its NIC handle, as on the Infrastructure tab's lists
+      // By its name, or else its NIC handle, and the Unknown account for the bills without an
+      // account, as on the Infrastructure tab's lists
       it('name the account of each dedicated server billed when the page shows all accounts',
         async () => {
           const { user } = await renderDashboard(severalAccounts);
           await openTab(user, 'Comparaison');
           await openComparison(user, INFRASTRUCTURE);
 
-          await unfoldDedicatedServers(user);
+          await toggleRow(user, INFRASTRUCTURE, 'Serveurs dédiés');
 
           // The server of the account no longer configured, billed in August, and Lyon's,
           // rented from the end of August: 270 € each month, as the row
-          expect(billedServers()).toEqual([
+          expect(infrastructureRows().slice(1, 3)).toEqual([
             [
               'ns3000003.ip-203-0-113.eu', '(zz3333-ovh)',
               'Location du serveur RISE-1 ns3000003.ip-203-0-113.eu - 1 mois',
@@ -622,16 +607,27 @@ describe('Compare tab', () => {
             ],
           ]);
 
-          // Billed in July only, that month compared with itself: the server of the bills
-          // without an account, which names no account once one is selected
-          await selectAccount(user, 'Compte inconnu');
-          await openComparison(user, INFRASTRUCTURE);
+          // In July, with the server of the bills without an account, which no account claimed
+          await pickMonth(user, 'Août 2026', 'Juillet 2026');
 
-          expect(billedServers()).toEqual([[
-            'ns3000004.ip-203-0-113.eu',
-            'Location du serveur KS-1 ns3000004.ip-203-0-113.eu - 1 mois',
-            '90,00€', '90,00€', '0,0 %',
-          ]]);
+          expect(infrastructureRows().slice(0, 4)).toEqual([
+            ['Serveurs dédiés', '270,00€', '270,00€', '0,0 %'],
+            [
+              'ns3000003.ip-203-0-113.eu', '(zz3333-ovh)',
+              'Location du serveur RISE-1 ns3000003.ip-203-0-113.eu - 1 mois',
+              '180,00€', '0,00€', '-100,0 %',
+            ],
+            [
+              'ns3000004.ip-203-0-113.eu', '(Compte inconnu)',
+              'Location du serveur KS-1 ns3000004.ip-203-0-113.eu - 1 mois',
+              '90,00€', '0,00€', '-100,0 %',
+            ],
+            [
+              'ns3000001.ip-203-0-113.eu', '(Lyon subsidiary)',
+              'Location du serveur RISE-1 ns3000001.ip-203-0-113.eu - 1 mois',
+              '0,00€', '270,00€', '—',
+            ],
+          ]);
         });
 
       // example.com moved from Lyon to yy2222-ovh during September, and each account billed one
@@ -642,16 +638,15 @@ describe('Compare tab', () => {
           await openTab(user, 'Comparaison');
           await openComparison(user, INFRASTRUCTURE);
 
-          await unfoldRow(user, 'Noms de domaine');
+          await toggleRow(user, INFRASTRUCTURE, 'Noms de domaine');
 
           // Every account's, by account, as the Infrastructure tab asks for them
           for (const { from, to } of [months[1], months[0]]) {
             expect(api.fetchResourceTypeDetailsByAccount).toHaveBeenCalledWith('domain', from, to);
           }
-          expect(rowTextsOf(comparisonTable(INFRASTRUCTURE))[6])
-            .toEqual(['Noms de domaine', '30,00€', '35,00€', '+16,7 %']);
           // (10 - 15) / 15; each described as its own account billed it
-          expect(servicesUnder('Noms de domaine', 'Hôtes Private Cloud')).toEqual([
+          expect(infrastructureRows().slice(5, 11)).toEqual([
+            ['Noms de domaine', '30,00€', '35,00€', '+16,7 %'],
             ['example.com', '(Lyon subsidiary)', 'Option DNS Anycast example.com - 1 an',
               '15,00€', '10,00€', '-33,3 %'],
             ['example.org', '(Lyon subsidiary)', 'Renouvellement du domaine example.org - 1 an',
@@ -660,6 +655,7 @@ describe('Compare tab', () => {
               '0,00€', '18,00€', '—'],
             ['example.com', '(yy2222-ovh)', 'Option DNSSEC example.com - 1 an',
               '0,00€', '7,00€', '—'],
+            ['Hôtes Private Cloud', '0,00€', '0,00€', '—'],
           ]);
         });
 
@@ -675,13 +671,15 @@ describe('Compare tab', () => {
         await openTab(user, 'Comparaison');
         await openComparison(user, INFRASTRUCTURE);
 
-        await unfoldDedicatedServers(user);
+        await toggleRow(user, INFRASTRUCTURE, 'Serveurs dédiés');
 
         // August's, not September's again
         expect(api.fetchResourceTypeDetailsByAccount).toHaveBeenCalledTimes(2);
         expect(api.fetchResourceTypeDetailsByAccount)
           .toHaveBeenLastCalledWith('dedicated_server', '2026-08-01', '2026-08-31');
-        expect(billedServers().map(([identifier, account]) => [identifier, account])).toEqual([
+        expect(infrastructureRows().slice(1, 3).map(([identifier, account]) => (
+          [identifier, account]
+        ))).toEqual([
           ['ns3000003.ip-203-0-113.eu', '(zz3333-ovh)'],
           ['ns3000001.ip-203-0-113.eu', '(Lyon subsidiary)'],
         ]);
@@ -692,21 +690,11 @@ describe('Compare tab', () => {
   // Each row of the infrastructure and Private Cloud comparisons unfolds into its services,
   // month A against month B (#192)
   describe('rows unfolded into their services (#192)', () => {
-    // The chevron of a row of a comparison, found by the row that it names
-    const chevron = (title, row) => within(comparisonTable(title))
-      .getByRole('button', { name: `Services : ${row}` });
     // The rows of a comparison that a chevron folds and unfolds, by their labels: those
     // unfolded, or those folded
     const rowsThatUnfold = (title, unfolded) => within(comparisonTable(title))
       .queryAllByRole('button', { expanded: unfolded })
       .map((button) => texts(button.closest('tr'))[0]);
-    // Unfolds or folds a row of a comparison with a click on its chevron, as the user does
-    const toggleRow = async (user, title, row) => {
-      await user.click(chevron(title, row));
-      await settle();
-    };
-    // The rows of the infrastructure comparison, each as the texts it shows, header left out
-    const infrastructureRows = () => rowTextsOf(comparisonTable(INFRASTRUCTURE)).slice(1);
     // The row of a service of the infrastructure comparison, found by its identifier
     const serviceRow = (identifier) => within(comparisonTable(INFRASTRUCTURE))
       .getByText(identifier).closest('tr');

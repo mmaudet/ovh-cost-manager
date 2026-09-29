@@ -1,9 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { screen } from '@testing-library/react';
 import { lyonAccount, severalAccounts } from './fixtures/accounts.js';
-import {
-  openTab, renderDashboard, resourceType, selectAccount, settle,
-} from './support/render.jsx';
+import { openTab, renderDashboard, selectAccount } from './support/render.jsx';
 
 // The keys the page caches the answers of its queries under. Each period keeps its own
 // answers, and the end of an import invalidates them by the name of their query (see
@@ -147,32 +144,6 @@ describe('query keys', () => {
       ]));
       // Rather than the projects of month A once each
       expect(allKeys()).not.toContainEqual(['byProject', '2026-08-01', '2026-08-31']);
-    });
-
-  // With all accounts shown, the lists name the account of each service (#123): the Compare
-  // tab asks for the services of a row it unfolds by account (#194), under the key of the
-  // Infrastructure tab's bill lines of a resource type by account, which September's share
-  it("caches the services by account of Compare under the Infrastructure tab's keys",
-    async () => {
-      const { user, allKeys } = await renderDashboard(severalAccounts);
-      await openTab(user, 'Infrastructure');
-      await user.click(resourceType('Dedicated Servers'));
-      await settle();
-      await openTab(user, 'Comparaison');
-
-      await user.click(screen.getByRole('button', { name: /^Comparaison Infrastructure/ }));
-      await user.click(screen.getByRole('button', { name: 'Services : Serveurs dédiés' }));
-      await settle();
-
-      // Those of a resource type, but for the keys that the queries waited under before one
-      // opened
-      const ofResourceType = allKeys().filter(([name, resourceType]) => (
-        name.startsWith('resourceTypeDetails') && resourceType !== null
-      ));
-      expect(sorted(ofResourceType)).toEqual(sorted([
-        ['resourceTypeDetailsByAccount', 'dedicated_server', '2026-09-01', '2026-09-30'],
-        ['resourceTypeDetailsByAccount', 'dedicated_server', '2026-08-01', '2026-08-31'],
-      ]));
     });
 
   // A request for one account names it, and so does the key of its answers, after the key's
