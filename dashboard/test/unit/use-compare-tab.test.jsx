@@ -436,6 +436,57 @@ describe('useCompareTab', () => {
       expect(result.current.resourceTypeServicesQuery(DEDICATED_SERVERS, august).enabled)
         .toBe(false);
     });
+
+    // With several accounts, all of them shown, while the lists name the account of each
+    // service (#194): see fixtures/accounts.js
+    describe('by account', () => {
+      const withAccountColumn = {
+        ...onCompare,
+        accountColumn: accountColumnOf(
+          accountsOf(severalAccounts.accounts), null, (key) => translations.fr[key],
+        ),
+      };
+      // The services of an answer by account, as [identifier, account, cost]
+      const servicesByAccountIn = (answer) => answer
+        .map(({ domain, account, total }) => [domain, account, total]);
+
+      it("asks for every account's by account, under the Infrastructure tab's key", async () => {
+        const { result } = await renderTabHook(useCompareTab, withAccountColumn,
+          severalAccounts);
+
+        const query = result.current.resourceTypeServicesQuery(DEDICATED_SERVERS, august);
+
+        // For all accounts, which the column shows: its key names none
+        expect(query.queryKey).toEqual([
+          'resourceTypeDetailsByAccount', DEDICATED_SERVERS, '2026-08-01', '2026-08-31',
+        ]);
+        expect(query.enabled).toBe(true);
+        // The server of the account no longer configured, and Lyon's
+        expect(servicesByAccountIn(await query.queryFn())).toEqual([
+          ['ns3000003.ip-203-0-113.eu', 'zz3333-ovh', 200],
+          ['ns3000001.ip-203-0-113.eu', 'xx1111-ovh', 70],
+        ]);
+        expect(api.fetchResourceTypeDetailsByAccount)
+          .toHaveBeenCalledWith(DEDICATED_SERVERS, '2026-08-01', '2026-08-31');
+        expect(api.fetchResourceTypeDetails).not.toHaveBeenCalled();
+      });
+
+      // As the other figures of the tab
+      it('waits for the tab, and for a month of the months list', async () => {
+        const { result, rerender } = await renderTabHook(useCompareTab,
+          { ...withAccountColumn, activeTab: 'overview' }, severalAccounts);
+
+        expect(result.current.resourceTypeServicesQuery(DEDICATED_SERVERS, august).enabled)
+          .toBe(false);
+
+        await rerender({ ...withAccountColumn, months: [september, august] });
+
+        expect(result.current.resourceTypeServicesQuery(DEDICATED_SERVERS, july).enabled)
+          .toBe(false);
+        expect(result.current.resourceTypeServicesQuery(DEDICATED_SERVERS, august).enabled)
+          .toBe(true);
+      });
+    });
   });
 
   // Several accounts in the instance (#119), all of them shown, where the comparison by
