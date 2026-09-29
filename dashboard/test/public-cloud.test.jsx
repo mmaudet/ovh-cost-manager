@@ -402,7 +402,8 @@ describe('Public Cloud tab', () => {
         const [production, , sandbox] = account.projectsEnriched;
         return { ...account, projectsEnriched: [production, sandbox] };
       };
-      const NOT_IN_INVENTORY = "Facturé mais absent de l'inventaire des projets";
+      // That of the account whose bills charged it, whether another account holds it or none
+      const NOT_IN_INVENTORY = "Facturé mais absent de l'inventaire des projets du compte";
 
       it('have a row of their own, after the others, so that the list adds up to the Cloud total',
         async () => {
@@ -421,7 +422,8 @@ describe('Public Cloud tab', () => {
 
           await selectLanguage(user, 'en');
 
-          expect(within(cloudProjectsTable()).getByTitle('Billed but not in the project inventory'))
+          expect(within(cloudProjectsTable())
+            .getByTitle("Billed but not in the account's project inventory"))
             .toHaveTextContent('†');
         });
 
