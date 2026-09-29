@@ -172,7 +172,10 @@ const useCompareTab = ({ months, activeTab, selectedAccount, accountColumn }) =>
   // Veeam VMs backed up (kind 'vms') or the Enterprise licences ('enterprise') of the month
   // (#197). Both rows' come in one answer a month, asked for once, of which each row selects
   // its own. The row runs it once unfolded, as the other figures of the month run: on the tab,
-  // for a month of the months list.
+  // for a month of the months list. They are as many as the row counts, but in three cases,
+  // which getBackupServices() in data/db.js names: a VM refunded to 0 € or less, counted but
+  // not listed, a line without an identifier, listed but not counted, and a VM that two
+  // accounts billed, counted once but listed for each, while the lists name the account.
   const backupServicesQuery = (kind, month) => ({
     ...backupServicesOf(month),
     select: (services) => services[kind],

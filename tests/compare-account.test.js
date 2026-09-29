@@ -219,7 +219,7 @@ describe('GET /api/analysis/backup-services', () => {
   });
 
   // A row of the backup comparison counts the services it unfolds into, whose costs add up to
-  // its own
+  // its own, but in the cases that getBackupServices() names, which these requests avoid
   test.each([
     ['September, all accounts', SEPTEMBER, undefined],
     ['September, Lyon', SEPTEMBER, LYON],

@@ -1421,7 +1421,15 @@ const inventoryOps = {
   },
 
   // Backup stats (Veeam etc), on the bills of the account (see accountCondition()), every
-  // account's by default: those of the Compare tab's months and of the Backup tab (#119)
+  // account's by default: those of the Compare tab's months and of the Backup tab (#119). Each
+  // kind counts the identifiers of its lines, once whatever the accounts that billed them and
+  // whatever the lines add up to, and adds up what all its lines cost. It counts as many
+  // services as getBackupServices() lists, which the Compare tab unfolds its rows into, but in
+  // three cases, which the tab shows as they are (#197): a VM that a refund brings to 0 € or
+  // less is counted, but not listed, as the Infrastructure tab leaves such a service out; a
+  // line without an identifier is listed, but not counted; and, while the lists name the
+  // account of each service, with all accounts shown, a VM that two accounts billed is counted
+  // once, but listed once for each account.
   getBackupStats: (fromDate, toDate, account = null) => {
     const ofAccount = accountCondition(account, 'b.account');
     // The number of services of the lines that a condition keeps, and what they cost
@@ -1452,6 +1460,12 @@ const inventoryOps = {
    * Compare tab's backup comparison unfolds its two rows into. Each service as the bill lines
    * of a resource type by service give it, and with byAccount, once for each account that
    * billed it, with that account (see servicesOfLines()).
+   *
+   * They are as many as getBackupStats() counts, but in three cases, which the Compare tab
+   * shows as they are: a VM that a refund brings to 0 € or less is counted, but not listed, as
+   * the Infrastructure tab leaves such a service out; a line without an identifier is listed,
+   * but not counted; and, with byAccount, a VM that two accounts billed is counted once, but
+   * listed once for each account.
    * @param {string} fromDate
    * @param {string} toDate
    * @param {?string} [account]
