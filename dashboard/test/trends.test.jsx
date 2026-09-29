@@ -331,7 +331,7 @@ describe('Trends tab', () => {
     // The synthetic account, whose projects called AI Endpoints models
     const withAiEndpoints = { ...account, aiEndpoints };
     const AI_ENDPOINTS_TREND =
-      /^(Évolution des coûts AI Endpoints par modèle|AI Endpoints cost by model)$/;
+      /^(Évolution des coûts AI Endpoints par modèle|AI Endpoints cost evolution by model)$/;
     // The card of the chart: its heading, then its legend, one item per model
     const aiEndpointsTrend = () =>
       cardOf(screen.getByRole('heading', { name: AI_ENDPOINTS_TREND }));
@@ -442,7 +442,7 @@ describe('Trends tab', () => {
       await openTab(user, 'Trends');
 
       expect(texts(aiEndpointsTrend())).toEqual([
-        'AI Endpoints cost by model',
+        'AI Endpoints cost evolution by model',
         'gpt-oss-120b', 'gpt-oss-20b', 'bge-m3', 'whisper-large-v3', 'Mistral-7B-Instruct-v0.3',
         'stable-diffusion-xl-base-v10',
       ]);

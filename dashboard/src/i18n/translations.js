@@ -541,7 +541,7 @@ export const translations = {
     outputTokens: 'Output tokens',
     aiEndpointsTotal: 'AI Endpoints Total',
     // The cost of each AI Endpoints model month by month, which the Trends tab charts (#196)
-    aiEndpointsTrend: 'AI Endpoints cost by model',
+    aiEndpointsTrend: 'AI Endpoints cost evolution by model',
     // The type of a bucket without a class (#145)
     bucketEmpty: 'Empty',
     bucketEmptyHint: 'An empty bucket has no class: OVHcloud gives one to each object',
