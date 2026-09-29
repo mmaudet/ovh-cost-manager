@@ -123,36 +123,47 @@ const CompareTab = ({
     ...privateCloudTypes,
   ], infrastructureSorting.sort, resourceTypeValues(byResourceTypeA, byResourceTypeB), language);
 
+  // Draws a row of the infrastructure, backup or Private Cloud comparison, by the comparison's
+  // name: its label, its amounts in months A and B, as its cells show them, a cost by default,
+  // and the variation from one to the other. It unfolds when either month billed it more than
+  // 0 €, into its services, which the query of its services in a month gives
+  // (servicesQueryOf) and which follow the comparison's sort; each comparison's rows unfold on
+  // their own (#192, #197).
+  const drawServicesRow = (comparison, {
+    key, label, valA, valB, shownA = `${fmt(valA)}€`, shownB = `${fmt(valB)}€`, servicesQueryOf,
+  }) => (
+    <UnfoldingRow
+      key={key}
+      unfolding={valA > 0 || valB > 0 ? unfoldingOf(comparison, key) : null}
+      chevronLabel={`${t('servicesOf')} ${label}`}
+      label={label}
+      detail={(
+        <UnfoldedRowServices
+          servicesQueryOf={servicesQueryOf}
+          monthA={compareMonthA} monthB={compareMonthB} sort={sortingOf(comparison).sort}
+          values={SERVICE_VALUES} columnCount={COMPARISON_COLUMNS}
+          accountColumn={accountColumn} fmt={fmt} language={language} t={t}
+        />
+      )}
+    >
+      <td className="p-3 text-right font-medium">{shownA}</td>
+      <td className="p-3 text-right text-gray-500">{shownB}</td>
+      <td className="p-3 text-right">
+        <Variation from={valA} to={valB} language={language} t={t} />
+      </td>
+    </UnfoldingRow>
+  );
+
   // Draws a row of the infrastructure or Private Cloud comparison, by the comparison's name: the
-  // cost of a resource type in months A and B (#32). It unfolds into its services when either
-  // month billed it more than 0 €, as each service that it lists, and they follow the
-  // comparison's sort; each comparison's rows unfold on their own (#192).
-  const drawResourceTypeRow = (comparison, { key, label }) => {
-    const valA = costOfType(byResourceTypeA, key);
-    const valB = costOfType(byResourceTypeB, key);
-    return (
-      <UnfoldingRow
-        key={key}
-        unfolding={valA > 0 || valB > 0 ? unfoldingOf(comparison, key) : null}
-        chevronLabel={`${t('servicesOf')} ${label}`}
-        label={label}
-        detail={(
-          <UnfoldedRowServices
-            servicesQueryOf={(month) => resourceTypeServicesQuery(key, month)}
-            monthA={compareMonthA} monthB={compareMonthB} sort={sortingOf(comparison).sort}
-            values={SERVICE_VALUES} columnCount={COMPARISON_COLUMNS}
-            accountColumn={accountColumn} fmt={fmt} language={language} t={t}
-          />
-        )}
-      >
-        <td className="p-3 text-right font-medium">{fmt(valA)}€</td>
-        <td className="p-3 text-right text-gray-500">{fmt(valB)}€</td>
-        <td className="p-3 text-right">
-          <Variation from={valA} to={valB} language={language} t={t} />
-        </td>
-      </UnfoldingRow>
-    );
-  };
+  // cost of a resource type in months A and B (#32), which unfolds into each service that it
+  // lists (#192)
+  const drawResourceTypeRow = (comparison, { key, label }) => drawServicesRow(comparison, {
+    key,
+    label,
+    valA: costOfType(byResourceTypeA, key),
+    valB: costOfType(byResourceTypeB, key),
+    servicesQueryOf: (month) => resourceTypeServicesQuery(key, month),
+  });
 
   return (
     <div className="space-y-6">
@@ -350,7 +361,8 @@ const CompareTab = ({
           <tbody>
             {/* The number and the cost of the Veeam VMs and Enterprise licences of months A
                 and B, as the Backup tab shows them for the selected month (#32). A row that
-                either month billed unfolds into its services (#197). */}
+                either month billed unfolds into its services (#197), which come by month A,
+                then by month B: the comparison's sort stays null, as no header sorts it. */}
             {[
               {
                 key: 'backup_vms',
@@ -362,31 +374,18 @@ const CompareTab = ({
                 kind: 'enterprise',
                 label: language === 'en' ? 'Veeam Enterprise License' : 'Licence Veeam Enterprise',
               },
-            ].map(row => {
-              const a = backupsOf(backupStatsA, row.kind);
-              const b = backupsOf(backupStatsB, row.kind);
-              return (
-                <UnfoldingRow
-                  key={row.key}
-                  unfolding={a.total > 0 || b.total > 0 ? unfoldingOf('backup', row.key) : null}
-                  chevronLabel={`${t('servicesOf')} ${row.label}`}
-                  label={row.label}
-                  detail={(
-                    <UnfoldedRowServices
-                      servicesQueryOf={(month) => backupServicesQuery(row.kind, month)}
-                      monthA={compareMonthA} monthB={compareMonthB} sort={null}
-                      values={SERVICE_VALUES} columnCount={COMPARISON_COLUMNS}
-                      accountColumn={accountColumn} fmt={fmt} language={language} t={t}
-                    />
-                  )}
-                >
-                  <td className="p-3 text-right font-medium">{a.count} / {fmt(a.total)}€</td>
-                  <td className="p-3 text-right text-gray-500">{b.count} / {fmt(b.total)}€</td>
-                  <td className="p-3 text-right">
-                    <Variation from={a.total} to={b.total} language={language} t={t} />
-                  </td>
-                </UnfoldingRow>
-              );
+            ].map(({ key, kind, label }) => {
+              const a = backupsOf(backupStatsA, kind);
+              const b = backupsOf(backupStatsB, kind);
+              return drawServicesRow('backup', {
+                key,
+                label,
+                valA: a.total,
+                valB: b.total,
+                shownA: `${a.count} / ${fmt(a.total)}€`,
+                shownB: `${b.count} / ${fmt(b.total)}€`,
+                servicesQueryOf: (month) => backupServicesQuery(kind, month),
+              });
             })}
           </tbody>
         </table>
