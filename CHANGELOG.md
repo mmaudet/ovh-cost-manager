@@ -12,6 +12,17 @@ sections were written afterwards from the git history.
 
 <!-- scripts/release.sh inserts each new version above the first version heading. -->
 
+## 3.2.1 - 2026-09-29
+
+<!-- Upgrade notes and highlights of this release, if any. -->
+
+### Bug fixes
+* fix: import the carbon footprint when the calculator answers 202 by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/184
+* fix: compare a Public Cloud project's products from the bills by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/185
+* fix: give each Public Cloud project what it was billed in the month by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/186
+
+**Full Changelog**: https://github.com/mmaudet/ovh-cost-manager/compare/v3.2.0...v3.2.1
+
 ## 3.2.0 - 2026-09-29
 
 The dashboard's lists now sort by any of their columns, with a click on a
