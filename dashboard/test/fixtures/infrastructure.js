@@ -217,6 +217,22 @@ const lyonFirstRental = {
   description: 'Location du serveur RISE-1 ns3000001.ip-203-0-113.eu - prorata',
   total: 70,
 };
+// The rental of the server of the account no longer configured in July, the 180 € of
+// dedicated servers of that account's costs by resource type (#194)
+const removedServerJulyRental = { ...removedServerRental, total: 180 };
+
+// The domains of account.js, the accounts' (#194): Lyon's up to August, the Unknown account's
+// in July, and in September, example.net, registered by yy2222-ovh, and example.com, which moved
+// from Lyon to yy2222-ovh: Lyon paid its DNS Anycast option, and yy2222-ovh its DNSSEC option.
+// Each account's add up to what its domains cost (accounts.js).
+const domains = infrastructure.resourceTypeDetails.domain;
+const [exampleNetRegistration] = domains['2026-09'];
+const lyonExampleComOption = billedDomain(
+  'example.com', 'Option DNS Anycast example.com - 1 an', 10, 1,
+);
+const movedExampleComOption = billedDomain(
+  'example.com', 'Option DNSSEC example.com - 1 an', 7, 1,
+);
 // A service about to expire, as /api/inventory/expiring lists it
 const expiring = (type, { id, display_name: displayName, expiration_date: date, account }) => ({
   id, display_name: displayName, type, expiration_date: date, account,
@@ -241,11 +257,28 @@ export const infrastructureOfSeveralAccounts = {
       expiring('vps', vps),
       expiring('vps', stagingVps),
     ],
-    // The bill lines of a resource type by service and account, for the list that names the
-    // account of each service: those of September by service, each billed to one account
+    // The bill lines of a resource type by service and account, for the lists that name the
+    // account of each service, most expensive first, as the server sorts them: a service once
+    // for each account whose bills billed it
     resourceTypeDetailsByAccount: {
-      dedicated_server: { '2026-09': [serverRental].map(billedTo(LYON)) },
+      dedicated_server: {
+        '2026-09': [serverRental].map(billedTo(LYON)),
+        // The server of the account no longer configured, and Lyon's, from the end of August
+        '2026-08': [billedTo(REMOVED)(removedServerRental), billedTo(LYON)(lyonFirstRental)],
+        '2026-07': [
+          billedTo(REMOVED)(removedServerJulyRental), billedTo(null)(legacyServerRental),
+        ],
+      },
       backup: { '2026-09': septemberBackups.map(billedTo(UNNAMED)) },
+      domain: {
+        '2026-09': [
+          billedTo(UNNAMED)(exampleNetRegistration),
+          billedTo(LYON)(lyonExampleComOption),
+          billedTo(UNNAMED)(movedExampleComOption),
+        ],
+        '2026-08': domains['2026-08'].map(billedTo(LYON)),
+        '2026-07': domains['2026-07'].map(billedTo(null)),
+      },
     },
   },
   ofAccount: {
@@ -256,26 +289,35 @@ export const infrastructureOfSeveralAccounts = {
       expiringServices: [expiring('dedicated_server', billedServer), expiring('vps', vps)],
       resourceTypeDetails: {
         dedicated_server: { '2026-09': [serverRental], '2026-08': [lyonFirstRental] },
+        domain: { '2026-09': [lyonExampleComOption], '2026-08': domains['2026-08'] },
       },
     },
     [UNNAMED]: {
       inventoryServers: [deliveredServer],
       inventoryVps: [stagingVps],
       expiringServices: [expiring('vps', stagingVps)],
-      resourceTypeDetails: { backup: { '2026-09': septemberBackups } },
+      resourceTypeDetails: {
+        backup: { '2026-09': septemberBackups },
+        domain: { '2026-09': [exampleNetRegistration, movedExampleComOption] },
+      },
     },
     // Up to August, its latest month
     [REMOVED]: {
       inventoryServers: [removedServer],
       expiringServices: [expiring('dedicated_server', removedServer)],
-      resourceTypeDetails: { dedicated_server: { '2026-08': [removedServerRental] } },
+      resourceTypeDetails: {
+        dedicated_server: { '2026-08': [removedServerRental], '2026-07': [removedServerJulyRental] },
+      },
     },
     // Up to July, its only month
     unknown: {
       inventoryServers: [legacyServer],
       inventoryStorage: [oldStorage],
       expiringServices: [expiring('storage', oldStorage)],
-      resourceTypeDetails: { dedicated_server: { '2026-07': [legacyServerRental] } },
+      resourceTypeDetails: {
+        dedicated_server: { '2026-07': [legacyServerRental] },
+        domain: { '2026-07': domains['2026-07'] },
+      },
     },
   },
 };

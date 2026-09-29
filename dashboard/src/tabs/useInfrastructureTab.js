@@ -1,9 +1,5 @@
 // The Infrastructure tab's state and data queries, in a hook that the dashboard shell calls
 // on every render: see docs/adr/0001-tab-state-lives-in-the-dashboard-shell.md
-//
-// The Compare tab lists the dedicated servers this hook returns as well: they load on that
-// tab too, under the same key, so that it lists them before the Infrastructure tab opens
-// (#35).
 
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
@@ -42,14 +38,14 @@ const useInfrastructureTab = ({
   const sortingOf = useTableSorts();
 
   // The inventory of the account shown: the servers, VPS and storage services that exist now,
-  // whatever the month
+  // whatever the month, which the tab lists once open. The Compare tab no longer lists the
+  // servers, whose row unfolds into those that months A and B billed (#194).
   const inventoryOf = (key, fetch, enabled) => accountQuery(selectedAccount, {
     key: [key], fetch, enabled,
   });
 
   const { data: inventoryServers = [] } = useQuery(inventoryOf(
-    'inventoryServers', fetchInventoryServers,
-    activeTab === 'infrastructure' || activeTab === 'compare',
+    'inventoryServers', fetchInventoryServers, activeTab === 'infrastructure',
   ));
 
   const { data: inventoryVps = [] } = useQuery(inventoryOf(

@@ -264,9 +264,6 @@ export default function Dashboard() {
     selectedMonth, holdsSelectedMonth, activeTab, selectedResourceType, selectedAccount,
     accountColumn,
   });
-  // The Compare tab lists the dedicated servers too, those of the account shown (#123): the
-  // shell passes them on, and the hook loads them on either tab (#35)
-  const { inventoryServers } = infrastructureTab;
 
   const backupTab = useBackupTab({
     selectedMonth, holdsSelectedMonth, activeTab, selectedAccount,
@@ -756,7 +753,7 @@ export default function Dashboard() {
         {activeTab === 'compare' && (
           <CompareTab
             {...compareTab} language={language} t={t} fmt={fmt}
-            months={months} inventoryServers={inventoryServers} accountColumn={accountColumn}
+            months={months} accountColumn={accountColumn}
           />
         )}
 
