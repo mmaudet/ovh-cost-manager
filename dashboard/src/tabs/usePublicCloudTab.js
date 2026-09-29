@@ -36,14 +36,16 @@ const usePublicCloudTab = ({
 
   // Enriched projects for the Public Cloud tab, and whether those of the account shown have
   // loaded: until they have, as when the tab first opens or another account is selected, the tab
-  // cannot tell which projects billed in the month the list lacks (#180)
-  const {
-    data: projectsEnriched = [], isSuccess: projectsLoaded,
-  } = useQuery(accountQuery(selectedAccount, {
+  // cannot tell which projects billed in the month the list lacks (#180). A later request that
+  // fails, such as once an import is over, leaves the projects that it had, and so the tab
+  // those that it lacks.
+  const { data: projectsOfAccount } = useQuery(accountQuery(selectedAccount, {
     key: ['projectsEnriched'],
     fetch: fetchProjectsEnriched,
     enabled: activeTab === 'inventory',
   }));
+  const projectsEnriched = projectsOfAccount ?? [];
+  const projectsLoaded = projectsOfAccount !== undefined;
 
   // The project whose detail is open: the one selected, while the list of the account shown
   // holds it. It stays selected across account switches (#56), but with an account that does

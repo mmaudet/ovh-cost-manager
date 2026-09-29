@@ -125,6 +125,24 @@ describe('usePublicCloudTab', () => {
       expect(result.current.projectsLoaded).toBe(false);
     });
 
+    // As when the page asks for it again once an import is over: the list keeps the projects it
+    // had, and so the tab those that it lacks
+    it('keep telling that the list of projects has loaded when a later request for it fails',
+      async () => {
+        const { result, rerender, queryClient } = await renderTabHook(usePublicCloudTab, onTheTab);
+        api.fetchProjectsEnriched.mockRejectedValue(
+          new Error('Request failed with status code 500'),
+        );
+
+        await act(() => queryClient.invalidateQueries({ queryKey: ['projectsEnriched'] }));
+        await rerender(onTheTab);
+
+        expect(queryClient.getQueryState(['projectsEnriched']).status).toBe('error');
+        expect(names(result.current.projectsEnriched))
+          .toEqual(['Production', 'Staging', 'Sandbox']);
+        expect(result.current.projectsLoaded).toBe(true);
+      });
+
     it('are requested once the tab opens', async () => {
       const { result, rerender } = await renderTabHook(usePublicCloudTab,
         { ...onTheTab, activeTab: 'overview' });
