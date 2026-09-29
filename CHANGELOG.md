@@ -12,6 +12,59 @@ sections were written afterwards from the git history.
 
 <!-- scripts/release.sh inserts each new version above the first version heading. -->
 
+## 3.2.0 - 2026-09-29
+
+The dashboard's lists now sort by any of their columns, with a click on a
+header (#146): text from A to Z, figures, sizes and dates from the largest or
+the latest, and a second click reverses it. Each list keeps its usual order
+until then, and its CSV export keeps it whatever the order shown.
+
+The Public Cloud tab's figures now add up (#145). A project's current
+consumption counts all that it uses, where it counted little more than its
+instances. The cards and the Cloud credit add up to the month's cloud total,
+with a new « Autres services » card for the products without a card of their
+own, such as databases, load balancers or volume backups. A project's detail
+lists its other services, its registry among them. An empty bucket reads
+« Vide » rather than « Inconnu », as OVHcloud gives a class to each object,
+never to a bucket.
+
+### Upgrade notes
+
+- **Nothing to configure.** The figures read from the bills, the cards and the
+  other services, are right at once.
+- **The projects' current consumption fills in at the next import that reads
+  the cloud details**: `--all`, the Docker containers' default `IMPORT_FLAGS`,
+  which the dashboard's resync button uses too, or `--include-cloud-details`.
+  Until then, it keeps the partial figures of the last import. So do the
+  header's current consumption and forecast when they come from the projects,
+  as when OVH tells no consumption.
+- **That forecast counts the monthly charges once**, such as the monthly plans
+  and the savings plans, rather than extrapolating them over the month: with
+  monthly plans, it may drop.
+- **API.**
+  - `GET /api/analysis/public-cloud-stats` gains `other`, the products without
+    a card of their own with their cost, and `credits`, the credit that the
+    bills used. Its cards count the lines of the Public Cloud projects only,
+    each line in one card; `aiml` and `loadBalancers` count the lines of their
+    products.
+  - `GET /api/projects/:id/other-services` is new: the products of a project
+    over a period that its detail lists no section of its own for.
+  - The rows of `GET /api/projects/:id/consumption` gain kinds, such as
+    `storage`, `snapshot`, `savings_plan` or the types of the newer products,
+    as OVH names them.
+
+### New features
+* feat: sort the dashboard's tables by any of their columns by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/176
+### Bug fixes
+* fix: count every part of a Public Cloud project's current usage by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/172
+* fix: add the Public Cloud cards up to the month's cloud total by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/173
+* fix: say that an empty bucket has no class, and name the archive classes by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/174
+* fix: name the typed resources of a project's consumption by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/177
+### Maintenance
+* docs: show the carbon footprint tab in the README by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/175
+
+**Full Changelog**: https://github.com/mmaudet/ovh-cost-manager/compare/v3.1.0...v3.2.0
+
 ## 3.1.0 - 2026-09-28
 
 OVH Cost Manager now imports the carbon footprint that OVHcloud's carbon
