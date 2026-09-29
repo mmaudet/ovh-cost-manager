@@ -88,7 +88,12 @@ OVH API ──> data/import.js ──> SQLite (ovh-bills.db) ──> server/inde
   until the provider is discovered. Its decisions live in small pure modules
   (`config.js`, `session-cookie.js`, `login-state.js`, `logout-token.js`, `provider.js`,
   `health.js`…); only `oidc-client.js` and `routes.js` load `openid-client` and `jose`,
-  which are ES modules.
+  which are ES modules. Besides each tab's figures, the routes give what the Compare tab's
+  rows unfold into (#189): the services of a resource type,
+  `/api/analysis/resource-type-details`, which the Infrastructure tab lists too, and those
+  of the Veeam backups, the VMs backed up and the Enterprise licences,
+  `/api/analysis/backup-services` (#197), both once for each account with `byAccount=true`;
+  and a project's products with their charges, `/api/projects/:id/products` (#181, #195).
 - **`dashboard/`** — Vite + React SPA (Recharts, TanStack Query, Tailwind, axios). In dev,
   Vite proxies `/api` to `:3001` (see `dashboard/vite.config.js`). i18n is FR/EN
   (`src/i18n/translations.js`). The page, `src/pages/Dashboard.jsx`, is a shell: each tab
@@ -98,6 +103,13 @@ OVH API ──> data/import.js ──> SQLite (ovh-bills.db) ──> server/inde
   (#146): a `SortableHeader` per column, `sortRows()` for the rows, by their raw values,
   and the order in the tab's hook, with `useTableSorts()`; a table keeps its own order
   until a header is clicked, and its CSV export keeps it whatever the order shown.
+  The Compare tab's rows unfold into what they add up, their services or a product's
+  charges (#189), through `src/components/UnfoldingRow.jsx`: `UnfoldingRow` draws a row
+  whose chevron unfolds it, `DetailRow` each service or charge under it, `sortUnfolded()`
+  orders those within their row, and `useUnfoldedRows()`, in the tab's hook, holds the rows
+  unfolded. `UnfoldedRowServices.jsx` loads the services of a resource type or a backup row
+  once unfolded, and `ProjectProductComparison.jsx` a product's charges with the products;
+  both pair months A and B with `pairMonths()` (`src/utils/monthComparison.js`).
 
 ### Accounts
 
