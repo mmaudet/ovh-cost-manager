@@ -1175,6 +1175,30 @@ describe('Compare tab', () => {
       expect(backupRows().map(([label]) => label)).toEqual([VMS, LICENCES, LICENCE]);
     });
 
+    // As the rows of a comparison by project, until the user sorts it: vm-app-1 and vm-db-1
+    // cost 20 € each in August, whose answer gives vm-db-1 first, by service, the last first, as
+    // the server gives services of the same cost; vm-app-1 the more in September; then
+    // vm-files-1, from nothing in August
+    it('list the services of a row by month A, the most expensive first, then by month B',
+      async () => {
+        const [app, db] = account.backupServices['2026-08'].vms;
+        const { user } = await renderDashboard({
+          ...account,
+          backupServices: {
+            ...account.backupServices,
+            '2026-08': { vms: [{ ...db, total: 20 }, { ...app, total: 20 }], enterprise: [] },
+          },
+        });
+        await openTab(user, 'Comparaison');
+        await openComparison(user, BACKUP);
+
+        await toggleRow(user, BACKUP, VMS);
+
+        expect(backupRows().map(([label]) => label)).toEqual([
+          VMS, 'vm-app-1.example.com', 'vm-db-1.example.com', 'vm-files-1.example.com', LICENCES,
+        ]);
+      });
+
     // July backed nothing up, and August no licence
     it('offer no chevron on a row that neither month billed', async () => {
       const { user } = await renderDashboard();
