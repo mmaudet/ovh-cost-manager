@@ -7,6 +7,7 @@ import {
 import {
   lyonAccount, removedAccount, severalAccounts, unknownAccount, unnamedAccount,
 } from './fixtures/accounts.js';
+import { enterpriseLicence } from './fixtures/backup.js';
 import { months } from './fixtures/calendar.js';
 import { api, failFor, holdBack } from './support/api.js';
 import {
@@ -1123,7 +1124,8 @@ describe('Compare tab', () => {
     const backupRows = () => rowTextsOf(comparisonTable(BACKUP)).slice(1);
     const VMS = 'VMs Veeam Backup';
     const LICENCES = 'Licence Veeam Enterprise';
-    const LICENCE = '6f1d2c3b-4a5e-4f60-8b7c-9d0e1f2a3b4c';
+    // The licence under it, by its identifier
+    const LICENCE = enterpriseLicence.domain;
     // The VMs of August and September, as many as the row counts in each month, adding up to its
     // cost: (40 - 25) / 25, (30 - 15) / 15, and one from nothing in August
     const vms = [

@@ -7,6 +7,7 @@ import { months } from '../fixtures/calendar.js';
 import {
   lyonAccount, removedAccount, severalAccounts, unknownAccount, unnamedAccount,
 } from '../fixtures/accounts.js';
+import { enterpriseLicence } from '../fixtures/backup.js';
 import { api } from '../support/api.js';
 import { renderTabHook, TAB_IDS, WAITING } from '../support/hooks.jsx';
 import { settle } from '../support/query-client.js';
@@ -494,7 +495,6 @@ describe('useCompareTab', () => {
   // The services of the Veeam backups in month A or B (#197): the query that a backup row runs
   // once unfolded, which the hook defines, one answer a month for both rows
   describe("query of a backup row's services", () => {
-    const LICENCE = '6f1d2c3b-4a5e-4f60-8b7c-9d0e1f2a3b4c';
     // The services of a row, as [identifier, cost], and its account when it names one
     const servicesIn = (services) => services.map(({ domain, total, account }) => (
       account === undefined ? [domain, total] : [domain, total, account]
@@ -520,7 +520,7 @@ describe('useCompareTab', () => {
           ['vm-app-1.example.com', 40], ['vm-db-1.example.com', 30],
           ['vm-files-1.example.com', 20],
         ]);
-        expect(servicesIn(licences.select(answer))).toEqual([[LICENCE, 25]]);
+        expect(servicesIn(licences.select(answer))).toEqual([[enterpriseLicence.domain, 25]]);
       });
 
     it('asks for those of the account shown, under a key that names it last', async () => {

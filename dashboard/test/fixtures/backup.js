@@ -2,8 +2,9 @@ import { infrastructure } from './infrastructure.js';
 
 // The VMs backed up, as the bill lines of the backups give them by service
 const vms = infrastructure.resourceTypeDetails.backup;
-// The Veeam Enterprise licence of September
-const enterpriseLicence = {
+// The Veeam Enterprise licence of September, as the licences' services give it (#197), whose
+// identifier the tests find its row of the Compare tab by
+export const enterpriseLicence = {
   domain: '6f1d2c3b-4a5e-4f60-8b7c-9d0e1f2a3b4c',
   description: 'Veeam Enterprise Plus licence',
   total: 25,
