@@ -26,7 +26,7 @@ const serviceRows = (servicesA, servicesB) => pairMonths(
  * lists name the account of each service, each names its account in brackets, and a service
  * billed to several accounts has a row for each (#194).
  * @param {object} props
- * @param {function(?object): object} props.servicesQuery - The options of the query of the
+ * @param {function(?object): object} props.servicesQueryOf - The options of the query of the
  *   row's services in a month, for useQuery: useCompareTab()'s resourceTypeServicesQuery() or
  *   backupServicesQuery(), for the row
  * @param {?object} props.monthA
@@ -46,9 +46,9 @@ const serviceRows = (servicesA, servicesB) => pairMonths(
  *   failed; else a row for each service
  */
 const UnfoldedRowServices = ({
-  servicesQuery, monthA, monthB, sort, values, columnCount, accountColumn, fmt, language, t,
+  servicesQueryOf, monthA, monthB, sort, values, columnCount, accountColumn, fmt, language, t,
 }) => {
-  const { status, dataA, dataB } = useMonthAnswers(servicesQuery, monthA, monthB);
+  const { status, dataA, dataB } = useMonthAnswers(servicesQueryOf, monthA, monthB);
   // Until both months' answers arrive, or when one failed, rather than a month at 0 €, in line
   // with the services
   if (status !== 'answered') {

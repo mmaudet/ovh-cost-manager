@@ -138,7 +138,7 @@ const CompareTab = ({
         label={label}
         detail={(
           <UnfoldedRowServices
-            servicesQuery={(month) => resourceTypeServicesQuery(key, month)}
+            servicesQueryOf={(month) => resourceTypeServicesQuery(key, month)}
             monthA={compareMonthA} monthB={compareMonthB} sort={sortingOf(comparison).sort}
             values={SERVICE_VALUES} columnCount={COMPARISON_COLUMNS}
             accountColumn={accountColumn} fmt={fmt} language={language} t={t}
@@ -373,7 +373,7 @@ const CompareTab = ({
                   label={row.label}
                   detail={(
                     <UnfoldedRowServices
-                      servicesQuery={(month) => backupServicesQuery(row.kind, month)}
+                      servicesQueryOf={(month) => backupServicesQuery(row.kind, month)}
                       monthA={compareMonthA} monthB={compareMonthB} sort={null}
                       values={SERVICE_VALUES} columnCount={COMPARISON_COLUMNS}
                       accountColumn={accountColumn} fmt={fmt} language={language} t={t}
