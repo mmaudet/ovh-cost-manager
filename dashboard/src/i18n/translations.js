@@ -58,6 +58,10 @@ export const translations = {
     projectComparison: 'Comparaison par projet',
     variation: 'Variation',
     variationNotComputable: 'non calculable : mois A à 0 € ou moins',
+    // The column of the Public Cloud products of a project's comparison (#181)
+    product: 'Produit',
+    noProjectData: 'Aucune donnée pour ce projet',
+    projectProductsFailed: 'Impossible de charger le détail de ce projet.',
 
     // What a click on the header of a column that sorts its table does (#146)
     sortAscending: 'Trier par ordre croissant',
@@ -205,6 +209,12 @@ export const translations = {
     // The products that no Public Cloud card of its own counts, and the credit (#145)
     otherServices: 'Autres services',
     cloudCreditUsed: 'Crédit Cloud utilisé',
+    // And those that have one, which the Compare tab compares too (#181)
+    productInstances: 'Instances',
+    productObjectStorage: 'Stockage objet',
+    productVolumes: 'Volumes',
+    productSnapshots: 'Snapshots',
+    productSavingsPlans: 'Savings plans',
     productVolumeBackups: 'Sauvegardes de volumes',
     productDatabases: 'Bases de données',
     productLoadBalancers: 'Load balancers',
@@ -336,6 +346,10 @@ export const translations = {
     projectComparison: 'Comparison by project',
     variation: 'Variation',
     variationNotComputable: 'cannot be computed: month A at €0 or below',
+    // The column of the Public Cloud products of a project's comparison (#181)
+    product: 'Product',
+    noProjectData: 'No data for this project',
+    projectProductsFailed: 'The detail of this project could not be loaded.',
 
     // What a click on the header of a column that sorts its table does (#146)
     sortAscending: 'Sort in ascending order',
@@ -483,6 +497,12 @@ export const translations = {
     // The products that no Public Cloud card of its own counts, and the credit (#145)
     otherServices: 'Other services',
     cloudCreditUsed: 'Cloud credit used',
+    // And those that have one, which the Compare tab compares too (#181)
+    productInstances: 'Instances',
+    productObjectStorage: 'Object storage',
+    productVolumes: 'Volumes',
+    productSnapshots: 'Snapshots',
+    productSavingsPlans: 'Savings plans',
     productVolumeBackups: 'Volume backups',
     productDatabases: 'Databases',
     productLoadBalancers: 'Load balancers',

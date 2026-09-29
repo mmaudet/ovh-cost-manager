@@ -542,7 +542,7 @@ For an instance of [several accounts](#several-ovh-accounts), every route that l
 - `unknown`, for the Unknown account: the data stored before the upgrade that no account claimed;
 - none, for all accounts, as before.
 
-Any other value gets a 400. The routes of one bill or one project, such as `/api/bills/:id` or `/api/projects/:id/instances`, need no parameter, as that bill or project belongs to one account. Without the parameter, the account-wide figures (the month's consumption, its forecast, the balance and the consumption history) add up the accounts. The rows that belong to an account, such as projects, services and credit movements, name it in an `account` field: its NIC handle, or `null` for the Unknown account. With several accounts, the CSV exports gain a last `account` column. `byAccount=true` on `/api/analysis/by-project`, `/api/analysis/resource-type-details` and `/api/gpu/summary` gives a project or a service billed to several accounts once for each account, with its account.
+Any other value gets a 400. The routes of one bill or one project, such as `/api/bills/:id` or `/api/projects/:id/instances`, need no parameter, as that bill or project belongs to one account. `/api/projects/:id/products` takes it all the same, as it breaks down what `/api/analysis/by-project` gives the project for an account: a project's bill lines belong to the account of their bill, which may not be the project's own, as for a project moved to another account. Without the parameter, the account-wide figures (the month's consumption, its forecast, the balance and the consumption history) add up the accounts. The rows that belong to an account, such as projects, services and credit movements, name it in an `account` field: its NIC handle, or `null` for the Unknown account. With several accounts, the CSV exports gain a last `account` column. `byAccount=true` on `/api/analysis/by-project`, `/api/analysis/resource-type-details` and `/api/gpu/summary` gives a project or a service billed to several accounts once for each account, with its account.
 
 ### Accounts
 
@@ -607,6 +607,7 @@ The carbon footprint is what OVHcloud's carbon calculator attributes to the acco
 | `GET /api/projects/:id/quotas`                   | Project quotas by region                     |
 | `GET /api/projects/:id/buckets?from=&to=`        | Project S3 buckets with cost                 |
 | `GET /api/projects/:id/other-services?from=&to=` | Project's other services, registry included |
+| `GET /api/projects/:id/products?from=&to=`       | Project's products, from its bills           |
 | `GET /api/projects/:id/instance-total?from=&to=` | Project instance total cost                  |
 | `GET /api/inventory/servers`                     | Dedicated servers list                       |
 | `GET /api/inventory/vps`                         | VPS instances list                           |

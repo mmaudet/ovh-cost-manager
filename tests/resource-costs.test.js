@@ -18,15 +18,15 @@ let dataDir;
 let lineCount = 0;
 const previousDataDir = process.env.DATA_DIR;
 
-// One bill per date, one bill line per call
-function seedBillLine(description, totalPrice, date = '2026-03-01') {
+// One bill per date, one bill line per call, of the project by default
+function seedBillLine(description, totalPrice, date = '2026-03-01', projectId = PROJECT) {
   const billId = `FR-${date}`;
   db.bills.upsert({
     id: billId, date, price_without_tax: 0, price_with_tax: 0, tax: 0,
     currency: 'EUR', pdf_url: null, html_url: null, account: ACCOUNT.nic
   });
   db.details.insert({
-    id: `${billId}_${++lineCount}`, bill_id: billId, project_id: PROJECT, domain: PROJECT,
+    id: `${billId}_${++lineCount}`, bill_id: billId, project_id: projectId, domain: projectId,
     description, quantity: 1, unit_price: totalPrice, total_price: totalPrice, service_type: null
   });
 }
@@ -373,6 +373,73 @@ describe('Public Cloud cards', () => {
     seedBillLine('A product that OVH launched since', 0);
 
     expect(db.inventory.getPublicCloudStats(FROM, TO).other).toEqual({ total: 0, products: [] });
+  });
+});
+
+// The Compare tab compares a project's products month by month, from the bills of each month
+// (#181): every product, those with a card of their own included, and the credit apart
+describe("a project's products", () => {
+  const APRIL = ['2026-04-01', '2026-04-30'];
+
+  beforeEach(() => {
+    // Billed in March, with the credit that its bill used
+    seedBillLine('Consommation à l\'heure pour les instances b3-8 gra11', 100);
+    seedBillLine('Stockage Standard - Bucket assets sur la région gra', 10);
+    seedBillLine('Managed Private Registry - plan M', 40);
+    seedBillLine('Public Cloud Databases PostgreSQL business DB1-7 à gra', 30);
+    seedBillLine('Utilisation du credit cloud', -5);
+    // And in April
+    seedBillLine('Consommation à l\'heure pour les instances b3-8 gra11', 120, '2026-04-01');
+    seedBillLine('Disques supplémentaires à gra9 de type high-speed', 20, '2026-04-01');
+    seedBillLine('Managed Kubernetes Service - Standard plan', 12, '2026-04-01');
+    // Another project's line, on the bill of March
+    db.projects.upsert({
+      id: 'proj-2', name: 'Project 2', description: null, status: 'ok', created_at: null,
+      account: ACCOUNT.nic,
+    });
+    seedBillLine('Consommation à l\'heure pour les instances b3-8 gra11', 70, '2026-03-01',
+      'proj-2');
+  });
+
+  test('are every product of a month, the most expensive first, with the credit apart', () => {
+    expect(db.cloudDetails.getProductsByProject(PROJECT, FROM, TO)).toEqual({
+      total: 180,
+      products: [
+        { product: 'instances', total: 100 },
+        { product: 'registry', total: 40 },
+        { product: 'databases', total: 30 },
+        { product: 'objectStorage', total: 10 },
+      ],
+      credits: -5,
+    });
+  });
+
+  test("are each month's own", () => {
+    expect(db.cloudDetails.getProductsByProject(PROJECT, ...APRIL)).toEqual({
+      total: 152,
+      products: [
+        { product: 'instances', total: 120 },
+        { product: 'volumes', total: 20 },
+        { product: 'kubernetes', total: 12 },
+      ],
+      credits: 0,
+    });
+  });
+
+  test('are none in a month without any bill line of the project', () => {
+    expect(db.cloudDetails.getProductsByProject(PROJECT, '2026-05-01', '2026-05-31'))
+      .toEqual({ total: 0, products: [], credits: 0 });
+  });
+
+  // The project's figure in the comparison by project, which the Compare tab's detail of the
+  // project breaks down
+  test('add up, with the credit, to what the bills charged the project', () => {
+    const { total, credits } = db.cloudDetails.getProductsByProject(PROJECT, FROM, TO);
+
+    expect(total + credits).toBe(175);
+    expect(db.analysis.byProject(FROM, TO))
+      .toEqual([expect.objectContaining({ project_id: PROJECT, total: 175 }),
+        expect.objectContaining({ project_id: 'proj-2', total: 70 })]);
   });
 });
 

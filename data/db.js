@@ -1657,6 +1657,26 @@ function allocateSwiftArchive(db, rows, projectId, fromDate, toDate) {
   }
 }
 
+/**
+ * The bill lines of a Public Cloud project over a period, as productFigures() reads them: those
+ * of the bills of the account (see accountCondition()), every account's by default.
+ * @param {string} projectId
+ * @param {string} fromDate
+ * @param {string} toDate
+ * @param {?string} [account]
+ * @returns {{description: ?string, domain: ?string, total_price: number}[]}
+ */
+function projectBillLines(projectId, fromDate, toDate, account = null) {
+  const ofAccount = accountCondition(account, 'b.account');
+  return getDb().prepare(`
+    SELECT d.description, d.domain, d.total_price
+    FROM bill_details d
+    JOIN bills b ON d.bill_id = b.id
+    WHERE d.project_id = ? AND b.date >= ? AND b.date <= ?
+      AND ${ofAccount.sql}
+  `).all(projectId, fromDate, toDate, ...ofAccount.params);
+}
+
 // Cloud detail operations (Phase 4)
 const cloudDetailOps = {
   /**
@@ -2050,14 +2070,31 @@ const cloudDetailOps = {
    * @returns {{total: number, products: {product: string, total: number}[], credits: number}}
    */
   getOtherServicesByProject: (projectId, fromDate, toDate) => {
-    const { others, credits } = productFigures(getDb().prepare(`
-      SELECT d.description, d.domain, d.total_price
-      FROM bill_details d
-      JOIN bills b ON d.bill_id = b.id
-      WHERE d.project_id = ? AND b.date >= ? AND b.date <= ?
-    `).all(projectId, fromDate, toDate),
-    ['instances', 'objectStorage', 'volumes', 'snapshots', 'savingsPlans']);
+    const { others, credits } = productFigures(projectBillLines(projectId, fromDate, toDate),
+      ['instances', 'objectStorage', 'volumes', 'snapshots', 'savingsPlans']);
     return { ...others, credits };
+  },
+
+  /**
+   * Every Public Cloud product of a project over a period, from its bills, each with its cost,
+   * the most expensive first, and the Public Cloud credit that the bills used (#181): what the
+   * Compare tab compares for a project, month by month. With the credit, the products add up
+   * to the project's cost in analysis.byProject(), for the same account.
+   * @param {string} projectId
+   * @param {string} fromDate
+   * @param {string} toDate
+   * @param {?string} [account] - The account whose bills count (see accountCondition()): every
+   *   account's by default. A project's bill lines belong to the account of their bill, which
+   *   may not be the project's own, as for a project moved to another account (ADR 0002).
+   * @returns {{total: number, products: {product: string, total: number}[], credits: number}}
+   */
+  getProductsByProject: (projectId, fromDate, toDate, account = null) => {
+    // No product set apart, so that the products that productFigures() names `others` are
+    // every one of them, the credit aside
+    const { others: everyProduct, credits } = productFigures(
+      projectBillLines(projectId, fromDate, toDate, account), [],
+    );
+    return { ...everyProduct, credits };
   },
 
   /**

@@ -238,6 +238,15 @@ export const fetchProjectOtherServices = async (projectId, from, to) => {
   return data;
 };
 
+// Every product of a project over a period, from the bills of the account, and the credit
+// that they used (#181): what the Compare tab compares for a project, month by month
+export const fetchProjectProducts = async (projectId, from, to, account = null) => {
+  const { data } = await api.get(`/projects/${projectId}/products`, {
+    params: { from, to, ...accountParams(account) },
+  });
+  return data;
+};
+
 export const fetchProjectInstanceTotal = async (projectId, from, to) => {
   const { data } = await api.get(`/projects/${projectId}/instance-total`, { params: { from, to } });
   return data;

@@ -66,6 +66,8 @@ const emptyAnswers = {
     loadBalancers: { count: 0, total: 0 },
   }),
   backupStats: () => ({ vms: { count: 0, total: 0 }, enterprise: { count: 0, total: 0 } }),
+  // Nothing billed to the project over the period (#181)
+  projectProducts: () => ({ total: 0, products: [], credits: 0 }),
   // No carbon footprint for any of the 12 months that end on a month (#154)
   carbonTrend: (end) => Array.from({ length: 12 }, (_, index) => ({
     month: shiftMonths(end, index - 11).slice(0, 7), footprint: null, coveredShare: null,
@@ -184,6 +186,11 @@ const answers = {
   fetchProjectBuckets: entryForProject('projectBuckets', emptyAnswers.list),
   fetchProjectOtherServices: entryForProject('projectOtherServices',
     () => ({ total: 0, products: [], credits: 0 })),
+  // The products of a project from the bills of a period, of the account the page selects,
+  // as the costs by project (#181)
+  fetchProjectProducts: (data, projectId, from, to, account) =>
+    entryForProject('projectProducts', emptyAnswers.projectProducts)(
+      ofAccount(data, account), projectId, from, to),
   fetchProjectInstanceTotal: entryForProject('projectInstanceTotal', emptyAnswers.instanceTotal),
   // The GPU costs of a period, of the account the page selects (#120)
   fetchGpuSummary: entryForPeriodOfAccount('gpuSummary', emptyAnswers.gpuSummary),
