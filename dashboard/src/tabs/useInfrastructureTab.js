@@ -9,10 +9,11 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useTableSorts } from '../components/SortableHeader.jsx';
 import {
-  fetchInventoryServers, fetchInventoryVps, fetchInventoryStorage, fetchResourceTypeDetails,
+  fetchInventoryServers, fetchInventoryVps, fetchInventoryStorage,
   fetchResourceTypeDetailsByAccount,
 } from '../services/api.js';
 import { accountQuery } from '../utils/accounts.js';
+import { resourceTypeDetailsQuery } from './resourceTypeDetailsQueries.js';
 
 /**
  * The inventory and the bill lines of the account shown (#123), for the Infrastructure tab.
@@ -59,9 +60,11 @@ const useInfrastructureTab = ({
   ));
 
   // The bill lines of the open resource type in the month selected, whatever the tab (#56):
-  // those of the account shown, or, while the lists name the account of each service, those
-  // of all accounts by account, a service billed to several accounts once for each. One query
-  // or the other, so that a single-account installation keeps the queries it had.
+  // those of the account shown, under the key of the services that the Compare tab lists for
+  // the same resource type, month and account (#192), or, while the lists name the account of
+  // each service, those of all accounts by account, a service billed to several accounts once
+  // for each. One query or the other, so that a single-account installation keeps the queries
+  // it had.
   const detailsOf = [selectedResourceType, selectedMonth?.from, selectedMonth?.to];
   const detailsEnabled = !!selectedResourceType && holdsSelectedMonth;
   const { data: resourceTypeDetails = [] } = useQuery(accountColumn
@@ -72,13 +75,9 @@ const useInfrastructureTab = ({
       ),
       enabled: detailsEnabled,
     }
-    : accountQuery(selectedAccount, {
-      key: ['resourceTypeDetails', ...detailsOf],
-      fetch: (account) => fetchResourceTypeDetails(
-        selectedResourceType, selectedMonth.from, selectedMonth.to, account,
-      ),
-      enabled: detailsEnabled,
-    }));
+    : resourceTypeDetailsQuery(
+      selectedAccount, selectedResourceType, selectedMonth, detailsEnabled,
+    ));
 
   return {
     sortingOf,

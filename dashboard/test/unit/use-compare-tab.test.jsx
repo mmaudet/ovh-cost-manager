@@ -204,6 +204,8 @@ describe('useCompareTab', () => {
       compareMonthB: expect.any(Object),
       setCompareMonthB: expect.any(Function),
       sortingOf: expect.any(Function),
+      // The rows unfolded into their services, by comparison (#192)
+      unfoldingOf: expect.any(Function),
       compareDataA: expect.any(Object),
       compareDataB: expect.any(Object),
       byServiceA: expect.any(Array),
@@ -218,6 +220,9 @@ describe('useCompareTab', () => {
       // The query of a project's products in a month, which the comparison of the project's
       // products runs once opened (#181)
       projectProductsQuery: expect.any(Function),
+      // The query of a resource type's services in a month, which its row runs once unfolded
+      // (#192)
+      resourceTypeServicesQuery: expect.any(Function),
     });
     // The comparison by project by month A, the most expensive first, until the user sorts it
     expect(result.current.sortingOf('projects').sort)

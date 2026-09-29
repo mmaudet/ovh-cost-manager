@@ -16,6 +16,7 @@ import {
   openTab,
   optionsOf,
   renderDashboard,
+  resourceType,
   rowTextsOf,
   rowsOf,
   selectAccount,
@@ -605,6 +606,338 @@ describe('Compare tab', () => {
 
           expect(listedServers()).toEqual(['legacy-server']);
         });
+    });
+  });
+
+  // Each row of the infrastructure and Private Cloud comparisons unfolds into its services,
+  // month A against month B (#192)
+  describe('rows unfolded into their services (#192)', () => {
+    // The chevron of a row of a comparison, found by the row that it names
+    const chevron = (title, row) => within(comparisonTable(title))
+      .getByRole('button', { name: `Services : ${row}` });
+    // The rows of a comparison that a chevron folds and unfolds, by their labels: those
+    // unfolded, or those folded
+    const rowsThatUnfold = (title, unfolded) => within(comparisonTable(title))
+      .queryAllByRole('button', { expanded: unfolded })
+      .map((button) => texts(button.closest('tr'))[0]);
+    // Unfolds or folds a row of a comparison with a click on its chevron, as the user does
+    const toggleRow = async (user, title, row) => {
+      await user.click(chevron(title, row));
+      await settle();
+    };
+    // The rows of the infrastructure comparison, each as the texts it shows, header left out
+    const infrastructureRows = () => rowTextsOf(comparisonTable(INFRASTRUCTURE)).slice(1);
+    // The row of a service of the infrastructure comparison, found by its identifier
+    const serviceRow = (identifier) => within(comparisonTable(INFRASTRUCTURE))
+      .getByText(identifier).closest('tr');
+    const DEDICATED_SERVERS = 'Liste des Serveurs dédiés présents au 15/09/2026';
+    // The row of the dedicated servers, with the servers of the inventory under its label (#35)
+    const dedicatedServersRow = [
+      DEDICATED_SERVERS, 'backup-server', 'ns3000002.ip-198-51-100.eu',
+      '270,00€', '270,00€', '0,0 %',
+    ];
+
+    it('start folded, with a chevron on each row that month A or B billed', async () => {
+      const { user } = await renderDashboard();
+      await openTab(user, 'Comparaison');
+
+      await openComparison(user, INFRASTRUCTURE);
+      await openComparison(user, PRIVATE_CLOUD);
+
+      // The dedicated servers and the domains, which August and September billed
+      expect(rowsThatUnfold(INFRASTRUCTURE, false)).toEqual([
+        'Liste des Serveurs dédiés présents au 15/09/2026', 'Noms de domaine',
+      ]);
+      expect(rowsThatUnfold(INFRASTRUCTURE, true)).toEqual([]);
+      expect(chevron(INFRASTRUCTURE, 'Noms de domaine')).toHaveAttribute('aria-expanded', 'false');
+      // Neither month billed the Private Cloud
+      expect(within(comparisonTable(PRIVATE_CLOUD)).queryAllByRole('button')).toEqual([]);
+      // Nothing is asked for before a row unfolds
+      expect(api.fetchResourceTypeDetails).not.toHaveBeenCalled();
+    });
+
+    it('list the services of a row under it once unfolded, until a second click', async () => {
+      const { user } = await renderDashboard();
+      await openTab(user, 'Comparaison');
+      await openComparison(user, INFRASTRUCTURE);
+
+      await toggleRow(user, INFRASTRUCTURE, DEDICATED_SERVERS);
+
+      // Those of each month that the Infrastructure tab lists, for all accounts (null), as the
+      // instance knows a single one
+      for (const { from, to } of [months[1], months[0]]) {
+        expect(api.fetchResourceTypeDetails)
+          .toHaveBeenCalledWith('dedicated_server', from, to, null);
+      }
+      expect(chevron(INFRASTRUCTURE, DEDICATED_SERVERS)).toHaveAttribute('aria-expanded', 'true');
+      // The server billed in August and September: its identifier, the description of its most
+      // expensive bill line, its cost in months A and B, and the variation
+      expect(infrastructureRows().slice(0, 3)).toEqual([
+        dedicatedServersRow,
+        [
+          'ns3000001.ip-203-0-113.eu',
+          'Location du serveur RISE-1 ns3000001.ip-203-0-113.eu - 1 mois',
+          '270,00€', '270,00€', '0,0 %',
+        ],
+        ['VPS', '0,00€', '0,00€', '—'],
+      ]);
+      const table = comparisonTable(INFRASTRUCTURE);
+      // The identifier in a fixed-width font, the description cut to its column, the whole of
+      // it on hover, as on the Infrastructure tab
+      expect(within(table).getByText('ns3000001.ip-203-0-113.eu')).toHaveClass('font-mono');
+      expect(within(table)
+        .getByTitle('Location du serveur RISE-1 ns3000001.ip-203-0-113.eu - 1 mois'))
+        .toHaveClass('truncate');
+
+      await toggleRow(user, INFRASTRUCTURE, DEDICATED_SERVERS);
+
+      expect(chevron(INFRASTRUCTURE, DEDICATED_SERVERS)).toHaveAttribute('aria-expanded', 'false');
+      expect(infrastructureRows().slice(0, 2)).toEqual([
+        dedicatedServersRow, ['VPS', '0,00€', '0,00€', '—'],
+      ]);
+    });
+
+    // The domains of August and September, paired by their identifiers. Each month's add up to
+    // the row's cost: 30 € in August, 35 € in September.
+    it('compare each service that either month billed, from 0 € in a month that did not',
+      async () => {
+        const { user } = await renderDashboard();
+        await openTab(user, 'Comparaison');
+        await openComparison(user, INFRASTRUCTURE);
+
+        await toggleRow(user, INFRASTRUCTURE, 'Noms de domaine');
+
+        // Billed in both months, once, as September billed it: (17 - 15) / 15
+        expect(texts(serviceRow('example.com'))).toEqual([
+          'example.com', 'Option DNS Anycast example.com - 1 an', '15,00€', '17,00€', '+13,3 %',
+        ]);
+        // As August billed it, down to nothing in September
+        expect(texts(serviceRow('example.org'))).toEqual([
+          'example.org', 'Renouvellement du domaine example.org - 1 an',
+          '15,00€', '0,00€', '-100,0 %',
+        ]);
+        // From nothing in August: no variation to compute (#65), and a tooltip that says why
+        expect(texts(serviceRow('example.net'))).toEqual([
+          'example.net', 'Création du domaine example.net - 1 an', '0,00€', '18,00€', '—',
+        ]);
+        expect(within(serviceRow('example.net'))
+          .getByTitle('non calculable : mois A à 0 € ou moins')).toHaveTextContent('—');
+      });
+
+    // As the comparison by project, until the user sorts the table
+    it('list the services of a row by month A, the most expensive first, then by month B',
+      async () => {
+        const { user } = await renderDashboard();
+        await openTab(user, 'Comparaison');
+        await openComparison(user, INFRASTRUCTURE);
+
+        await toggleRow(user, INFRASTRUCTURE, 'Noms de domaine');
+
+        // Right under the row of the domains: example.com and example.org cost 15 € each in
+        // August, example.com the more in September, then example.net, from nothing in August
+        expect(infrastructureRows().slice(5, 10).map(([label]) => label)).toEqual([
+          'Noms de domaine', 'example.com', 'example.org', 'example.net', 'Hôtes Private Cloud',
+        ]);
+      });
+
+    // By the same columns as the rows, each service under its own row (#146)
+    it('sort the services within their rows as the table, by any column, each way in turn',
+      async () => {
+        const { user } = await renderDashboard();
+        await openTab(user, 'Comparaison');
+        await openComparison(user, INFRASTRUCTURE);
+        await toggleRow(user, INFRASTRUCTURE, DEDICATED_SERVERS);
+        await toggleRow(user, INFRASTRUCTURE, 'Noms de domaine');
+        const sortBy = (column) => sortTable(user, comparisonTable(INFRASTRUCTURE), column);
+        // The rows of the table by their labels, the services by their identifiers
+        const labels = () => infrastructureRows().map(([label]) => label);
+        // The services right under the row of the domains
+        const domains = () => {
+          const row = labels().indexOf('Noms de domaine');
+          return labels().slice(row + 1, row + 4);
+        };
+        const SERVER = 'ns3000001.ip-203-0-113.eu';
+        // The rows that neither month billed, in the table's order
+        const NOTHING_BILLED = [
+          'VPS', 'Stockage', 'Load Balancer', 'Adresses IP', 'Hôtes Private Cloud',
+          'Datastores Private Cloud',
+        ];
+
+        await sortBy(/^Variation/);
+
+        // +16,7 % for the domains, then 0,0 % for the dedicated servers; within the domains,
+        // +13,3 %, -100,0 %, then the variation that cannot be computed, last either way
+        expect(labels()).toEqual([
+          'Noms de domaine', 'example.com', 'example.org', 'example.net',
+          DEDICATED_SERVERS, SERVER, ...NOTHING_BILLED,
+        ]);
+
+        await sortBy(/^Variation/);
+
+        expect(labels()).toEqual([
+          DEDICATED_SERVERS, SERVER,
+          'Noms de domaine', 'example.org', 'example.com', 'example.net', ...NOTHING_BILLED,
+        ]);
+
+        // By the identifiers of the services, from A to Z first
+        await sortBy(/^Type/);
+
+        expect(domains()).toEqual(['example.com', 'example.net', 'example.org']);
+
+        await sortBy(/^Type/);
+
+        expect(domains()).toEqual(['example.org', 'example.net', 'example.com']);
+
+        // 15 € for example.com and for example.org, which keep their order
+        await sortBy(/^Août 2026/);
+
+        expect(domains()).toEqual(['example.com', 'example.org', 'example.net']);
+
+        await sortBy(/^Août 2026/);
+
+        expect(domains()).toEqual(['example.net', 'example.com', 'example.org']);
+
+        await sortBy(/^Septembre 2026/);
+
+        expect(domains()).toEqual(['example.net', 'example.com', 'example.org']);
+        expect(labels().slice(0, 2)).toEqual([DEDICATED_SERVERS, SERVER]);
+
+        await sortBy(/^Septembre 2026/);
+
+        expect(domains()).toEqual(['example.org', 'example.com', 'example.net']);
+        expect(labels().slice(-2)).toEqual([DEDICATED_SERVERS, SERVER]);
+      });
+
+    it('stay unfolded when the user picks other months, with their services, and comes back',
+      async () => {
+        const { user } = await renderDashboard();
+        await openTab(user, 'Comparaison');
+        await openComparison(user, INFRASTRUCTURE);
+        await toggleRow(user, INFRASTRUCTURE, 'Noms de domaine');
+
+        await pickMonth(user, 'Août 2026', 'Juillet 2026');
+
+        expect(api.fetchResourceTypeDetails)
+          .toHaveBeenCalledWith('domain', '2026-07-01', '2026-07-31', null);
+        // example.fr, renewed in July, then the domains of September, from nothing in July
+        const julyAndSeptember = [
+          ['Noms de domaine', '30,00€', '35,00€', '+16,7 %'],
+          ['example.fr', 'Renouvellement du domaine example.fr - 1 an',
+            '30,00€', '0,00€', '-100,0 %'],
+          ['example.net', 'Création du domaine example.net - 1 an', '0,00€', '18,00€', '—'],
+          ['example.com', 'Option DNS Anycast example.com - 1 an', '0,00€', '17,00€', '—'],
+          ['Hôtes Private Cloud', '0,00€', '0,00€', '—'],
+        ];
+        expect(infrastructureRows().slice(5, 10)).toEqual(julyAndSeptember);
+
+        await openTab(user, "Vue d'ensemble");
+        await openTab(user, 'Comparaison');
+        // Closed again, as every comparison but the projects' when the tab opens
+        await openComparison(user, INFRASTRUCTURE);
+
+        expect(chevron(INFRASTRUCTURE, 'Noms de domaine')).toHaveAttribute('aria-expanded', 'true');
+        expect(infrastructureRows().slice(5, 10)).toEqual(julyAndSeptember);
+      });
+
+    // Rather than services at 0 € in a month whose answer has yet to arrive
+    it('say that the services of a row load until both months have answered', async () => {
+      const { user } = await renderDashboard();
+      await openTab(user, 'Comparaison');
+      await openComparison(user, INFRASTRUCTURE);
+      const release = holdBack(api.fetchResourceTypeDetails,
+        (type, from) => from === '2026-09-01');
+
+      await user.click(chevron(INFRASTRUCTURE, 'Noms de domaine'));
+
+      expect(infrastructureRows().slice(5, 8)).toEqual([
+        ['Noms de domaine', '30,00€', '35,00€', '+16,7 %'],
+        ['Chargement des données...'],
+        ['Hôtes Private Cloud', '0,00€', '0,00€', '—'],
+      ]);
+
+      release();
+      await settle();
+
+      expect(infrastructureRows().slice(6, 9).map(([label]) => label))
+        .toEqual(['example.com', 'example.org', 'example.net']);
+    });
+
+    // Rather than a month at 0 €, whose services could not load
+    it('say when the services of a month could not load', async () => {
+      const { user } = await renderDashboard();
+      await openTab(user, 'Comparaison');
+      await openComparison(user, INFRASTRUCTURE);
+      const answer = api.fetchResourceTypeDetails.getMockImplementation();
+      api.fetchResourceTypeDetails.mockImplementation(async (...args) => {
+        if (args[1] === '2026-08-01') throw new Error('Request failed with status code 500');
+        return answer(...args);
+      });
+
+      await toggleRow(user, INFRASTRUCTURE, 'Noms de domaine');
+
+      expect(infrastructureRows().slice(5, 8)).toEqual([
+        ['Noms de domaine', '30,00€', '35,00€', '+16,7 %'],
+        ['Impossible de charger les services de cette ligne.'],
+        ['Hôtes Private Cloud', '0,00€', '0,00€', '—'],
+      ]);
+    });
+
+    // The hosts of September, which August did not bill: see fixtures/account.js
+    it('unfold the rows of the Private Cloud comparison alike, each comparison on its own',
+      async () => {
+        const { user } = await renderDashboard({ ...account, ...everyResourceType });
+        await openTab(user, 'Comparaison');
+        await openComparison(user, INFRASTRUCTURE);
+        await openComparison(user, PRIVATE_CLOUD);
+
+        await toggleRow(user, PRIVATE_CLOUD, 'Hôtes Private Cloud');
+
+        expect(api.fetchResourceTypeDetails)
+          .toHaveBeenCalledWith('private_cloud_host', '2026-09-01', '2026-09-30', null);
+        const hosts = [
+          ['Hôtes Private Cloud', '0,00€', '1 450,00€', '—'],
+          ['pcc-203-0-113-10/host/1234', 'Host Private Cloud 256 Go pcc-203-0-113-10 - 1 mois',
+            '0,00€', '850,00€', '—'],
+          ['pcc-203-0-113-10/host/1235', 'Host Private Cloud 96 Go pcc-203-0-113-10 - 1 mois',
+            '0,00€', '600,00€', '—'],
+        ];
+        expect(rowTextsOf(comparisonTable(PRIVATE_CLOUD)).slice(1)).toEqual([
+          ...hosts, ['Datastores Private Cloud', '0,00€', '380,00€', '—'],
+        ]);
+        // The same row of the infrastructure comparison stays folded, until the user unfolds it
+        expect(chevron(INFRASTRUCTURE, 'Hôtes Private Cloud'))
+          .toHaveAttribute('aria-expanded', 'false');
+
+        await toggleRow(user, INFRASTRUCTURE, 'Hôtes Private Cloud');
+
+        const row = infrastructureRows().findIndex(([label]) => label === 'Hôtes Private Cloud');
+        expect(infrastructureRows().slice(row, row + 3)).toEqual(hosts);
+        expect(rowsThatUnfold(PRIVATE_CLOUD, true)).toEqual(['Hôtes Private Cloud']);
+      });
+
+    // Those of a resource type, month and account are one query, whichever tab asks first
+    // (ADR 0001)
+    it('share the services of a month with the Infrastructure tab', async () => {
+      const { user } = await renderDashboard();
+      await openTab(user, 'Infrastructure');
+      await user.click(resourceType('Dedicated Servers'));
+      await settle();
+      expect(api.fetchResourceTypeDetails)
+        .toHaveBeenCalledWith('dedicated_server', '2026-09-01', '2026-09-30', null);
+      await openTab(user, 'Comparaison');
+      await openComparison(user, INFRASTRUCTURE);
+
+      await toggleRow(user, INFRASTRUCTURE, DEDICATED_SERVERS);
+
+      // August's, not September's again
+      expect(api.fetchResourceTypeDetails).toHaveBeenCalledTimes(2);
+      expect(api.fetchResourceTypeDetails)
+        .toHaveBeenLastCalledWith('dedicated_server', '2026-08-01', '2026-08-31', null);
+      expect(texts(serviceRow('ns3000001.ip-203-0-113.eu'))).toEqual([
+        'ns3000001.ip-203-0-113.eu',
+        'Location du serveur RISE-1 ns3000001.ip-203-0-113.eu - 1 mois',
+        '270,00€', '270,00€', '0,0 %',
+      ]);
     });
   });
 

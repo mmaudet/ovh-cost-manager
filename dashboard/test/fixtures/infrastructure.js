@@ -96,6 +96,12 @@ const veeamBackup = (vm, total) => ({
   line_count: 1,
 });
 
+// A domain, as the bill lines of the domains group by service: the description of its most
+// expensive line, what they cost, and how many they are
+const billedDomain = (domain, description, total, lineCount) => ({
+  domain, description, total, line_count: lineCount,
+});
+
 export const infrastructure = {
   inventoryServers: [billedServer, newServer],
   inventoryVps: [vps],
@@ -117,6 +123,24 @@ export const infrastructure = {
       '2026-08': [
         veeamBackup('vm-app-1.example.com', 25),
         veeamBackup('vm-db-1.example.com', 15),
+      ],
+    },
+    // The domains, which the Compare tab unfolds (#192): example.fr renewed in July,
+    // example.com and example.org in August, then, in September, two options of example.com
+    // and example.net registered with its DNS zone. Each month's add up to what its domains
+    // cost (account.js).
+    domain: {
+      '2026-09': [
+        billedDomain('example.net', 'Création du domaine example.net - 1 an', 18, 2),
+        billedDomain('example.com', 'Option DNS Anycast example.com - 1 an', 17, 2),
+      ],
+      // Of the same cost, by identifier from Z to A, as the server sorts them
+      '2026-08': [
+        billedDomain('example.org', 'Renouvellement du domaine example.org - 1 an', 15, 1),
+        billedDomain('example.com', 'Renouvellement du domaine example.com - 1 an', 15, 1),
+      ],
+      '2026-07': [
+        billedDomain('example.fr', 'Renouvellement du domaine example.fr - 1 an', 30, 1),
       ],
     },
   },

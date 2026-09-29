@@ -4,6 +4,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useTableSorts } from '../components/SortableHeader.jsx';
+import { useUnfoldedRows } from '../components/UnfoldingRow.jsx';
 import {
   fetchSummary, fetchByProject, fetchByService, fetchByResourceType, fetchBackupStats,
   fetchProjectProducts,
@@ -11,6 +12,7 @@ import {
 import { accountQuery } from '../utils/accounts.js';
 import { holdsMonth } from '../utils/months.js';
 import { projectsByAccountQuery } from './projectsByAccountQueries.js';
+import { resourceTypeDetailsQuery } from './resourceTypeDetailsQueries.js';
 
 // The comparison by project sorts by month A, the most expensive first, until the user sorts
 // it by another column (#146)
@@ -43,6 +45,8 @@ const useCompareTab = ({ months, activeTab, selectedAccount, accountColumn }) =>
   // The sort order of its tables, by table (#146): the comparison by project, the
   // infrastructure comparison, and the comparison of each project's products, by project
   const sortingOf = useTableSorts({ projects: BY_MONTH_A });
+  // The rows unfolded into their services, by comparison (#192)
+  const unfoldingOf = useUnfoldedRows();
 
   // Whether the months list holds each month compared: not before months A and B have their
   // defaults, nor while the list of the account just selected loads, nor when that account
@@ -133,12 +137,21 @@ const useCompareTab = ({ months, activeTab, selectedAccount, accountColumn }) =>
     enabled: asksFor(month),
   });
 
+  // The options of the query of a resource type's services in month A or B, for useQuery: those
+  // that the Infrastructure tab lists for the resource type in the month, for the account shown,
+  // under the same key (#192). The row of the resource type runs it once unfolded, as the other
+  // figures of the month run: on the tab, for a month of the months list.
+  const resourceTypeServicesQuery = (resourceType, month) => resourceTypeDetailsQuery(
+    selectedAccount, resourceType, month, asksFor(month),
+  );
+
   return {
     compareMonthA,
     setCompareMonthA,
     compareMonthB,
     setCompareMonthB,
     sortingOf,
+    unfoldingOf,
     compareDataA,
     compareDataB,
     byServiceA,
@@ -150,6 +163,7 @@ const useCompareTab = ({ months, activeTab, selectedAccount, accountColumn }) =>
     backupStatsA,
     backupStatsB,
     projectProductsQuery,
+    resourceTypeServicesQuery,
   };
 };
 
