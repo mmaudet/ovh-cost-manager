@@ -987,8 +987,8 @@ describe('Compare tab', () => {
       expect(api.fetchResourceTypeDetailsByAccount).not.toHaveBeenCalled();
     });
 
-    // The PDF export prints the page: the headers print without their sort marks (#146), and
-    // the rows without their chevrons
+    // The PDF export prints the page: the unfolded rows print with their services, and without
+    // their chevrons, as the headers print without their sort marks (#146)
     it('print unfolded, without their chevrons', async () => {
       const { user } = await renderDashboard();
       await openTab(user, 'Comparaison');

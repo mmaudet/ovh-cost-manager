@@ -35,9 +35,12 @@ const BY_MONTH_A = { column: 'totalA', kind: 'number', direction: 'desc' };
  *   Account column of the lists (accountColumnOf()), null when they name no account: while
  *   it shows, the comparison by project names the account of each project
  * @returns {object} Months A and B and their setters, the sort order of the tab's tables
- *   (sortingOf(), see useTableSorts()), the figures of both months, which the tab shows, and
- *   the query of a project's products in a month (projectProductsQuery(projectId, month)),
- *   which the comparison of the project's products runs once opened
+ *   (sortingOf(), see useTableSorts()), the rows unfolded into their services (unfoldingOf(),
+ *   see useUnfoldedRows()), the figures of both months, which the tab shows, the query of a
+ *   project's products in a month (projectProductsQuery(projectId, month)), which the
+ *   comparison of the project's products runs once opened, and the query of a resource type's
+ *   services in a month (resourceTypeServicesQuery(resourceType, month)), which its row runs
+ *   once unfolded
  */
 const useCompareTab = ({ months, activeTab, selectedAccount, accountColumn }) => {
   const [compareMonthA, setCompareMonthA] = useState(null);
