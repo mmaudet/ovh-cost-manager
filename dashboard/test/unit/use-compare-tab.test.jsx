@@ -374,6 +374,70 @@ describe('useCompareTab', () => {
     });
   });
 
+  // The services of a resource type in month A or B (#192): the query that its row runs once
+  // unfolded, which the hook defines, under the key of the bill lines that the Infrastructure
+  // tab lists for the same resource type, month and account (ADR 0001)
+  describe("query of a resource type's services", () => {
+    const DEDICATED_SERVERS = 'dedicated_server';
+    // The services of an answer, as [identifier, cost]
+    const servicesIn = (answer) => answer.map(({ domain, total }) => [domain, total]);
+
+    it('asks for the services of a resource type in a month, and runs none itself', async () => {
+      const { result, keysOf } = await renderTabHook(useCompareTab, onCompare);
+      // Nothing is asked for before a row unfolds
+      expect(api.fetchResourceTypeDetails).not.toHaveBeenCalled();
+      expect(keysOf('resourceTypeDetails')).toEqual([]);
+
+      const query = result.current.resourceTypeServicesQuery(DEDICATED_SERVERS, august);
+
+      // For all accounts, its key names none, as its request does not
+      expect(query.queryKey)
+        .toEqual(['resourceTypeDetails', DEDICATED_SERVERS, '2026-08-01', '2026-08-31']);
+      expect(query.enabled).toBe(true);
+      expect(servicesIn(await query.queryFn())).toEqual([['ns3000001.ip-203-0-113.eu', 270]]);
+      expect(api.fetchResourceTypeDetails)
+        .toHaveBeenCalledWith(DEDICATED_SERVERS, '2026-08-01', '2026-08-31', null);
+    });
+
+    it('asks for those of the account shown, under a key that names it last', async () => {
+      const { result } = await renderTabHook(useCompareTab,
+        { ...onCompare, selectedAccount: lyonAccount.id }, severalAccounts);
+
+      const query = result.current.resourceTypeServicesQuery(DEDICATED_SERVERS, august);
+
+      expect(query.queryKey).toEqual([
+        'resourceTypeDetails', DEDICATED_SERVERS, '2026-08-01', '2026-08-31', lyonAccount.id,
+      ]);
+      // Lyon's server, rented from the end of August
+      expect(servicesIn(await query.queryFn())).toEqual([['ns3000001.ip-203-0-113.eu', 70]]);
+      expect(api.fetchResourceTypeDetails)
+        .toHaveBeenCalledWith(DEDICATED_SERVERS, '2026-08-01', '2026-08-31', lyonAccount.id);
+    });
+
+    // As the other figures of the tab: on the tab only, for a month of the months list, once
+    // the page knows the account shown
+    it('waits for the tab, for a month of the account shown, and for that account', async () => {
+      const { result, rerender } = await renderTabHook(useCompareTab,
+        { ...monthsArrive, activeTab: 'overview' });
+
+      expect(result.current.resourceTypeServicesQuery(DEDICATED_SERVERS, august).enabled)
+        .toBe(false);
+
+      // An account not billed in July
+      await rerender({ ...onCompare, months: [september, august] });
+
+      expect(result.current.resourceTypeServicesQuery(DEDICATED_SERVERS, july).enabled)
+        .toBe(false);
+      expect(result.current.resourceTypeServicesQuery(DEDICATED_SERVERS, august).enabled)
+        .toBe(true);
+
+      await rerender({ ...onCompare, selectedAccount: undefined });
+
+      expect(result.current.resourceTypeServicesQuery(DEDICATED_SERVERS, august).enabled)
+        .toBe(false);
+    });
+  });
+
   // Several accounts in the instance (#119), all of them shown, where the comparison by
   // project names the account of each project: see fixtures/accounts.js
   describe('projects of the Account column', () => {
