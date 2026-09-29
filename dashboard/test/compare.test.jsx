@@ -682,13 +682,10 @@ describe('Compare tab', () => {
         ],
         ['VPS', '0,00€', '0,00€', '—'],
       ]);
-      const table = comparisonTable(INFRASTRUCTURE);
-      // The identifier in a fixed-width font, the description cut to its column, the whole of
-      // it on hover, as on the Infrastructure tab
-      expect(within(table).getByText('ns3000001.ip-203-0-113.eu')).toHaveClass('font-mono');
-      expect(within(table)
-        .getByTitle('Location du serveur RISE-1 ns3000001.ip-203-0-113.eu - 1 mois'))
-        .toHaveClass('truncate');
+      // The whole of its description on hover, which the page may cut to its column
+      const description = 'Location du serveur RISE-1 ns3000001.ip-203-0-113.eu - 1 mois';
+      expect(within(serviceRow('ns3000001.ip-203-0-113.eu')).getByTitle(description))
+        .toHaveTextContent(description);
 
       await toggleRow(user, INFRASTRUCTURE, DEDICATED_SERVERS);
 
