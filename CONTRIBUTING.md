@@ -145,8 +145,9 @@ script:
   the CSV exports and of the Markdown report; it also opens the Compare
   accordions, every Public Cloud project (`--projects 3` for the first three
   only) and every resource type of the Infrastructure tab, then the Compare tab
-  again, once the Infrastructure tab has loaded the dedicated servers: a base
-  older than #35 only lists them then, a newer one lists them on both visits;
+  again, after the Infrastructure tab, whose queries it may share: a base older
+  than #35 lists the inventory's dedicated servers then only, one from #35 on
+  both visits, until #194 leaves them to the Infrastructure tab;
 - compares the two captures section by section, normalising nothing but runs
   of spaces, tabs and line breaks (the no-break spaces of amounts are kept),
   prints the differences, and exits with 1 when there is any, 0 otherwise, or

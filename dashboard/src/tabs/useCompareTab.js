@@ -13,7 +13,8 @@ import { accountQuery } from '../utils/accounts.js';
 import { BY_MONTH_A } from '../utils/monthComparison.js';
 import { holdsMonth } from '../utils/months.js';
 import { projectsByAccountQuery } from './projectsByAccountQueries.js';
-// Under the module's name: the hook gives its query, for the account shown, the same name
+// Under the module's name: the hook gives the same name to its own query of a resource type's
+// services, which asks for them as the page shows them, on the tab
 import * as servicesQueries from './resourceTypeServicesQueries.js';
 
 /**
@@ -31,7 +32,8 @@ import * as servicesQueries from './resourceTypeServicesQueries.js';
  *   for
  * @param {?{ label: string, nameOf: function(?string): string }} shell.accountColumn - The
  *   Account column of the lists (accountColumnOf()), null when they name no account: while
- *   it shows, the comparison by project names the account of each project
+ *   it shows, the comparison by project names the account of each project, and the services
+ *   of the rows that the tab unfolds name theirs (#194)
  * @returns {object} Months A and B and their setters, the sort order of the tab's tables
  *   (sortingOf(), see useTableSorts()), the rows unfolded into their services (unfoldingOf(),
  *   see useUnfoldedRows()), the figures of both months, which the tab shows, the query of a

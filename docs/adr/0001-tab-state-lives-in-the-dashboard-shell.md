@@ -19,34 +19,32 @@ Shared state that a tab changes along with other parts of the page stays in the 
 reaches the tab with its setter: the Public Cloud project whose detail is open, and the
 resource type whose bill lines are open on the Infrastructure tab. When a tab reads data
 that another tab's hook owns, that hook returns it and the shell passes it on, so that the
-query keeps a single owner and its loading condition: with all accounts shown, the Public
-Cloud tab's list of projects gives what the month billed each project from the projects by
-account that the Overview hook loads (#180). The Compare tab listed the dedicated servers
-that the Infrastructure hook loads (#35) until its row of the dedicated servers unfolded
-into those billed in months A and B (#194). The shell reads no tab hook's result for what
-it shows itself: the "vs previous month" KPI runs its own query of the summary of the month
-before the selected one (#50). When a month the Compare tab compares is one the shell
-loads, the Compare hook's queries of that month share their keys with those the shell and
-the Backup hook run for it. When the page opens, month B is the latest month, the selected
-one: its summary, costs by resource type and Veeam backups share their keys (`summary`,
-`byResourceType`, `backupStats`). Month A is the second latest billed month (`months[1]`):
-when it is the month just before the latest one, as it is unless nothing was billed that
-month, its summary shares its key with the shell's month before. While the lists show the
-Account column, with all accounts shown, the Compare hook asks for the projects of its
-months by account, under the key of the Overview hook's projects by account
-(`projectsByAccount`, #119). The services of a resource type that the Compare tab lists
-under a row it unfolds, for a month and the account shown, share the key of the bill lines
-that the Infrastructure hook loads for the same resource type, month and account
-(`resourceTypeDetails`, #192), and while the lists show the Account column, with all
-accounts shown, both ask for them by account, under one key again
-(`resourceTypeDetailsByAccount`, #194): both hooks build those queries in
-`tabs/resourceTypeServicesQueries.js`, and the Compare hook gives their options, which the
-row runs once unfolded, as a project's comparison runs those of its products (#181). The
-Compare hook owns the months it picks, and a shared key only means a shared cache, not a
-shared owner. A query that follows the account selected in the header carries that account
-in its key, after the other parts, and none when all accounts are shown, as its request
-names the account or not (#115): two queries share a key only for the same account, or both
-for all accounts.
+query keeps a single owner and its loading condition: while the lists show the Account
+column, with all accounts shown, the Public Cloud tab's list of projects gives what the
+month billed each project from the projects by account that the Overview hook loads (#180).
+The shell reads no tab hook's result for what it shows itself: the "vs previous month" KPI
+runs its own query of the summary of the month before the selected one (#50). When a month
+the Compare tab compares is one the shell loads, the Compare hook's queries of that month
+share their keys with those the shell and the Backup hook run for it. When the page opens,
+month B is the latest month, the selected one: its summary, costs by resource type and
+Veeam backups share their keys (`summary`, `byResourceType`, `backupStats`). Month A is the
+second latest billed month (`months[1]`): when it is the month just before the latest one,
+as it is unless nothing was billed that month, its summary shares its key with the shell's
+month before. While the lists show the Account column, with all accounts shown, the Compare
+hook asks for the projects of its months by account, under the key of the Overview hook's
+projects by account (`projectsByAccount`, #119). The services of a resource type that the
+Compare tab lists under a row it unfolds, for a month and the account shown, share the key
+of the bill lines that the Infrastructure hook loads for the same resource type, month and
+account (`resourceTypeDetails`, #192), and while the lists show the Account column, with
+all accounts shown, both ask for them by account, under one key again
+(`resourceTypeDetailsByAccount`, #194): both hooks take their query from
+`tabs/resourceTypeServicesQueries.js`, which picks the query and its key, and the Compare
+hook gives its options, which the row runs once unfolded, as a project's comparison runs
+those of its products (#181). The Compare hook owns the months it picks, and a shared key
+only means a shared cache, not a shared owner. A query that follows the account selected in
+the header carries that account in its key, after the other parts, and none when all
+accounts are shown, as its request names the account or not (#115): two queries share a key
+only for the same account, or both for all accounts.
 
 What stays open depends on how the user moves around the page (#56):
 
