@@ -25,7 +25,7 @@ The screenshots show anonymised data.
 ### Overview
 ![Overview - Service breakdown and top projects](docs/screenshots/overview.png)
 
-### Month Comparison
+### Month Comparison Tab
 ![Compare - Side by side month comparison](docs/screenshots/compare.png)
 
 ### Historical Trends
@@ -57,7 +57,7 @@ New in version 3.1.0.
 - **Resource Type Detail**: Expandable cost breakdown per individual service within each category
 - **GPU Cost Consolidation**: Dedicated view for GPU costs by model (NVIDIA L4, L40S, A100, H100) and by project
 - **AI Endpoints Models**: each AI Endpoints model that the month's bills name, with its input tokens, its output tokens and its cost, in the Public Cloud tab, and its monthly cost in the Trends tab (see [AI Endpoints Models](#ai-endpoints-models))
-- **Month Comparison**: Side-by-side comparison between two months with variation tracking, including infrastructure, backup, Private Cloud, and per-project product breakdowns
+- **Month Comparison**: Side-by-side comparison between two months with variation tracking, including infrastructure, backup, Private Cloud, and per-project product breakdowns, whose rows unfold into their services and charges (see [Month Comparison](#month-comparison))
 - **Trend Analysis**: Historical trends with configurable period (3-36 months), and GPU and AI Endpoints evolution charts
 - **Budget Tracking**: Visual budget consumption with configurable targets
 
@@ -505,6 +505,48 @@ The table sorts by cost, the most expensive first, until a header is clicked, an
 
 The **AI Endpoints cost evolution by model** chart gives each model's cost month by month, over the tab's period up to the month selected in the header: a stacked bar per month of the bills, one color per model, with a legend of the models, the most expensive over the period first, and a tooltip that gives each model's cost in the month. A model keeps its color from one period or account to the next, though two models may share one. As the GPU chart, it shows once two months of the period have AI Endpoints lines.
 
+## Month Comparison
+
+The Compare tab compares two months, month A and month B, from their bills: it opens on the two latest months that have bills, and the user picks others. It compares their totals, their costs by service type and by project, their costs by resource type in the infrastructure and Private Cloud comparisons, their Veeam backups, and each Public Cloud project's products. Each row gives the amount of month A, the amount of month B and the variation from one to the other, in red when it grows and in green when it shrinks. The tab follows the account selected in the header.
+
+### Rows That Unfold
+
+Each row that adds up several services or charges unfolds into them, month A against month B, one row each, in the columns of the row it details:
+
+- **Infrastructure and Private Cloud comparisons**: each resource type (dedicated servers, VPS, storage, load balancers, IP addresses, domains, Private Cloud hosts and datastores) unfolds into its services, named as the Infrastructure tab names them: by their identifier and the description of their most expensive bill line, month B's when month B billed them, cut to its column, whole on hover. The Dedicated Servers row no longer lists the servers that the inventory holds today, which have nothing to do with months A and B: it unfolds into the servers that either month billed, and the Infrastructure tab keeps listing the inventory.
+- **Backup comparison**: the row of the Veeam VMs unfolds into each VM backed up, and that of the Enterprise licenses into each license. Folded, each keeps its number of services and its amount, and it unfolds into as many services, but in three cases: a VM that a refund brings to 0 € or less is counted, but not listed; a line without an identifier is listed, but not counted; and, while the lists name each row's account, a VM that two accounts billed is counted once, but listed once for each account.
+- **A project's comparison**: each product unfolds into its charges. The Public Cloud credit that the bills used pays for no product, and does not unfold.
+
+Every row starts folded. A chevron at the start of a row unfolds it and folds it again, from the keyboard too; a row that neither month billed has none. A row stays unfolded when the table is sorted, when the user picks other months, whose services or charges it then shows, and when another tab is opened. A row's services load once it unfolds: it says so until both months have answered, or that a month's could not load. A resource type's services of a month load once for this tab and the Infrastructure tab, for the same account. A product's charges come with the products, so that it unfolds at once. The PDF export prints the unfolded rows, without their chevrons.
+
+The service type chart and the comparison by project do not unfold.
+
+### Services and Charges
+
+The words are those of the [glossary](CONTEXT.md):
+
+- **Service**: what OVHcloud bills under one identifier, which each of its bill lines names: a dedicated server, a VPS, a domain, an IP block, a Public Cloud project… Its identifier gives its resource type.
+- **Charge**: what a service's bill line pays for, as its description names it without the period it covers: an instance's monthly plan, named with the instance's id and region, a flavor's hourly use in a region, a bucket's storage, an AI Endpoints model's input tokens… A Public Cloud project is a single service, whose bill lines differ by what they pay for: its products unfold into their charges.
+
+On some accounts' bills, the Public Cloud descriptions end with the period that the line covers, such as « (01/08/2026-31/08/2026) »; on others, they carry none. A charge leaves that period out, and writes a curly apostrophe straight, so that the lines that pay for one charge in two months, or on two accounts' bills, make one row. The lines of one charge in a month add up, and a product's charges add up to its amount; the charges that cost nothing in a month are left out, as the products that cost nothing are. OCM reads the charges when the server reads the bills, as it reads the products: the bills already imported show them, without a new import.
+
+### Billed in One Month
+
+A service or charge that one of the months did not bill shows 0 € in that month:
+
+- **Month B only**: its variation reads « — », which cannot be computed from 0 €, with a tooltip that says why, as for a project billed in month B only.
+- **Month A only**: its variation reads −100 %.
+
+The services of a row add up to its amounts, but for a service whose lines of a month add up to 0 € or less, such as one that a refund cancels out: it shows 0 € in that month, as the Infrastructure tab leaves such a service out.
+
+### Order
+
+The services and charges of a row follow the table's sort, within their row, by the same columns: their identifier or their charge, month A, month B or the variation, and each stays under its own row. Until the user sorts the table, they come by month A, the most expensive first, then by month B. The Private Cloud and backup comparisons, which do not sort, keep that order.
+
+### Several Accounts
+
+The services and charges are those of the account selected in the header, and, for the Unknown account, those of the bills without an account. With all accounts shown, a project's products and their charges add up the bills of every account. When the instance holds several accounts, the lists then name each row's account: each service names its own in brackets, by its name, or else its NIC handle, and the Unknown account as such. A service that two accounts billed shows once for each, so that its rows add up to the row's amounts.
+
 ## Docker Deployment
 
 Two deployment modes are available. The [deployment guide](docs/deployment.md) describes both, with every setting, and is the reference for them:
@@ -563,7 +605,7 @@ For an instance of [several accounts](#several-ovh-accounts), every route that l
 - `unknown`, for the Unknown account: the data stored before the upgrade that no account claimed;
 - none, for all accounts, as before.
 
-Any other value gets a 400. The routes of one bill or one project, such as `/api/bills/:id` or `/api/projects/:id/instances`, need no parameter, as that bill or project belongs to one account. `/api/projects/:id/products` takes it all the same, as it breaks down what `/api/analysis/by-project` gives the project for an account: a project's bill lines belong to the account of their bill, which may not be the project's own, as for a project moved to another account. Without the parameter, the account-wide figures (the month's consumption, its forecast, the balance and the consumption history) add up the accounts. The rows that belong to an account, such as projects, services and credit movements, name it in an `account` field: its NIC handle, or `null` for the Unknown account. With several accounts, the CSV exports gain a last `account` column. `byAccount=true` on `/api/analysis/by-project`, `/api/analysis/resource-type-details` and `/api/gpu/summary` gives a project or a service billed to several accounts once for each account, with its account.
+Any other value gets a 400. The routes of one bill or one project, such as `/api/bills/:id` or `/api/projects/:id/instances`, need no parameter, as that bill or project belongs to one account. `/api/projects/:id/products` takes it all the same, as it breaks down what `/api/analysis/by-project` gives the project for an account: a project's bill lines belong to the account of their bill, which may not be the project's own, as for a project moved to another account. Without the parameter, the account-wide figures (the month's consumption, its forecast, the balance and the consumption history) add up the accounts. The rows that belong to an account, such as projects, services and credit movements, name it in an `account` field: its NIC handle, or `null` for the Unknown account. With several accounts, the CSV exports gain a last `account` column. `byAccount=true` on `/api/analysis/by-project`, `/api/analysis/resource-type-details`, `/api/analysis/backup-services` and `/api/gpu/summary` gives a project or a service billed to several accounts once for each account, with its account.
 
 ### Accounts
 
@@ -587,6 +629,7 @@ The route lists the accounts that the imports recorded: those that the configura
 | `GET /api/analysis/public-cloud-stats?from=&to=`          | Public Cloud cards, `other` included          |
 | `GET /api/analysis/ai-endpoints?from=&to=`                | Cost and tokens of each AI Endpoints model    |
 | `GET /api/analysis/backup-stats?from=&to=`                | Backup stats (Veeam VMs, Enterprise licenses) |
+| `GET /api/analysis/backup-services?from=&to=`             | Each Veeam VM and Enterprise license          |
 | `GET /api/analysis/daily-trend?from=&to=&account=`        | Daily cost trend                              |
 | `GET /api/analysis/monthly-trend?months=6&end=YYYY-MM`    | Monthly cost trend, `months` ending on `end`  |
 
@@ -605,6 +648,16 @@ tokens, and its `total`, the most expensive first. `monthlyTrend` gives each
 `month`, `YYYY-MM`, of the period whose bills name a model, by the month of its
 bills, the earliest first, with the `costs` of every model of the period in it,
 at 0 for a model that the month did not bill. Amounts are to the cent.
+
+`/api/analysis/backup-services` gives the services of the Veeam backups that
+the bills of the period charged, which the Compare tab's backup comparison
+unfolds its rows into (see [Month Comparison](#month-comparison)): `vms`, each
+VM backed up, and `enterprise`, each Enterprise license, the services of the
+very bill lines that `/api/analysis/backup-stats` counts. Each gives its
+`domain`, the service's identifier, the `description` of its most expensive
+bill line, its `total` and its `line_count`, as
+`/api/analysis/resource-type-details` gives a resource type's services: those
+whose lines add up to more than 0 €, the most expensive first.
 
 ### Consumption & Account
 
@@ -639,13 +692,22 @@ The carbon footprint is what OVHcloud's carbon calculator attributes to the acco
 | `GET /api/projects/:id/quotas`                   | Project quotas by region                     |
 | `GET /api/projects/:id/buckets?from=&to=`        | Project S3 buckets with cost                 |
 | `GET /api/projects/:id/other-services?from=&to=` | Project's other services, registry included |
-| `GET /api/projects/:id/products?from=&to=`       | Project's products, from its bills           |
+| `GET /api/projects/:id/products?from=&to=`       | Project's products and their charges         |
 | `GET /api/projects/:id/instance-total?from=&to=` | Project instance total cost                  |
 | `GET /api/inventory/servers`                     | Dedicated servers list                       |
 | `GET /api/inventory/vps`                         | VPS instances list                           |
 | `GET /api/inventory/storage`                     | Storage services list                        |
 | `GET /api/inventory/summary`                     | Resource count summary                       |
 | `GET /api/inventory/expiring?days=30`            | Expired and expiring services, soonest first |
+
+`/api/projects/:id/products` gives what the bills of the period charged a
+project, which the Compare tab compares month by month (see
+[Month Comparison](#month-comparison)): its `products`, each with its
+`product`, its `total` and its `charges`, what its bill lines add up to by
+charge, each as `{ charge, total }`, the most expensive first, and `total`,
+what the products cost in all; and `credits`, the Public Cloud credit that the
+bills used, which pays for no product and has no charges. The products and
+charges that cost nothing are left out. Amounts are to the cent.
 
 ### GPU & System
 
