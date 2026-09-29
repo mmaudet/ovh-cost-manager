@@ -1566,11 +1566,12 @@ function registerRoutes() {
     }
   });
 
-  // Every product of a project over a period, from its bills, with its cost, and the credit
-  // that they used (#181): what the Compare tab compares for a project, month by month. Those
-  // of the bills of the account the request asks for, or of every account without one, as
-  // /api/analysis/by-project, whose cost of the project they break down: a project's bill
-  // lines belong to the account of their bill, which may not be the project's own (ADR 0002).
+  // Every product of a project over a period, from its bills, with its cost and its charges,
+  // and the credit that they used (#181, #195): what the Compare tab compares for a project,
+  // month by month, and unfolds each product into. Those of the bills of the account the
+  // request asks for, or of every account without one, as /api/analysis/by-project, whose cost
+  // of the project they break down: a project's bill lines belong to the account of their bill,
+  // which may not be the project's own (ADR 0002).
   app.get('/api/projects/:id/products', accountParameter, (req, res) => {
     try {
       const { from, to } = req.query;

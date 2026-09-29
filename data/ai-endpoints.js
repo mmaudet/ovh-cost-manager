@@ -12,12 +12,14 @@
  * no side effect.
  */
 
-// The descriptions of the lines of a model's tokens, by what their quantity counts, its input or
-// its output tokens: in French, which end with the model, and in English, as OVHcloud's public
-// order catalog gives them. A model's name is one word, as the catalog names it: gpt-oss-20b,
-// bge-m3…
+const { chargeOf } = require('./public-cloud-products');
+
+// The charges of a model's tokens, by what their lines' quantity counts, its input or its output
+// tokens: in French, which end with the model, and in English, as OVHcloud's public order catalog
+// gives them, as chargeOf() writes them, without their period and with a straight apostrophe. A
+// model's name is one word, as the catalog names it: gpt-oss-20b, bge-m3…
 const TOKEN_PATTERNS = [
-  ['input', /^Nombre de tokens d['’]entrée pour le modèle AI Endpoints (\S+)$/i],
+  ['input', /^Nombre de tokens d'entrée pour le modèle AI Endpoints (\S+)$/i],
   ['input', /^Amount of input tokens for AI Endpoints (\S+) model$/i],
   ['output', /^Nombre de tokens de sortie pour le modèle AI Endpoints (\S+)$/i],
   ['output', /^Amount of output tokens for AI Endpoints (\S+) model$/i],
@@ -28,12 +30,9 @@ const TOKEN_PATTERNS = [
 // Endpoints <model> » in French, "AI Endpoints <model> model" in English
 const MODEL_PATTERNS = [/\bmodèle AI Endpoints (\S+)/i, /\bAI Endpoints (\S+) model\b/i];
 
-// The period in brackets that ends each description on some accounts' bills, such as
-// « (01/08/2026-31/08/2026) »: no part of what the line names
-const PERIOD = /\s*\([^()]*\d[^()]*\)$/;
-
 /**
- * Reads a bill line of an AI Endpoints model: a line that names no model, such as those of AI
+ * Reads a bill line of an AI Endpoints model, from its charge (chargeOf()), which names the model
+ * alike whatever the period of the line: a line that names no model, such as those of AI
  * Notebooks, AI Training or AI Deploy, or a line that names AI Endpoints alone, is not a
  * model's.
  * @param {?string} description - The bill line's description
@@ -43,7 +42,7 @@ const PERIOD = /\s*\([^()]*\d[^()]*\)$/;
  *   seconds of audio, which counts in its cost only. Null for a line that names no model.
  */
 function readAiEndpointsLine(description) {
-  const text = String(description ?? '').trim().replace(PERIOD, '');
+  const text = chargeOf(description);
   for (const [counts, pattern] of TOKEN_PATTERNS) {
     const model = text.match(pattern)?.[1];
     if (model) return { model, counts };
