@@ -1369,12 +1369,12 @@ describe('Compare tab', () => {
         await toggleProduct(user, 'Instances');
         await toggleProduct(user, 'Stockage objet');
         const sortBy = (column) => sortTable(user, comparisonTable(PRODUCTION_PRODUCTS), column);
-        // The rows of the table by their labels: the products, and the charges under them
-        const labels = () => productRows().map(([label]) => label);
+        // The rows of the table by their names: the products, and their charges under them
+        const names = () => productRows().map(([name]) => name);
         // The charges right under the instances
         const instances = () => {
-          const row = labels().indexOf('Instances');
-          return labels().slice(row + 1, row + 6);
+          const row = names().indexOf('Instances');
+          return names().slice(row + 1, row + 6);
         };
         // The charges of the object storage: a bucket that cost more in September, the Cold
         // Archive, and a bucket that cost as much
@@ -1387,7 +1387,7 @@ describe('Compare tab', () => {
         // +22,3 % for the instances, +0,4 % for the object storage, then the products of 0,0 %;
         // within the instances, +38,0 %, 0,0 %, -25,0 %, -100,0 %, then the variation that
         // cannot be computed, last either way
-        expect(labels()).toEqual([
+        expect(names()).toEqual([
           'Instances', hourlyUse('l4-90'), DB_1_PLAN, hourlyUse('b3-8'), hourlyUse('d2-4'),
           hourlyUse('b3-16'),
           'Stockage objet', ASSETS, COLD_ARCHIVE, OLD_EXPORTS,
@@ -1396,7 +1396,7 @@ describe('Compare tab', () => {
 
         await sortBy(/^Variation/);
 
-        expect(labels()).toEqual([
+        expect(names()).toEqual([
           'Savings plans', 'Volumes', 'Snapshots',
           'Stockage objet', COLD_ARCHIVE, OLD_EXPORTS, ASSETS,
           'Instances', hourlyUse('d2-4'), hourlyUse('b3-8'), DB_1_PLAN, hourlyUse('l4-90'),
