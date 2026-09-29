@@ -25,6 +25,10 @@ const { buildRateLimitConfig } = require('./rate-limit-config');
 const { isHealthCheck } = require('./auth/health');
 const { requestLogLine } = require('./request-log');
 
+// The version of OCM that this server runs, which each release sets in the root package.json
+// (scripts/release.sh): the configuration route gives it, for the dashboard's footer (#188)
+const { version: OCM_VERSION } = require('../package.json');
+
 // Load configuration: the first config.json that exists. One that cannot be
 // read stops the server, rather than let it run without its settings
 const CONFIG_PATHS = [
@@ -868,6 +872,9 @@ function registerRoutes() {
       // Whether the server runs imports, on the resync route's rule: the dashboard reads it
       // to offer the resync or not (#51)
       importEnabled: importsEnabled(),
+      // The version of OCM that runs, which the footer shows (#188): behind authentication as
+      // this route is, where the health check, open to all, does not give it
+      version: OCM_VERSION,
     });
   });
 
