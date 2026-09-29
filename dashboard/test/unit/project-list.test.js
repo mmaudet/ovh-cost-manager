@@ -5,20 +5,20 @@ import { projectListRows } from '../../src/utils/projectList.js';
 // shown, as /api/projects/enriched lists them, most consuming first, with what the bills of the
 // month selected charged each, from its projects as /api/analysis/by-project lists them, most
 // expensive first.
-const listed = (id, name, fields = {}) => ({
+const inInventory = (id, name, fields = {}) => ({
   id, name, description: null, status: 'ok', account: 'xx1111-ovh', instance_count: 0,
   consumption_total: 0, period_start: null, period_end: null, ...fields,
 });
-const production = listed('project-production', 'Production', {
+const production = inInventory('project-production', 'Production', {
   instance_count: 5, consumption_total: 350,
 });
-const staging = listed('project-staging', 'Staging', { consumption_total: 52.35 });
-const sandbox = listed('project-sandbox', 'Sandbox');
+const staging = inInventory('project-staging', 'Staging', { consumption_total: 52.35 });
+const sandbox = inInventory('project-sandbox', 'Sandbox');
 const billed = (projectId, projectName, total) => ({
   projectId, projectName, total, detailsCount: 1,
 });
 
-// Each row as [id, name, billed]
+// Each row as [id, name, what the month billed it]
 const rows = (projects, billedProjects) => projectListRows(projects, billedProjects)
   .map(({ id, name, billed: amount }) => [id, name, amount]);
 
@@ -26,10 +26,13 @@ describe('projectListRows', () => {
   it('gives each project of the list what the month billed it, in the order of the list', () => {
     expect(projectListRows(
       [production, staging],
-      [billed('project-staging', 'Staging', 220), billed('project-production', 'Production', 610.4)],
+      [
+        billed('project-staging', 'Staging', 220),
+        billed('project-production', 'Production', 610.4),
+      ],
     )).toEqual([
-      { ...production, billed: 610.4, listed: true },
-      { ...staging, billed: 220, listed: true },
+      { ...production, billed: 610.4, inInventory: true },
+      { ...staging, billed: 220, inInventory: true },
     ]);
   });
 
@@ -70,10 +73,10 @@ describe('projectListRows', () => {
         billed('project-gone', 'Unknown', 45),
       ],
     )).toEqual([
-      { ...production, billed: 610.4, listed: true },
-      { ...sandbox, billed: null, listed: true },
-      { id: 'project-legacy', name: 'Legacy', billed: 220, listed: false },
-      { id: 'project-gone', name: 'Unknown', billed: 45, listed: false },
+      { ...production, billed: 610.4, inInventory: true },
+      { ...sandbox, billed: null, inInventory: true },
+      { id: 'project-legacy', name: 'Legacy', billed: 220, inInventory: false },
+      { id: 'project-gone', name: 'Unknown', billed: 45, inInventory: false },
     ]);
   });
 
@@ -99,9 +102,9 @@ describe('projectListRows', () => {
           ofAccount(billed('project-staging', 'Staging', 220), 'yy2222-ovh'),
         ],
       )).toEqual([
-        { ...lyonProduction, billed: 610.4, listed: true },
-        { ...unnamedStaging, billed: 220, listed: true },
-        { ...unknownSandbox, billed: null, listed: true },
+        { ...lyonProduction, billed: 610.4, inInventory: true },
+        { ...unnamedStaging, billed: 220, inInventory: true },
+        { ...unknownSandbox, billed: null, inInventory: true },
       ]);
     });
 
@@ -118,13 +121,13 @@ describe('projectListRows', () => {
             ofAccount(billed('project-gone', 'Unknown', 12), null),
           ],
         )).toEqual([
-          { ...lyonProduction, billed: 610.4, listed: true },
-          { ...unnamedStaging, billed: 220, listed: true },
+          { ...lyonProduction, billed: 610.4, inInventory: true },
+          { ...unnamedStaging, billed: 220, inInventory: true },
           {
             id: 'project-staging', name: 'Staging', account: 'xx1111-ovh', billed: 30,
-            listed: false,
+            inInventory: false,
           },
-          { id: 'project-gone', name: 'Unknown', account: null, billed: 12, listed: false },
+          { id: 'project-gone', name: 'Unknown', account: null, billed: 12, inInventory: false },
         ]);
       });
   });

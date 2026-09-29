@@ -28,21 +28,22 @@ const openProjectAccountOf = (accountColumn, projectsEnriched, openProject) => {
 // The value of a project in each column that sorts the list (#146): its account, none without
 // the Account column, no consumption for a project that consumed nothing, and no amount billed
 // for a project that no bill line of the month names (#180), which the list shows as "-". A
-// project billed that the list lacks has no state, instance count or consumption there.
+// project billed that the inventory of the account lacks has no state, instance count or
+// consumption there.
 const projectValues = (accountColumn) => ({
   name: (p) => p.name || p.id,
   account: (p) => accountColumn?.nameOf(p.account),
   state: (p) => p.status,
-  instances: (p) => (p.listed ? p.instance_count || 0 : null),
+  instances: (p) => (p.inInventory ? p.instance_count || 0 : null),
   consumption: (p) => (p.consumption_total > 0 ? p.consumption_total : null),
   billed: (p) => p.billed,
 });
 
-// The row of a project billed in the month that the list lacks (#180): its name, marked as a
-// bucket billed but gone from the inventory is, and its id, as the server may not name it; its
-// account in the Account column, and what the month billed it. The inventory has none of its
-// resources: it has no detail to open.
-const UnlistedProjectRow = ({ project, accountColumn, t, fmt }) => (
+// The row of a project billed in the month that the list lacks, as the inventory of the account
+// whose bills charged it lacks it (#180): its name, marked as a bucket billed but gone from the
+// inventory is, and its id, as the server may not name it; that account in the Account column,
+// and what the month billed it. The list has none of its resources: it has no detail to open.
+const ProjectNotInInventoryRow = ({ project, accountColumn, t, fmt }) => (
   <tr className="border-b opacity-60">
     <td className="p-3 font-medium">
       <span>{project.name}</span>
@@ -263,9 +264,9 @@ const PublicCloudTab = ({
               </thead>
               <tbody>
                 {/* A project's detail shows right under it, whatever the order */}
-                {projects.map(p => (!p.listed ? (
-                  <UnlistedProjectRow
-                    key={`unlisted ${p.id} ${p.account}`} project={p}
+                {projects.map(p => (!p.inInventory ? (
+                  <ProjectNotInInventoryRow
+                    key={`not in inventory ${p.id} ${p.account}`} project={p}
                     accountColumn={accountColumn} t={t} fmt={fmt}
                   />
                 ) : (
