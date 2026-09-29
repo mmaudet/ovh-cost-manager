@@ -18,6 +18,7 @@ import {
   cloudProjects,
   cloudProjectsTable,
   headerOf,
+  monthSelector,
   openTab,
   panelOf,
   renderDashboard,
@@ -39,6 +40,14 @@ const projectRowsShown = () => [...cloudProjectsTable().tBodies[0].rows]
   .map((row) => texts(row));
 // The total under the list of projects, as the texts it shows (#180)
 const projectListTotal = () => texts(cloudProjectsTable().tFoot);
+// What the column of the amounts billed in the month shows for each project, in the order
+// shown, '' for a cell that shows nothing: while no project is open (#180)
+const billedColumn = () => {
+  const table = cloudProjectsTable();
+  const column = [...table.tHead.rows[0].cells]
+    .findIndex((cell) => /^(Facturé en|Billed in) /.test(cell.textContent));
+  return [...table.tBodies[0].rows].map((row) => texts(row.cells[column]).join(' '));
+};
 // The KPI card of the month's Cloud total, which the bill lines of the month that name a
 // project add up to
 const cloudTotalCard = (label = 'Total Cloud', monthCost = 'Coût total du mois') => cardOf(
@@ -254,6 +263,42 @@ describe('Public Cloud tab', () => {
         expect(projectListTotal()).toEqual(['Total Cloud', '702,00€']);
         expect(texts(cloudTotalCard())).toEqual(['Total Cloud', '702,00€', 'Public Cloud']);
       });
+
+    // As after a change of month, the page showing the month once its figures have loaded: rather
+    // than show that nothing was billed, or a total that the amounts would not add up to, the
+    // list gives neither until what the month billed its projects loads (#62, #180)
+    it('give no amount until what the month billed them loads', async () => {
+      const { user } = await renderDashboard();
+      await openTab(user, 'Public Cloud');
+      const releaseAugust = holdBack(api.fetchByProject, (from) => from === '2026-08-01');
+
+      await user.selectOptions(monthSelector(), 'Août 2026');
+      await screen.findByRole('columnheader', { name: /^Facturé en août 2026/ });
+
+      expect(projectRowsShown()).toEqual([
+        ['Production', 'Customer-facing services', 'ok', '5', '350,00€', '▼'],
+        ['Staging', 'ok', '0', '52,35€', '▼'],
+        ['Sandbox', 'ok', '0', '-', '▼'],
+      ]);
+      expect(cloudProjectsTable().tFoot).toBeNull();
+
+      releaseAugust();
+      await settle();
+
+      expect(billedColumn()).toEqual(['512,00€', '190,00€', '-']);
+      expect(projectListTotal()).toEqual(['Total Cloud', '702,00€']);
+    });
+
+    it('give no amount when what the month billed them cannot load', async () => {
+      const { user } = await renderDashboard();
+      await openTab(user, 'Public Cloud');
+      api.fetchByProject.mockRejectedValue(new Error('Request failed with status code 500'));
+
+      await selectMonth(user, 'Août 2026');
+
+      expect(billedColumn()).toEqual(['', '', '']);
+      expect(cloudProjectsTable().tFoot).toBeNull();
+    });
 
     it('show the detail of a project under it on a click, until a second click', async () => {
       const { user } = await openProduction();
@@ -1260,6 +1305,26 @@ describe('Public Cloud tab', () => {
         ]);
         expect(rowTextsOf(cloudProjectsTable())[3])
           .toEqual(['Sandbox', 'Unknown account', 'ok', '0', '-', '-', '▼']);
+      });
+
+      // What the month billed each account's projects, which the Overview's breakdown by project
+      // loads for the month (#118)
+      it('gives no amount until what the month billed each account loads', async () => {
+        const { user } = await renderDashboard(severalAccounts);
+        await openTab(user, 'Public Cloud');
+        const releaseAugust = holdBack(api.fetchProjectsByAccount, (from) => from === '2026-08-01');
+
+        await user.selectOptions(monthSelector(), 'Août 2026');
+        await screen.findByRole('columnheader', { name: /^Facturé en août 2026/ });
+
+        expect(billedColumn()).toEqual(['', '', '']);
+        expect(cloudProjectsTable().tFoot).toBeNull();
+
+        releaseAugust();
+        await settle();
+
+        expect(billedColumn()).toEqual(['512,00€', '190,00€', '-']);
+        expect(projectListTotal()).toEqual(['Total Cloud', '702,00€']);
       });
 
       // What the bills of the month charged a project is then what those of each account

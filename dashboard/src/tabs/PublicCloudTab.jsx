@@ -79,30 +79,33 @@ const downloadResources = (openProjectAccount, rows, columns, filename) => {
 // The Public Cloud tab, which the shell renders while it is active: what usePublicCloudTab()
 // returns, the open project and the sort order of its tables included (#146), with the shell's
 // language, translations (t), amount format (fmt) and locale, the selected month, the setter of
-// the selected project, and three of its queries that load at page start: the month's costs by
-// resource type, its GPU costs, and its costs by project (byProject), which the list of
-// projects gives next to their current consumption (#180). And the Account column of the lists,
-// null when they show none (#121), and the cloud total of the selected month, which the cards
-// and the list add up to (#145, #180). While the Account column shows, the list gives what the
-// month billed each project by account, from the projects by account that the Overview hook
-// loads for its breakdown (projectsByAccount, #118), which the shell passes on.
+// the selected project, and two of its queries that load at page start: the month's costs by
+// resource type and its GPU costs. And what the month billed each project (billedProjects), which
+// the list of projects gives next to their current consumption (#180): the costs by project of
+// the account shown, or, while the lists name the account of each project, those by account of
+// the Overview's breakdown (#118), which the shell picks, undefined until they load. And the
+// Account column of the lists, null when they show none (#121), and the cloud total of the
+// selected month, which the cards and the list add up to (#145, #180).
 const PublicCloudTab = ({
   projectsEnriched, projectsLoaded, publicCloudStats, projectConsumption, projectInstances,
   instanceCount, projectInstanceTotal, projectBuckets, projectVolumes, projectSnapshots,
   projectSavingsPlans, projectOtherServices, projectQuotas, setShowAllInstances,
   setShowAllBuckets, setShowAllVolumes, setShowAllSnapshots, setShowAllSavingsPlans, sortingOf,
   language, t, fmt, locale, selectedMonth, openProject, setSelectedProject,
-  byResourceType, gpuSummary, byProject, projectsByAccount, accountColumn, cloudTotal,
+  byResourceType, gpuSummary, billedProjects, accountColumn, cloudTotal,
 }) => {
   // The Account column of the CSV files of the open project's resources, for all of them
   const openProjectAccount = openProjectAccountOf(accountColumn, projectsEnriched, openProject);
-  // The projects with what the month billed them, and those billed that the list lacks once the
-  // list of the account shown has loaded (projectsLoaded), in the order the user sorts them, in
-  // the server's until then (#146)
+  // Whether what the month billed the projects has loaded: until then, as after a change of
+  // month, or when it cannot load, the list gives no amount, rather than show that nothing was
+  // billed, nor the total that the amounts add up to, nor the projects billed that it lacks
+  const amountsLoaded = billedProjects !== undefined;
+  // The projects of the account shown once they have loaded (projectsLoaded), with what the
+  // month billed them, and those billed that the list lacks, in the order the user sorts them,
+  // in the server's until then (#146)
   const projectSorting = sortingOf('projects');
   const projects = sortRows(
-    projectListRows(projectsEnriched, accountColumn ? projectsByAccount : byProject)
-      .filter(({ listed }) => listed || projectsLoaded),
+    projectsLoaded ? projectListRows(projectsEnriched, billedProjects ?? []) : [],
     projectSorting.sort, projectValues(accountColumn), language,
   );
   return (
@@ -288,7 +291,7 @@ const PublicCloudTab = ({
                         {p.consumption_total > 0 ? `${fmt(p.consumption_total)}€` : '-'}
                       </td>
                       <td className="p-3 text-right font-medium">
-                        {p.billed === null ? '-' : `${fmt(p.billed)}€`}
+                        {amountsLoaded && (p.billed === null ? '-' : `${fmt(p.billed)}€`)}
                       </td>
                       <td className="p-3 text-center">
                         <span className="text-gray-400 text-lg">
@@ -586,7 +589,7 @@ const PublicCloudTab = ({
               </tbody>
               {/* What the column of the amounts billed adds up to: the month's Cloud total, as
                   under the Overview's breakdown by project (#180) */}
-              {cloudTotal !== undefined && (
+              {amountsLoaded && cloudTotal !== undefined && (
                 <tfoot>
                   <tr className="bg-gray-50 font-semibold">
                     <td className="p-3" colSpan={accountColumn ? 5 : 4}>{t('cloudTotal')}</td>
