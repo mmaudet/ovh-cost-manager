@@ -369,10 +369,10 @@ function registerRoutes() {
   });
 
   // The byAccount parameter of the lists of the costs of projects (#118), and of the bill lines
-  // of a resource type by service (#123): req.byAccount, whether a request asks for each
-  // project or service once for each account that billed it, with that account, as the lists
-  // that name the account of each row do, rather than once. true or false, false without it;
-  // any other value is refused.
+  // of a resource type or of the Veeam backups by service (#123, #197): req.byAccount, whether a
+  // request asks for each project or service once for each account that billed it, with that
+  // account, as the lists that name the account of each row do, rather than once. true or
+  // false, false without it; any other value is refused.
   const byAccountParameter = (req, res, next) => {
     const { byAccount } = req.query;
     if (byAccount !== undefined && byAccount !== 'true' && byAccount !== 'false') {
@@ -1416,6 +1416,25 @@ function registerRoutes() {
       res.status(500).json({ error: err.message });
     }
   });
+
+  // The services of the Veeam backups of a month (#197): the VMs backed up and the Enterprise
+  // licences, which the Compare tab's backup comparison unfolds its two rows into, those of the
+  // account the request asks for, or of every account without one, and with byAccount, each
+  // once for each account that billed it, with that account
+  app.get('/api/analysis/backup-services', accountParameter, byAccountParameter,
+    (req, res) => {
+      try {
+        const { from, to } = req.query;
+        const validation = validateDateRange(from, to);
+        if (!validation.valid) return res.status(400).json({ error: validation.error });
+        const data = db.inventory.getBackupServices(
+          from, to, req.account, { byAccount: req.byAccount },
+        );
+        res.json(data);
+      } catch (err) {
+        res.status(500).json({ error: err.message });
+      }
+    });
 
   // ========================
   // Cloud Project Detail Endpoints (Phase 4)
