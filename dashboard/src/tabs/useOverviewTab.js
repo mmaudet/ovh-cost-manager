@@ -31,7 +31,7 @@ const useOverviewTab = ({ selectedMonth, holdsSelectedMonth, accountColumn }) =>
   // and the GPU costs by project. As the shell's queries of the month, they wait until the
   // months of the account shown hold it.
   const enabled = accountColumn !== null && holdsSelectedMonth;
-  const { data: projectsByAccountOfMonth } = useQuery(
+  const { data: projectsByAccountOfMonth, isError: projectsByAccountFailed } = useQuery(
     projectsByAccountQuery(selectedMonth, enabled),
   );
   const { data: gpuProjectsByAccount = [] } = useQuery(
@@ -44,6 +44,8 @@ const useOverviewTab = ({ selectedMonth, holdsSelectedMonth, accountColumn }) =>
     // Whether those of the month have loaded, which the Public Cloud tab's list waits for,
     // rather than show that nothing was billed (#180)
     projectsByAccountLoaded: projectsByAccountOfMonth !== undefined,
+    // Whether they could not load, which the list says (#180)
+    projectsByAccountFailed,
     gpuProjectsByAccount,
   };
 };

@@ -84,16 +84,17 @@ const downloadResources = (openProjectAccount, rows, columns, filename) => {
 // resource type and its GPU costs. And what the month billed each project (billedProjects), which
 // the list of projects gives next to their current consumption (#180): the costs by project of
 // the account shown, or, while the lists name the account of each project, those by account of
-// the Overview's breakdown (#118), which the shell picks, undefined until they load. And the
-// Account column of the lists, null when they show none (#121), and the cloud total of the
-// selected month, which the cards and the list add up to (#145, #180).
+// the Overview's breakdown (#118), which the shell picks, undefined until they load, and
+// whether they could not (billedProjectsFailed). And the Account column of the lists, null when
+// they show none (#121), and the cloud total of the selected month, which the cards and the list
+// add up to (#145, #180).
 const PublicCloudTab = ({
   projectsEnriched, projectsLoaded, publicCloudStats, projectConsumption, projectInstances,
   instanceCount, projectInstanceTotal, projectBuckets, projectVolumes, projectSnapshots,
   projectSavingsPlans, projectOtherServices, projectQuotas, setShowAllInstances,
   setShowAllBuckets, setShowAllVolumes, setShowAllSnapshots, setShowAllSavingsPlans, sortingOf,
   language, t, fmt, locale, selectedMonth, openProject, setSelectedProject,
-  byResourceType, gpuSummary, billedProjects, accountColumn, cloudTotal,
+  byResourceType, gpuSummary, billedProjects, billedProjectsFailed, accountColumn, cloudTotal,
 }) => {
   // The Account column of the CSV files of the open project's resources, for all of them
   const openProjectAccount = openProjectAccountOf(accountColumn, projectsEnriched, openProject);
@@ -601,6 +602,10 @@ const PublicCloudTab = ({
               )}
             </table>
           </div>
+          {/* Rather than blank amounts that could as well be loading (#62, #64) */}
+          {billedProjectsFailed && (
+            <p className="mt-3 text-sm text-red-500">{t('billedAmountsFailed')}</p>
+          )}
         </div>
       )}
 

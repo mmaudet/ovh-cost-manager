@@ -202,6 +202,7 @@ export const translations = {
     vpsInstances: 'VPS',
     storageServices: 'Stockage',
     cloudProjects: 'Projets Cloud',
+    billedAmountsFailed: 'Impossible de charger ce que le mois a facturé à chaque projet.',
     // The header of the column of the list of projects that gives what the bills of the month
     // selected charged each, with the month: « Facturé en septembre 2026 » (#180)
     billedIn: 'Facturé en',
@@ -486,6 +487,7 @@ export const translations = {
     vpsInstances: 'VPS',
     storageServices: 'Storage',
     cloudProjects: 'Cloud Projects',
+    billedAmountsFailed: 'What the month billed each project could not be loaded.',
     // The header of the column of the list of projects that gives what the bills of the month
     // selected charged each, with the month: "Billed in September 2026" (#180)
     billedIn: 'Billed in',

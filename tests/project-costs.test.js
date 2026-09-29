@@ -178,4 +178,25 @@ describe('costs by project', () => {
         .toEqual(once);
     });
   });
+
+  // The Public Cloud tab's list of projects gives what the month billed each project, under the
+  // month's cloud total, which it must add up to (#180): both add up the same bill lines
+  describe('add up to the cloud total of the period', () => {
+    const { UNKNOWN_ACCOUNT } = require('../data/sql-conditions');
+
+    test.each([
+      ['2026-09-01', '2026-09-30'],
+      ['2026-10-01', '2026-10-31'],
+      ['2026-12-01', '2026-12-31'],
+    ])('from %s to %s, for every account, one account and the Unknown account', (from, to) => {
+      for (const account of [null, ACCOUNT.nic, PARIS, UNKNOWN_ACCOUNT]) {
+        const cloudTotal = db.analysis.summary(from, to, account).cloud_total ?? 0;
+        for (const byAccount of [false, true]) {
+          const costs = db.analysis.byProject(from, to, account, { byAccount })
+            .reduce((sum, row) => sum + row.total, 0);
+          expect(costs).toBeCloseTo(cloudTotal, 2);
+        }
+      }
+    });
+  });
 });

@@ -39,6 +39,8 @@ const figures = () => cardRowOf('Kubernetes');
 // header, nor its total
 const projectRowsShown = () => [...cloudProjectsTable().tBodies[0].rows]
   .map((row) => texts(row));
+// The names of the projects of the list, in the order shown
+const projectNames = () => projectRowsShown().map(([name]) => name);
 // The total under the list of projects, as the texts it shows (#180)
 const projectListTotal = () => texts(cloudProjectsTable().tFoot);
 // What the column of the amounts billed in the month shows for each project, in the order
@@ -285,15 +287,19 @@ describe('Public Cloud tab', () => {
       expect(projectListTotal()).toEqual(['Total Cloud', '702,00€']);
     });
 
-    it('give no amount when what the month billed them cannot load', async () => {
+    it('give no amount when what the month billed them cannot load, and say so', async () => {
       const { user } = await renderDashboard();
       await openTab(user, 'Public Cloud');
+      expect(screen.queryByText(/^Impossible de charger ce que le mois/)).not.toBeInTheDocument();
       api.fetchByProject.mockRejectedValue(new Error('Request failed with status code 500'));
 
       await selectMonth(user, 'Août 2026');
 
       expect(billedColumn()).toEqual(['', '', '']);
       expect(cloudProjectsTable().tFoot).toBeNull();
+      expect(within(cloudProjects())
+        .getByText('Impossible de charger ce que le mois a facturé à chaque projet.'))
+        .toBeInTheDocument();
     });
 
     it('show the detail of a project under it on a click, until a second click', async () => {
@@ -379,7 +385,6 @@ describe('Public Cloud tab', () => {
     it('sort by what the month billed them, the project billed nothing last', async () => {
       const { user } = await renderDashboard();
       await openTab(user, 'Public Cloud');
-      const projectNames = () => projectRowsShown().map(([name]) => name);
 
       await sortTable(user, cloudProjectsTable(), /^Facturé en/);
 
@@ -477,7 +482,6 @@ describe('Public Cloud tab', () => {
         async () => {
           const { user } = await renderDashboard(withoutStaging());
           await openTab(user, 'Public Cloud');
-          const projectNames = () => projectRowsShown().map(([name]) => name);
 
           await sortTable(user, cloudProjectsTable(), /^Facturé en/);
 

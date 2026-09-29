@@ -179,11 +179,13 @@ export default function Dashboard() {
 
   // Its costs by project, undefined until they load: the Public Cloud tab's list of projects
   // waits for them (#180)
-  const { data: byProjectOfMonth } = useQuery(accountQuery(selectedAccount, {
-    key: ['byProject', selectedMonth?.from, selectedMonth?.to],
-    fetch: (account) => fetchByProject(selectedMonth.from, selectedMonth.to, account),
-    enabled: holdsSelectedMonth,
-  }));
+  const { data: byProjectOfMonth, isError: byProjectFailed } = useQuery(
+    accountQuery(selectedAccount, {
+      key: ['byProject', selectedMonth?.from, selectedMonth?.to],
+      fetch: (account) => fetchByProject(selectedMonth.from, selectedMonth.to, account),
+      enabled: holdsSelectedMonth,
+    }),
+  );
   const byProject = byProjectOfMonth ?? [];
 
   const { data: byResourceType = [] } = useQuery(accountQuery(selectedAccount, {
@@ -239,6 +241,10 @@ export default function Dashboard() {
   const billedProjects = accountColumn
     ? (overviewTab.projectsByAccountLoaded ? overviewTab.projectsByAccount : undefined)
     : byProjectOfMonth;
+  // Whether they could not load, which the list says rather than leave its amounts blank
+  const billedProjectsFailed = accountColumn
+    ? overviewTab.projectsByAccountFailed
+    : byProjectFailed;
 
   const compareTab = useCompareTab({ months, activeTab, selectedAccount, accountColumn });
 
@@ -773,7 +779,7 @@ export default function Dashboard() {
             selectedMonth={selectedMonth}
             setSelectedProject={setSelectedProject} byResourceType={byResourceType}
             gpuSummary={gpuSummary} accountColumn={accountColumn} cloudTotal={summary?.cloudTotal}
-            billedProjects={billedProjects}
+            billedProjects={billedProjects} billedProjectsFailed={billedProjectsFailed}
           />
         )}
 

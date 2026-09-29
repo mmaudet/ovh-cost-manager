@@ -129,6 +129,7 @@ describe('useOverviewTab', () => {
       sortingOf: expect.any(Function),
       projectsByAccount: [],
       projectsByAccountLoaded: false,
+      projectsByAccountFailed: false,
       gpuProjectsByAccount: [],
     });
     // The project breakdown by amount, the most expensive first, until the user sorts it; the
