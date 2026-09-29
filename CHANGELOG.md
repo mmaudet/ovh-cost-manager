@@ -14,7 +14,27 @@ sections were written afterwards from the git history.
 
 ## 3.3.0 - 2026-09-29
 
-<!-- Upgrade notes and highlights of this release, if any. -->
+Two features, which a user of 3.2.0 asked for:
+
+- **The Compare tab's rows unfold into what they add up** (#182, #189).
+  - The rows of the infrastructure, Private Cloud and backup comparisons unfold into their services: each dedicated server, VPS, domain, IP block, Private Cloud host or datastore, each Veeam VM and licence.
+  - A Public Cloud project's products unfold into their charges: an instance's monthly plan, a flavor's hourly use in a region, a bucket's storage, an AI Endpoints model's tokens.
+  - Each gives the amount of month A, the amount of month B and the variation, and names its account while all accounts are shown.
+  - The list of the dedicated servers that the inventory holds today leaves the Compare tab, where it compared nothing.
+
+  See [Month Comparison](https://github.com/mmaudet/ovh-cost-manager/blob/v3.3.0/README.md#month-comparison) in the README.
+- **AI Endpoints by model** (#183, #190).
+  - The Public Cloud tab lists the AI Endpoints models that the month's bills name, with their input tokens, their output tokens and their cost.
+  - The Trends tab charts each model's monthly cost.
+
+  See [AI Endpoints Models](https://github.com/mmaudet/ovh-cost-manager/blob/v3.3.0/README.md#ai-endpoints-models) in the README.
+
+### Upgrade notes
+
+- **No re-import.** Both features read the bills already imported, when the server reads them.
+- **New route:** `/api/analysis/backup-services`.
+- **New route:** `/api/analysis/ai-endpoints`.
+- **Changed answer:** `/api/projects/:id/products` gives each product's `charges`.
 
 ### New features
 * feat: list the month's AI Endpoints models in the Public Cloud tab by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/201

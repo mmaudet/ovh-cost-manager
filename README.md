@@ -56,8 +56,8 @@ New in version 3.1.0.
 - **Resource Type Classification**: Automatic categorization (Public Cloud, Dedicated Servers, VPS, Storage, Load Balancers, IP, Domains, Private Cloud Hosts, Private Cloud Datastores, Licenses, Backup, Telephony)
 - **Resource Type Detail**: Expandable cost breakdown per individual service within each category
 - **GPU Cost Consolidation**: Dedicated view for GPU costs by model (NVIDIA L4, L40S, A100, H100) and by project
-- **AI Endpoints Models**: each AI Endpoints model that the month's bills name, with its input tokens, its output tokens and its cost, in the Public Cloud tab, and its monthly cost in the Trends tab (see [AI Endpoints Models](#ai-endpoints-models))
-- **Month Comparison**: Side-by-side comparison between two months with variation tracking, including infrastructure, backup, Private Cloud, and per-project product breakdowns, whose rows unfold into their services and charges (see [Month Comparison](#month-comparison))
+- **AI Endpoints Models** (new in version 3.3.0): each AI Endpoints model that the month's bills name, with its input tokens, its output tokens and its cost, in the Public Cloud tab, and its monthly cost in the Trends tab (see [AI Endpoints Models](#ai-endpoints-models))
+- **Month Comparison**: Side-by-side comparison between two months with variation tracking, including infrastructure, backup, Private Cloud, and per-project product breakdowns, whose rows unfold into their services and charges since version 3.3.0 (see [Month Comparison](#month-comparison))
 - **Trend Analysis**: Historical trends with configurable period (3-36 months), and GPU and AI Endpoints evolution charts
 - **Budget Tracking**: Visual budget consumption with configurable targets
 
@@ -487,7 +487,7 @@ With all accounts shown, the footprint adds up the accounts that have one, and n
 
 ## AI Endpoints Models
 
-OVHcloud's AI Endpoints serves AI models through an API, and bills each model's use on the bill lines of the Public Cloud project that called it, one per charge: most often the model's input tokens and its output tokens, priced apart, such as « Nombre de tokens d'entrée pour le modèle AI Endpoints gpt-oss-20b », or "Amount of input tokens for AI Endpoints gpt-oss-20b model" on English bills, whose quantity is the number of tokens. OCM reads the model that each line names, and what the line counts, when the server reads the bills: the bills already imported show them, without a new import.
+OVHcloud's AI Endpoints serves AI models through an API, and bills each model's use on the bill lines of the Public Cloud project that called it, one per charge: most often the model's input tokens and its output tokens, priced apart, such as « Nombre de tokens d'entrée pour le modèle AI Endpoints gpt-oss-20b », or "Amount of input tokens for AI Endpoints gpt-oss-20b model" on English bills, whose quantity is the number of tokens. Since version 3.3.0, OCM reads the model that each line names, and what the line counts, when the server reads the bills: the bills already imported show them, without a new import.
 
 Both tabs follow the account selected in the header, and add up the accounts' lines when all are shown.
 
@@ -511,7 +511,7 @@ The Compare tab compares two months, month A and month B, from their bills: it o
 
 ### Rows That Unfold
 
-Each row that adds up several services or charges unfolds into them, month A against month B, one row each, in the columns of the row it details:
+Since version 3.3.0, each row that adds up several services or charges unfolds into them, month A against month B, one row each, in the columns of the row it details:
 
 - **Infrastructure and Private Cloud comparisons**: each resource type (dedicated servers, VPS, storage, load balancers, IP addresses, domains, Private Cloud hosts and datastores) unfolds into its services, named as the Infrastructure tab names them: by their identifier and the description of their most expensive bill line, month B's when month B billed them, cut to its column, whole on hover. The Dedicated Servers row no longer lists the servers that the inventory holds today, which have nothing to do with months A and B: it unfolds into the servers that either month billed, and the Infrastructure tab keeps listing the inventory.
 - **Backup comparison**: the row of the Veeam VMs unfolds into each VM backed up, and that of the Enterprise licenses into each license. Folded, each keeps its number of services and its amount, and it unfolds into as many services, but in three cases: a VM that a refund brings to 0 € or less is counted, but not listed; a line without an identifier is listed, but not counted; and, while the lists name each row's account, a VM that two accounts billed is counted once, but listed once for each account.
