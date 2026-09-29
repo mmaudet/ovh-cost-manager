@@ -1,5 +1,6 @@
 /**
- * The instance and volume lines of a Public Cloud project's bills, as OVH words them:
+ * The instance, volume and AI Endpoints lines of a Public Cloud project's bills, as OVH words
+ * them:
  *
  * - a monthly plan names its flavor, its instance and its region: "Forfait mensuel pour une
  *   instance b2-30 (id <uuid>, region gra7) - 01 mois";
@@ -11,9 +12,16 @@
  * - the additional disks of a type are billed on one line per region: "Disques
  *   supplémentaires à gra9 de type high-speed".
  *
+ * - an AI Endpoints model (see CONTEXT.md) is billed on a line per charge, most often its input
+ *   tokens and its output tokens: "Nombre de tokens d'entrée pour le modèle AI Endpoints
+ *   gpt-oss-20b", or "Amount of input tokens for AI Endpoints gpt-oss-20b model" on English
+ *   bills.
+ *
  * The per-instance costs pick the instance lines with instanceLineCondition() and read them
  * with readInstanceLine(), the per-volume costs read the volume lines with readVolumeLine(),
- * and so do the ties of the carbon footprint (#155). This module has no side effect.
+ * and so do the ties of the carbon footprint (#155). The AI Endpoints models pick their lines
+ * with aiEndpointsLineCondition() and read them with readAiEndpointsLine() (#193). This module
+ * has no side effect.
  */
 
 // How the description of each kind of instance line starts, with `_` for the apostrophe,
@@ -103,4 +111,59 @@ function readVolumeLine(description) {
   return volume ? { region: volume[1], type: volume[2].trim() } : null;
 }
 
-module.exports = { instanceLineCondition, readInstanceLine, readVolumeLine };
+// The lines of an AI Endpoints model's tokens, by what their quantity counts, as OVHcloud words
+// them in French, which end with the model, and in English, as its public order catalog does.
+// A model's name is one word, as OVHcloud's catalog names it: gpt-oss-20b, bge-m3…
+const AI_ENDPOINTS_TOKENS = [
+  ['inputTokens', /^Nombre de tokens d['’]entrée pour le modèle AI Endpoints (\S+)$/i],
+  ['inputTokens', /^Amount of input tokens for AI Endpoints (\S+) model$/i],
+  ['outputTokens', /^Nombre de tokens de sortie pour le modèle AI Endpoints (\S+)$/i],
+  ['outputTokens', /^Amount of output tokens for AI Endpoints (\S+) model$/i],
+];
+
+// How any line of an AI Endpoints model names it, such as the line of a speech-to-text model's
+// seconds of audio, "Duration of data processed by AI Endpoints whisper-large-v3 model (in s)":
+// « modèle AI Endpoints <model> » in French, "AI Endpoints <model> model" in English
+const AI_ENDPOINTS_MODEL = [/\bmodèle AI Endpoints (\S+)/i, /\bAI Endpoints (\S+) model\b/i];
+
+// The period in brackets that ends each description on some accounts' bills, such as
+// « (01/08/2026-31/08/2026) »: no part of what the line names
+const PERIOD = /\s*\([^()]*\d[^()]*\)$/;
+
+/**
+ * Reads a bill line of an AI Endpoints model (#193): a line that names no model, such as those
+ * of AI Notebooks, AI Training or AI Deploy, is not AI Endpoints'.
+ * @param {?string} description - The bill line's description
+ * @returns {?{model: string, counts: ?string}} The model that the line names, as the line
+ *   words it, and what the line's quantity counts: inputTokens or outputTokens, their number,
+ *   or null for any other line of the model, such as its seconds of audio, which counts in its
+ *   cost only. Null for a line that names no model.
+ */
+function readAiEndpointsLine(description) {
+  const text = String(description ?? '').trim().replace(PERIOD, '');
+  for (const [counts, wording] of AI_ENDPOINTS_TOKENS) {
+    const model = text.match(wording)?.[1];
+    if (model) return { model, counts };
+  }
+  for (const naming of AI_ENDPOINTS_MODEL) {
+    const model = text.match(naming)?.[1];
+    if (model) return { model, counts: null };
+  }
+  return null;
+}
+
+/**
+ * The condition that keeps the lines that may name an AI Endpoints model, which
+ * readAiEndpointsLine() reads, of a query's bill lines, to join with AND to its WHERE clause,
+ * with its parameters, as instanceLineCondition(). LIKE ignores the case, as the reader does.
+ * @param {string} column - The column of the query that holds the lines' descriptions
+ * @returns {{sql: string, params: string[]}}
+ */
+function aiEndpointsLineCondition(column) {
+  return { sql: `${column} LIKE ?`, params: ['%AI Endpoints%'] };
+}
+
+module.exports = {
+  aiEndpointsLineCondition, instanceLineCondition, readAiEndpointsLine, readInstanceLine,
+  readVolumeLine,
+};

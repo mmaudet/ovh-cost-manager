@@ -1,7 +1,8 @@
 const Database = require('better-sqlite3');
 const { classifyWebCloud, WEB_CLOUD_FAMILIES } = require('./classify');
 const {
-  instanceLineCondition, readInstanceLine, readVolumeLine,
+  aiEndpointsLineCondition, instanceLineCondition, readAiEndpointsLine, readInstanceLine,
+  readVolumeLine,
 } = require('./public-cloud-lines');
 const { tieFootprint } = require('./carbon-ties');
 const { MONTHLY_KINDS } = require('./cloud-usage');
@@ -785,6 +786,61 @@ const analysisOps = {
     `).get(fromDate, toDate, ...ofAccount.params);
 
     return totals;
+  },
+
+  /**
+   * The AI Endpoints models that the bill lines of the Public Cloud projects name between two
+   * dates (#193), each once, the projects together: the lines of the bills of the account (see
+   * accountCondition()), every account's by default. Each model gives its input tokens and its
+   * output tokens, the quantities of the lines that count them, and its cost, all its lines
+   * together, those that count in its cost only included, such as a speech-to-text model's
+   * seconds of audio (see readAiEndpointsLine()). Read when the server reads the bills: no
+   * re-import.
+   * @param {string} fromDate
+   * @param {string} toDate
+   * @param {?string} [account]
+   * @returns {{total: number, models: {model: string, inputTokens: ?number,
+   *   outputTokens: ?number, total: number}[]}} What the models cost, which their costs add up
+   *   to, and each model, the most expensive first, as its lines name it: a token figure is null
+   *   when none of its lines counts those tokens, such as an embedding model's output tokens.
+   *   Amounts to the cent.
+   */
+  aiEndpoints: (fromDate, toDate, account = null) => {
+    const ofBills = accountCondition(account, 'b.account');
+    const naming = aiEndpointsLineCondition('d.description');
+    const lines = getDb().prepare(`
+      SELECT d.description, d.quantity, d.total_price
+      FROM bill_details d
+      JOIN bills b ON d.bill_id = b.id
+      WHERE b.date >= ? AND b.date <= ?
+        AND d.project_id IS NOT NULL
+        AND ${naming.sql}
+        AND ${ofBills.sql}
+    `).all(fromDate, toDate, ...naming.params, ...ofBills.params);
+
+    const byModel = new Map();
+    for (const { description, quantity, total_price: price } of lines) {
+      const read = readAiEndpointsLine(description);
+      if (read === null) continue;
+      if (!byModel.has(read.model)) {
+        byModel.set(read.model, {
+          model: read.model, inputTokens: null, outputTokens: null, total: 0,
+        });
+      }
+      const figures = byModel.get(read.model);
+      if (read.counts !== null) {
+        figures[read.counts] = (figures[read.counts] ?? 0) + (quantity || 0);
+      }
+      figures.total += price || 0;
+    }
+    // Those that cost the same by name, so that they keep one order
+    const models = [...byModel.values()]
+      .map((figures) => ({ ...figures, total: Math.round(figures.total * 100) / 100 }))
+      .sort((a, b) => b.total - a.total || a.model.localeCompare(b.model));
+    return {
+      total: Math.round(models.reduce((sum, { total }) => sum + total, 0) * 100) / 100,
+      models,
+    };
   },
 
   billsByProject: (projectNameOrId, fromDate, toDate) => {
