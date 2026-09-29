@@ -3,6 +3,7 @@ import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
 import Modal from '../components/Modal.jsx';
 import TableActions from '../components/TableActions.jsx';
 import { SortableHeader, sortRows } from '../components/SortableHeader.jsx';
+import { AiEndpointsByModel } from '../components/AiEndpointsByModel.jsx';
 import { BucketsTable, bucketCsvColumns, sortBucketsByName } from '../components/BucketsTable.jsx';
 import { SavingsPlansTable, savingsPlanCsvColumns } from '../components/SavingsPlansTable.jsx';
 import { VolumesTable, volumeCsvColumns, volumeCsvRows } from '../components/VolumesTable.jsx';
@@ -91,7 +92,7 @@ const downloadResources = (openProjectAccount, rows, columns, filename) => {
 const PublicCloudTab = ({
   projectsEnriched, projectsLoaded, publicCloudStats, projectConsumption, projectInstances,
   instanceCount, projectInstanceTotal, projectBuckets, projectVolumes, projectSnapshots,
-  projectSavingsPlans, projectOtherServices, projectQuotas, setShowAllInstances,
+  projectSavingsPlans, projectOtherServices, projectQuotas, aiEndpoints, setShowAllInstances,
   setShowAllBuckets, setShowAllVolumes, setShowAllSnapshots, setShowAllSavingsPlans, sortingOf,
   language, t, fmt, locale, selectedMonth, openProject, setSelectedProject,
   byResourceType, gpuSummary, billedProjects, billedProjectsFailed, accountColumn, cloudTotal,
@@ -212,6 +213,14 @@ const PublicCloudTab = ({
           {`${fmt(publicCloudStats.credits.total)}€`}
         </p>
       ) : null}
+
+      {/* The AI Endpoints models of the month, the projects together (#193) */}
+      {aiEndpoints?.models.length > 0 && (
+        <AiEndpointsByModel
+          aiEndpoints={aiEndpoints} sorting={sortingOf('aiEndpoints')}
+          language={language} t={t} fmt={fmt}
+        />
+      )}
 
       {/* Cloud Projects Table with inline detail: the projects of the inventory, and those
           billed in the month that it lacks (#180) */}

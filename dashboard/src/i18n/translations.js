@@ -231,6 +231,12 @@ export const translations = {
     productRegistry: 'Registre',
     productKubernetes: 'Kubernetes',
     productOther: 'Divers',
+    // The AI Endpoints models that the month billed, and their tokens (#193)
+    aiEndpointsByModel: 'AI Endpoints par modèle',
+    model: 'Modèle',
+    inputTokens: 'Tokens d\'entrée',
+    outputTokens: 'Tokens de sortie',
+    aiEndpointsTotal: 'Total AI Endpoints',
     // The type of a bucket without a class (#145)
     bucketEmpty: 'Vide',
     bucketEmptyHint: 'Un bucket vide n\'a pas de classe : OVHcloud en donne une à chaque objet',
@@ -526,6 +532,12 @@ export const translations = {
     productRegistry: 'Container registry',
     productKubernetes: 'Kubernetes',
     productOther: 'Miscellaneous',
+    // The AI Endpoints models that the month billed, and their tokens (#193)
+    aiEndpointsByModel: 'AI Endpoints by model',
+    model: 'Model',
+    inputTokens: 'Input tokens',
+    outputTokens: 'Output tokens',
+    aiEndpointsTotal: 'AI Endpoints Total',
     // The type of a bucket without a class (#145)
     bucketEmpty: 'Empty',
     bucketEmptyHint: 'An empty bucket has no class: OVHcloud gives one to each object',

@@ -97,6 +97,9 @@ describe('query keys', () => {
       ['projectOtherServices', undefined, '2026-09-01', '2026-09-30'],
       ['publicCloudStats', undefined, undefined],
       ['publicCloudStats', '2026-09-01', '2026-09-30'],
+      // And its AI Endpoints models of the month (#193)
+      ['aiEndpoints', undefined, undefined],
+      ['aiEndpoints', '2026-09-01', '2026-09-30'],
       // The Web Cloud tab's: the 12 months that end on the selected one
       ['webCloudSummary', undefined, undefined],
       ['webCloudSummary', '2025-10-01', '2026-09-30'],
@@ -186,10 +189,12 @@ describe('query keys', () => {
         ['monthlyTrend', 3, '2026-09', 'xx1111-ovh'],
         ['monthlyTrendByCategory', 3, '2026-09', 'xx1111-ovh'],
         ['gpuTrend', '2026-07-01', '2026-09-30', 'xx1111-ovh'],
-        // The Public Cloud tab's projects and figures of the month (#121), which wait for the
-        // tab. The resources of a project follow the project, which belongs to one account.
+        // The Public Cloud tab's projects and figures of the month (#121), and its AI Endpoints
+        // models (#193), which wait for the tab. The resources of a project follow the project,
+        // which belongs to one account.
         ['projectsEnriched', 'xx1111-ovh'],
         ['publicCloudStats', '2026-09-01', '2026-09-30', 'xx1111-ovh'],
+        ['aiEndpoints', '2026-09-01', '2026-09-30', 'xx1111-ovh'],
         // The Web Cloud tab's, for the 12 months that end on September (#122)
         ['webCloudSummary', '2025-10-01', '2026-09-30', 'xx1111-ovh'],
         ['webCloudItems', '2025-10-01', '2026-09-30', 'xx1111-ovh'],

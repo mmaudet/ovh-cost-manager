@@ -57,7 +57,8 @@ describe('usePublicCloudTab', () => {
       { ...onTheTab, selectedProject: production });
 
     // What the shell spreads over the tab and its modals: the sort order of its tables (#146),
-    // the "show all" modals, closed, the projects and the figures of the month, the open
+    // the "show all" modals, closed, the projects and the figures of the month, the AI
+    // Endpoints models of the month (#193), none in the synthetic account's figures, the open
     // project and its resources, whose lists the tests below read
     expect(result.current).toEqual({
       sortingOf: expect.any(Function),
@@ -74,6 +75,7 @@ describe('usePublicCloudTab', () => {
       projectsEnriched: expect.any(Array),
       projectsLoaded: true,
       publicCloudStats: expect.any(Object),
+      aiEndpoints: { total: 0, models: [] },
       openProject: production,
       projectConsumption: expect.any(Array),
       projectInstances: expect.any(Array),

@@ -269,6 +269,24 @@ export const fetchPublicCloudStats = async (from, to, account = null) => {
 };
 
 /**
+ * The AI Endpoints models that the bills of a period name (#193), the projects together, which
+ * the Public Cloud tab lists for the month it shows
+ * @param {string} from - The first day of the period, 'YYYY-MM-DD'
+ * @param {string} to - Its last day
+ * @param {?string} [account] - The account whose bills to read, as the functions above take
+ *   it: null for all accounts
+ * @returns {Promise<{ total: number, models: object[] }>} What the models cost in all, and
+ *   each model's name, as the bills give it, its inputTokens and outputTokens, null when none
+ *   of its lines counts them, and its cost, total, the most expensive first
+ */
+export const fetchAiEndpoints = async (from, to, account = null) => {
+  const { data } = await api.get('/analysis/ai-endpoints', {
+    params: { from, to, ...accountParams(account) },
+  });
+  return data;
+};
+
+/**
  * Backup stats (Veeam) of a month, for the Compare and Backup tabs (#119)
  * @param {string} from - The first day of the month, 'YYYY-MM-DD'
  * @param {string} to - Its last day
