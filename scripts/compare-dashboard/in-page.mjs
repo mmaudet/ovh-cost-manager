@@ -81,9 +81,12 @@ export function readPage({ tabLabels }) {
   const next = tabRow.nextElementSibling;
   const tab = next && next !== column.lastElementChild ? next : null;
 
-  // A row that opens a detail ends with ▼, and the whole row takes the click (pointer cursor)
+  // A row that opens a detail ends with ▼, and the whole row takes the click (pointer cursor).
+  // A table header's sort mark reads ▼ too once its table sorts by that column (#146), as the
+  // table of the AI Endpoints models does from the start (#193): it opens no row, and is left
+  // out, as capture.mjs leaves it out of the marks it clicks.
   const rowLabels = !tab ? [] : [...tab.querySelectorAll('span')]
-    .filter((span) => span.textContent.trim() === '▼')
+    .filter((span) => span.textContent.trim() === '▼' && !span.closest('th'))
     .map((span) => {
       let row = span;
       const clickable = (element) => getComputedStyle(element).cursor === 'pointer';
