@@ -1011,6 +1011,51 @@ describe('Compare tab', () => {
       }
       expect(within(table).getByText('Option DNS Anycast example.com - 1 an')).toBeVisible();
     });
+
+    // The descriptions stay those of the bills
+    it('speak English when the page does', async () => {
+      const { user } = await renderDashboard();
+      await selectLanguage(user, 'en');
+      await openTab(user, 'Compare');
+      const title = /^Infrastructure Comparison/;
+      await openComparison(user, title);
+      const englishChevron = (row) => within(comparisonTable(title))
+        .getByRole('button', { name: `Services: ${row}` });
+      const rows = () => rowTextsOf(comparisonTable(title)).slice(1);
+      // August's dedicated servers cannot load
+      const answer = api.fetchResourceTypeDetails.getMockImplementation();
+      api.fetchResourceTypeDetails.mockImplementation(async (type, from, ...rest) => {
+        if (type === 'dedicated_server' && from === '2026-08-01') {
+          throw new Error('Request failed with status code 500');
+        }
+        return answer(type, from, ...rest);
+      });
+
+      await user.click(englishChevron('List of Dedicated Servers present on 15/09/2026'));
+      await settle();
+
+      expect(rows()[1]).toEqual(['The services of this row could not be loaded.']);
+
+      const release = holdBack(api.fetchResourceTypeDetails, (type) => type === 'domain');
+      await user.click(englishChevron('Domains'));
+
+      expect(rows().slice(6, 8)).toEqual([
+        ['Domains', '30.00€', '35.00€', '+16.7%'], ['Loading data...'],
+      ]);
+
+      release();
+      await settle();
+
+      expect(rows().slice(6, 10)).toEqual([
+        ['Domains', '30.00€', '35.00€', '+16.7%'],
+        ['example.com', 'Option DNS Anycast example.com - 1 an', '15.00€', '17.00€', '+13.3%'],
+        ['example.org', 'Renouvellement du domaine example.org - 1 an',
+          '15.00€', '0.00€', '-100.0%'],
+        ['example.net', 'Création du domaine example.net - 1 an', '0.00€', '18.00€', '—'],
+      ]);
+      expect(within(within(comparisonTable(title)).getByText('example.net').closest('tr'))
+        .getByTitle('cannot be computed: month A at €0 or below')).toHaveTextContent('—');
+    });
   });
 
   // The comparison of each project's products in months A and B, from the bills of each month
