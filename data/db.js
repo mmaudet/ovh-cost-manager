@@ -2089,11 +2089,12 @@ const cloudDetailOps = {
    * @returns {{total: number, products: {product: string, total: number}[], credits: number}}
    */
   getProductsByProject: (projectId, fromDate, toDate, account = null) => {
-    // No product set apart: every one, the credit aside
-    const { others, credits } = productFigures(
+    // No product set apart, so that the products that productFigures() names `others` are
+    // every one of them, the credit aside
+    const { others: everyProduct, credits } = productFigures(
       projectBillLines(projectId, fromDate, toDate, account), [],
     );
-    return { ...others, credits };
+    return { ...everyProduct, credits };
   },
 
   /**

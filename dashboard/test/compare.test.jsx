@@ -677,6 +677,23 @@ describe('Compare tab', () => {
       ]);
     });
 
+    // Rather than a month at 0 €, the symptom of #181
+    it('say that they could not load when the products of a month fail', async () => {
+      const { user } = await renderDashboard();
+      await openTab(user, 'Comparaison');
+      const answer = api.fetchProjectProducts.getMockImplementation();
+      api.fetchProjectProducts.mockImplementation(async (...args) => {
+        if (args[1] === '2026-08-01') throw new Error('Request failed with status code 500');
+        return answer(...args);
+      });
+
+      await openComparison(user, PRODUCTION_PRODUCTS);
+
+      expect(within(comparison(PRODUCTION_PRODUCTS))
+        .getByText('Impossible de charger le détail de ce projet.')).toBeInTheDocument();
+      expect(comparisonTable(PRODUCTION_PRODUCTS)).not.toBeInTheDocument();
+    });
+
     // A credit pays for no product (CONTEXT.md), as on the Public Cloud tab
     it('show the credit that the bills used apart, after the products', async () => {
       const { user } = await renderDashboard();
@@ -686,7 +703,7 @@ describe('Compare tab', () => {
       await openComparison(user, PRODUCTION_PRODUCTS);
 
       // July's products add up to 715 €, and with its credit to Production's 680 € in the
-      // comparison by project. There is no variation from a credit to compute (#65).
+      // comparison by project. There is no variation of a credit to compute (#65).
       expect(rowsOf(comparisonTable(PRODUCTION_PRODUCTS))).toEqual([
         ['Produit○', 'Juillet 2026○', 'Septembre 2026○', 'Variation○'],
         // (538.90 - 650) / 650
@@ -696,7 +713,7 @@ describe('Compare tab', () => {
         ['Savings plans', '0,00€', '28,00€', '—'],
         ['Volumes', '0,00€', '12,50€', '—'],
         ['Snapshots', '0,00€', '6,00€', '—'],
-        ['Crédit Cloud utilisé', '-35,00€', '0,00€', '—'],
+        ['Crédit Cloud utilisé', '-35,00€', '0,00€', ''],
       ]);
 
       // The least expensive in July first: the credit stays last
@@ -706,13 +723,13 @@ describe('Compare tab', () => {
       expect(rowsOf(comparisonTable(PRODUCTION_PRODUCTS)).slice(-3)).toEqual([
         ['Bases de données', '45,00€', '0,00€', '-100,0 %'],
         ['Instances', '650,00€', '538,90€', '-17,1 %'],
-        ['Crédit Cloud utilisé', '-35,00€', '0,00€', '—'],
+        ['Crédit Cloud utilisé', '-35,00€', '0,00€', ''],
       ]);
 
       await selectLanguage(user, 'en');
 
       expect(rowsOf(comparisonTable(/^Production \(Project\)/)).at(-1))
-        .toEqual(['Cloud credit used', '-35.00€', '0.00€', '—']);
+        .toEqual(['Cloud credit used', '-35.00€', '0.00€', '']);
     });
 
     // Each on its own, and still sorted once opened again (#146)

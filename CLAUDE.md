@@ -112,10 +112,10 @@ NIC handle:
   bill lines belong to the account of their bill, which may not be the project's own.
   Without it, a route answers as before the accounts, and the account-wide figures
   (consumption, forecast, balance, consumption history, carbon footprint) add up the
-  accounts. `byAccount=true` opts a list of projects
-  or services into one row per account, and the CSV exports gain a last `account` column
-  once `/api/accounts` lists two entries (`sendCsv()`). `GET /api/accounts` lists the
-  recorded accounts, then the Unknown account while rows without an account remain.
+  accounts. `byAccount=true` opts a list of projects or services into one row per account,
+  and the CSV exports gain a last `account` column once `/api/accounts` lists two entries
+  (`sendCsv()`). `GET /api/accounts` lists the recorded accounts, then the Unknown account
+  while rows without an account remain.
 - **Dashboard.** The shell holds the selected account (`useSelectedAccount()`, remembered
   in the browser, per ADR 0001) and passes `selectedAccount` to the tab hooks: `null` for
   all accounts, the default, or the `id` that `/api/accounts` gives. A query that follows

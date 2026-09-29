@@ -61,6 +61,7 @@ export const translations = {
     // The column of the Public Cloud products of a project's comparison (#181)
     product: 'Produit',
     noProjectData: 'Aucune donnée pour ce projet',
+    projectProductsFailed: 'Impossible de charger le détail de ce projet.',
 
     // What a click on the header of a column that sorts its table does (#146)
     sortAscending: 'Trier par ordre croissant',
@@ -348,6 +349,7 @@ export const translations = {
     // The column of the Public Cloud products of a project's comparison (#181)
     product: 'Product',
     noProjectData: 'No data for this project',
+    projectProductsFailed: 'The detail of this project could not be loaded.',
 
     // What a click on the header of a column that sorts its table does (#146)
     sortAscending: 'Sort in ascending order',

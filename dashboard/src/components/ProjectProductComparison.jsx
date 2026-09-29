@@ -36,7 +36,7 @@ const productRows = (billedA, billedB) => {
  * project. The credit shows apart, after the products, as it pays for none. The products keep
  * the order of their months until the user sorts them (sorting, which the Compare tab's hook
  * holds for each project: see SortableHeader.jsx). It says that it loads until the answers of
- * both months arrive.
+ * both months arrive, and that it could not load when one failed.
  * @param {object} props
  * @param {function(?object): object} props.productsQueryOf - The options of the query of the
  *   project's products in a month, for useQuery (useCompareTab()'s projectProductsQuery())
@@ -53,6 +53,10 @@ export default function ProjectProductComparison({
   // Until both months' answers arrive, rather than a month at 0 € or no product at all
   if (answerA.isLoading || answerB.isLoading) {
     return <div className="text-gray-500 text-sm">{t('loading')}</div>;
+  }
+  // A month whose answer failed, rather than a month at 0 € (#181)
+  if (answerA.isError || answerB.isError) {
+    return <div className="text-red-500 text-sm">{t('projectProductsFailed')}</div>;
   }
   const billedA = answerA.data ?? NOTHING_BILLED;
   const billedB = answerB.data ?? NOTHING_BILLED;
@@ -116,11 +120,8 @@ export default function ProjectProductComparison({
             <td className="p-3">{t('cloudCreditUsed')}</td>
             <td className="p-3 text-right">{fmt(billedA.credits)}€</td>
             <td className="p-3 text-right">{fmt(billedB.credits)}€</td>
-            <td className="p-3 text-right">
-              <Variation
-                from={billedA.credits} to={billedB.credits} language={language} t={t}
-              />
-            </td>
+            {/* No variation of a credit to compute (#65) */}
+            <td className="p-3" />
           </tr>
         </tfoot>
       )}
