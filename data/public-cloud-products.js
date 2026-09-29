@@ -59,12 +59,14 @@ const PERIOD = /\s*\([^()]*\d{1,2}\/\d{1,2}\/\d{4}[^()]*\)$/;
  * The charge of a Public Cloud bill line (see CONTEXT.md): what it pays for, as its description
  * names it without the period that ends it in brackets on some accounts' bills, so that the lines
  * of one charge name it alike whatever the month they cover. The other accounts' descriptions
- * carry none: each is its line's charge.
+ * carry none: each is its line's charge. Some bills write the apostrophe curly, « l’heure », as
+ * others write it straight: the charge writes it straight, so that one charge reads alike on
+ * every bill.
  * @param {?string} description - The bill line's description
  * @returns {string}
  */
 function chargeOf(description) {
-  return String(description ?? '').trim().replace(PERIOD, '');
+  return String(description ?? '').trim().replace(PERIOD, '').replace(/’/g, "'");
 }
 
 const toCents = (amount) => Math.round(amount * 100) / 100;
@@ -121,4 +123,4 @@ function productFigures(lines, apart = CARD_PRODUCTS) {
   };
 }
 
-module.exports = { CARD_PRODUCTS, productFigures, publicCloudProductOf };
+module.exports = { CARD_PRODUCTS, chargeOf, productFigures, publicCloudProductOf };

@@ -36,6 +36,8 @@ const monthlyPlan = (instance) => 'Forfait mensuel pour une instance r3-32 '
 const PRORATA = 'Prorata de la facturation mensuelle d\'une instance r3-32 '
   + '(id 5a1c2e3d-0000-4000-8000-000000000003, region sbg5)';
 const HOURLY_USE = 'Consommation à l\'heure pour les instances b3-8 gra11';
+// The same, with the curly apostrophe that some bills write
+const HOURLY_USE_CURLY = 'Consommation à l’heure pour les instances b3-8 gra11';
 // The snapshots of a region
 const snapshotsIn = (region) => `Snapshots Public Cloud - ${region}`;
 // An AI Endpoints model's input tokens
@@ -79,6 +81,7 @@ function seed(db) {
     // A refund of the snapshots of sbg5
     line('FR1002-3', 'FR1002', snapshotsIn('sbg5'), -2),
     line('FR2001-1', 'FR2001', endingWith(AUGUST_PERIOD, DISKS), 3),
+    line('FR2001-2', 'FR2001', endingWith(AUGUST_PERIOD, HOURLY_USE_CURLY), 12),
     line('FR2002-1', 'FR2002', endingWith(JULY_PERIOD, DISKS), 2.5),
   ]);
 }
@@ -134,6 +137,18 @@ describe('GET /api/projects/:id/products: the charges of each product', () => {
       [PRORATA, 20],
     ]);
   });
+
+  // Lyon's bill writes its apostrophe straight, Paris's curly: the same charge, as the bills
+  // write it straight
+  test('gives one charge for descriptions whose apostrophes differ, straight or curly',
+    async () => {
+      expect(chargesOf(await productsOf(SEPTEMBER), 'instances')).toEqual([
+        [monthlyPlan(1), 64],
+        [monthlyPlan(2), 64],
+        [HOURLY_USE, 42],
+        [PRORATA, 20],
+      ]);
+    });
 
   // 1.004 € and 2.003 € of a model's input tokens, on Lyon's two bills of September
   test('adds up the lines of a charge to the cent', async () => {
