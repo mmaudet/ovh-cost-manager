@@ -552,7 +552,7 @@ describe('dashboard shell', () => {
       expect(screen.getByText("Données synchronisées via l'API OVHcloud")).toBeInTheDocument();
     });
 
-    // As a server older than the version it would show gives none (#188)
+    // As a server older than the footer's version gives none (#188)
     it('shows no version when the server gives none', async () => {
       await renderDashboard({ ...account, config: { ...account.config, version: undefined } });
 

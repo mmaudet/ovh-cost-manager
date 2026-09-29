@@ -64,9 +64,9 @@ const importHistoryValues = (t) => ({
   bills: (h) => h.bills_imported,
 });
 
-// Where the release notes of each version of OCM are, by its tag, such as v3.3.1: the footer
-// links the version that runs to its own (#188)
-const RELEASES_URL = 'https://github.com/mmaudet/ovh-cost-manager/releases/tag';
+// The page of a release's notes, before its tag, such as v3.3.1: the footer links the version
+// that runs to its own (#188)
+const RELEASE_TAG_URL = 'https://github.com/mmaudet/ovh-cost-manager/releases/tag';
 
 // The age, in days, beyond which the banner warns of a synchronisation
 const SYNC_WARNING_DAYS = 30;
@@ -814,18 +814,19 @@ export default function Dashboard() {
         {/* Footer */}
         <div className="text-center text-sm text-gray-400 pt-4 pb-2">
           <p>{t('syncedVia')}</p>
-          {/* The version of OCM that runs, which the configuration route gives, linked to its
-              release notes, so that whoever uses the page knows which version is deployed
-              (#188): none from a server that gives none */}
+          {/* The version of OCM that runs, which the configuration route gives, on a line of its
+              own, apart from the synchronisations below, linked to its release notes, so that
+              whoever uses the page knows which version is deployed (#188): none from a server
+              that gives none */}
           {configData?.version && (
             <div className="mt-1">
               <a
-                href={`${RELEASES_URL}/v${configData.version}`}
+                href={`${RELEASE_TAG_URL}/v${configData.version}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="hover:text-gray-600 hover:underline"
               >
-                OVH Cost Manager v{configData.version}
+                {t('appTitle')} v{configData.version}
               </a>
             </div>
           )}
