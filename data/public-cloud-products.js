@@ -71,12 +71,18 @@ function chargeOf(description) {
 
 const toCents = (amount) => Math.round(amount * 100) / 100;
 
+// The products, or the charges of a product, that cost anything, each with its cost (total):
+// those at 0 € left out, the most expensive first, then by name, which nameOf() gives
+const nonZeroByCost = (entries, nameOf) => entries
+  .filter(({ total }) => total !== 0)
+  .sort((a, b) => b.total - a.total || nameOf(a).localeCompare(nameOf(b)));
+
 // A product's charges, from what its lines add up to by charge: each to the cent, those at 0 €
 // left out, as the products at 0 € are, the most expensive first, then by charge
-const chargeList = (totals) => [...totals]
-  .map(([charge, total]) => ({ charge, total: toCents(total) }))
-  .filter(({ total }) => total !== 0)
-  .sort((a, b) => b.total - a.total || a.charge.localeCompare(b.charge));
+const chargeList = (totals) => nonZeroByCost(
+  [...totals].map(([charge, total]) => ({ charge, total: toCents(total) })),
+  ({ charge }) => charge,
+);
 
 /**
  * What Public Cloud bill lines add up to, by product.
@@ -111,11 +117,12 @@ function productFigures(lines, apart = CARD_PRODUCTS) {
     descriptions: byProduct.get(product)?.descriptions.size || 0,
     charges: chargeList(byProduct.get(product)?.charges ?? []),
   });
-  const products = [...byProduct.keys()]
-    .filter((product) => !apart.includes(product) && product !== 'credits')
-    .map((product) => ({ product, total: figuresOf(product).total }))
-    .filter(({ total }) => total !== 0)
-    .sort((a, b) => b.total - a.total || a.product.localeCompare(b.product));
+  const products = nonZeroByCost(
+    [...byProduct.keys()]
+      .filter((product) => !apart.includes(product) && product !== 'credits')
+      .map((product) => ({ product, total: figuresOf(product).total })),
+    ({ product }) => product,
+  );
   return {
     figuresOf,
     others: { total: toCents(products.reduce((sum, { total }) => sum + total, 0)), products },
