@@ -10,9 +10,10 @@ const { productFigures } = require('./public-cloud-products');
 const { storageClassLabel } = require('./storage-classes');
 const { monthsOfWindow, shiftMonth } = require('./months');
 const ownership = require('./ownership');
-// The conditions of the queries that keep one account's rows (#115), or a list of ids
+// The conditions of the queries that keep one account's rows (#115), a list of ids, or the
+// bill lines of the Veeam backups (#197)
 const {
-  UNKNOWN_ACCOUNT, accountCondition, configuredAccountsCondition, idInList,
+  UNKNOWN_ACCOUNT, accountCondition, configuredAccountsCondition, idInList, ofBackupLines,
 } = require('./sql-conditions');
 // What brings a database that an earlier version created to schema.sql's form
 const {
@@ -128,14 +129,14 @@ function servicesOfLines(linesOf, fromDate, toDate, account, byAccount) {
   const grouping = costGrouping('d.domain', byAccount);
   // By account, the description of the row's account's own lines
   const sameAccount = byAccount ? 'AND b2.account IS b.account' : '';
-  const lines = linesOf('d');
-  const serviceLines = linesOf('d2');
+  const ofLines = linesOf('d');
+  const ofServiceLines = linesOf('d2');
   return getDb().prepare(`
     SELECT
       d.domain,
       (SELECT d2.description FROM bill_details d2
        JOIN bills b2 ON d2.bill_id = b2.id
-       WHERE d2.domain = d.domain AND ${serviceLines.sql}
+       WHERE d2.domain = d.domain AND ${ofServiceLines.sql}
          AND b2.date >= ? AND b2.date <= ?
          AND ${ofLineAccount.sql} ${sameAccount}
        ORDER BY d2.total_price DESC LIMIT 1
@@ -144,30 +145,17 @@ function servicesOfLines(linesOf, fromDate, toDate, account, byAccount) {
       COUNT(d.id) as line_count${grouping.select}
     FROM bill_details d
     JOIN bills b ON d.bill_id = b.id
-    WHERE ${lines.sql}
+    WHERE ${ofLines.sql}
       AND b.date >= ? AND b.date <= ?
       AND ${ofAccount.sql}
     GROUP BY ${grouping.groupBy}
     HAVING total > 0
     ORDER BY ${grouping.orderBy}
   `).all(
-    ...serviceLines.params, fromDate, toDate, ...ofLineAccount.params,
-    ...lines.params, fromDate, toDate, ...ofAccount.params,
+    ...ofServiceLines.params, fromDate, toDate, ...ofLineAccount.params,
+    ...ofLines.params, fromDate, toDate, ...ofAccount.params,
   );
 }
-
-// The bill lines of the Veeam backups, which the Veeam backups count (#32) and the Compare
-// tab's backup comparison unfolds into their services (#197), each as a condition on the alias
-// of their table: those of the backup resource type, whose services are the VMs backed up, and
-// those whose description names Veeam and Enterprise, the licences
-const BACKUP_LINES = {
-  vms: (alias) => ({ sql: `${alias}.resource_type = 'backup'`, params: [] }),
-  enterprise: (alias) => ({
-    sql: `(LOWER(${alias}.description) LIKE '%veeam%'`
-      + ` AND LOWER(${alias}.description) LIKE '%enterprise%')`,
-    params: [],
-  }),
-};
 
 let db = null;
 
@@ -1435,32 +1423,25 @@ const inventoryOps = {
   // Backup stats (Veeam etc), on the bills of the account (see accountCondition()), every
   // account's by default: those of the Compare tab's months and of the Backup tab (#119)
   getBackupStats: (fromDate, toDate, account = null) => {
-    const db = getDb();
     const ofAccount = accountCondition(account, 'b.account');
-
-    // Count Veeam backup VMs
-    const vms = db.prepare(`
-      SELECT COUNT(DISTINCT domain) as count, ROUND(SUM(total_price), 2) as total
-      FROM bill_details d
-      JOIN bills b ON d.bill_id = b.id
-      WHERE b.date >= ? AND b.date <= ?
-        AND ${BACKUP_LINES.vms('d').sql}
-        AND ${ofAccount.sql}
-    `).get(fromDate, toDate, ...ofAccount.params);
-
-    // Veeam Enterprise licenses (from descriptions)
-    const enterprise = db.prepare(`
-      SELECT COUNT(DISTINCT domain) as count, ROUND(SUM(total_price), 2) as total
-      FROM bill_details d
-      JOIN bills b ON d.bill_id = b.id
-      WHERE b.date >= ? AND b.date <= ?
-        AND ${BACKUP_LINES.enterprise('d').sql}
-        AND ${ofAccount.sql}
-    `).get(fromDate, toDate, ...ofAccount.params);
+    // The number of services of the lines that a condition keeps, and what they cost
+    const figuresOf = (ofLines) => {
+      const figures = getDb().prepare(`
+        SELECT COUNT(DISTINCT domain) as count, ROUND(SUM(total_price), 2) as total
+        FROM bill_details d
+        JOIN bills b ON d.bill_id = b.id
+        WHERE b.date >= ? AND b.date <= ?
+          AND ${ofLines.sql}
+          AND ${ofAccount.sql}
+      `).get(fromDate, toDate, ...ofLines.params, ...ofAccount.params);
+      return { count: figures?.count || 0, total: figures?.total || 0 };
+    };
 
     return {
-      vms: { count: vms?.count || 0, total: vms?.total || 0 },
-      enterprise: { count: enterprise?.count || 0, total: enterprise?.total || 0 }
+      // The Veeam VMs backed up
+      vms: figuresOf(ofBackupLines.vms('d')),
+      // The Veeam Enterprise licences, from the descriptions of their lines
+      enterprise: figuresOf(ofBackupLines.enterprise('d')),
     };
   },
 
@@ -1479,8 +1460,8 @@ const inventoryOps = {
    * @returns {{ vms: object[], enterprise: object[] }}
    */
   getBackupServices: (fromDate, toDate, account = null, { byAccount = false } = {}) => ({
-    vms: servicesOfLines(BACKUP_LINES.vms, fromDate, toDate, account, byAccount),
-    enterprise: servicesOfLines(BACKUP_LINES.enterprise, fromDate, toDate, account, byAccount),
+    vms: servicesOfLines(ofBackupLines.vms, fromDate, toDate, account, byAccount),
+    enterprise: servicesOfLines(ofBackupLines.enterprise, fromDate, toDate, account, byAccount),
   }),
 
   clearAll: () => {
