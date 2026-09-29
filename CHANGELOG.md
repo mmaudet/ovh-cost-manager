@@ -12,6 +12,24 @@ sections were written afterwards from the git history.
 
 <!-- scripts/release.sh inserts each new version above the first version heading. -->
 
+## 3.3.0 - 2026-09-29
+
+<!-- Upgrade notes and highlights of this release, if any. -->
+
+### New features
+* feat: list the month's AI Endpoints models in the Public Cloud tab by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/201
+* feat: unfold the infrastructure comparison's rows into their services by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/202
+* feat: chart the monthly cost of each AI Endpoints model in the Trends tab by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/203
+* feat: name each service's account in the Compare tab, and drop its inventory list by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/205
+* feat: unfold a project's products into their charges in the Compare tab by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/206
+* feat: unfold the backup comparison's rows into their VMs and licences by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/207
+### Maintenance
+* docs: add Service, Charge and AI Endpoints model to the glossary by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/200
+* docs: document the AI Endpoints models by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/204
+* docs: document the unfolding rows of the Compare tab by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/208
+
+**Full Changelog**: https://github.com/mmaudet/ovh-cost-manager/compare/v3.2.1...v3.3.0
+
 ## 3.2.1 - 2026-09-29
 
 Three fixes, which users of 3.2.0 reported:
