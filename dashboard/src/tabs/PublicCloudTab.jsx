@@ -87,20 +87,22 @@ const downloadResources = (openProjectAccount, rows, columns, filename) => {
 // month billed each project by account, from the projects by account that the Overview hook
 // loads for its breakdown (projectsByAccount, #118), which the shell passes on.
 const PublicCloudTab = ({
-  projectsEnriched, publicCloudStats, projectConsumption, projectInstances, instanceCount,
-  projectInstanceTotal, projectBuckets, projectVolumes, projectSnapshots, projectSavingsPlans,
-  projectOtherServices, projectQuotas, setShowAllInstances, setShowAllBuckets, setShowAllVolumes,
-  setShowAllSnapshots, setShowAllSavingsPlans, sortingOf,
+  projectsEnriched, projectsLoaded, publicCloudStats, projectConsumption, projectInstances,
+  instanceCount, projectInstanceTotal, projectBuckets, projectVolumes, projectSnapshots,
+  projectSavingsPlans, projectOtherServices, projectQuotas, setShowAllInstances,
+  setShowAllBuckets, setShowAllVolumes, setShowAllSnapshots, setShowAllSavingsPlans, sortingOf,
   language, t, fmt, locale, selectedMonth, openProject, setSelectedProject,
   byResourceType, gpuSummary, byProject, projectsByAccount, accountColumn, cloudTotal,
 }) => {
   // The Account column of the CSV files of the open project's resources, for all of them
   const openProjectAccount = openProjectAccountOf(accountColumn, projectsEnriched, openProject);
-  // The projects with what the month billed them, and those billed that the list lacks, in the
-  // order the user sorts them, in the server's until then (#146)
+  // The projects with what the month billed them, and those billed that the list lacks once the
+  // list of the account shown has loaded (projectsLoaded), in the order the user sorts them, in
+  // the server's until then (#146)
   const projectSorting = sortingOf('projects');
   const projects = sortRows(
-    projectListRows(projectsEnriched, accountColumn ? projectsByAccount : byProject),
+    projectListRows(projectsEnriched, accountColumn ? projectsByAccount : byProject)
+      .filter(({ listed }) => listed || projectsLoaded),
     projectSorting.sort, projectValues(accountColumn), language,
   );
   return (

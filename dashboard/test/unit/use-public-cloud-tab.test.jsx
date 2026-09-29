@@ -72,6 +72,7 @@ describe('usePublicCloudTab', () => {
       showAllSavingsPlans: false,
       setShowAllSavingsPlans: expect.any(Function),
       projectsEnriched: expect.any(Array),
+      projectsLoaded: true,
       publicCloudStats: expect.any(Object),
       openProject: production,
       projectConsumption: expect.any(Array),
@@ -98,9 +99,31 @@ describe('usePublicCloudTab', () => {
         expect(api.fetchProjectsEnriched).not.toHaveBeenCalled();
         expect(api.fetchPublicCloudStats).not.toHaveBeenCalled();
         expect(result.current.projectsEnriched).toEqual([]);
+        expect(result.current.projectsLoaded).toBe(false);
         expect(result.current.publicCloudStats).toBeUndefined();
       },
     );
+
+    // Until then, the tab cannot tell which projects billed in the month the list lacks (#180)
+    it('tell once the list of projects has loaded', async () => {
+      const { result, rerender } = await renderTabHook(usePublicCloudTab,
+        { ...onTheTab, activeTab: 'overview' });
+
+      await rerender(onTheTab);
+
+      expect(result.current.projectsLoaded).toBe(true);
+    });
+
+    it('tell that the list of projects has not loaded when it fails to', async () => {
+      const { result, rerender } = await renderTabHook(usePublicCloudTab,
+        { ...onTheTab, activeTab: 'overview' });
+      api.fetchProjectsEnriched.mockRejectedValue(new Error('Request failed with status code 500'));
+
+      await rerender(onTheTab);
+
+      expect(result.current.projectsEnriched).toEqual([]);
+      expect(result.current.projectsLoaded).toBe(false);
+    });
 
     it('are requested once the tab opens', async () => {
       const { result, rerender } = await renderTabHook(usePublicCloudTab,
@@ -221,6 +244,7 @@ describe('usePublicCloudTab', () => {
         ['publicCloudStats', '2026-09-01', '2026-09-30', undefined],
       )).toMatchObject(WAITING);
       expect(result.current.projectsEnriched).toEqual([]);
+      expect(result.current.projectsLoaded).toBe(false);
       expect(result.current.publicCloudStats).toBeUndefined();
     });
 

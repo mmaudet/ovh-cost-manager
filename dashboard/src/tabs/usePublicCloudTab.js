@@ -34,8 +34,12 @@ const usePublicCloudTab = ({
   const [showAllSnapshots, setShowAllSnapshots] = useState(false);
   const [showAllSavingsPlans, setShowAllSavingsPlans] = useState(false);
 
-  // Enriched projects for the Public Cloud tab
-  const { data: projectsEnriched = [] } = useQuery(accountQuery(selectedAccount, {
+  // Enriched projects for the Public Cloud tab, and whether those of the account shown have
+  // loaded: until they have, as when the tab first opens or another account is selected, the tab
+  // cannot tell which projects billed in the month the list lacks (#180)
+  const {
+    data: projectsEnriched = [], isSuccess: projectsLoaded,
+  } = useQuery(accountQuery(selectedAccount, {
     key: ['projectsEnriched'],
     fetch: fetchProjectsEnriched,
     enabled: activeTab === 'inventory',
@@ -129,6 +133,7 @@ const usePublicCloudTab = ({
     showAllSavingsPlans,
     setShowAllSavingsPlans,
     projectsEnriched,
+    projectsLoaded,
     openProject,
     projectConsumption,
     projectInstances,

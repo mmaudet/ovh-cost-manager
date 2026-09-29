@@ -3,7 +3,7 @@ import { screen, within } from '@testing-library/react';
 import { account } from './fixtures/account.js';
 import { publicCloudFigures } from './fixtures/public-cloud.js';
 import { lyonAccount, removedAccount, severalAccounts } from './fixtures/accounts.js';
-import { api } from './support/api.js';
+import { api, holdBack } from './support/api.js';
 import {
   BOM,
   captureFileDownloads,
@@ -391,6 +391,27 @@ describe('Public Cloud tab', () => {
           ['Staging', '†', 'project-staging', '-', '-', '-', '220,00€'],
         ]);
         expect(projectListTotal()).toEqual(['Total Cloud', '830,40€']);
+      });
+
+      // Which projects the list lacks tells only once it has loaded: until then, as when the tab
+      // first opens, the page shows no list, rather than every project billed as one that the
+      // inventory lacks
+      it('wait for the list of projects to load', async () => {
+        const { user } = await renderDashboard();
+        const release = holdBack(api.fetchProjectsEnriched);
+        const tabBar = screen.getByRole('button', { name: "Vue d'ensemble" }).parentElement;
+
+        await user.click(within(tabBar).getByRole('button', { name: 'Public Cloud' }));
+
+        expect(screen.queryByRole('heading', { name: 'Projets Cloud' })).not.toBeInTheDocument();
+        expect(screen.queryByTitle(NOT_IN_INVENTORY)).not.toBeInTheDocument();
+
+        release();
+        await settle();
+
+        expect(projectRowsShown().map(([name]) => name))
+          .toEqual(['Production', 'Staging', 'Sandbox']);
+        expect(screen.queryByTitle(NOT_IN_INVENTORY)).not.toBeInTheDocument();
       });
 
       // The inventory has none of its resources
