@@ -188,10 +188,11 @@ export const billedProducts = (total, products, credits = 0) => ({
 });
 
 // What the bill lines of the projects pay for, as OVHcloud words them: the
-// charges of their products (#195). The hourly use of a flavor in a region,
-// and the monthly plan of db-1.
-const hourlyUse = (flavor) => `Consommation à l'heure pour les instances ${flavor} gra11`;
-const DB_1_PLAN = 'Forfait mensuel pour une instance r3-32 '
+// charges of their products (#195), which the tests find the rows of the
+// Compare tab by. The hourly use of a flavor in a region, and the monthly plan
+// of db-1.
+export const hourlyUse = (flavor) => `Consommation à l'heure pour les instances ${flavor} gra11`;
+export const DB_1_PLAN = 'Forfait mensuel pour une instance r3-32 '
   + '(id instance-db-1, region sbg5) - 01 mois';
 // The savings plans, as their lines name them
 const WEB_PLAN = 'Savings plan (id : savings-plan-b3-8-web) '
@@ -199,10 +200,10 @@ const WEB_PLAN = 'Savings plan (id : savings-plan-b3-8-web) '
 const LEGACY_PLAN = 'Savings plan (id : savings-plan-c3-4-legacy) '
   + 'pour 1 instance(s) c3-4 - Durée : 1M';
 // The storage of a bucket in a region, and the Cold Archive, billed as a whole
-const bucketStorage = (bucket, region) => (
+export const bucketStorage = (bucket, region) => (
   `Stockage Standard - Bucket ${bucket} sur la région ${region}`
 );
-const COLD_ARCHIVE = 'Stockage Cold Archive';
+export const COLD_ARCHIVE = 'Stockage Cold Archive';
 // The additional disks of a type in a region, and the snapshots of a region
 const disks = (region, type) => `Disques supplémentaires à ${region} de type ${type}`;
 const snapshotsIn = (region) => `Snapshots Public Cloud - ${region}`;

@@ -1,7 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import { screen, within } from '@testing-library/react';
 import { account, everyResourceType, threeBilledProjects } from './fixtures/account.js';
-import { billedProducts } from './fixtures/public-cloud.js';
+import {
+  COLD_ARCHIVE, DB_1_PLAN, billedProducts, bucketStorage, hourlyUse,
+} from './fixtures/public-cloud.js';
 import {
   lyonAccount, removedAccount, severalAccounts, unknownAccount, unnamedAccount,
 } from './fixtures/accounts.js';
@@ -1332,10 +1334,6 @@ describe('Compare tab', () => {
     // The row of a charge of Production's comparison, found by the charge
     const chargeRow = (charge) => within(comparisonTable(PRODUCTION_PRODUCTS))
       .getByText(charge).closest('tr');
-    // The hourly use of a flavor in gra11, and db-1's monthly plan: charges of the instances
-    const hourlyUse = (flavor) => `Consommation à l'heure pour les instances ${flavor} gra11`;
-    const DB_1_PLAN = 'Forfait mensuel pour une instance r3-32 (id instance-db-1, region sbg5) '
-      + '- 01 mois';
 
     it('start folded, with a chevron on each product, and none on the credit', async () => {
       const { user } = await renderDashboard();
@@ -1443,9 +1441,8 @@ describe('Compare tab', () => {
         };
         // The charges of the object storage: a bucket that cost more in September, the Cold
         // Archive, and a bucket that cost as much
-        const ASSETS = 'Stockage Standard - Bucket assets-example-com sur la région gra';
-        const COLD_ARCHIVE = 'Stockage Cold Archive';
-        const OLD_EXPORTS = 'Stockage Standard - Bucket old-exports sur la région sbg';
+        const ASSETS = bucketStorage('assets-example-com', 'gra');
+        const OLD_EXPORTS = bucketStorage('old-exports', 'sbg');
 
         await sortBy(/^Variation/);
 
