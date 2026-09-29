@@ -31,11 +31,17 @@ second latest billed month (`months[1]`): when it is the month just before the l
 as it is unless nothing was billed that month, its summary shares its key with the shell's
 month before. While the lists show the Account column, with all accounts shown, the Compare
 hook asks for the projects of its months by account, under the key of the Overview hook's
-projects by account (`projectsByAccount`, #119). The Compare hook owns the months it picks,
-and a shared key only means a shared cache, not a shared owner. A query that follows the
-account selected in the header carries that account in its key, after the other parts, and
-none when all accounts are shown, as its request names the account or not (#115): two
-queries share a key only for the same account, or both for all accounts.
+projects by account (`projectsByAccount`, #119). The services of a resource type that the
+Compare tab lists under a row it unfolds, for a month and the account shown, share the key of
+the bill lines that the Infrastructure hook loads for the same resource type, month and account
+(`resourceTypeDetails`, #192): both hooks build that query in
+`tabs/resourceTypeServicesQueries.js`, and the Compare hook gives its options, which the row
+runs once unfolded, as a project's comparison runs those of its products (#181). The Compare
+hook owns the months it picks, and a shared key only means a shared cache, not a shared
+owner. A query that follows the account selected in the header carries that account in its
+key, after the other parts, and none when all accounts are shown, as its request names the
+account or not (#115): two queries share a key only for the same account, or both for all
+accounts.
 
 What stays open depends on how the user moves around the page (#56):
 

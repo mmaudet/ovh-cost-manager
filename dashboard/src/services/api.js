@@ -162,7 +162,9 @@ export const fetchByResourceType = async (from, to, account = null) => {
   return data;
 };
 
-// The bill lines of a resource type billed to the account, by service (#123)
+// The bill lines of a resource type billed to the account, by service (#123), which the
+// Infrastructure tab lists under its open resource type and the Compare tab under a row it
+// unfolds (#192). The tabs ask for them through tabs/resourceTypeServicesQueries.js.
 export const fetchResourceTypeDetails = async (type, from, to, account = null) => {
   const { data } = await api.get('/analysis/resource-type-details', {
     params: { type, from, to, ...accountParams(account) },
@@ -172,7 +174,7 @@ export const fetchResourceTypeDetails = async (type, from, to, account = null) =
 
 // The same for all accounts, for the list that names the account of each service (#123):
 // each service once for each account whose bills billed it, with that account, rather than
-// once
+// once. The tabs ask for them through tabs/resourceTypeServicesQueries.js too.
 export const fetchResourceTypeDetailsByAccount = async (type, from, to) => {
   const { data } = await api.get('/analysis/resource-type-details', {
     params: { type, from, to, byAccount: true },

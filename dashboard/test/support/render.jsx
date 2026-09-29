@@ -5,8 +5,9 @@
 // so it has no test ids. When the markup changes, as it will with the common
 // panel planned after the split, the tests are fixed here, in one place.
 
+import { readFileSync } from 'node:fs';
 import { StrictMode } from 'react';
-import { vi } from 'vitest';
+import { onTestFinished, vi } from 'vitest';
 import { cleanup, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClientProvider } from '@tanstack/react-query';
@@ -77,6 +78,17 @@ export function fakeTimers() {
     now: TODAY,
     toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'Date'],
   });
+}
+
+// Lays the page out as the browser prints it, for the PDF export, until the end of the test:
+// the print rules of the page's style sheet, which jsdom would leave out, as it lays pages out
+// for a screen only. What they hide, toBeVisible() then tells.
+export function layOutForPrint() {
+  const pageStyles = readFileSync(`${import.meta.dirname}/../../src/index.css`, 'utf8');
+  const printRules = document.createElement('style');
+  printRules.textContent = pageStyles.replace('@media print', '@media screen');
+  document.head.append(printRules);
+  onTestFinished(() => printRules.remove());
 }
 
 // Under fake timers, lets time pass, then waits until the page shows what

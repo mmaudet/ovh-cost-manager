@@ -361,14 +361,26 @@ class Walker {
     await download.delete();
   }
 
-  /** Opens every accordion of the tab. */
+  /**
+   * Opens every accordion of the tab, and unfolds every row of its comparisons (#192): a click
+   * on the first closed button, until none is left. Opening an accordion shows the chevrons of
+   * its rows, closed buttons too: the closed buttons counted before the first click fell short,
+   * and the clicks went to those chevrons rather than to the accordions below them, whose
+   * comparisons the capture then missed. A bound stops a page whose buttons would not stay
+   * open, far above the tab's accordions and rows.
+   */
   async expandAll(key) {
     const tab = await this.tabLocator();
     if (!tab) return;
     const closed = tab.locator('button[aria-expanded="false"]');
-    const count = await closed.count();
-    if (!count) return;
-    for (let i = 0; i < count; i++) await closed.first().click();
+    if (!(await closed.count())) return;
+    const maxClicks = 1000;
+    for (let clicks = 0; await closed.count(); clicks++) {
+      if (clicks === maxClicks) {
+        throw new Error(`the tab still had buttons to open after ${maxClicks} clicks`);
+      }
+      await closed.first().click();
+    }
     await this.settle();
     this.capture.add(`${key}/expanded`, normalize((await this.read()).view));
   }
