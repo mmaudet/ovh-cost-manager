@@ -66,6 +66,8 @@ const emptyAnswers = {
     loadBalancers: { count: 0, total: 0 },
   }),
   backupStats: () => ({ vms: { count: 0, total: 0 }, enterprise: { count: 0, total: 0 } }),
+  // No AI Endpoints model over the period (#193)
+  aiEndpoints: () => ({ total: 0, models: [] }),
   // Nothing billed to the project over the period (#181)
   projectProducts: () => ({ total: 0, products: [], credits: 0 }),
   // No carbon footprint for any of the 12 months that end on a month (#154)
@@ -195,6 +197,8 @@ const answers = {
   // The GPU costs of a period, of the account the page selects (#120)
   fetchGpuSummary: entryForPeriodOfAccount('gpuSummary', emptyAnswers.gpuSummary),
   fetchPublicCloudStats: entryForPeriodOfAccount('publicCloudStats', emptyAnswers.publicCloudStats),
+  // And its AI Endpoints models (#193)
+  fetchAiEndpoints: entryForPeriodOfAccount('aiEndpoints', emptyAnswers.aiEndpoints),
   // And the Veeam backups of a month, which the Compare and Backup tabs show (#119)
   fetchBackupStats: entryForPeriodOfAccount('backupStats', emptyAnswers.backupStats),
   // The carbon footprint of a month, by that month, of the account the page selects (#147)

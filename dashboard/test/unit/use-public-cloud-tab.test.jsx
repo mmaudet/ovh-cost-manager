@@ -1,10 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import { act } from '@testing-library/react';
 import { usePublicCloudTab } from '../../src/tabs/usePublicCloudTab.js';
+import { account } from '../fixtures/account.js';
 import {
-  lyonAccount, severalAccounts, unknownAccount, unnamedAccount,
+  lyonAccount, severalAccounts, severalAccountsWithAiEndpoints, unknownAccount, unnamedAccount,
 } from '../fixtures/accounts.js';
 import { months } from '../fixtures/calendar.js';
+import { aiEndpoints } from '../fixtures/public-cloud.js';
 import { api } from '../support/api.js';
 import { renderTabHook, TAB_IDS, WAITING } from '../support/hooks.jsx';
 
@@ -57,7 +59,8 @@ describe('usePublicCloudTab', () => {
       { ...onTheTab, selectedProject: production });
 
     // What the shell spreads over the tab and its modals: the sort order of its tables (#146),
-    // the "show all" modals, closed, the projects and the figures of the month, the open
+    // the "show all" modals, closed, the projects and the figures of the month, the AI
+    // Endpoints models of the month (#193), none in the synthetic account's figures, the open
     // project and its resources, whose lists the tests below read
     expect(result.current).toEqual({
       sortingOf: expect.any(Function),
@@ -74,6 +77,7 @@ describe('usePublicCloudTab', () => {
       projectsEnriched: expect.any(Array),
       projectsLoaded: true,
       publicCloudStats: expect.any(Object),
+      aiEndpoints: { total: 0, models: [] },
       openProject: production,
       projectConsumption: expect.any(Array),
       projectInstances: expect.any(Array),
@@ -318,6 +322,112 @@ describe('usePublicCloudTab', () => {
         ['projectInstances', 'project-production', '2026-09-01', '2026-09-30'],
       ]);
       expect(result.current.instanceCount).toBe(5);
+    });
+  });
+
+  // The AI Endpoints models of the month (#193), as the figures of the month: see
+  // fixtures/public-cloud.js and fixtures/accounts.js
+  describe('AI Endpoints models of the month', () => {
+    // The synthetic account, whose projects called AI Endpoints models
+    const withAiEndpoints = { ...account, aiEndpoints };
+    const lyon = lyonAccount.id;
+    // The models of an answer, by name, in its order
+    const models = ({ models: list }) => list.map(({ model }) => model);
+
+    it.each(TAB_IDS.filter((tab) => tab !== 'inventory'))(
+      'are left out while the %s tab is active',
+      async (activeTab) => {
+        const { result } = await renderTabHook(usePublicCloudTab,
+          { ...onTheTab, activeTab }, withAiEndpoints);
+
+        expect(api.fetchAiEndpoints).not.toHaveBeenCalled();
+        expect(result.current.aiEndpoints).toBeUndefined();
+      },
+    );
+
+    it('are requested once the tab opens, for all accounts', async () => {
+      const { result, rerender } = await renderTabHook(usePublicCloudTab,
+        { ...onTheTab, activeTab: 'overview' }, withAiEndpoints);
+
+      await rerender(onTheTab);
+
+      expect(api.fetchAiEndpoints).toHaveBeenCalledWith('2026-09-01', '2026-09-30', null);
+      expect(result.current.aiEndpoints).toEqual(aiEndpoints['2026-09']);
+    });
+
+    it('wait for a month', async () => {
+      const { result, queryClient } = await renderTabHook(usePublicCloudTab,
+        { ...onTheTab, ...noMonth }, withAiEndpoints);
+
+      expect(api.fetchAiEndpoints).not.toHaveBeenCalled();
+      expect(queryClient.getQueryState(['aiEndpoints', undefined, undefined]))
+        .toMatchObject(WAITING);
+      expect(result.current.aiEndpoints).toBeUndefined();
+    });
+
+    // Those of a month that the account shown lacks would never show (#115, #120)
+    it('wait until the months of the account shown hold the month selected', async () => {
+      const { result, queryClient } = await renderTabHook(usePublicCloudTab,
+        { ...onTheTab, holdsSelectedMonth: false }, withAiEndpoints);
+
+      expect(api.fetchAiEndpoints).not.toHaveBeenCalled();
+      expect(queryClient.getQueryState(['aiEndpoints', '2026-09-01', '2026-09-30']))
+        .toMatchObject(WAITING);
+      expect(result.current.aiEndpoints).toBeUndefined();
+    });
+
+    it('follow the selected month', async () => {
+      const { result, rerender } = await renderTabHook(usePublicCloudTab,
+        onTheTab, withAiEndpoints);
+
+      await rerender({ ...onTheTab, selectedMonth: august });
+
+      expect(api.fetchAiEndpoints).toHaveBeenCalledWith('2026-08-01', '2026-08-31', null);
+      expect(result.current.aiEndpoints).toEqual(aiEndpoints['2026-08']);
+    });
+
+    it('are requested for the account shown, and cached under keys that name it', async () => {
+      const { result, keysOf } = await renderTabHook(usePublicCloudTab,
+        { ...onTheTab, selectedAccount: lyon }, severalAccountsWithAiEndpoints);
+
+      expect(api.fetchAiEndpoints).toHaveBeenCalledWith('2026-09-01', '2026-09-30', lyon);
+      expect(models(result.current.aiEndpoints)).toEqual([
+        'gpt-oss-120b', 'gpt-oss-20b', 'bge-m3', 'Mistral-7B-Instruct-v0.3',
+      ]);
+      // The account after the other parts of the key, which stay those of all accounts
+      expect(keysOf('aiEndpoints')).toEqual([['aiEndpoints', '2026-09-01', '2026-09-30', lyon]]);
+    });
+
+    it('follow the account shown, the Unknown account too, and all accounts again', async () => {
+      const { result, rerender } = await renderTabHook(usePublicCloudTab,
+        onTheTab, severalAccountsWithAiEndpoints);
+
+      await rerender({ ...onTheTab, selectedAccount: unnamedAccount.id });
+
+      expect(models(result.current.aiEndpoints))
+        .toEqual(['whisper-large-v3', 'stable-diffusion-xl-base-v10']);
+
+      await rerender({ ...onTheTab, selectedAccount: unknownAccount.id });
+
+      expect(api.fetchAiEndpoints).toHaveBeenCalledWith('2026-09-01', '2026-09-30', 'unknown');
+      expect(result.current.aiEndpoints).toEqual({ total: 0, models: [] });
+
+      await rerender(onTheTab);
+
+      expect(result.current.aiEndpoints).toEqual(aiEndpoints['2026-09']);
+    });
+
+    // An account selected on an earlier visit, until the accounts list tells whether the page
+    // still offers it (useSelectedAccount())
+    it('wait while the page does not know the account shown', async () => {
+      const { result, queryClient } = await renderTabHook(usePublicCloudTab,
+        { ...onTheTab, selectedAccount: undefined }, severalAccountsWithAiEndpoints);
+
+      expect(api.fetchAiEndpoints).not.toHaveBeenCalled();
+      expect(queryClient.getQueryState(
+        ['aiEndpoints', '2026-09-01', '2026-09-30', undefined],
+      )).toMatchObject(WAITING);
+      expect(result.current.aiEndpoints).toBeUndefined();
     });
   });
 

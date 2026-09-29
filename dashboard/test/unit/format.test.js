@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import {
   localeOf, formatCurrency, formatWholeNumber, formatDecimal, formatPercent, formatYearMonth,
-  formatMonthLabel, formatMonthName, yearMonthOf, fmtBytes, fmtMemory, takesSingular,
+  formatMonthLabel, formatMonthName, yearMonthOf, fmtBytes, fmtMemory, formatTokens,
+  takesSingular,
 } from '../../src/utils/format.js';
 import { NBSP, NNBSP } from '../support/amounts.js';
 
@@ -325,5 +326,43 @@ describe('fmtMemory', () => {
     // Below, with the thousands separator of the language
     expect(fmtMemory(1023.4, 'en')).toBe('1,023 MB');
     expect(fmtMemory(1023.4, 'fr')).toBe(`1${NNBSP}023 Mo`);
+  });
+});
+
+// The tokens of an AI Endpoints model, as the Public Cloud tab's table of the models shows them
+// (#193): in millions, in the number format of the language
+describe('formatTokens', () => {
+  it('writes tokens in millions, with one decimal from 0.1 M', () => {
+    expect(formatTokens(12500000, 'fr')).toBe('12,5 M');
+    expect(formatTokens(12500000, 'en')).toBe('12.5 M');
+    expect(formatTokens(30000000, 'fr')).toBe('30,0 M');
+    expect(formatTokens(100000, 'fr')).toBe('0,1 M');
+  });
+
+  it('writes French numbers by default', () => {
+    expect(formatTokens(12500000)).toBe('12,5 M');
+  });
+
+  // Rather than « 0,0 M »
+  it('writes fewer than 0.1 M to two significant digits, so that tokens never read 0', () => {
+    expect(formatTokens(45000, 'fr')).toBe('0,045 M');
+    expect(formatTokens(12345, 'en')).toBe('0.012 M');
+    expect(formatTokens(7, 'en')).toBe('0.000007 M');
+    // Which rounds to 0.1 M, and reads as 0.1 M does
+    expect(formatTokens(99960, 'en')).toBe('0.1 M');
+  });
+
+  it('writes no token with one decimal', () => {
+    expect(formatTokens(0, 'fr')).toBe('0,0 M');
+  });
+
+  it('writes a dash for the tokens that none of a model\'s lines counts', () => {
+    expect(formatTokens(null, 'fr')).toBe('—');
+    expect(formatTokens(undefined, 'en')).toBe('—');
+  });
+
+  it('writes large counts with the thousands separator of the language', () => {
+    expect(formatTokens(1234560000, 'en')).toBe('1,234.6 M');
+    expect(formatTokens(1234560000, 'fr')).toBe(`1${NNBSP}234,6 M`);
   });
 });

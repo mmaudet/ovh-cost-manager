@@ -57,6 +57,13 @@ const normalize = (text) => text
 
 const firstLine = (error) => String(error?.message ?? error).split('\n')[0];
 
+// The marks of the rows that open a detail within a scope, ▼ while closed and ▲ while open, as
+// readPage() finds them. A table header's sort mark reads the same once its table sorts by that
+// column (#146), as the table of the AI Endpoints models does from the start (#193): it opens
+// no row, and clicking it would sort that table and put the marks out of step with the rows.
+const rowMarks = (scope, mark) =>
+  scope.locator(`xpath=.//span[normalize-space()="${mark}"][not(ancestor::th)]`);
+
 // The page's errors are the one section normalised beyond whitespace: what differs between
 // the two sides by construction goes, that is their stacks (only the first line of a message
 // is kept), the server's address and the hashed file names of the bundle.
@@ -384,12 +391,12 @@ class Walker {
     const count = Math.min(rowLabels.length, limit);
     for (let i = 0; i < count; i++) {
       const tab = await this.tabLocator();
-      await tab.locator('span').filter({ hasText: /^▼$/ }).nth(i).click();
+      await rowMarks(tab, '▼').nth(i).click();
       await this.settle();
       const { view } = await this.read();
       const rowKey = this.capture.add(`${key}/${kind}:${rowLabels[i]}`, normalize(view));
       if (withTableActions) await this.captureTableActions(rowKey);
-      await tab.locator('span').filter({ hasText: /^▲$/ }).first().click();
+      await rowMarks(tab, '▲').first().click();
       await this.settle();
     }
   }
