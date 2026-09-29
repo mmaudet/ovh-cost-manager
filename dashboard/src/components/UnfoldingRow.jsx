@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import { BY_MONTH_A, BY_MONTH_B } from '../utils/monthComparison.js';
+import { sortRows } from './SortableHeader.jsx';
 
 // The chevron of a row that unfolds: pointing at the row's label while it is folded, and down
 // once it is unfolded. Screen readers skip it: its button says it (aria-expanded).
@@ -53,6 +55,26 @@ const UnfoldingRow = ({ unfolding, chevronLabel, label, detail, children }) => (
 );
 
 /**
+ * What unfolded rows of a comparison show under them, their services or charges (#189), in the
+ * order of the comparison's sort, by the values of its columns, within each row; and, of the
+ * same value in its column, in their own order: by month A, the most expensive first, then by
+ * month B, which they keep until the user sorts the comparison. Sorted by month B, then by month
+ * A, those of the same cost in month A keep their order of month B.
+ * @param {object[]} rows - What a row unfolds into
+ * @param {?object} sort - The comparison's sort, by its columns (see SortableHeader.jsx): null
+ *   until the user sorts it, as for a comparison that does not sort
+ * @param {Object<string, function(object): *>} values - The value of each in the comparison's
+ *   columns, by the column's name, as sortRows() takes them, those of months A and B (totalA,
+ *   totalB) included
+ * @param {string} language - The page's, whose alphabet sorts the text
+ * @returns {object[]}
+ */
+const sortUnfolded = (rows, sort, values, language) => sortRows(
+  sortRows(sortRows(rows, BY_MONTH_B, values, language), BY_MONTH_A, values, language),
+  sort, values, language,
+);
+
+/**
  * The rows that the user unfolded in the comparisons of a tab (#189), which the hook of the tab
  * holds, so that they stay unfolded while another tab is open (ADR 0001), whatever the order of
  * the rows or the months compared.
@@ -71,4 +93,4 @@ const useUnfoldedRows = () => {
   };
 };
 
-export { UnfoldingRow, useUnfoldedRows };
+export { UnfoldingRow, sortUnfolded, useUnfoldedRows };

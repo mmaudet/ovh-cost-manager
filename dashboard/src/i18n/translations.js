@@ -66,6 +66,8 @@ export const translations = {
     // label (#192)
     servicesOf: 'Services :',
     servicesFailed: 'Impossible de charger les services de cette ligne.',
+    // The chevron of a product of a project's comparison, which unfolds into its charges (#195)
+    chargesOf: 'Charges :',
 
     // What a click on the header of a column that sorts its table does (#146)
     sortAscending: 'Trier par ordre croissant',
@@ -371,6 +373,8 @@ export const translations = {
     // label (#192)
     servicesOf: 'Services:',
     servicesFailed: 'The services of this row could not be loaded.',
+    // The chevron of a product of a project's comparison, which unfolds into its charges (#195)
+    chargesOf: 'Charges:',
 
     // What a click on the header of a column that sorts its table does (#146)
     sortAscending: 'Sort in ascending order',

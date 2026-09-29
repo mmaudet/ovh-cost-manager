@@ -423,13 +423,15 @@ const CompareTab = ({
           </tbody>
         </table>
       </Accordion>
-      {/* One accordion per Public Cloud project: the comparison of its products (#181) */}
+      {/* One accordion per Public Cloud project: the comparison of its products (#181), each of
+          which unfolds into its charges, the products unfolded held for each project (#195) */}
       {detailedProjects.map((proj) => (
         <Accordion key={proj.projectId} title={`${proj.projectName} (${t('project')})`}>
           <ProjectProductComparison
             productsQueryOf={(month) => projectProductsQuery(proj.projectId, month)}
             monthA={compareMonthA} monthB={compareMonthB}
             sorting={sortingOf(`products ${proj.projectId}`)}
+            unfoldingOf={(product) => unfoldingOf(`products ${proj.projectId}`, product)}
             fmt={fmt} language={language} t={t}
           />
         </Accordion>

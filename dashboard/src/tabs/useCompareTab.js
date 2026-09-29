@@ -33,7 +33,7 @@ import * as servicesQueries from './resourceTypeServicesQueries.js';
  *   Account column of the lists (accountColumnOf()), null when they name no account: while
  *   it shows, the comparison by project names the account of each project
  * @returns {object} Months A and B and their setters, the sort order of the tab's tables
- *   (sortingOf(), see useTableSorts()), the rows unfolded into their services (unfoldingOf(),
+ *   (sortingOf(), see useTableSorts()), the rows unfolded into what they add up (unfoldingOf(),
  *   see useUnfoldedRows()), the figures of both months, which the tab shows, the query of a
  *   project's products in a month (projectProductsQuery(projectId, month)), which the
  *   comparison of the project's products runs once opened, and the query of a resource type's
@@ -47,7 +47,8 @@ const useCompareTab = ({ months, activeTab, selectedAccount, accountColumn }) =>
   // most expensive first, until the user sorts it by another column, the infrastructure
   // comparison, and the comparison of each project's products, by project
   const sortingOf = useTableSorts({ projects: BY_MONTH_A });
-  // The rows unfolded into their services, by comparison (#192)
+  // The rows unfolded, by comparison: into their services (#192), or a project's products into
+  // their charges (#195)
   const unfoldingOf = useUnfoldedRows();
 
   // Whether the months list holds each month compared: not before months A and B have their
