@@ -1,30 +1,59 @@
 import { formatMonthLabel } from '../utils/format.js';
-import { pairMonths } from '../utils/monthComparison.js';
+import { comparisonValues, pairMonths } from '../utils/monthComparison.js';
 import { publicCloudProductLabel } from '../utils/publicCloudProducts.js';
-import { variationPercent } from '../utils/variation.js';
 import { MonthAnswersMessage, useMonthAnswers } from './MonthAnswers.jsx';
 import { SortableHeader, sortRows } from './SortableHeader.jsx';
+import { DetailRow, LABEL_PADDING, UnfoldingRow, sortUnfolded } from './UnfoldingRow.jsx';
 import { Variation } from './Variation.jsx';
 
 // What the server answers for a month whose bills charged the project nothing
 const NOTHING_BILLED = { total: 0, products: [], credits: 0 };
 
 // The value of a product in each column that sorts the comparison (#146): its name as the table
-// gives it, its cost in months A and B, and the variation from one to the other, none from 0 €
-// or less
-const productValues = (t) => ({
-  product: (row) => publicCloudProductLabel(row.product, t),
-  totalA: (row) => row.valA,
-  totalB: (row) => row.valB,
-  variation: (row) => variationPercent(row.valA, row.valB),
-});
+// gives it, its cost in months A and B, and the variation from one to the other
+const productValues = (t) => comparisonValues(
+  'product', (row) => publicCloudProductLabel(row.product, t),
+);
+
+// The value of a charge in the same columns, which sort the charges of each product as they sort
+// the products (#195): the charge itself, its cost in months A and B, and the variation
+const CHARGE_VALUES = comparisonValues('product', (row) => row.charge);
 
 // The rows of the comparison, from the products of months A and B, each the most expensive
 // first: those of month A, in its order, then those of month B only, in theirs, each with its
-// cost in both months, 0 € in a month whose bills did not charge it
+// cost and its charges in both months, 0 € and none in a month whose bills did not charge it
 const productRows = (billedA, billedB) => pairMonths(
   billedA.products, billedB.products, ({ product }) => product,
-).map(({ key, valA, valB }) => ({ product: key, valA, valB }));
+).map(({ key, rowA, rowB, valA, valB }) => ({
+  product: key, chargesA: rowA?.charges ?? [], chargesB: rowB?.charges ?? [], valA, valB,
+}));
+
+/**
+ * The charges of a product in months A and B, right under its unfolded row in the comparison of
+ * a project's products (#195), one row each, indented, in the comparison's columns: each charge
+ * that the bills of either month charged the project, paired by charge, its cost in each month,
+ * 0 € in a month whose bills did not charge it, and the variation. They follow the comparison's
+ * sort, within their row, and come by month A, the most expensive first, then by month B, until
+ * the user sorts it (sortUnfolded()).
+ * @param {object} props
+ * @param {{ charge: string, total: number }[]} props.chargesA - The product's charges in month A,
+ *   as the server gives them, the most expensive first
+ * @param {{ charge: string, total: number }[]} props.chargesB - Those of month B
+ * @param {?object} props.sort - The sort of the comparison, by its columns (see
+ *   SortableHeader.jsx): null until the user sorts it
+ * @returns {JSX.Element[]} A row for each charge
+ */
+const ProductCharges = ({ chargesA, chargesB, sort, fmt, language, t }) => sortUnfolded(
+  pairMonths(chargesA, chargesB, ({ charge }) => charge)
+    .map(({ key, valA, valB }) => ({ charge: key, valA, valB })),
+  sort, CHARGE_VALUES, language,
+).map(({ charge, valA, valB }) => (
+  <DetailRow key={charge} valA={valA} valB={valB} fmt={fmt} language={language} t={t}>
+    {/* A long charge, such as an instance's monthly plan, which names the instance, wraps to the
+        column of the products */}
+    <div className="text-xs break-words">{charge}</div>
+  </DetailRow>
+));
 
 /**
  * The comparison of a Public Cloud project's products in months A and B, from the bills of each
@@ -32,18 +61,23 @@ const productRows = (billedA, billedB) => pairMonths(
  * add up, with the credit that the bills used, to the project's cost in the comparison by
  * project. The credit shows apart, after the products, as it pays for none. The products keep
  * the order of their months until the user sorts them (sorting, which the Compare tab's hook
- * holds for each project: see SortableHeader.jsx). It says that it loads until the answers of
- * both months arrive, and that it could not load when one failed.
+ * holds for each project: see SortableHeader.jsx). Each product unfolds into its charges (#195),
+ * which come with the products: unfolding one asks for nothing. The credit does not unfold. It
+ * says that it loads until the answers of both months arrive, and that it could not load when
+ * one failed.
  * @param {object} props
  * @param {function(?object): object} props.productsQueryOf - The options of the query of the
  *   project's products in a month, for useQuery (useCompareTab()'s projectProductsQuery())
  * @param {?object} props.monthA
  * @param {?object} props.monthB
  * @param {{ sort: ?object, onSort: function(object) }} props.sorting
+ * @param {function(string): { unfolded: boolean, onToggle: function() }} props.unfoldingOf -
+ *   Whether a product is unfolded, by its name, and what folds or unfolds it, which the Compare
+ *   tab's hook holds for each project (see useUnfoldedRows())
  * @returns {JSX.Element}
  */
 export default function ProjectProductComparison({
-  productsQueryOf, monthA, monthB, sorting, fmt, language, t,
+  productsQueryOf, monthA, monthB, sorting, unfoldingOf, fmt, language, t,
 }) {
   const { status, dataA, dataB } = useMonthAnswers(productsQueryOf, monthA, monthB);
   // Until both months' answers arrive, rather than a month at 0 € or no product at all, or
@@ -96,25 +130,40 @@ export default function ProjectProductComparison({
         </tr>
       </thead>
       <tbody>
-        {sortRows(
-          rows, sorting.sort, productValues(t), language,
-        ).map(({ product, valA, valB }) => (
-          <tr key={product} className="border-b hover:bg-gray-50 transition-colors">
-            <td className="p-3 font-medium">{publicCloudProductLabel(product, t)}</td>
-            <td className="p-3 text-right font-medium">{fmt(valA)}€</td>
-            <td className="p-3 text-right text-gray-500">{fmt(valB)}€</td>
-            <td className="p-3 text-right">
-              <Variation from={valA} to={valB} language={language} t={t} />
-            </td>
-          </tr>
-        ))}
+        {sortRows(rows, sorting.sort, productValues(t), language).map(({
+          product, chargesA, chargesB, valA, valB,
+        }) => {
+          const label = publicCloudProductLabel(product, t);
+          return (
+            <UnfoldingRow
+              key={product}
+              // A product unfolds once either month gives it charges, as every product that
+              // costs anything has
+              unfolding={chargesA.length > 0 || chargesB.length > 0 ? unfoldingOf(product) : null}
+              chevronLabel={`${t('chargesOf')} ${label}`}
+              label={label}
+              detail={(
+                <ProductCharges
+                  chargesA={chargesA} chargesB={chargesB} sort={sorting.sort}
+                  fmt={fmt} language={language} t={t}
+                />
+              )}
+            >
+              <td className="p-3 text-right font-medium">{fmt(valA)}€</td>
+              <td className="p-3 text-right text-gray-500">{fmt(valB)}€</td>
+              <td className="p-3 text-right">
+                <Variation from={valA} to={valB} language={language} t={t} />
+              </td>
+            </UnfoldingRow>
+          );
+        })}
       </tbody>
       {/* The credit that the bills used, which pays for no product: after them, whatever
-          their order */}
+          their order, its label in line with theirs, which leave room for their chevrons */}
       {credited && (
         <tfoot>
           <tr className="border-b text-gray-500">
-            <td className="p-3">{t('cloudCreditUsed')}</td>
+            <td className={LABEL_PADDING}>{t('cloudCreditUsed')}</td>
             <td className="p-3 text-right">{fmt(billedA.credits)}€</td>
             <td className="p-3 text-right">{fmt(billedB.credits)}€</td>
             {/* No variation of a credit to compute (#65) */}

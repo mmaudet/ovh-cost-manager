@@ -173,13 +173,49 @@ const quota = (id, project_id, region, cores, instances) => ({
 });
 
 // The products of a project's bills over a period, as /api/projects/:id/products
-// answers them (#181): what they cost in all, each product as [product, cost],
-// the most expensive first, and the credit that the bills used
+// answers them (#181): what they cost in all, each product as [product, cost,
+// charges], the most expensive first, and the credit that the bills used. The
+// charges of a product (#195), each as [charge, cost], the most expensive
+// first: none when the test gives none.
 export const billedProducts = (total, products, credits = 0) => ({
   total,
-  products: products.map(([product, cost]) => ({ product, total: cost })),
+  products: products.map(([product, cost, charges = []]) => ({
+    product,
+    total: cost,
+    charges: charges.map(([charge, chargeCost]) => ({ charge, total: chargeCost })),
+  })),
   credits,
 });
+
+// What the bill lines of the projects pay for, as OVHcloud words them: the
+// charges of their products (#195), which the tests find the rows of the
+// Compare tab by. The hourly use of a flavor in a region, and the monthly plan
+// of db-1.
+export const hourlyUse = (flavor) => `Consommation à l'heure pour les instances ${flavor} gra11`;
+export const DB_1_PLAN = 'Forfait mensuel pour une instance r3-32 '
+  + '(id instance-db-1, region sbg5) - 01 mois';
+// The savings plans, as their lines name them
+const WEB_PLAN = 'Savings plan (id : savings-plan-b3-8-web) '
+  + 'pour 2 instance(s) b3-8 - Durée : 1M';
+const LEGACY_PLAN = 'Savings plan (id : savings-plan-c3-4-legacy) '
+  + 'pour 1 instance(s) c3-4 - Durée : 1M';
+// The storage of a bucket in a region, and the Cold Archive, billed as a whole
+export const bucketStorage = (bucket, region) => (
+  `Stockage Standard - Bucket ${bucket} sur la région ${region}`
+);
+export const COLD_ARCHIVE = 'Stockage Cold Archive';
+// The additional disks of a type in a region, and the snapshots of a region
+const disks = (region, type) => `Disques supplémentaires à ${region} de type ${type}`;
+const snapshotsIn = (region) => `Snapshots Public Cloud - ${region}`;
+// The products that Production's bills of August and September charged alike
+const PRODUCTION_SAVINGS_PLANS = ['savingsPlans', 28, [[WEB_PLAN, 20], [LEGACY_PLAN, 8]]];
+const PRODUCTION_VOLUMES = ['volumes', 12.5, [
+  [disks('sbg5', 'high-speed'), 6.5], [disks('gra11', 'classic'), 4.5],
+  [disks('bhs5', 'classic'), 1.5],
+]];
+const PRODUCTION_SNAPSHOTS = ['snapshots', 6, [
+  [snapshotsIn('sbg5'), 4], [snapshotsIn('gra11'), 2],
+]];
 
 // The AI Endpoints models that the bills of a period name, as
 // /api/analysis/ai-endpoints answers them (#193): what they cost in all, and
@@ -305,23 +341,57 @@ export const publicCloud = {
   // the Compare tab compares (#181): with the credit, they add up to its cost
   // in the comparison by project (account.js). In August and September, the
   // two projects' add up to the cards above; Production used a credit in July.
+  // Each product with its charges, which add up to its cost (#195): in
+  // Production's instances, the GPU instance's hourly use grew in September,
+  // the web instances' fell, down to the cost of db-1's monthly plan, that of
+  // batch-1 went, and a b3-16 appeared.
   projectProducts: {
     [PRODUCTION]: {
       '2026-09': billedProducts(610.4, [
-        ['instances', 538.9], ['savingsPlans', 28], ['objectStorage', 25], ['volumes', 12.5],
-        ['snapshots', 6],
+        ['instances', 538.9, [
+          [hourlyUse('l4-90'), 420.5], [DB_1_PLAN, 64], [hourlyUse('b3-8'), 48],
+          [hourlyUse('b3-16'), 6.4],
+        ]],
+        PRODUCTION_SAVINGS_PLANS,
+        ['objectStorage', 25, [
+          [bucketStorage('assets-example-com', 'gra'), 14], [COLD_ARCHIVE, 9],
+          [bucketStorage('old-exports', 'sbg'), 2],
+        ]],
+        PRODUCTION_VOLUMES,
+        PRODUCTION_SNAPSHOTS,
       ]),
       '2026-08': billedProducts(512, [
-        ['instances', 440.6], ['savingsPlans', 28], ['objectStorage', 24.9], ['volumes', 12.5],
-        ['snapshots', 6],
+        ['instances', 440.6, [
+          [hourlyUse('l4-90'), 304.6], [hourlyUse('b3-8'), 64], [DB_1_PLAN, 64],
+          [hourlyUse('d2-4'), 8],
+        ]],
+        PRODUCTION_SAVINGS_PLANS,
+        ['objectStorage', 24.9, [
+          [bucketStorage('assets-example-com', 'gra'), 13.9], [COLD_ARCHIVE, 9],
+          [bucketStorage('old-exports', 'sbg'), 2],
+        ]],
+        PRODUCTION_VOLUMES,
+        PRODUCTION_SNAPSHOTS,
       ]),
       '2026-07': billedProducts(715, [
-        ['instances', 650], ['databases', 45], ['objectStorage', 20],
+        ['instances', 650, [
+          [hourlyUse('t2-45'), 522], [hourlyUse('b3-8'), 64], [DB_1_PLAN, 64],
+        ]],
+        ['databases', 45, [['Public Cloud Databases PostgreSQL business DB1-7 à gra', 45]]],
+        ['objectStorage', 20, [
+          [bucketStorage('assets-example-com', 'gra'), 11], [COLD_ARCHIVE, 9],
+        ]],
       ], -35),
     },
     [STAGING]: {
-      '2026-09': billedProducts(220, [['instances', 180], ['registry', 40]]),
-      '2026-08': billedProducts(190, [['instances', 150], ['registry', 40]]),
+      '2026-09': billedProducts(220, [
+        ['instances', 180, [[hourlyUse('b3-16'), 180]]],
+        ['registry', 40, [['Managed Private Registry - plan M', 40]]],
+      ]),
+      '2026-08': billedProducts(190, [
+        ['instances', 150, [[hourlyUse('b3-16'), 150]]],
+        ['registry', 40, [['Managed Private Registry - plan M', 40]]],
+      ]),
     },
   },
 

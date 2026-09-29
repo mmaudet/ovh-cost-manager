@@ -2105,25 +2105,35 @@ const cloudDetailOps = {
   },
 
   /**
-   * Every Public Cloud product of a project over a period, from its bills, each with its cost,
-   * the most expensive first, and the Public Cloud credit that the bills used (#181): what the
-   * Compare tab compares for a project, month by month. With the credit, the products add up
-   * to the project's cost in analysis.byProject(), for the same account.
+   * Every Public Cloud product of a project over a period, from its bills, each with its cost
+   * and its charges, the most expensive first, and the Public Cloud credit that the bills used,
+   * which has none (#181, #195): what the Compare tab compares for a project, month by month,
+   * and unfolds each product into. With the credit, the products add up to the project's cost
+   * in analysis.byProject(), for the same account.
    * @param {string} projectId
    * @param {string} fromDate
    * @param {string} toDate
    * @param {?string} [account] - The account whose bills count (see accountCondition()): every
    *   account's by default. A project's bill lines belong to the account of their bill, which
    *   may not be the project's own, as for a project moved to another account (ADR 0002).
-   * @returns {{total: number, products: {product: string, total: number}[], credits: number}}
+   * @returns {{total: number, products: {product: string, total: number, charges: {charge:
+   *   string, total: number}[]}[], credits: number}} Each product's charges as productFigures()
+   *   gives them: what their lines add up to, to the cent, the most expensive first, those at
+   *   0 € left out
    */
   getProductsByProject: (projectId, fromDate, toDate, account = null) => {
     // No product set apart, so that the products that productFigures() names `others` are
     // every one of them, the credit aside
-    const { others: everyProduct, credits } = productFigures(
+    const { figuresOf, others: everyProduct, credits } = productFigures(
       projectBillLines(projectId, fromDate, toDate, account), [],
     );
-    return { ...everyProduct, credits };
+    return {
+      ...everyProduct,
+      products: everyProduct.products.map((entry) => ({
+        ...entry, charges: figuresOf(entry.product).charges,
+      })),
+      credits,
+    };
   },
 
   /**

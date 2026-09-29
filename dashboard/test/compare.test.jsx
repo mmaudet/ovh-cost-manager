@@ -1,7 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import { screen, within } from '@testing-library/react';
 import { account, everyResourceType, threeBilledProjects } from './fixtures/account.js';
-import { billedProducts } from './fixtures/public-cloud.js';
+import {
+  COLD_ARCHIVE, DB_1_PLAN, billedProducts, bucketStorage, hourlyUse,
+} from './fixtures/public-cloud.js';
 import {
   lyonAccount, removedAccount, severalAccounts, unknownAccount, unnamedAccount,
 } from './fixtures/accounts.js';
@@ -1308,6 +1310,338 @@ describe('Compare tab', () => {
 
       expect(within(comparison(/^Production \(Project\)/))
         .getByText('No data for this project')).toBeInTheDocument();
+    });
+  });
+
+  // Each product of a project's comparison unfolds into its charges, month A against month B,
+  // which come with the products that the comparison loads (#195). See fixtures/public-cloud.js.
+  describe('products unfolded into their charges (#195)', () => {
+    // The chevron of a product of Production's comparison, found by the product that it names
+    const chevron = (product) => within(comparisonTable(PRODUCTION_PRODUCTS))
+      .getByRole('button', { name: `Charges : ${product}` });
+    // The products that a chevron folds and unfolds, by their labels: those unfolded, or those
+    // folded
+    const productsThatUnfold = (unfolded) => within(comparisonTable(PRODUCTION_PRODUCTS))
+      .queryAllByRole('button', { expanded: unfolded })
+      .map((button) => texts(button.closest('tr'))[0]);
+    // Unfolds or folds a product with a click on its chevron, as the user does
+    const toggleProduct = async (user, product) => {
+      await user.click(chevron(product));
+      await settle();
+    };
+    // The rows of Production's comparison, header left out, each as the texts of its cells
+    const productRows = () => rowsOf(comparisonTable(PRODUCTION_PRODUCTS)).slice(1);
+    // The row of a charge of Production's comparison, found by the charge
+    const chargeRow = (charge) => within(comparisonTable(PRODUCTION_PRODUCTS))
+      .getByText(charge).closest('tr');
+
+    it('start folded, with a chevron on each product, and none on the credit', async () => {
+      const { user } = await renderDashboard();
+      await openTab(user, 'Comparaison');
+      // July, whose bills used a credit
+      await pickMonth(user, 'Août 2026', 'Juillet 2026');
+
+      await openComparison(user, PRODUCTION_PRODUCTS);
+
+      expect(productsThatUnfold(false)).toEqual([
+        'Instances', 'Bases de données', 'Stockage objet', 'Savings plans', 'Volumes', 'Snapshots',
+      ]);
+      expect(productsThatUnfold(true)).toEqual([]);
+      expect(chevron('Instances')).toHaveAttribute('aria-expanded', 'false');
+      // The credit pays for no product: it has no charge to unfold into
+      const credit = within(comparisonTable(PRODUCTION_PRODUCTS))
+        .getByText('Crédit Cloud utilisé').closest('tr');
+      expect(within(credit).queryByRole('button')).not.toBeInTheDocument();
+    });
+
+    // The charges of August and September, which add up to the product's cost in each month
+    it('list the charges of a product under it once unfolded, until a second click', async () => {
+      const { user } = await renderDashboard();
+      await openTab(user, 'Comparaison');
+      await openComparison(user, PRODUCTION_PRODUCTS);
+
+      await toggleProduct(user, 'Stockage objet');
+
+      expect(chevron('Stockage objet')).toHaveAttribute('aria-expanded', 'true');
+      // Each charge, its cost in months A and B, and the variation: (14 - 13.90) / 13.90
+      expect(productRows().slice(2, 7)).toEqual([
+        ['Stockage objet', '24,90€', '25,00€', '+0,4 %'],
+        ['Stockage Standard - Bucket assets-example-com sur la région gra',
+          '13,90€', '14,00€', '+0,7 %'],
+        ['Stockage Cold Archive', '9,00€', '9,00€', '0,0 %'],
+        ['Stockage Standard - Bucket old-exports sur la région sbg',
+          '2,00€', '2,00€', '0,0 %'],
+        ['Volumes', '12,50€', '12,50€', '0,0 %'],
+      ]);
+
+      await toggleProduct(user, 'Stockage objet');
+
+      expect(chevron('Stockage objet')).toHaveAttribute('aria-expanded', 'false');
+      expect(productRows().slice(2, 4)).toEqual([
+        ['Stockage objet', '24,90€', '25,00€', '+0,4 %'],
+        ['Volumes', '12,50€', '12,50€', '0,0 %'],
+      ]);
+    });
+
+    // Production's instances of August and September, paired by charge
+    it('compare each charge that either month billed, from 0 € in a month that did not',
+      async () => {
+        const { user } = await renderDashboard();
+        await openTab(user, 'Comparaison');
+        await openComparison(user, PRODUCTION_PRODUCTS);
+
+        await toggleProduct(user, 'Instances');
+
+        // Billed in both months: (420.50 - 304.60) / 304.60
+        expect(texts(chargeRow(hourlyUse('l4-90'))))
+          .toEqual([hourlyUse('l4-90'), '304,60€', '420,50€', '+38,0 %']);
+        // Billed in August only, down to nothing in September
+        expect(texts(chargeRow(hourlyUse('d2-4'))))
+          .toEqual([hourlyUse('d2-4'), '8,00€', '0,00€', '-100,0 %']);
+        // From nothing in August: no variation to compute (#65), and a tooltip that says why
+        expect(texts(chargeRow(hourlyUse('b3-16'))))
+          .toEqual([hourlyUse('b3-16'), '0,00€', '6,40€', '—']);
+        expect(within(chargeRow(hourlyUse('b3-16')))
+          .getByTitle('non calculable : mois A à 0 € ou moins')).toHaveTextContent('—');
+      });
+
+    // As the comparison by project, until the user sorts the table
+    it('list the charges of a product by month A, the most expensive first, then by month B',
+      async () => {
+        const { user } = await renderDashboard();
+        await openTab(user, 'Comparaison');
+        await openComparison(user, PRODUCTION_PRODUCTS);
+
+        await toggleProduct(user, 'Instances');
+
+        // Right under the instances: db-1's monthly plan and the web instances' hourly use cost
+        // 64 € each in August, the monthly plan the more in September; the b3-16's, from nothing
+        // in August, last
+        expect(productRows().slice(0, 7).map(([name]) => name)).toEqual([
+          'Instances', hourlyUse('l4-90'), DB_1_PLAN, hourlyUse('b3-8'), hourlyUse('d2-4'),
+          hourlyUse('b3-16'), 'Savings plans',
+        ]);
+      });
+
+    // By the same columns as the products, each charge under its own product (#146)
+    it('sort the charges within their products as the table, by any column, each way in turn',
+      async () => {
+        const { user } = await renderDashboard();
+        await openTab(user, 'Comparaison');
+        await openComparison(user, PRODUCTION_PRODUCTS);
+        await toggleProduct(user, 'Instances');
+        await toggleProduct(user, 'Stockage objet');
+        const sortBy = (column) => sortTable(user, comparisonTable(PRODUCTION_PRODUCTS), column);
+        // The rows of the table by their names: the products, and their charges under them
+        const names = () => productRows().map(([name]) => name);
+        // The charges right under the instances
+        const instances = () => {
+          const row = names().indexOf('Instances');
+          return names().slice(row + 1, row + 6);
+        };
+        // The charges of the object storage: a bucket that cost more in September, the Cold
+        // Archive, and a bucket that cost as much
+        const ASSETS = bucketStorage('assets-example-com', 'gra');
+        const OLD_EXPORTS = bucketStorage('old-exports', 'sbg');
+
+        await sortBy(/^Variation/);
+
+        // +22,3 % for the instances, +0,4 % for the object storage, then the products of 0,0 %;
+        // within the instances, +38,0 %, 0,0 %, -25,0 %, -100,0 %, then the variation that
+        // cannot be computed, last either way
+        expect(names()).toEqual([
+          'Instances', hourlyUse('l4-90'), DB_1_PLAN, hourlyUse('b3-8'), hourlyUse('d2-4'),
+          hourlyUse('b3-16'),
+          'Stockage objet', ASSETS, COLD_ARCHIVE, OLD_EXPORTS,
+          'Savings plans', 'Volumes', 'Snapshots',
+        ]);
+
+        await sortBy(/^Variation/);
+
+        expect(names()).toEqual([
+          'Savings plans', 'Volumes', 'Snapshots',
+          'Stockage objet', COLD_ARCHIVE, OLD_EXPORTS, ASSETS,
+          'Instances', hourlyUse('d2-4'), hourlyUse('b3-8'), DB_1_PLAN, hourlyUse('l4-90'),
+          hourlyUse('b3-16'),
+        ]);
+
+        // By the charges themselves, from A to Z first
+        await sortBy(/^Produit/);
+
+        expect(instances()).toEqual([
+          hourlyUse('b3-8'), hourlyUse('b3-16'), hourlyUse('d2-4'), hourlyUse('l4-90'), DB_1_PLAN,
+        ]);
+
+        await sortBy(/^Produit/);
+
+        expect(instances()).toEqual([
+          DB_1_PLAN, hourlyUse('l4-90'), hourlyUse('d2-4'), hourlyUse('b3-16'), hourlyUse('b3-8'),
+        ]);
+
+        // 64 € for db-1's monthly plan and for the web instances' hourly use, which keep their
+        // order
+        await sortBy(/^Août 2026/);
+
+        expect(instances()).toEqual([
+          hourlyUse('l4-90'), DB_1_PLAN, hourlyUse('b3-8'), hourlyUse('d2-4'), hourlyUse('b3-16'),
+        ]);
+
+        await sortBy(/^Août 2026/);
+
+        expect(instances()).toEqual([
+          hourlyUse('b3-16'), hourlyUse('d2-4'), DB_1_PLAN, hourlyUse('b3-8'), hourlyUse('l4-90'),
+        ]);
+
+        await sortBy(/^Septembre 2026/);
+
+        expect(instances()).toEqual([
+          hourlyUse('l4-90'), DB_1_PLAN, hourlyUse('b3-8'), hourlyUse('b3-16'), hourlyUse('d2-4'),
+        ]);
+
+        await sortBy(/^Septembre 2026/);
+
+        expect(instances()).toEqual([
+          hourlyUse('d2-4'), hourlyUse('b3-16'), hourlyUse('b3-8'), DB_1_PLAN, hourlyUse('l4-90'),
+        ]);
+      });
+
+    it('stay unfolded when the user picks other months, with their charges, and comes back',
+      async () => {
+        const { user } = await renderDashboard();
+        await openTab(user, 'Comparaison');
+        await openComparison(user, PRODUCTION_PRODUCTS);
+        await toggleProduct(user, 'Instances');
+
+        await pickMonth(user, 'Août 2026', 'Juillet 2026');
+
+        // The GPU instance of July, gone by September, then db-1's monthly plan and the web
+        // instances' hourly use, 64 € each in July, then the charges of September only
+        const julyAndSeptember = [
+          ['Instances', '650,00€', '538,90€', '-17,1 %'],
+          [hourlyUse('t2-45'), '522,00€', '0,00€', '-100,0 %'],
+          [DB_1_PLAN, '64,00€', '64,00€', '0,0 %'],
+          [hourlyUse('b3-8'), '64,00€', '48,00€', '-25,0 %'],
+          [hourlyUse('l4-90'), '0,00€', '420,50€', '—'],
+          [hourlyUse('b3-16'), '0,00€', '6,40€', '—'],
+          ['Bases de données', '45,00€', '0,00€', '-100,0 %'],
+        ];
+        expect(productRows().slice(0, 7)).toEqual(julyAndSeptember);
+
+        await openTab(user, "Vue d'ensemble");
+        await openTab(user, 'Comparaison');
+        // Closed again, as every comparison but the projects' when the tab opens
+        await openComparison(user, PRODUCTION_PRODUCTS);
+
+        expect(chevron('Instances')).toHaveAttribute('aria-expanded', 'true');
+        expect(productRows().slice(0, 7)).toEqual(julyAndSeptember);
+        // Each project's products unfold on their own: Staging's instances stay folded
+        await openComparison(user, /^Staging \(Projet\)/);
+        expect(within(comparisonTable(/^Staging \(Projet\)/))
+          .getByRole('button', { name: 'Charges : Instances' }))
+          .toHaveAttribute('aria-expanded', 'false');
+      });
+
+    // The charges come with the products that the comparison loads when it opens
+    it('ask for nothing when a product unfolds', async () => {
+      const { user } = await renderDashboard();
+      await openTab(user, 'Comparaison');
+      await openComparison(user, PRODUCTION_PRODUCTS);
+      // The requests that the page sent so far
+      const requestsSent = () => Object.values(api)
+        .reduce((count, request) => count + request.mock.calls.length, 0);
+      const sent = requestsSent();
+
+      await toggleProduct(user, 'Instances');
+
+      expect(chargeRow(hourlyUse('l4-90'))).toBeInTheDocument();
+      expect(requestsSent()).toBe(sent);
+    });
+
+    // The PDF export prints the page: the unfolded products print with their charges, and
+    // without their chevrons, as the headers print without their sort marks (#146)
+    it('print unfolded, without their chevrons', async () => {
+      const { user } = await renderDashboard();
+      await openTab(user, 'Comparaison');
+      await openComparison(user, PRODUCTION_PRODUCTS);
+      await toggleProduct(user, 'Instances');
+      // Found while they show: the comparison's title prints without its button either
+      const table = comparisonTable(PRODUCTION_PRODUCTS);
+      const chevrons = [chevron('Instances'), chevron('Stockage objet')];
+
+      layOutForPrint();
+
+      for (const folding of chevrons) {
+        expect(folding).not.toBeVisible();
+      }
+      expect(within(table).getByText('Instances')).toBeVisible();
+      for (const flavor of ['l4-90', 'b3-8', 'd2-4', 'b3-16']) {
+        expect(within(table).getByText(hourlyUse(flavor)).closest('tr')).toBeVisible();
+      }
+      expect(within(table).getByText(DB_1_PLAN)).toBeVisible();
+    });
+
+    // The charges stay as the bills word them
+    it('speak English when the page does', async () => {
+      const { user } = await renderDashboard();
+      await selectLanguage(user, 'en');
+      await openTab(user, 'Compare');
+      const title = /^Production \(Project\)/;
+      await openComparison(user, title);
+
+      await user.click(within(comparisonTable(title))
+        .getByRole('button', { name: 'Charges: Object storage' }));
+      await settle();
+
+      expect(rowsOf(comparisonTable(title)).slice(3, 8)).toEqual([
+        ['Object storage', '24.90€', '25.00€', '+0.4%'],
+        ['Stockage Standard - Bucket assets-example-com sur la région gra',
+          '13.90€', '14.00€', '+0.7%'],
+        ['Stockage Cold Archive', '9.00€', '9.00€', '0.0%'],
+        ['Stockage Standard - Bucket old-exports sur la région sbg', '2.00€', '2.00€', '0.0%'],
+        ['Volumes', '12.50€', '12.50€', '0.0%'],
+      ]);
+    });
+
+    // Several accounts in the instance: see fixtures/accounts.js. Staging, billed to yy2222-ovh,
+    // and in September to Lyon too, whose bills charged it 50 € of a b3-16's hourly use (#181)
+    it('unfold into the charges of the bills of the account selected', async () => {
+      const lyon = severalAccounts.ofAccount[lyonAccount.id];
+      const { user } = await renderDashboard({
+        ...severalAccounts,
+        ofAccount: {
+          ...severalAccounts.ofAccount,
+          [lyonAccount.id]: {
+            ...lyon,
+            byProject: {
+              ...lyon.byProject,
+              '2026-09': [...lyon.byProject['2026-09'], {
+                projectId: 'project-staging', projectName: 'Staging', total: 50, detailsCount: 1,
+              }],
+            },
+            projectProducts: {
+              ...lyon.projectProducts,
+              'project-staging': {
+                '2026-09': billedProducts(50, [['instances', 50, [[hourlyUse('b3-16'), 50]]]]),
+              },
+            },
+          },
+        },
+      });
+      await openTab(user, 'Comparaison');
+      await selectAccount(user, 'Lyon subsidiary');
+      const staging = /^Staging \(Projet\)/;
+      await openComparison(user, staging);
+
+      await user.click(within(comparisonTable(staging))
+        .getByRole('button', { name: 'Charges : Instances' }));
+      await settle();
+
+      // Not the 150 € and 180 € that yy2222-ovh's bills charged it
+      expect(rowsOf(comparisonTable(staging))).toEqual([
+        ['Produit○', 'Août 2026○', 'Septembre 2026○', 'Variation○'],
+        ['Instances', '0,00€', '50,00€', '—'],
+        [hourlyUse('b3-16'), '0,00€', '50,00€', '—'],
+      ]);
     });
   });
 

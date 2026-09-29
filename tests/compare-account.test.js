@@ -37,6 +37,14 @@ const stagingLine = (id, billId, description, price) => ({
   unit_price: price, total_price: price, service_type: 'Compute', resource_type: 'cloud_project',
 });
 
+// The only charge of each product that the bills charged the Staging project (#195): what its
+// lines pay for, as their descriptions name it
+const CHARGES = {
+  instances: 'Consommation à l\'heure pour les instances b3-8 gra11',
+  registry: 'Managed Private Registry - plan M',
+  objectStorage: 'Stockage Standard - Bucket assets sur la région gra',
+};
+
 // Two accounts and the Unknown account, whose bills of September back VMs up, and Lyon's of
 // August too. The bills of each account billed the Staging project in September, and Lyon's
 // in August. Every NIC handle, name, identifier and amount is made up.
@@ -53,7 +61,6 @@ function seed(db) {
   db.getDb().prepare(
     "INSERT INTO bills (id, date, currency, account) VALUES ('FR0001', '2026-09-20', 'EUR', NULL)",
   ).run();
-  const instances = 'Consommation à l\'heure pour les instances b3-8 gra11';
   db.details.insertMany([
     backupLine('FR1001-1', 'FR1001', 'vm-web-1', 30),
     backupLine('FR1001-2', 'FR1001', 'vm-db-1', 20),
@@ -61,12 +68,12 @@ function seed(db) {
     backupLine('FR2001-1', 'FR2001', 'vm-app-1', 40),
     licenceLine('FR2001-2', 'FR2001', 'veeam-licence-1', 25),
     backupLine('FR0001-1', 'FR0001', 'vm-old-1', 10),
-    stagingLine('FR1001-3', 'FR1001', instances, 50),
-    stagingLine('FR1002-2', 'FR1002', instances, 150),
+    stagingLine('FR1001-3', 'FR1001', CHARGES.instances, 50),
+    stagingLine('FR1002-2', 'FR1002', CHARGES.instances, 150),
     stagingLine('FR1002-3', 'FR1002', 'Utilisation du credit cloud', -10),
-    stagingLine('FR2001-3', 'FR2001', instances, 130),
-    stagingLine('FR2001-4', 'FR2001', 'Managed Private Registry - plan M', 40),
-    stagingLine('FR0001-2', 'FR0001', 'Stockage Standard - Bucket assets sur la région gra', 3),
+    stagingLine('FR2001-3', 'FR2001', CHARGES.instances, 130),
+    stagingLine('FR2001-4', 'FR2001', CHARGES.registry, 40),
+    stagingLine('FR0001-2', 'FR0001', CHARGES.objectStorage, 3),
   ]);
 }
 
@@ -141,11 +148,16 @@ describe('GET /api/projects/:id/products', () => {
   const productsOf = (month, account) =>
     ocm.get(`${route}?${month}${account === undefined ? '' : `&account=${account}`}`);
   // An answer of the route: what the products cost in all, each product as [product, cost],
-  // the most expensive first, and the credit
+  // the most expensive first, and the credit. Each product has its only charge, which costs
+  // what the product costs (#195).
   const products = (total, entries, credits = 0) => ({
     status: 200,
     body: {
-      total, products: entries.map(([product, cost]) => ({ product, total: cost })), credits,
+      total,
+      products: entries.map(([product, cost]) => ({
+        product, total: cost, charges: [{ charge: CHARGES[product], total: cost }],
+      })),
+      credits,
     },
   });
 
