@@ -37,8 +37,10 @@ OVH API ──> data/import.js ──> SQLite (ovh-bills.db) ──> server/inde
     `db.js` exposes them on `db.accounts` and `db.clearAccount()`.
   - `sql-conditions.js` — the conditions that the queries join to their WHERE clause: that
     of an account, `accountCondition()`, with `UNKNOWN_ACCOUNT`, which `db.js` re-exports,
-    and that of a list of ids from the OVH API, `idInList()`. Without side effects: the
-    tests load `UNKNOWN_ACCOUNT` from it without the database.
+    that of a list of ids from the OVH API, `idInList()`, and those of the bill lines of the
+    Veeam backups, `ofBackupLines`, the VMs backed up and the Enterprise licences, which
+    `getBackupStats()` counts and `getBackupServices()` lists (#197). Without side effects:
+    the tests load `UNKNOWN_ACCOUNT` from it without the database.
   - `classify.js` — pure functions (`classifyService`, etc.) mapping a bill line's
     description to a service type. **Classification runs at import time** and the result is
     stored in `bill_details.service_type`; the server reads the stored value, it does not
@@ -107,9 +109,13 @@ OVH API ──> data/import.js ──> SQLite (ovh-bills.db) ──> server/inde
   charges (#189), through `src/components/UnfoldingRow.jsx`: `UnfoldingRow` draws a row
   whose chevron unfolds it, `DetailRow` each service or charge under it, `sortUnfolded()`
   orders those within their row, and `useUnfoldedRows()`, in the tab's hook, holds the rows
-  unfolded. `UnfoldedRowServices.jsx` loads the services of a resource type or a backup row
-  once unfolded, and `ProjectProductComparison.jsx` a product's charges with the products;
-  both pair months A and B with `pairMonths()` (`src/utils/monthComparison.js`).
+  unfolded. In `CompareTab.jsx`, `drawServicesRow()` draws a row of the infrastructure,
+  Private Cloud or backup comparison, which `UnfoldedRowServices.jsx` unfolds into its
+  services, from the query of a month that its `servicesQueryOf` prop gives, run once the
+  row unfolds; `ProjectProductComparison.jsx` unfolds a product into its charges, which come
+  with the products. `src/utils/monthComparison.js` pairs what months A and B gave
+  (`pairMonths()`), a service by its identifier and its account (`byNameAndAccount()`), and
+  gives the value of a row in the columns that sort it (`comparisonValues()`).
 
 ### Accounts
 
@@ -142,7 +148,11 @@ NIC handle:
   in the browser, per ADR 0001) and passes `selectedAccount` to the tab hooks: `null` for
   all accounts, the default, or the `id` that `/api/accounts` gives. A query that follows
   it is built with `accountQuery()` (`src/utils/accounts.js`): its request and its key name
-  the account only when one is selected, after the other parts of the key. The selector
+  the account only when one is selected, after the other parts of the key. A list that
+  follows the Account column too is built with `listQuery()`, next to it, the one factory
+  of such queries: while the column shows, it asks for the rows of all accounts by account,
+  a project or a service once for each account that billed it; otherwise, for those of the
+  account shown, as `accountQuery()` does. The selector
   shows when `/api/accounts` lists two entries or more (`offersAccounts()`), the Unknown
   account and the accounts no longer configured included. The same module gives the
   Account column of the lists and CSV exports with all accounts shown, the budget the page
