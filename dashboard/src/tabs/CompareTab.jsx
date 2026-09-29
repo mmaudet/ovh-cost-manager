@@ -134,12 +134,12 @@ const CompareTab = ({
     ...privateCloudTypes,
   ], infrastructureSorting.sort, resourceTypeValues(byResourceTypeA, byResourceTypeB), language);
 
-  // A row of the infrastructure or Private Cloud comparison, by the comparison's name and its
-  // sort, null when it does not sort: the cost of a resource type in months A and B (#32), and
-  // what shows under its label, if anything. It unfolds into its services when either month
-  // billed it more than 0 €, as each service that it lists, and they follow the sort; each
-  // comparison's rows unfold on their own (#192).
-  const resourceTypeRow = (comparison, sort) => ({ key, label, details }) => {
+  // Draws a row of the infrastructure or Private Cloud comparison, by the comparison's name: the
+  // cost of a resource type in months A and B (#32), and what shows under its label, if
+  // anything. It unfolds into its services when either month billed it more than 0 €, as each
+  // service that it lists, and they follow the comparison's sort; each comparison's rows unfold
+  // on their own (#192).
+  const drawResourceTypeRow = (comparison, { key, label, details }) => {
     const valA = costOfType(byResourceTypeA, key);
     const valB = costOfType(byResourceTypeB, key);
     return (
@@ -150,8 +150,8 @@ const CompareTab = ({
         label={<>{label}{details}</>}
         detail={(
           <ResourceTypeServices
-            servicesQueryOf={(month) => resourceTypeServicesQuery(key, month)}
-            monthA={compareMonthA} monthB={compareMonthB} sort={sort}
+            resourceType={key} resourceTypeServicesQuery={resourceTypeServicesQuery}
+            monthA={compareMonthA} monthB={compareMonthB} sort={sortingOf(comparison).sort}
             fmt={fmt} language={language} t={t}
           />
         )}
@@ -341,9 +341,7 @@ const CompareTab = ({
             </tr>
           </thead>
           <tbody>
-            {infrastructureTypes.map(
-              resourceTypeRow('infrastructure', infrastructureSorting.sort),
-            )}
+            {infrastructureTypes.map((type) => drawResourceTypeRow('infrastructure', type))}
           </tbody>
         </table>
       </Accordion>
@@ -405,7 +403,8 @@ const CompareTab = ({
             </tr>
           </thead>
           <tbody>
-            {privateCloudTypes.map(resourceTypeRow('privateCloud', null))}
+            {/* Its sort stays null, as it has no header that sorts it */}
+            {privateCloudTypes.map((type) => drawResourceTypeRow('privateCloud', type))}
           </tbody>
         </table>
       </Accordion>

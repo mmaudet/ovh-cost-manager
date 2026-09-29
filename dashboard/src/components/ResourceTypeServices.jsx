@@ -7,7 +7,7 @@ import { Variation } from './Variation.jsx';
 // services as it sorts the rows (#146): its identifier in the column of the rows' labels, its
 // cost in months A and B, and the variation from one to the other, none from 0 € or less
 const SERVICE_VALUES = {
-  type: (service) => service.domain,
+  type: (service) => service.identifier,
   totalA: (service) => service.valA,
   totalB: (service) => service.valB,
   variation: (service) => variationPercent(service.valA, service.valB),
@@ -27,17 +27,18 @@ const inOrder = (services, sort, language) => sortRows(
   sort, SERVICE_VALUES, language,
 );
 
-// The services of months A and B, paired by their identifier: each service that either month
-// billed, with the description of its most expensive bill line, month B's when month B billed
-// it, and its cost in each month, 0 € in a month that did not bill it
+// The services of months A and B, paired by their identifier, which the server gives as
+// `domain`, whatever the service: each service that either month billed, with the description
+// of its most expensive bill line, month B's when month B billed it, and its cost in each
+// month, 0 € in a month that did not bill it
 const serviceRows = (servicesA, servicesB) => {
   const ofMonthA = new Map(servicesA.map((service) => [service.domain, service]));
   const ofMonthB = new Map(servicesB.map((service) => [service.domain, service]));
-  return [...new Set([...ofMonthA.keys(), ...ofMonthB.keys()])].map((domain) => ({
-    domain,
-    description: (ofMonthB.get(domain) ?? ofMonthA.get(domain)).description,
-    valA: ofMonthA.get(domain)?.total ?? 0,
-    valB: ofMonthB.get(domain)?.total ?? 0,
+  return [...new Set([...ofMonthA.keys(), ...ofMonthB.keys()])].map((identifier) => ({
+    identifier,
+    description: (ofMonthB.get(identifier) ?? ofMonthA.get(identifier)).description,
+    valA: ofMonthA.get(identifier)?.total ?? 0,
+    valB: ofMonthB.get(identifier)?.total ?? 0,
   }));
 };
 
@@ -55,18 +56,20 @@ const MessageRow = ({ className, children }) => (
  * services that the Infrastructure tab lists for each month, as it shows them, their costs and
  * the variation. They follow the comparison's sort, within their row.
  * @param {object} props
- * @param {function(?object): object} props.servicesQueryOf - The options of the query of the
- *   resource type's services in a month, for useQuery (useCompareTab()'s
- *   resourceTypeServicesQuery())
+ * @param {string} props.resourceType
+ * @param {function(string, ?object): object} props.resourceTypeServicesQuery - The options of
+ *   the query of a resource type's services in a month, for useQuery (useCompareTab()'s)
  * @param {?object} props.monthA
  * @param {?object} props.monthB
  * @param {?object} props.sort - The sort of the comparison, by its columns (see
  *   SortableHeader.jsx): null until the user sorts it, as for a comparison that does not sort
  * @returns {JSX.Element[]}
  */
-const ResourceTypeServices = ({ servicesQueryOf, monthA, monthB, sort, fmt, language, t }) => {
-  const answerA = useQuery(servicesQueryOf(monthA));
-  const answerB = useQuery(servicesQueryOf(monthB));
+const ResourceTypeServices = ({
+  resourceType, resourceTypeServicesQuery, monthA, monthB, sort, fmt, language, t,
+}) => {
+  const answerA = useQuery(resourceTypeServicesQuery(resourceType, monthA));
+  const answerB = useQuery(resourceTypeServicesQuery(resourceType, monthB));
   // Until both months' answers arrive, rather than a month at 0 €
   if (answerA.isLoading || answerB.isLoading) {
     return <MessageRow className="text-gray-500">{t('loading')}</MessageRow>;
@@ -76,14 +79,14 @@ const ResourceTypeServices = ({ servicesQueryOf, monthA, monthB, sort, fmt, lang
     return <MessageRow className="text-red-500">{t('servicesFailed')}</MessageRow>;
   }
   return inOrder(serviceRows(answerA.data ?? [], answerB.data ?? []), sort, language).map(({
-    domain, description, valA, valB,
+    identifier, description, valA, valB,
   }) => (
-    <tr key={domain} className="border-b text-gray-600">
+    <tr key={identifier} className="border-b text-gray-600">
       {/* A cell that asks the table for no width of its own (max-w-0): the description is cut
           to the column of the rows' labels, whatever the page's width, rather than widen the
           table, and the identifier wraps to it, at its hyphens first */}
       <td className="max-w-0 py-2 pr-3 pl-12">
-        <div className="font-mono text-xs break-words">{domain}</div>
+        <div className="font-mono text-xs break-words">{identifier}</div>
         <div className="truncate text-xs text-gray-500" title={description}>
           {description}
         </div>

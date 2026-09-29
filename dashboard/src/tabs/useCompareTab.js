@@ -12,7 +12,8 @@ import {
 import { accountQuery } from '../utils/accounts.js';
 import { holdsMonth } from '../utils/months.js';
 import { projectsByAccountQuery } from './projectsByAccountQueries.js';
-import { resourceTypeDetailsQuery } from './resourceTypeDetailsQueries.js';
+// Under the module's name: the hook gives its query, for the account shown, the same name
+import * as servicesQueries from './resourceTypeServicesQueries.js';
 
 // The comparison by project sorts by month A, the most expensive first, until the user sorts
 // it by another column (#146)
@@ -144,9 +145,8 @@ const useCompareTab = ({ months, activeTab, selectedAccount, accountColumn }) =>
   // that the Infrastructure tab lists for the resource type in the month, for the account shown,
   // under the same key (#192). The row of the resource type runs it once unfolded, as the other
   // figures of the month run: on the tab, for a month of the months list.
-  const resourceTypeServicesQuery = (resourceType, month) => resourceTypeDetailsQuery(
-    selectedAccount, resourceType, month, asksFor(month),
-  );
+  const resourceTypeServicesQuery = (resourceType, month) => servicesQueries
+    .resourceTypeServicesQuery(selectedAccount, resourceType, month, asksFor(month));
 
   return {
     compareMonthA,

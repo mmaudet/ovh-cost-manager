@@ -10,10 +10,11 @@ import { useQuery } from '@tanstack/react-query';
 import { useTableSorts } from '../components/SortableHeader.jsx';
 import {
   fetchInventoryServers, fetchInventoryVps, fetchInventoryStorage,
-  fetchResourceTypeDetailsByAccount,
 } from '../services/api.js';
 import { accountQuery } from '../utils/accounts.js';
-import { resourceTypeDetailsQuery } from './resourceTypeDetailsQueries.js';
+import {
+  resourceTypeServicesByAccountQuery, resourceTypeServicesQuery,
+} from './resourceTypeServicesQueries.js';
 
 /**
  * The inventory and the bill lines of the account shown (#123), for the Infrastructure tab.
@@ -59,24 +60,17 @@ const useInfrastructureTab = ({
     'inventoryStorage', fetchInventoryStorage, activeTab === 'infrastructure',
   ));
 
-  // The bill lines of the open resource type in the month selected, whatever the tab (#56):
-  // those of the account shown, under the key of the services that the Compare tab lists for
-  // the same resource type, month and account (#192), or, while the lists name the account of
-  // each service, those of all accounts by account, a service billed to several accounts once
-  // for each. One query or the other, so that a single-account installation keeps the queries
-  // it had.
-  const detailsOf = [selectedResourceType, selectedMonth?.from, selectedMonth?.to];
-  const detailsEnabled = !!selectedResourceType && holdsSelectedMonth;
+  // The bill lines of the open resource type in the month selected, by service, whatever the
+  // tab (#56): the services of the account shown, under the key of those that the Compare tab
+  // lists for the same resource type, month and account (#192), or, while the lists name the
+  // account of each service, those of all accounts by account, a service billed to several
+  // accounts once for each. One query or the other, so that a single-account installation
+  // keeps the queries it had.
+  const servicesEnabled = !!selectedResourceType && holdsSelectedMonth;
   const { data: resourceTypeDetails = [] } = useQuery(accountColumn
-    ? {
-      queryKey: ['resourceTypeDetailsByAccount', ...detailsOf],
-      queryFn: () => fetchResourceTypeDetailsByAccount(
-        selectedResourceType, selectedMonth.from, selectedMonth.to,
-      ),
-      enabled: detailsEnabled,
-    }
-    : resourceTypeDetailsQuery(
-      selectedAccount, selectedResourceType, selectedMonth, detailsEnabled,
+    ? resourceTypeServicesByAccountQuery(selectedResourceType, selectedMonth, servicesEnabled)
+    : resourceTypeServicesQuery(
+      selectedAccount, selectedResourceType, selectedMonth, servicesEnabled,
     ));
 
   return {
