@@ -12,6 +12,42 @@ sections were written afterwards from the git history.
 
 <!-- scripts/release.sh inserts each new version above the first version heading. -->
 
+## 3.2.1 - 2026-09-29
+
+Three fixes, which users of 3.2.0 reported:
+
+- **The carbon footprint imports again** (#179). OVHcloud's carbon calculator
+  accepts the request of the file with 202 Accepted, which the OVH API client
+  that OCM uses took for an error, whatever the key's rights: the import now
+  makes those calls itself.
+- **The Public Cloud tab's list of projects adds up to the month's
+  « Total Cloud »** (#180). A column gives what the month selected billed each
+  project, next to its current consumption, which is not billed yet; a
+  « Total Cloud » row closes the list, and a project that the month billed but
+  the list lacks gets a row of its own, marked †.
+- **The Compare tab compares a Public Cloud project's products from the bills**
+  (#181), for every billed month, where it read the consumption that each import
+  records, which only covers the month in which the import ran: the detail of a
+  project was empty for most months.
+
+### Upgrade notes
+
+- **Nothing to configure.** To import the carbon footprint, each account's key
+  needs `GET /me`, as every import does since 3.0.0, and the rule
+  `POST /me/carbonCalculator/csv` (see the README's "Carbon Footprint"). The
+  next import that includes it (`--all`, the Docker default) fetches it.
+- **API.** `GET /api/projects/:id/products?from=&to=` is new: the products of a
+  project over a period, from its bills, with the credit that they used apart.
+  Unlike the other routes of one project, it takes the `account` parameter, as a
+  project's bill lines belong to the account of their bill.
+
+### Bug fixes
+* fix: import the carbon footprint when the calculator answers 202 by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/184
+* fix: compare a Public Cloud project's products from the bills by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/185
+* fix: give each Public Cloud project what it was billed in the month by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/186
+
+**Full Changelog**: https://github.com/mmaudet/ovh-cost-manager/compare/v3.2.0...v3.2.1
+
 ## 3.2.0 - 2026-09-29
 
 The dashboard's lists now sort by any of their columns, with a click on a
