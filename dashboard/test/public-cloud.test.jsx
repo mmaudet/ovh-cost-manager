@@ -350,6 +350,84 @@ describe('Public Cloud tab', () => {
       expect(projectNames()).toEqual(['Staging', 'Production', 'Sandbox']);
     });
 
+    // The list gives the projects of the inventory, which may lack a project billed in the
+    // month: here Staging, which September billed 220,00€
+    describe('billed in the month that the list lacks', () => {
+      const withoutStaging = () => {
+        const [production, , sandbox] = account.projectsEnriched;
+        return { ...account, projectsEnriched: [production, sandbox] };
+      };
+      const NOT_IN_INVENTORY = "Facturé mais absent de l'inventaire des projets";
+
+      it('have a row of their own, after the others, so that the list adds up to the Cloud total',
+        async () => {
+          const { user } = await renderDashboard(withoutStaging());
+
+          await openTab(user, 'Public Cloud');
+
+          // Its id, as the server may not name it, and what the month billed it only
+          expect(projectRowsShown()).toEqual([
+            ['Production', 'Customer-facing services', 'ok', '5', '350,00€', '610,40€', '▼'],
+            ['Sandbox', 'ok', '0', '-', '-', '▼'],
+            ['Staging', '†', 'project-staging', '-', '-', '-', '220,00€'],
+          ]);
+          expect(within(cloudProjectsTable()).getByTitle(NOT_IN_INVENTORY)).toHaveTextContent('†');
+          expect(projectListTotal()).toEqual(['Total Cloud', '830,40€']);
+
+          await selectLanguage(user, 'en');
+
+          expect(within(cloudProjectsTable()).getByTitle('Billed but not in the project inventory'))
+            .toHaveTextContent('†');
+        });
+
+      // Such as the projects of an account whose inventory another account holds
+      it('show when the list has no project of its own', async () => {
+        const { user } = await renderDashboard({ ...account, projectsEnriched: [] });
+
+        await openTab(user, 'Public Cloud');
+
+        expect(projectRowsShown()).toEqual([
+          ['Production', '†', 'project-production', '-', '-', '-', '610,40€'],
+          ['Staging', '†', 'project-staging', '-', '-', '-', '220,00€'],
+        ]);
+        expect(projectListTotal()).toEqual(['Total Cloud', '830,40€']);
+      });
+
+      // The inventory has none of its resources
+      it('have no detail to open', async () => {
+        const { user } = await renderDashboard(withoutStaging());
+        await openTab(user, 'Public Cloud');
+
+        await user.click(within(cloudProjectsTable()).getByText('Staging'));
+        await settle();
+
+        expect(detailHeadings()).toEqual([]);
+        expect(api.fetchProjectConsumption).not.toHaveBeenCalled();
+        expect(api.fetchProjectInstances).not.toHaveBeenCalled();
+      });
+
+      // They have no state, instance count or consumption in the list: they come last by those,
+      // either way, as a project without a value there does (#146)
+      it('sort by what the month billed them, and last by what the list lacks of them',
+        async () => {
+          const { user } = await renderDashboard(withoutStaging());
+          await openTab(user, 'Public Cloud');
+          const projectNames = () => projectRowsShown().map(([name]) => name);
+
+          await sortTable(user, cloudProjectsTable(), /^Facturé en/);
+
+          expect(projectNames()).toEqual(['Production', 'Staging', 'Sandbox']);
+
+          await sortTable(user, cloudProjectsTable(), /^Instances/);
+
+          expect(projectNames()).toEqual(['Production', 'Sandbox', 'Staging']);
+
+          await sortTable(user, cloudProjectsTable(), /^Instances/);
+
+          expect(projectNames()).toEqual(['Sandbox', 'Production', 'Staging']);
+        });
+    });
+
     // Which ways of moving around the page keep the open project: see navigation.test.jsx (#56)
   });
 
@@ -893,7 +971,9 @@ describe('Public Cloud tab', () => {
   );
 
   it('shows only its figures when there is no Public Cloud project', async () => {
-    const { user } = await renderDashboard({ ...account, projectsEnriched: [] });
+    // None in the inventory, and none that the bills of the month name, which the list would
+    // give (#180)
+    const { user } = await renderDashboard({ ...account, projectsEnriched: [], byProject: {} });
 
     await openTab(user, 'Public Cloud');
 
@@ -1159,6 +1239,25 @@ describe('Public Cloud tab', () => {
         ]);
         expect(rowTextsOf(cloudProjectsTable())[3])
           .toEqual(['Sandbox', 'Unknown account', 'ok', '0', '-', '-', '▼']);
+      });
+
+      // What the bills of the month charged a project is then what those of each account
+      // charged it, as in the Overview's breakdown by project (#118)
+      it('names the account whose bills charged a project that the list lacks', async () => {
+        const [lyonProduction, , unknownSandbox] = severalAccounts.projectsEnriched;
+        const { user } = await renderDashboard({
+          ...severalAccounts, projectsEnriched: [lyonProduction, unknownSandbox],
+        });
+
+        await openTab(user, 'Public Cloud');
+
+        expect(projectRowsShown()).toEqual([
+          ['Production', 'Customer-facing services', 'Lyon subsidiary', 'ok', '5', '350,00€',
+            '610,40€', '▼'],
+          ['Sandbox', 'Compte inconnu', 'ok', '0', '-', '-', '▼'],
+          ['Staging', '†', 'project-staging', 'yy2222-ovh', '-', '-', '-', '220,00€'],
+        ]);
+        expect(projectListTotal()).toEqual(['Total Cloud', '830,40€']);
       });
 
       it('names no account once one is selected, and names them again with all accounts',

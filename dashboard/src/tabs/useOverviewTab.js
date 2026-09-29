@@ -6,9 +6,10 @@
 // read it as well. So do the costs by project and the GPU costs, once for each project. The
 // budget stays in the shell too, since the month-end forecast card reads it.
 //
-// The tab queries only what its lists alone show when they name the account of each project,
-// with all accounts shown (#118): their projects once for each account that billed them.
-// Everything else lists each project once, as before.
+// The tab queries only what its lists show when they name the account of each project, with all
+// accounts shown (#118): their projects once for each account that billed them, which the list of
+// projects of the Public Cloud tab reads too, through the shell (#180). Everything else lists
+// each project once, as before.
 
 import { useQuery } from '@tanstack/react-query';
 import { useTableSorts } from '../components/SortableHeader.jsx';
@@ -26,8 +27,9 @@ const useOverviewTab = ({ selectedMonth, holdsSelectedMonth, accountColumn }) =>
   const sortingOf = useTableSorts({ projects: BY_AMOUNT });
 
   // The projects of the month by account, for all accounts, while the lists name the account
-  // of each: the breakdown by project, and the GPU costs by project. As the shell's queries of
-  // the month, they wait until the months of the account shown hold it.
+  // of each: the breakdown by project, which the Public Cloud tab's list of projects reads too,
+  // and the GPU costs by project. As the shell's queries of the month, they wait until the
+  // months of the account shown hold it.
   const enabled = accountColumn !== null && holdsSelectedMonth;
   const { data: projectsByAccount = [] } = useQuery(projectsByAccountQuery(selectedMonth, enabled));
   const { data: gpuProjectsByAccount = [] } = useQuery(

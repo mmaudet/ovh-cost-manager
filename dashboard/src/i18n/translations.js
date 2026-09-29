@@ -205,6 +205,8 @@ export const translations = {
     // What the bills of the month selected charged each project of the list, before the month
     // as a sentence names it (#180)
     billedIn: 'Facturé en',
+    // The mark of a project billed in the month that the list lacks (#180)
+    projectNotInInventory: 'Facturé mais absent de l\'inventaire des projets',
     // The products that no Public Cloud card of its own counts, and the credit (#145)
     otherServices: 'Autres services',
     cloudCreditUsed: 'Crédit Cloud utilisé',
@@ -486,6 +488,8 @@ export const translations = {
     // What the bills of the month selected charged each project of the list, before the month
     // as a sentence names it (#180)
     billedIn: 'Billed in',
+    // The mark of a project billed in the month that the list lacks (#180)
+    projectNotInInventory: 'Billed but not in the project inventory',
     // The products that no Public Cloud card of its own counts, and the credit (#145)
     otherServices: 'Other services',
     cloudCreditUsed: 'Cloud credit used',

@@ -228,6 +228,10 @@ export default function Dashboard() {
   // before the loading screen, so that the tab keeps them while another one is open (ADR 0001)
 
   const overviewTab = useOverviewTab({ selectedMonth, holdsSelectedMonth, accountColumn });
+  // The Public Cloud tab's list of projects gives what the month billed each, by account while
+  // the lists name the account of each project, as the Overview's breakdown does: the shell
+  // passes on the projects by account that the Overview hook loads (#180)
+  const { projectsByAccount } = overviewTab;
 
   const compareTab = useCompareTab({ months, activeTab, selectedAccount, accountColumn });
 
@@ -762,7 +766,7 @@ export default function Dashboard() {
             selectedMonth={selectedMonth}
             setSelectedProject={setSelectedProject} byResourceType={byResourceType}
             gpuSummary={gpuSummary} accountColumn={accountColumn} cloudTotal={summary?.cloudTotal}
-            byProject={byProject}
+            byProject={byProject} projectsByAccount={projectsByAccount}
           />
         )}
 

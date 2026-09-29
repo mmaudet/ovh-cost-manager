@@ -57,4 +57,75 @@ describe('projectListRows', () => {
   it('gives no row when the list has no project and the month billed none', () => {
     expect(projectListRows([], [])).toEqual([]);
   });
+
+  // So that the amounts add up to the month's cloud total: a project billed in the month that the
+  // list lacks gets a row of its own, after the projects of the list, in the order of the bills'
+  // projects. The server names a project that the projects table lacks "Unknown".
+  it('gives the projects billed in the month that the list lacks after those of the list', () => {
+    expect(projectListRows(
+      [production, sandbox],
+      [
+        billed('project-production', 'Production', 610.4),
+        billed('project-legacy', 'Legacy', 220),
+        billed('project-gone', 'Unknown', 45),
+      ],
+    )).toEqual([
+      { ...production, billed: 610.4, listed: true },
+      { ...sandbox, billed: null, listed: true },
+      { id: 'project-legacy', name: 'Legacy', billed: 220, listed: false },
+      { id: 'project-gone', name: 'Unknown', billed: 45, listed: false },
+    ]);
+  });
+
+  it('gives the projects billed in the month when the list has none', () => {
+    expect(rows([], [billed('project-legacy', 'Legacy', 220)]))
+      .toEqual([['project-legacy', 'Legacy', 220]]);
+  });
+
+  // With all accounts shown, the list names the account of each project, and the bills' projects
+  // come once for each account that billed them, with that account, null for the Unknown account
+  // (#118): a project of the bills is one of the list when it has its id and its account
+  describe('by account', () => {
+    const ofAccount = (project, account) => ({ ...project, account });
+    const lyonProduction = ofAccount(production, 'xx1111-ovh');
+    const unnamedStaging = ofAccount(staging, 'yy2222-ovh');
+    const unknownSandbox = ofAccount(sandbox, null);
+
+    it('gives each project of the list what the bills of its account charged it', () => {
+      expect(projectListRows(
+        [lyonProduction, unnamedStaging, unknownSandbox],
+        [
+          ofAccount(billed('project-production', 'Production', 610.4), 'xx1111-ovh'),
+          ofAccount(billed('project-staging', 'Staging', 220), 'yy2222-ovh'),
+        ],
+      )).toEqual([
+        { ...lyonProduction, billed: 610.4, listed: true },
+        { ...unnamedStaging, billed: 220, listed: true },
+        { ...unknownSandbox, billed: null, listed: true },
+      ]);
+    });
+
+    // Such as a project that moved from an account to another: what its former account was
+    // billed for it is not in the list, which gives it the other
+    it('gives a project billed to an account that the list does not give it a row of its own',
+      () => {
+        expect(projectListRows(
+          [lyonProduction, unnamedStaging],
+          [
+            ofAccount(billed('project-production', 'Production', 610.4), 'xx1111-ovh'),
+            ofAccount(billed('project-staging', 'Staging', 220), 'yy2222-ovh'),
+            ofAccount(billed('project-staging', 'Staging', 30), 'xx1111-ovh'),
+            ofAccount(billed('project-gone', 'Unknown', 12), null),
+          ],
+        )).toEqual([
+          { ...lyonProduction, billed: 610.4, listed: true },
+          { ...unnamedStaging, billed: 220, listed: true },
+          {
+            id: 'project-staging', name: 'Staging', account: 'xx1111-ovh', billed: 30,
+            listed: false,
+          },
+          { id: 'project-gone', name: 'Unknown', account: null, billed: 12, listed: false },
+        ]);
+      });
+  });
 });
