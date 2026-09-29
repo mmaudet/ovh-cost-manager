@@ -1213,6 +1213,46 @@ describe('Compare tab', () => {
           ));
         });
 
+      // vm-db-1 moved from Lyon to yy2222-ovh during September: 10 € for Lyon, then 20 € for
+      // yy2222-ovh, which the server gives after vm-files-1, of the same cost, by service, the
+      // last first. The row counts three VMs in September, as the Veeam backups do, and lists
+      // four (getBackupServices() in data/db.js).
+      it('list a VM that two accounts backed up once for each, which the row counts once',
+        async () => {
+          const september = severalAccounts.backupServicesByAccount['2026-09'];
+          const [app, db, files] = september.vms;
+          const { user } = await renderDashboard({
+            ...severalAccounts,
+            backupServicesByAccount: {
+              ...severalAccounts.backupServicesByAccount,
+              '2026-09': {
+                ...september,
+                vms: [
+                  app, files, { ...db, total: 20 }, { ...db, total: 10, account: lyonAccount.nic },
+                ],
+              },
+            },
+          });
+          await openTab(user, 'Comparaison');
+          await openComparison(user, BACKUP);
+
+          await toggleRow(user, BACKUP, VMS);
+
+          const description = (vm) => `Veeam Managed Backup - ${vm}`;
+          expect(backupRows().slice(0, 6)).toEqual([
+            [VMS, '2 / 40,00€', '3 / 90,00€', '+125,0 %'],
+            ['vm-app-1.example.com', '(yy2222-ovh)', description('vm-app-1.example.com'),
+              '25,00€', '40,00€', '+60,0 %'],
+            ['vm-db-1.example.com', '(yy2222-ovh)', description('vm-db-1.example.com'),
+              '15,00€', '20,00€', '+33,3 %'],
+            ['vm-files-1.example.com', '(yy2222-ovh)', description('vm-files-1.example.com'),
+              '0,00€', '20,00€', '—'],
+            ['vm-db-1.example.com', '(Lyon subsidiary)', description('vm-db-1.example.com'),
+              '0,00€', '10,00€', '—'],
+            [LICENCES, '0 / 0,00€', '1 / 25,00€', '—'],
+          ]);
+        });
+
       it('list the services of the account selected, and none of an account without backups',
         async () => {
           const { user } = await renderDashboard(severalAccounts);

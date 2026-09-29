@@ -264,6 +264,18 @@ describe('GET /api/analysis/backup-services', () => {
     expect(paris.description).toBe('Veeam Backup vm-web-1');
   });
 
+  // While the lists name the account of each service, with all accounts shown, the VMs row of
+  // the backup comparison counts a VM that two accounts backed up once, and lists it once for
+  // each account (see getBackupServices()): vm-web-1, in July
+  test('lists once for each account a VM that the Veeam backups count once', async () => {
+    const { body: stats } = await ocm.get(`/api/analysis/backup-stats?${JULY}`);
+    const { body: services } = await servicesOf(JULY, '&byAccount=true');
+
+    expect(stats.vms.count).toBe(1);
+    expect(services.vms.map(({ domain, account }) => [domain, account]))
+      .toEqual([['vm-web-1', LYON], ['vm-web-1', PARIS]]);
+  });
+
   // Rather than answer for all accounts, or for none, to a request that names an account
   test.each([
     ['a NIC handle that no import recorded', 'account=ww4444-ovh'],
