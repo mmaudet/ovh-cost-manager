@@ -939,6 +939,52 @@ describe('Compare tab', () => {
         '270,00€', '270,00€', '0,0 %',
       ]);
     });
+
+    // Several accounts in the instance: see fixtures/accounts.js. The rows stay unfolded, and
+    // the page closes the comparisons while the months of the account just selected load.
+    it('list the services of the account selected in the header', async () => {
+      const { user } = await renderDashboard(severalAccounts);
+      await openTab(user, 'Comparaison');
+      await selectAccount(user, 'Lyon subsidiary');
+      await openComparison(user, INFRASTRUCTURE);
+
+      await toggleRow(user, INFRASTRUCTURE, DEDICATED_SERVERS);
+
+      for (const { from, to } of [months[1], months[0]]) {
+        expect(api.fetchResourceTypeDetails)
+          .toHaveBeenCalledWith('dedicated_server', from, to, lyonAccount.id);
+      }
+      // Its server, rented from the end of August: (270 - 70) / 70
+      expect(infrastructureRows().slice(0, 2)).toEqual([
+        [DEDICATED_SERVERS, 'backup-server', '70,00€', '270,00€', '+285,7 %'],
+        ['ns3000001.ip-203-0-113.eu',
+          'Location du serveur RISE-1 ns3000001.ip-203-0-113.eu - 1 mois',
+          '70,00€', '270,00€', '+285,7 %'],
+      ]);
+
+      // Billed in July only: that month, compared with itself
+      await selectAccount(user, 'Compte inconnu');
+      await openComparison(user, INFRASTRUCTURE);
+
+      expect(api.fetchResourceTypeDetails)
+        .toHaveBeenCalledWith('dedicated_server', '2026-07-01', '2026-07-31', 'unknown');
+      expect(infrastructureRows().slice(0, 2)).toEqual([
+        [DEDICATED_SERVERS, 'legacy-server', '90,00€', '90,00€', '0,0 %'],
+        ['ns3000004.ip-203-0-113.eu',
+          'Location du serveur KS-1 ns3000004.ip-203-0-113.eu - 1 mois',
+          '90,00€', '90,00€', '0,0 %'],
+      ]);
+
+      await selectAccount(user, 'Tous les comptes');
+      await openComparison(user, INFRASTRUCTURE);
+
+      // Those of every account together, as the request names none
+      for (const { from, to } of [months[1], months[0]]) {
+        expect(api.fetchResourceTypeDetails)
+          .toHaveBeenCalledWith('dedicated_server', from, to, null);
+      }
+      expect(api.fetchResourceTypeDetailsByAccount).not.toHaveBeenCalled();
+    });
   });
 
   // The comparison of each project's products in months A and B, from the bills of each month

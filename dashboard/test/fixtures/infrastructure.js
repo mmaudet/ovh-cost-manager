@@ -210,6 +210,13 @@ const legacyServerRental = {
   total: 90,
   line_count: 1,
 };
+// Lyon rented its server from the end of August: that month's rental, prorated, the 70 € of
+// dedicated servers of Lyon's costs by resource type (#192)
+const lyonFirstRental = {
+  ...serverRental,
+  description: 'Location du serveur RISE-1 ns3000001.ip-203-0-113.eu - prorata',
+  total: 70,
+};
 // A service about to expire, as /api/inventory/expiring lists it
 const expiring = (type, { id, display_name: displayName, expiration_date: date, account }) => ({
   id, display_name: displayName, type, expiration_date: date, account,
@@ -247,7 +254,9 @@ export const infrastructureOfSeveralAccounts = {
       inventoryVps: [vps],
       inventoryStorage: [fileStorage],
       expiringServices: [expiring('dedicated_server', billedServer), expiring('vps', vps)],
-      resourceTypeDetails: { dedicated_server: { '2026-09': [serverRental] } },
+      resourceTypeDetails: {
+        dedicated_server: { '2026-09': [serverRental], '2026-08': [lyonFirstRental] },
+      },
     },
     [UNNAMED]: {
       inventoryServers: [deliveredServer],
