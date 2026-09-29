@@ -7,6 +7,9 @@
  * OVH gives it (#145): the hourly and monthly resources, and the typed resources of the
  * newer products, such as the container registry. What no part names, as when OVH adds a
  * kind of resource, counts as `other`. Without side effects.
+ *
+ * Checked on 29 September 2026 against a real answer, for a project with eleven products: its
+ * rows added up to OVH's total, with nothing left for `other` and nothing counted twice.
  */
 
 // An amount of the answer: a number, or an order.Price, whose value is the number
