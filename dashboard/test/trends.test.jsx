@@ -1,7 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import { screen, within } from '@testing-library/react';
 import { account } from './fixtures/account.js';
-import { lyonAccount, removedAccount, severalAccounts } from './fixtures/accounts.js';
+import {
+  lyonAccount, removedAccount, severalAccounts, severalAccountsWithAiEndpoints,
+} from './fixtures/accounts.js';
+import { aiEndpoints } from './fixtures/public-cloud.js';
 import { sinceJuly2025 } from './fixtures/trends.js';
 import { api } from './support/api.js';
 import {
@@ -319,6 +322,130 @@ describe('Trends tab', () => {
       await openTab(user, 'Tendances');
 
       expect(screen.queryByText('Évolution des coûts GPU')).not.toBeInTheDocument();
+    });
+  });
+
+  // The cost of each AI Endpoints model month by month (#196), over the months of the GPU
+  // trend: see fixtures/public-cloud.js, whose account called models in August and September
+  describe('AI Endpoints trend', () => {
+    // The synthetic account, whose projects called AI Endpoints models
+    const withAiEndpoints = { ...account, aiEndpoints };
+    const AI_ENDPOINTS_TREND =
+      /^(Évolution des coûts AI Endpoints par modèle|AI Endpoints cost evolution by model)$/;
+    // The card of the chart: its heading, then its legend, one item per model
+    const aiEndpointsTrend = () =>
+      cardOf(screen.getByRole('heading', { name: AI_ENDPOINTS_TREND }));
+    const legendOf = (card) => within(card).getAllByRole('listitem');
+
+    it('asks for the models of the period once the tab opens', async () => {
+      const { user } = await renderDashboard(withAiEndpoints);
+      // Nor does the Public Cloud tab ask for them until it opens
+      expect(api.fetchAiEndpoints).not.toHaveBeenCalled();
+
+      await openTab(user, 'Tendances');
+
+      // The 3 months of the GPU trend, July to September
+      expect(api.fetchAiEndpoints).toHaveBeenCalledWith('2026-07-01', '2026-09-30', allAccounts);
+    });
+
+    // What shows around the chart, which draws nothing in the tests (see setup.js)
+    it('is headed by its title, and names each model in its legend', async () => {
+      const { user } = await renderDashboard(withAiEndpoints);
+
+      await openTab(user, 'Tendances');
+
+      // The most expensive over the period first
+      expect(texts(aiEndpointsTrend())).toEqual([
+        'Évolution des coûts AI Endpoints par modèle',
+        'gpt-oss-120b', 'gpt-oss-20b', 'bge-m3', 'whisper-large-v3', 'Mistral-7B-Instruct-v0.3',
+        'stable-diffusion-xl-base-v10',
+      ]);
+      expect(legendOf(aiEndpointsTrend())).toHaveLength(6);
+    });
+
+    // Rather than a color by its rank, which the models of another period, month or account
+    // would change
+    it('gives each model its color whatever the account shown', async () => {
+      const { user } = await renderDashboard(severalAccountsWithAiEndpoints);
+      await openTab(user, 'Tendances');
+      // The color of a model's swatch in the legend
+      const colorOf = (model) =>
+        swatchOf(within(aiEndpointsTrend()).getByText(model)).style.backgroundColor;
+      const colors = ['gpt-oss-120b', 'bge-m3', 'Mistral-7B-Instruct-v0.3'].map(colorOf);
+
+      await selectAccount(user, 'Lyon subsidiary');
+
+      // Mistral-7B-Instruct-v0.3 comes 4th of Lyon's models rather than 5th
+      expect(['gpt-oss-120b', 'bge-m3', 'Mistral-7B-Instruct-v0.3'].map(colorOf)).toEqual(colors);
+    });
+
+    // As the GPU trend: a single bar is no trend
+    it('is left out when the models were billed in a single month of the period', async () => {
+      const { user } = await renderDashboard({
+        ...account,
+        aiEndpoints: { '2026-07/2026-09': aiEndpoints['2026-09'] },
+      });
+
+      await openTab(user, 'Tendances');
+
+      expect(screen.queryByRole('heading', { name: AI_ENDPOINTS_TREND })).not.toBeInTheDocument();
+    });
+
+    it('follows the period the user picks', async () => {
+      const { user } = await renderDashboard({ ...withAiEndpoints, ...sinceJuly2025 });
+      await openTab(user, 'Tendances');
+      // The 6 months that this history offers by default (see fixtures/trends.js)
+      expect(api.fetchAiEndpoints).toHaveBeenCalledWith('2026-04-01', '2026-09-30', allAccounts);
+
+      await user.selectOptions(periodSelector(), '2 ans');
+      await settle();
+
+      expect(api.fetchAiEndpoints).toHaveBeenCalledWith('2024-10-01', '2026-09-30', allAccounts);
+      expect(texts(aiEndpointsTrend())[0]).toBe('Évolution des coûts AI Endpoints par modèle');
+    });
+
+    it('follows the month selected in the header', async () => {
+      const { user } = await renderDashboard(withAiEndpoints);
+      await openTab(user, 'Tendances');
+
+      await selectMonth(user, 'Août 2026');
+
+      // June to August, when the models were billed in August alone: no trend to draw
+      expect(api.fetchAiEndpoints).toHaveBeenCalledWith('2026-06-01', '2026-08-31', allAccounts);
+      expect(screen.queryByRole('heading', { name: AI_ENDPOINTS_TREND })).not.toBeInTheDocument();
+    });
+
+    // See fixtures/accounts.js
+    it('follows the account selected', async () => {
+      const { user } = await renderDashboard(severalAccountsWithAiEndpoints);
+      await openTab(user, 'Tendances');
+
+      await selectAccount(user, 'Lyon subsidiary');
+
+      expect(api.fetchAiEndpoints)
+        .toHaveBeenCalledWith('2026-07-01', '2026-09-30', lyonAccount.id);
+      expect(texts(aiEndpointsTrend())).toEqual([
+        'Évolution des coûts AI Endpoints par modèle',
+        'gpt-oss-120b', 'gpt-oss-20b', 'bge-m3', 'Mistral-7B-Instruct-v0.3',
+      ]);
+
+      // Whose models were billed in September alone
+      await selectAccount(user, 'yy2222-ovh');
+
+      expect(screen.queryByRole('heading', { name: AI_ENDPOINTS_TREND })).not.toBeInTheDocument();
+    });
+
+    it('speaks English when the page does', async () => {
+      const { user } = await renderDashboard(withAiEndpoints);
+      await selectLanguage(user, 'en');
+
+      await openTab(user, 'Trends');
+
+      expect(texts(aiEndpointsTrend())).toEqual([
+        'AI Endpoints cost evolution by model',
+        'gpt-oss-120b', 'gpt-oss-20b', 'bge-m3', 'whisper-large-v3', 'Mistral-7B-Instruct-v0.3',
+        'stable-diffusion-xl-base-v10',
+      ]);
     });
   });
 

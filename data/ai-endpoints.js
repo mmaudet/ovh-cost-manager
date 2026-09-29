@@ -1,10 +1,11 @@
 /**
  * The AI Endpoints models (see CONTEXT.md) that the bill lines of a Public Cloud project name,
- * and what the lines add up to by model (#193). OVHcloud bills a model's use on a line per
- * charge, most often its input tokens and its output tokens, whose quantity is the number of
- * tokens: « Nombre de tokens d'entrée pour le modèle AI Endpoints gpt-oss-20b », or "Amount of
- * input tokens for AI Endpoints gpt-oss-20b model" on English bills. The model's other lines,
- * such as a speech-to-text model's seconds of audio, count in its cost only.
+ * and what the lines add up to by model (#193), in all and month by month (#196). OVHcloud
+ * bills a model's use on a line per charge, most often its input tokens and its output tokens,
+ * whose quantity is the number of tokens: « Nombre de tokens d'entrée pour le modèle AI
+ * Endpoints gpt-oss-20b », or "Amount of input tokens for AI Endpoints gpt-oss-20b model" on
+ * English bills. The model's other lines, such as a speech-to-text model's seconds of audio,
+ * count in its cost only.
  *
  * data/db.js selects the lines of a period, which aiEndpointsLineCondition() narrows down, and
  * modelFigures() adds them up, when the server reads the bills: no re-import. This module has
@@ -69,38 +70,58 @@ function aiEndpointsLineCondition(column) {
 
 const toCents = (amount) => Math.round(amount * 100) / 100;
 
+// The entry of a key in a map, which `create` makes the first time
+const entryOf = (map, key, create) => {
+  if (!map.has(key)) map.set(key, create());
+  return map.get(key);
+};
+
 /**
  * What bill lines add up to, by the AI Endpoints model that each names: those that name none
  * are left out.
- * @param {{description: ?string, quantity: ?number, total_price: ?number}[]} lines
+ * @param {{description: ?string, month: string, quantity: ?number, total_price: ?number}[]}
+ *   lines - Each with the month of its bill, YYYY-MM
  * @returns {{total: number, models: {model: string, tokens: {input: ?number, output: ?number},
- *   cost: number}[]}} Each model, the most expensive first, then by name, with its input and
- *   output tokens, what the quantities of its lines that count them add up to, null when none
- *   does, such as an embedding model's output tokens, and its cost, all its lines together, to
- *   the cent. And what the models cost in all: the sum of their costs to the cent, rather than
- *   of their lines, so that the models' costs add up to it, as the other services' do to theirs
- *   in productFigures().
+ *   cost: number}[], monthlyTrend: {month: string, costs: Object<string, number>}[]}} Each
+ *   model, the most expensive first, then by name, with its input and output tokens, what the
+ *   quantities of its lines that count them add up to, null when none does, such as an
+ *   embedding model's output tokens, and its cost, all its lines together, to the cent. What
+ *   the models cost in all: the sum of their costs to the cent, rather than of their lines, so
+ *   that the models' costs add up to it, as the other services' do to theirs in
+ *   productFigures(). And each month of the bills that name a model, the earliest first, with
+ *   the cost of each model in it, to the cent.
  */
 function modelFigures(lines) {
   const byModel = new Map();
+  // What each model cost in each month of the bills, by month, then by model
+  const byMonth = new Map();
   for (const line of lines) {
     const aiLine = readAiEndpointsLine(line.description);
     if (aiLine === null) continue;
-    if (!byModel.has(aiLine.model)) {
-      byModel.set(aiLine.model, {
-        model: aiLine.model, tokens: { input: null, output: null }, cost: 0,
-      });
-    }
-    const figures = byModel.get(aiLine.model);
+    const cost = line.total_price || 0;
+    const figures = entryOf(byModel, aiLine.model,
+      () => ({ model: aiLine.model, tokens: { input: null, output: null }, cost: 0 }));
     if (aiLine.counts !== null) {
       figures.tokens[aiLine.counts] = (figures.tokens[aiLine.counts] ?? 0) + (line.quantity || 0);
     }
-    figures.cost += line.total_price || 0;
+    figures.cost += cost;
+    const costsOfMonth = entryOf(byMonth, line.month, () => new Map());
+    costsOfMonth.set(aiLine.model, (costsOfMonth.get(aiLine.model) ?? 0) + cost);
   }
   const models = [...byModel.values()]
     .map((figures) => ({ ...figures, cost: toCents(figures.cost) }))
     .sort((a, b) => b.cost - a.cost || a.model.localeCompare(b.model));
-  return { total: toCents(models.reduce((sum, { cost }) => sum + cost, 0)), models };
+  // Every model of the lines in each month, at 0 in a month that billed it nothing, so that the
+  // months compare, in the order of the models; the months in theirs, YYYY-MM
+  const monthlyTrend = [...byMonth.keys()].sort().map((month) => ({
+    month,
+    costs: Object.fromEntries(models.map(({ model }) => [
+      model, toCents(byMonth.get(month).get(model) ?? 0),
+    ])),
+  }));
+  return {
+    total: toCents(models.reduce((sum, { cost }) => sum + cost, 0)), models, monthlyTrend,
+  };
 }
 
 module.exports = { aiEndpointsLineCondition, modelFigures };

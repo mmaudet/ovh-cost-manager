@@ -272,14 +272,17 @@ export const fetchPublicCloudStats = async (from, to, account = null) => {
 
 /**
  * The AI Endpoints models that the bills of a period name (#193), the projects together, which
- * the Public Cloud tab lists for the month it shows
+ * the Public Cloud tab lists for the month it shows, and their cost month by month, which the
+ * Trends tab charts over its period (#196)
  * @param {string} from - The first day of the period, 'YYYY-MM-DD'
  * @param {string} to - Its last day
  * @param {?string} [account] - The account whose bills to read, as the functions above take
  *   it: null for all accounts
- * @returns {Promise<{ total: number, models: object[] }>} What the models cost in all, and
- *   each model's name, as the bills give it, its inputTokens and outputTokens, null when none
- *   of its lines counts them, and its cost, total, the most expensive first
+ * @returns {Promise<{ total: number, models: object[], monthlyTrend: object[] }>} What the
+ *   models cost in all; each model's name, as the bills give it, its inputTokens and
+ *   outputTokens, null when none of its lines counts them, and its cost, total, the most
+ *   expensive first; and each month of the bills that name a model, the earliest first, with
+ *   the costs of every model in it, 0 for one that it did not bill
  */
 export const fetchAiEndpoints = async (from, to, account = null) => {
   const { data } = await api.get('/analysis/ai-endpoints', {

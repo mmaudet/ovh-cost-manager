@@ -241,6 +241,8 @@ export const translations = {
     inputTokens: 'Tokens d\'entrée',
     outputTokens: 'Tokens de sortie',
     aiEndpointsTotal: 'Total AI Endpoints',
+    // The cost of each AI Endpoints model month by month, which the Trends tab charts (#196)
+    aiEndpointsTrend: 'Évolution des coûts AI Endpoints par modèle',
     // The type of a bucket without a class (#145)
     bucketEmpty: 'Vide',
     bucketEmptyHint: 'Un bucket vide n\'a pas de classe : OVHcloud en donne une à chaque objet',
@@ -546,6 +548,8 @@ export const translations = {
     inputTokens: 'Input tokens',
     outputTokens: 'Output tokens',
     aiEndpointsTotal: 'AI Endpoints Total',
+    // The cost of each AI Endpoints model month by month, which the Trends tab charts (#196)
+    aiEndpointsTrend: 'AI Endpoints cost evolution by model',
     // The type of a bucket without a class (#145)
     bucketEmpty: 'Empty',
     bucketEmptyHint: 'An empty bucket has no class: OVHcloud gives one to each object',

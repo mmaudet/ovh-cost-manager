@@ -4,7 +4,7 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
-  fetchMonthlyTrend, fetchMonthlyTrendByCategory, fetchGpuSummary,
+  fetchMonthlyTrend, fetchMonthlyTrendByCategory, fetchGpuSummary, fetchAiEndpoints,
 } from '../services/api.js';
 import { accountQuery } from '../utils/accounts.js';
 import { monthsBetween, availablePeriodsFor } from '../utils/trendPeriods.js';
@@ -57,11 +57,22 @@ const useTrendsTab = ({
     return next;
   });
 
+  // The months of the period as dates, from the first day of the first to the last day of the
+  // month selected: those of the GPU and AI Endpoints trends
+  const trendWindow = monthWindowEndingOn(selectedMonth, trendPeriod);
+
   // GPU cost trend, over the same months (for trends tab)
-  const gpuTrendWindow = monthWindowEndingOn(selectedMonth, trendPeriod);
   const { data: gpuTrend } = useQuery(accountQuery(selectedAccount, {
-    key: ['gpuTrend', gpuTrendWindow?.from, gpuTrendWindow?.to],
-    fetch: (account) => fetchGpuSummary(gpuTrendWindow.from, gpuTrendWindow.to, account),
+    key: ['gpuTrend', trendWindow?.from, trendWindow?.to],
+    fetch: (account) => fetchGpuSummary(trendWindow.from, trendWindow.to, account),
+    enabled: holdsSelectedMonth && activeTab === 'trends',
+  }));
+
+  // The cost of each AI Endpoints model month by month (#196), over the same months, which only
+  // the tab shows
+  const { data: aiEndpointsTrend } = useQuery(accountQuery(selectedAccount, {
+    key: ['aiEndpointsTrend', trendWindow?.from, trendWindow?.to],
+    fetch: (account) => fetchAiEndpoints(trendWindow.from, trendWindow.to, account),
     enabled: holdsSelectedMonth && activeTab === 'trends',
   }));
 
@@ -74,6 +85,7 @@ const useTrendsTab = ({
     hiddenCategories,
     toggleCategory,
     gpuTrend,
+    aiEndpointsTrend,
   };
 };
 
