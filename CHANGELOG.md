@@ -12,6 +12,23 @@ sections were written afterwards from the git history.
 
 <!-- scripts/release.sh inserts each new version above the first version heading. -->
 
+## 3.3.1 - 2026-09-29
+
+The dashboard's footer now shows the version of OCM that runs, « OVH Cost
+Manager v3.3.1 », linked to its release notes, so that whoever uses it knows
+which version is deployed (#188).
+
+- **Where it comes from.** The server gives the version on `/api/config`,
+  behind authentication as the rest of the API. `/api/health`, which answers
+  without authentication, does not give it.
+- **Outside the dashboard.** The Docker images also carry their version, as
+  the OCI label `org.opencontainers.image.version`.
+
+### New features
+* feat: show the version of OCM in the dashboard's footer by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/210
+
+**Full Changelog**: https://github.com/mmaudet/ovh-cost-manager/compare/v3.3.0...v3.3.1
+
 ## 3.3.0 - 2026-09-29
 
 Two features, which a user of 3.2.0 asked for:
