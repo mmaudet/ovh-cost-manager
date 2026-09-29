@@ -36,6 +36,20 @@ const resourceTypeValues = (byResourceTypeA, byResourceTypeB) => ({
   ),
 });
 
+// The value of a service in the same columns, which sort the services of each row of the
+// infrastructure comparison as they sort the rows (#192): its identifier, its cost in each
+// month, and the variation from one to the other, none from 0 € or less
+const SERVICE_VALUES = {
+  type: (service) => service.identifier,
+  totalA: (service) => service.valA,
+  totalB: (service) => service.valB,
+  variation: (service) => variationPercent(service.valA, service.valB),
+};
+
+// The columns of the infrastructure and Private Cloud comparisons: the resource type, the cost
+// in months A and B, and the variation
+const RESOURCE_TYPE_COLUMNS = 4;
+
 // The value of a row of the comparison by project in each column that sorts it (#146): its
 // account, none without the Account column
 const projectComparisonValues = (accountColumn) => ({
@@ -152,6 +166,7 @@ const CompareTab = ({
           <ResourceTypeServices
             resourceType={key} resourceTypeServicesQuery={resourceTypeServicesQuery}
             monthA={compareMonthA} monthB={compareMonthB} sort={sortingOf(comparison).sort}
+            values={SERVICE_VALUES} columnCount={RESOURCE_TYPE_COLUMNS}
             fmt={fmt} language={language} t={t}
           />
         )}

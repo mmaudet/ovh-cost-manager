@@ -1,27 +1,15 @@
 import { BY_MONTH_A, BY_MONTH_B, pairMonths } from '../utils/monthComparison.js';
-import { variationPercent } from '../utils/variation.js';
 import { MonthAnswersMessage, useMonthAnswers } from './MonthAnswers.jsx';
 import { sortRows } from './SortableHeader.jsx';
 import { Variation } from './Variation.jsx';
 
-// The value of a service in each column of the comparison that it details, which sorts the
-// services as it sorts the rows (#146): its identifier in the column of the rows' labels, its
-// cost in months A and B, and the variation from one to the other, none from 0 € or less
-const SERVICE_VALUES = {
-  type: (service) => service.identifier,
-  totalA: (service) => service.valA,
-  totalB: (service) => service.valB,
-  variation: (service) => variationPercent(service.valA, service.valB),
-};
-
-// The services in the order of the comparison's sort, and of the same value in its column, in
-// their own order: by month A, the most expensive first, then by month B, which the services
-// keep until the user sorts the comparison. Sorted by month B, then by month A, the services of
-// the same cost in month A keep their order of month B.
-const inOrder = (services, sort, language) => sortRows(
-  sortRows(sortRows(services, BY_MONTH_B, SERVICE_VALUES, language),
-    BY_MONTH_A, SERVICE_VALUES, language),
-  sort, SERVICE_VALUES, language,
+// The services in the order of the comparison's sort, by the values of its columns, and of the
+// same value in its column, in their own order: by month A, the most expensive first, then by
+// month B, which the services keep until the user sorts the comparison. Sorted by month B, then
+// by month A, the services of the same cost in month A keep their order of month B.
+const inOrder = (services, sort, values, language) => sortRows(
+  sortRows(sortRows(services, BY_MONTH_B, values, language), BY_MONTH_A, values, language),
+  sort, values, language,
 );
 
 // The services of months A and B, paired by their identifier, which the server gives as
@@ -36,9 +24,9 @@ const serviceRows = (servicesA, servicesB) => pairMonths(
 
 /**
  * The services of a resource type in months A and B, right under its unfolded row in a
- * comparison of the Compare tab (#192), one row each, indented, in the row's columns: the
- * services that the Infrastructure tab lists for each month, as it shows them, their costs and
- * the variation. They follow the comparison's sort, within their row.
+ * comparison of the Compare tab (#192), one row each, indented, in the comparison's columns:
+ * the services that the Infrastructure tab lists for each month, as it shows them, their costs
+ * and the variation. They follow the comparison's sort, within their row.
  * @param {object} props
  * @param {string} props.resourceType
  * @param {function(string, ?object): object} props.resourceTypeServicesQuery - The options of
@@ -47,26 +35,34 @@ const serviceRows = (servicesA, servicesB) => pairMonths(
  * @param {?object} props.monthB
  * @param {?object} props.sort - The sort of the comparison, by its columns (see
  *   SortableHeader.jsx): null until the user sorts it, as for a comparison that does not sort
- * @returns {JSX.Element[]}
+ * @param {Object<string, function(object): *>} props.values - The value of a service in each
+ *   column of the comparison, by the column's name, as sortRows() takes them, those of months A
+ *   and B (totalA, totalB) included: a service has its identifier, its description, and its
+ *   cost in each month, valA and valB
+ * @param {number} props.columnCount - The comparison's number of columns
+ * @returns {JSX.Element|JSX.Element[]} A single row, across the comparison's columns, that says
+ *   that the services load, until both months answered, or that they could not load, when one
+ *   failed; else a row for each service
  */
 const ResourceTypeServices = ({
-  resourceType, resourceTypeServicesQuery, monthA, monthB, sort, fmt, language, t,
+  resourceType, resourceTypeServicesQuery, monthA, monthB, sort, values, columnCount,
+  fmt, language, t,
 }) => {
   const { status, dataA, dataB } = useMonthAnswers(
     (month) => resourceTypeServicesQuery(resourceType, month), monthA, monthB,
   );
-  // Until both months' answers arrive, or when one failed, rather than a month at 0 €: across
-  // the four columns of the comparison, in line with the services
+  // Until both months' answers arrive, or when one failed, rather than a month at 0 €, in line
+  // with the services
   if (status !== 'answered') {
     return (
       <tr className="border-b">
-        <td colSpan={4} className="py-2 pr-3 pl-12 text-sm">
+        <td colSpan={columnCount} className="py-2 pr-3 pl-12 text-sm">
           <MonthAnswersMessage status={status} failed={t('servicesFailed')} t={t} />
         </td>
       </tr>
     );
   }
-  return inOrder(serviceRows(dataA ?? [], dataB ?? []), sort, language).map(({
+  return inOrder(serviceRows(dataA ?? [], dataB ?? []), sort, values, language).map(({
     identifier, description, valA, valB,
   }) => (
     <tr key={identifier} className="border-b text-gray-600">
