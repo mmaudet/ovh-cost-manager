@@ -1,8 +1,7 @@
 import { accountInBrackets } from '../utils/accounts.js';
 import { byNameAndAccount, pairMonths } from '../utils/monthComparison.js';
 import { MonthAnswersMessage, useMonthAnswers } from './MonthAnswers.jsx';
-import { sortUnfolded } from './UnfoldingRow.jsx';
-import { Variation } from './Variation.jsx';
+import { DETAIL_PADDING, DetailRow, sortUnfolded } from './UnfoldingRow.jsx';
 
 // The services of months A and B, paired by their identifier, which the server gives as
 // `domain`, whatever the service, and by their account, which the server gives while the lists
@@ -57,7 +56,7 @@ const ResourceTypeServices = ({
   if (status !== 'answered') {
     return (
       <tr className="border-b">
-        <td colSpan={columnCount} className="py-2 pr-3 pl-12 text-sm">
+        <td colSpan={columnCount} className={`${DETAIL_PADDING} text-sm`}>
           <MonthAnswersMessage status={status} failed={t('servicesFailed')} t={t} />
         </td>
       </tr>
@@ -68,32 +67,24 @@ const ResourceTypeServices = ({
   ).map(({
     key, identifier, account, description, valA, valB,
   }) => (
-    <tr key={key} className="border-b text-gray-600">
-      {/* A cell that asks the table for no width of its own (max-w-0): the description is cut
-          to the column of the rows' labels, whatever the page's width, rather than widen the
-          table, and the identifier wraps to it, at its hyphens first */}
-      <td className="max-w-0 py-2 pr-3 pl-12">
-        <div className="text-xs break-words">
-          <span className="font-mono">{identifier}</span>
-          {/* Its account while the lists name it, in brackets, as a line that names a service
-              names it (#194) */}
-          {accountColumn && (
-            <>
-              {' '}
-              <span className="text-gray-400">{accountInBrackets(accountColumn, account)}</span>
-            </>
-          )}
-        </div>
-        <div className="truncate text-xs text-gray-500" title={description}>
-          {description}
-        </div>
-      </td>
-      <td className="py-2 px-3 text-right">{fmt(valA)}€</td>
-      <td className="py-2 px-3 text-right">{fmt(valB)}€</td>
-      <td className="py-2 px-3 text-right">
-        <Variation from={valA} to={valB} language={language} t={t} />
-      </td>
-    </tr>
+    <DetailRow key={key} valA={valA} valB={valB} fmt={fmt} language={language} t={t}>
+      {/* The description is cut to the column of the rows' labels, and the identifier wraps to
+          it, at its hyphens first */}
+      <div className="text-xs break-words">
+        <span className="font-mono">{identifier}</span>
+        {/* Its account while the lists name it, in brackets, as a line that names a service
+            names it (#194) */}
+        {accountColumn && (
+          <>
+            {' '}
+            <span className="text-gray-400">{accountInBrackets(accountColumn, account)}</span>
+          </>
+        )}
+      </div>
+      <div className="truncate text-xs text-gray-500" title={description}>
+        {description}
+      </div>
+    </DetailRow>
   ));
 };
 

@@ -1,34 +1,23 @@
 import { formatMonthLabel } from '../utils/format.js';
-import { pairMonths } from '../utils/monthComparison.js';
+import { comparisonValues, pairMonths } from '../utils/monthComparison.js';
 import { publicCloudProductLabel } from '../utils/publicCloudProducts.js';
-import { variationPercent } from '../utils/variation.js';
 import { MonthAnswersMessage, useMonthAnswers } from './MonthAnswers.jsx';
 import { SortableHeader, sortRows } from './SortableHeader.jsx';
-import { UnfoldingRow, sortUnfolded } from './UnfoldingRow.jsx';
+import { DetailRow, LABEL_PADDING, UnfoldingRow, sortUnfolded } from './UnfoldingRow.jsx';
 import { Variation } from './Variation.jsx';
 
 // What the server answers for a month whose bills charged the project nothing
 const NOTHING_BILLED = { total: 0, products: [], credits: 0 };
 
 // The value of a product in each column that sorts the comparison (#146): its name as the table
-// gives it, its cost in months A and B, and the variation from one to the other, none from 0 €
-// or less
-const productValues = (t) => ({
-  product: (row) => publicCloudProductLabel(row.product, t),
-  totalA: (row) => row.valA,
-  totalB: (row) => row.valB,
-  variation: (row) => variationPercent(row.valA, row.valB),
-});
+// gives it, its cost in months A and B, and the variation from one to the other
+const productValues = (t) => comparisonValues(
+  'product', (row) => publicCloudProductLabel(row.product, t),
+);
 
 // The value of a charge in the same columns, which sort the charges of each product as they sort
-// the products (#195): the charge itself, its cost in months A and B, and the variation from one
-// to the other, none from 0 € or less
-const CHARGE_VALUES = {
-  product: (row) => row.charge,
-  totalA: (row) => row.valA,
-  totalB: (row) => row.valB,
-  variation: (row) => variationPercent(row.valA, row.valB),
-};
+// the products (#195): the charge itself, its cost in months A and B, and the variation
+const CHARGE_VALUES = comparisonValues('product', (row) => row.charge);
 
 // The rows of the comparison, from the products of months A and B, each the most expensive
 // first: those of month A, in its order, then those of month B only, in theirs, each with its
@@ -59,16 +48,11 @@ const ProductCharges = ({ chargesA, chargesB, sort, fmt, language, t }) => sortU
     .map(({ key, valA, valB }) => ({ charge: key, valA, valB })),
   sort, CHARGE_VALUES, language,
 ).map(({ charge, valA, valB }) => (
-  <tr key={charge} className="border-b text-gray-600">
-    {/* A cell that asks the table for no width of its own (max-w-0): a long charge, such as an
-        instance's monthly plan, which names the instance, wraps to the column of the products */}
-    <td className="max-w-0 py-2 pr-3 pl-12 text-xs break-words">{charge}</td>
-    <td className="py-2 px-3 text-right">{fmt(valA)}€</td>
-    <td className="py-2 px-3 text-right">{fmt(valB)}€</td>
-    <td className="py-2 px-3 text-right">
-      <Variation from={valA} to={valB} language={language} t={t} />
-    </td>
-  </tr>
+  <DetailRow key={charge} valA={valA} valB={valB} fmt={fmt} language={language} t={t}>
+    {/* A long charge, such as an instance's monthly plan, which names the instance, wraps to the
+        column of the products */}
+    <div className="text-xs break-words">{charge}</div>
+  </DetailRow>
 ));
 
 /**
@@ -179,7 +163,7 @@ export default function ProjectProductComparison({
       {credited && (
         <tfoot>
           <tr className="border-b text-gray-500">
-            <td className="py-3 pr-3 pl-9">{t('cloudCreditUsed')}</td>
+            <td className={LABEL_PADDING}>{t('cloudCreditUsed')}</td>
             <td className="p-3 text-right">{fmt(billedA.credits)}€</td>
             <td className="p-3 text-right">{fmt(billedB.credits)}€</td>
             {/* No variation of a credit to compute (#65) */}

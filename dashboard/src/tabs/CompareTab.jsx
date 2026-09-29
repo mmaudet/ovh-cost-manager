@@ -8,6 +8,7 @@ import { ResourceTypeServices } from '../components/ResourceTypeServices.jsx';
 import { UnfoldingRow } from '../components/UnfoldingRow.jsx';
 import { Variation } from '../components/Variation.jsx';
 import { formatMonthLabel } from '../utils/format.js';
+import { comparisonValues } from '../utils/monthComparison.js';
 import { firstRowOfEachProject, projectComparisonRows } from '../utils/projectComparison.js';
 import { variationPercent } from '../utils/variation.js';
 
@@ -37,13 +38,8 @@ const resourceTypeValues = (byResourceTypeA, byResourceTypeB) => ({
 
 // The value of a service in the same columns, which sort the services of each row of the
 // infrastructure comparison as they sort the rows (#192): its identifier, its cost in each
-// month, and the variation from one to the other, none from 0 € or less
-const SERVICE_VALUES = {
-  type: (service) => service.identifier,
-  totalA: (service) => service.valA,
-  totalB: (service) => service.valB,
-  variation: (service) => variationPercent(service.valA, service.valB),
-};
+// month, and the variation from one to the other
+const SERVICE_VALUES = comparisonValues('type', (service) => service.identifier);
 
 // The columns of the infrastructure and Private Cloud comparisons: the resource type, the cost
 // in months A and B, and the variation
@@ -400,17 +396,22 @@ const CompareTab = ({
       </Accordion>
       {/* One accordion per Public Cloud project: the comparison of its products (#181), each of
           which unfolds into its charges, the products unfolded held for each project (#195) */}
-      {detailedProjects.map((proj) => (
-        <Accordion key={proj.projectId} title={`${proj.projectName} (${t('project')})`}>
-          <ProjectProductComparison
-            productsQueryOf={(month) => projectProductsQuery(proj.projectId, month)}
-            monthA={compareMonthA} monthB={compareMonthB}
-            sorting={sortingOf(`products ${proj.projectId}`)}
-            unfoldingOf={(product) => unfoldingOf(`products ${proj.projectId}`, product)}
-            fmt={fmt} language={language} t={t}
-          />
-        </Accordion>
-      ))}
+      {detailedProjects.map((proj) => {
+        // The name of the project's comparison, under which the hook holds its sort and the
+        // products unfolded
+        const productsComparison = `products ${proj.projectId}`;
+        return (
+          <Accordion key={proj.projectId} title={`${proj.projectName} (${t('project')})`}>
+            <ProjectProductComparison
+              productsQueryOf={(month) => projectProductsQuery(proj.projectId, month)}
+              monthA={compareMonthA} monthB={compareMonthB}
+              sorting={sortingOf(productsComparison)}
+              unfoldingOf={(product) => unfoldingOf(productsComparison, product)}
+              fmt={fmt} language={language} t={t}
+            />
+          </Accordion>
+        );
+      })}
     </div>
   );
 };

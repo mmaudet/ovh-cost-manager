@@ -1,6 +1,16 @@
 import { useState } from 'react';
 import { BY_MONTH_A, BY_MONTH_B } from '../utils/monthComparison.js';
 import { sortRows } from './SortableHeader.jsx';
+import { Variation } from './Variation.jsx';
+
+// The padding of the first cell of a comparison's rows, which leaves room before their label for
+// the chevron of those that unfold, so that every row's label lines up, whether it unfolds or
+// not: that of a row that never unfolds, such as the credit that a project's bills used, too
+const LABEL_PADDING = 'py-3 pr-3 pl-9';
+
+// The padding of the first cell of the rows that show under an unfolded row, indented under its
+// label, those that say that they load or could not load included
+const DETAIL_PADDING = 'py-2 pr-3 pl-12';
 
 // The chevron of a row that unfolds: pointing at the row's label while it is folded, and down
 // once it is unfolded. Screen readers skip it: its button says it (aria-expanded).
@@ -34,7 +44,7 @@ const Chevron = ({ unfolded }) => (
 const UnfoldingRow = ({ unfolding, chevronLabel, label, detail, children }) => (
   <>
     <tr className="border-b hover:bg-gray-50 transition-colors">
-      <td className="relative py-3 pr-3 pl-9 font-medium">
+      <td className={`relative ${LABEL_PADDING} font-medium`}>
         {unfolding && (
           <button
             type="button"
@@ -52,6 +62,30 @@ const UnfoldingRow = ({ unfolding, chevronLabel, label, detail, children }) => (
     </tr>
     {unfolding?.unfolded && detail}
   </>
+);
+
+/**
+ * A row that shows under an unfolded row of a comparison (#189), what the row adds up: a service
+ * or a charge, indented under the row's label, in the comparison's columns, its amount in months
+ * A and B, 0 € in a month that did not bill it, and the variation from one to the other. The
+ * caller gives it its key.
+ * @param {object} props
+ * @param {number} props.valA - Its amount in month A
+ * @param {number} props.valB - Its amount in month B
+ * @param {React.ReactNode} props.children - What names it, in its first cell, which asks the
+ *   table for no width of its own (max-w-0): what names it wraps or is cut to the column of the
+ *   rows' labels, whatever the page's width, rather than widen the table
+ * @returns {JSX.Element}
+ */
+const DetailRow = ({ valA, valB, fmt, language, t, children }) => (
+  <tr className="border-b text-gray-600">
+    <td className={`max-w-0 ${DETAIL_PADDING}`}>{children}</td>
+    <td className="py-2 px-3 text-right">{fmt(valA)}€</td>
+    <td className="py-2 px-3 text-right">{fmt(valB)}€</td>
+    <td className="py-2 px-3 text-right">
+      <Variation from={valA} to={valB} language={language} t={t} />
+    </td>
+  </tr>
 );
 
 /**
@@ -93,4 +127,6 @@ const useUnfoldedRows = () => {
   };
 };
 
-export { UnfoldingRow, sortUnfolded, useUnfoldedRows };
+export {
+  DETAIL_PADDING, DetailRow, LABEL_PADDING, UnfoldingRow, sortUnfolded, useUnfoldedRows,
+};

@@ -1,6 +1,9 @@
 // The comparisons of months A and B of the Compare tab: how they pair what each month gave,
 // such as the products of a Public Cloud project (#181) or the services of a resource type
-// (#192), and the order that their rows keep until the user sorts them (#146).
+// (#192), the order that their rows keep until the user sorts them (#146), and the values that
+// sort them.
+
+import { variationPercent } from './variation.js';
 
 // The sort by month A, the most expensive first, as the comparisons order their rows until the
 // user sorts them; by month B, for rows of the same cost in month A
@@ -30,6 +33,24 @@ const pairMonths = (rowsA, rowsB, keyOf) => {
 };
 
 /**
+ * The value of a row of a comparison of months A and B in each column that sorts it (#146), as
+ * sortRows() takes them: what names it, in the column that names the rows, its amount in months A
+ * and B, and the variation from one to the other, none from 0 € or less. The rows that
+ * pairMonths() pairs, such as a project's products, and those that unfolded rows show, their
+ * services or charges, sort by the same columns.
+ * @param {string} nameColumn - The name of the column that names the rows, such as 'product'
+ * @param {function(object): *} nameOf - What names a row in that column
+ * @returns {Object<string, function(object): *>} The value of a row, which has its amount in
+ *   each month (valA, valB), by the column's name
+ */
+const comparisonValues = (nameColumn, nameOf) => ({
+  [nameColumn]: nameOf,
+  totalA: (row) => row.valA,
+  totalB: (row) => row.valB,
+  variation: (row) => variationPercent(row.valA, row.valB),
+});
+
+/**
  * What makes a row of month A and one of month B the same, for pairMonths(): what it names, a
  * project or a service, and its account. The rows that the lists ask for by account, while
  * they name the account of each row, give the NIC handle of theirs, null for the Unknown
@@ -40,4 +61,4 @@ const pairMonths = (rowsA, rowsB, keyOf) => {
  */
 const byNameAndAccount = (nameOf) => (row) => JSON.stringify([nameOf(row), row.account ?? null]);
 
-export { BY_MONTH_A, BY_MONTH_B, byNameAndAccount, pairMonths };
+export { BY_MONTH_A, BY_MONTH_B, byNameAndAccount, comparisonValues, pairMonths };
