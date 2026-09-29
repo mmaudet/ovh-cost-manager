@@ -70,6 +70,12 @@ function aiEndpointsLineCondition(column) {
 
 const toCents = (amount) => Math.round(amount * 100) / 100;
 
+// The entry of a key in a map, which `create` makes the first time
+const entryOf = (map, key, create) => {
+  if (!map.has(key)) map.set(key, create());
+  return map.get(key);
+};
+
 /**
  * What bill lines add up to, by the AI Endpoints model that each names: those that name none
  * are left out.
@@ -87,24 +93,20 @@ const toCents = (amount) => Math.round(amount * 100) / 100;
  */
 function modelFigures(lines) {
   const byModel = new Map();
-  // What each model cost in each month of the bills, by month
+  // What each model cost in each month of the bills, by month, then by model
   const byMonth = new Map();
   for (const line of lines) {
     const aiLine = readAiEndpointsLine(line.description);
     if (aiLine === null) continue;
-    if (!byModel.has(aiLine.model)) {
-      byModel.set(aiLine.model, {
-        model: aiLine.model, tokens: { input: null, output: null }, cost: 0,
-      });
-    }
-    const figures = byModel.get(aiLine.model);
+    const cost = line.total_price || 0;
+    const figures = entryOf(byModel, aiLine.model,
+      () => ({ model: aiLine.model, tokens: { input: null, output: null }, cost: 0 }));
     if (aiLine.counts !== null) {
       figures.tokens[aiLine.counts] = (figures.tokens[aiLine.counts] ?? 0) + (line.quantity || 0);
     }
-    figures.cost += line.total_price || 0;
-    if (!byMonth.has(line.month)) byMonth.set(line.month, {});
-    const costs = byMonth.get(line.month);
-    costs[aiLine.model] = (costs[aiLine.model] ?? 0) + (line.total_price || 0);
+    figures.cost += cost;
+    const costsOfMonth = entryOf(byMonth, line.month, () => new Map());
+    costsOfMonth.set(aiLine.model, (costsOfMonth.get(aiLine.model) ?? 0) + cost);
   }
   const models = [...byModel.values()]
     .map((figures) => ({ ...figures, cost: toCents(figures.cost) }))
@@ -114,7 +116,7 @@ function modelFigures(lines) {
   const monthlyTrend = [...byMonth.keys()].sort().map((month) => ({
     month,
     costs: Object.fromEntries(models.map(({ model }) => [
-      model, toCents(byMonth.get(month)[model] ?? 0),
+      model, toCents(byMonth.get(month).get(model) ?? 0),
     ])),
   }));
   return {
