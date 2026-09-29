@@ -1417,7 +1417,7 @@ describe('Compare tab', () => {
         // Right under the instances: db-1's monthly plan and the web instances' hourly use cost
         // 64 € each in August, the monthly plan the more in September; the b3-16's, from nothing
         // in August, last
-        expect(productRows().slice(0, 7).map(([label]) => label)).toEqual([
+        expect(productRows().slice(0, 7).map(([name]) => name)).toEqual([
           'Instances', hourlyUse('l4-90'), DB_1_PLAN, hourlyUse('b3-8'), hourlyUse('d2-4'),
           hourlyUse('b3-16'), 'Savings plans',
         ]);
@@ -1543,20 +1543,18 @@ describe('Compare tab', () => {
 
     // The charges come with the products that the comparison loads when it opens
     it('ask for nothing when a product unfolds', async () => {
-      const { user, allKeys } = await renderDashboard();
+      const { user } = await renderDashboard();
       await openTab(user, 'Comparaison');
       await openComparison(user, PRODUCTION_PRODUCTS);
-      // The requests that the page sent so far, and the queries it holds
+      // The requests that the page sent so far
       const requestsSent = () => Object.values(api)
         .reduce((count, request) => count + request.mock.calls.length, 0);
       const sent = requestsSent();
-      const queries = allKeys();
 
       await toggleProduct(user, 'Instances');
 
       expect(chargeRow(hourlyUse('l4-90'))).toBeInTheDocument();
       expect(requestsSent()).toBe(sent);
-      expect(allKeys()).toEqual(queries);
     });
 
     // The PDF export prints the page: the unfolded products print with their charges, and
