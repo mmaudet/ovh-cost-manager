@@ -1,5 +1,6 @@
-import { useQuery } from '@tanstack/react-query';
+import { BY_MONTH_A, BY_MONTH_B, pairMonths } from '../utils/monthComparison.js';
 import { variationPercent } from '../utils/variation.js';
+import { MonthAnswersMessage, useMonthAnswers } from './MonthAnswers.jsx';
 import { sortRows } from './SortableHeader.jsx';
 import { Variation } from './Variation.jsx';
 
@@ -12,10 +13,6 @@ const SERVICE_VALUES = {
   totalB: (service) => service.valB,
   variation: (service) => variationPercent(service.valA, service.valB),
 };
-
-// The most expensive in month A, or in month B, first
-const BY_MONTH_A = { column: 'totalA', kind: 'number', direction: 'desc' };
-const BY_MONTH_B = { column: 'totalB', kind: 'number', direction: 'desc' };
 
 // The services in the order of the comparison's sort, and of the same value in its column, in
 // their own order: by month A, the most expensive first, then by month B, which the services
@@ -31,24 +28,11 @@ const inOrder = (services, sort, language) => sortRows(
 // `domain`, whatever the service: each service that either month billed, with the description
 // of its most expensive bill line, month B's when month B billed it, and its cost in each
 // month, 0 € in a month that did not bill it
-const serviceRows = (servicesA, servicesB) => {
-  const ofMonthA = new Map(servicesA.map((service) => [service.domain, service]));
-  const ofMonthB = new Map(servicesB.map((service) => [service.domain, service]));
-  return [...new Set([...ofMonthA.keys(), ...ofMonthB.keys()])].map((identifier) => ({
-    identifier,
-    description: (ofMonthB.get(identifier) ?? ofMonthA.get(identifier)).description,
-    valA: ofMonthA.get(identifier)?.total ?? 0,
-    valB: ofMonthB.get(identifier)?.total ?? 0,
-  }));
-};
-
-// What an unfolded row says in place of its services, across the four columns of the
-// comparison, in line with the services
-const MessageRow = ({ className, children }) => (
-  <tr className="border-b">
-    <td colSpan={4} className={`py-2 pr-3 pl-12 text-sm ${className}`}>{children}</td>
-  </tr>
-);
+const serviceRows = (servicesA, servicesB) => pairMonths(
+  servicesA, servicesB, ({ domain }) => domain,
+).map(({ key, rowA, rowB, valA, valB }) => ({
+  identifier: key, description: (rowB ?? rowA).description, valA, valB,
+}));
 
 /**
  * The services of a resource type in months A and B, right under its unfolded row in a
@@ -68,17 +52,21 @@ const MessageRow = ({ className, children }) => (
 const ResourceTypeServices = ({
   resourceType, resourceTypeServicesQuery, monthA, monthB, sort, fmt, language, t,
 }) => {
-  const answerA = useQuery(resourceTypeServicesQuery(resourceType, monthA));
-  const answerB = useQuery(resourceTypeServicesQuery(resourceType, monthB));
-  // Until both months' answers arrive, rather than a month at 0 €
-  if (answerA.isLoading || answerB.isLoading) {
-    return <MessageRow className="text-gray-500">{t('loading')}</MessageRow>;
+  const { status, dataA, dataB } = useMonthAnswers(
+    (month) => resourceTypeServicesQuery(resourceType, month), monthA, monthB,
+  );
+  // Until both months' answers arrive, or when one failed, rather than a month at 0 €: across
+  // the four columns of the comparison, in line with the services
+  if (status !== 'answered') {
+    return (
+      <tr className="border-b">
+        <td colSpan={4} className="py-2 pr-3 pl-12 text-sm">
+          <MonthAnswersMessage status={status} failed={t('servicesFailed')} t={t} />
+        </td>
+      </tr>
+    );
   }
-  // A month whose answer failed, rather than a month at 0 €
-  if (answerA.isError || answerB.isError) {
-    return <MessageRow className="text-red-500">{t('servicesFailed')}</MessageRow>;
-  }
-  return inOrder(serviceRows(answerA.data ?? [], answerB.data ?? []), sort, language).map(({
+  return inOrder(serviceRows(dataA ?? [], dataB ?? []), sort, language).map(({
     identifier, description, valA, valB,
   }) => (
     <tr key={identifier} className="border-b text-gray-600">

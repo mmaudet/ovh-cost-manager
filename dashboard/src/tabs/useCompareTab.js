@@ -10,14 +10,11 @@ import {
   fetchProjectProducts,
 } from '../services/api.js';
 import { accountQuery } from '../utils/accounts.js';
+import { BY_MONTH_A } from '../utils/monthComparison.js';
 import { holdsMonth } from '../utils/months.js';
 import { projectsByAccountQuery } from './projectsByAccountQueries.js';
 // Under the module's name: the hook gives its query, for the account shown, the same name
 import * as servicesQueries from './resourceTypeServicesQueries.js';
-
-// The comparison by project sorts by month A, the most expensive first, until the user sorts
-// it by another column (#146)
-const BY_MONTH_A = { column: 'totalA', kind: 'number', direction: 'desc' };
 
 /**
  * The state and data queries of the Compare tab, which compares two months of the account
@@ -46,8 +43,9 @@ const BY_MONTH_A = { column: 'totalA', kind: 'number', direction: 'desc' };
 const useCompareTab = ({ months, activeTab, selectedAccount, accountColumn }) => {
   const [compareMonthA, setCompareMonthA] = useState(null);
   const [compareMonthB, setCompareMonthB] = useState(null);
-  // The sort order of its tables, by table (#146): the comparison by project, the
-  // infrastructure comparison, and the comparison of each project's products, by project
+  // The sort order of its tables, by table (#146): the comparison by project, by month A, the
+  // most expensive first, until the user sorts it by another column, the infrastructure
+  // comparison, and the comparison of each project's products, by project
   const sortingOf = useTableSorts({ projects: BY_MONTH_A });
   // The rows unfolded into their services, by comparison (#192)
   const unfoldingOf = useUnfoldedRows();

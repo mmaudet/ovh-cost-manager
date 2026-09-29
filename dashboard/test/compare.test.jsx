@@ -6,7 +6,7 @@ import {
   lyonAccount, removedAccount, severalAccounts, unknownAccount, unnamedAccount,
 } from './fixtures/accounts.js';
 import { months } from './fixtures/calendar.js';
-import { api, holdBack } from './support/api.js';
+import { api, failFor, holdBack } from './support/api.js';
 import {
   accordionOf,
   cardOf,
@@ -868,11 +868,7 @@ describe('Compare tab', () => {
       const { user } = await renderDashboard();
       await openTab(user, 'Comparaison');
       await openComparison(user, INFRASTRUCTURE);
-      const answer = api.fetchResourceTypeDetails.getMockImplementation();
-      api.fetchResourceTypeDetails.mockImplementation(async (...args) => {
-        if (args[1] === '2026-08-01') throw new Error('Request failed with status code 500');
-        return answer(...args);
-      });
+      failFor(api.fetchResourceTypeDetails, (type, from) => from === '2026-08-01');
 
       await toggleRow(user, INFRASTRUCTURE, 'Noms de domaine');
 
@@ -1023,13 +1019,8 @@ describe('Compare tab', () => {
         .getByRole('button', { name: `Services: ${row}` });
       const rows = () => rowTextsOf(comparisonTable(title)).slice(1);
       // August's dedicated servers cannot load
-      const answer = api.fetchResourceTypeDetails.getMockImplementation();
-      api.fetchResourceTypeDetails.mockImplementation(async (type, from, ...rest) => {
-        if (type === 'dedicated_server' && from === '2026-08-01') {
-          throw new Error('Request failed with status code 500');
-        }
-        return answer(type, from, ...rest);
-      });
+      failFor(api.fetchResourceTypeDetails,
+        (type, from) => type === 'dedicated_server' && from === '2026-08-01');
 
       await user.click(englishChevron('List of Dedicated Servers present on 15/09/2026'));
       await settle();
@@ -1131,11 +1122,7 @@ describe('Compare tab', () => {
     it('say that they could not load when the products of a month fail', async () => {
       const { user } = await renderDashboard();
       await openTab(user, 'Comparaison');
-      const answer = api.fetchProjectProducts.getMockImplementation();
-      api.fetchProjectProducts.mockImplementation(async (...args) => {
-        if (args[1] === '2026-08-01') throw new Error('Request failed with status code 500');
-        return answer(...args);
-      });
+      failFor(api.fetchProjectProducts, (projectId, from) => from === '2026-08-01');
 
       await openComparison(user, PRODUCTION_PRODUCTS);
 
