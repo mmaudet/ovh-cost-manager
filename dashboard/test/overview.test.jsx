@@ -218,7 +218,8 @@ describe('Overview tab', () => {
 
       expect(api.fetchProjectInstances)
         .toHaveBeenCalledWith('project-staging', '2026-09-01', '2026-09-30');
-      expect(texts(cloudProjectRow('Staging'))).toEqual(['Staging', 'ok', '0', '52,35€', '▲']);
+      expect(texts(cloudProjectRow('Staging')))
+        .toEqual(['Staging', 'ok', '0', '52,35€', '220,00€', '▲']);
     });
 
     it('open a project of the GPU costs on the Public Cloud tab', async () => {
@@ -228,7 +229,7 @@ describe('Overview tab', () => {
       await settle();
 
       expect(texts(cloudProjectRow('Production')))
-        .toEqual(['Production', 'Customer-facing services', 'ok', '5', '350,00€', '▲']);
+        .toEqual(['Production', 'Customer-facing services', 'ok', '5', '350,00€', '610,40€', '▲']);
     });
   });
 

@@ -32,6 +32,10 @@ import {
 
 // The Public Cloud figures of the month, one card each
 const figures = () => cardRowOf('Kubernetes');
+// The rows of the list of projects, each as the texts it shows, in the order shown: without its
+// header, nor what shows under the rows
+const projectRowsShown = () => [...cloudProjectsTable().tBodies[0].rows]
+  .map((row) => texts(row));
 const openProject = async (user, name) => {
   await user.click(within(cloudProjects()).getByText(name));
   await settle();
@@ -202,20 +206,43 @@ describe('Public Cloud tab', () => {
   });
 
   describe('projects', () => {
-    it('are listed with their state, instance count and current consumption', async () => {
-      const { user } = await renderDashboard();
+    // What each consumed since the 1st of the current month, not billed yet, and what the bills
+    // of the month selected charged it, which OVHcloud bills the month after use (#180)
+    it('are listed with their state, instance count, current consumption and billed amount',
+      async () => {
+        const { user } = await renderDashboard();
 
-      await openTab(user, 'Public Cloud');
+        await openTab(user, 'Public Cloud');
 
-      expect(rowTextsOf(within(cloudProjects()).getByRole('table'))).toEqual([
-        ['Nom', '○', 'État', '○', 'Instances', '○', 'Consommation en cours', '○'],
-        ['Production', 'Customer-facing services', 'ok', '5', '350,00€', '▼'],
-        ['Staging', 'ok', '0', '52,35€', '▼'],
-        // Nothing consumed
-        ['Sandbox', 'ok', '0', '-', '▼'],
-      ]);
-      expect(detailHeadings()).toEqual([]);
-    });
+        expect(rowTextsOf(within(cloudProjects()).getByRole('table'))).toEqual([
+          ['Nom', '○', 'État', '○', 'Instances', '○', 'Consommation en cours', '○',
+            'Facturé en septembre 2026', '○'],
+          ['Production', 'Customer-facing services', 'ok', '5', '350,00€', '610,40€', '▼'],
+          ['Staging', 'ok', '0', '52,35€', '220,00€', '▼'],
+          // Nothing consumed, and no bill line of the month
+          ['Sandbox', 'ok', '0', '-', '-', '▼'],
+        ]);
+        expect(detailHeadings()).toEqual([]);
+      });
+
+    // The bills of a month charge what the projects used the month before: what they billed
+    // follows the month selected, not what the projects consume in the current month
+    it('give what the month selected billed them, and their current consumption whatever it',
+      async () => {
+        const { user } = await renderDashboard();
+        await openTab(user, 'Public Cloud');
+
+        await selectMonth(user, 'Août 2026');
+
+        expect(headerOf(cloudProjectsTable())).toEqual([
+          'Nom○', 'État○', 'Instances○', 'Consommation en cours○', 'Facturé en août 2026○', '',
+        ]);
+        expect(projectRowsShown()).toEqual([
+          ['Production', 'Customer-facing services', 'ok', '5', '350,00€', '512,00€', '▼'],
+          ['Staging', 'ok', '0', '52,35€', '190,00€', '▼'],
+          ['Sandbox', 'ok', '0', '-', '-', '▼'],
+        ]);
+      });
 
     it('show the detail of a project under it on a click, until a second click', async () => {
       const { user } = await openProduction();
@@ -260,21 +287,42 @@ describe('Public Cloud tab', () => {
 
       // The least consuming first, and last the project that consumed nothing
       expect(rowTextsOf(cloudProjectsTable())).toEqual([
-        ['Nom', '○', 'État', '○', 'Instances', '○', 'Consommation en cours', '▲'],
-        ['Staging', 'ok', '0', '52,35€', '▼'],
-        ['Production', 'Customer-facing services', 'ok', '5', '350,00€', '▼'],
-        ['Sandbox', 'ok', '0', '-', '▼'],
+        ['Nom', '○', 'État', '○', 'Instances', '○', 'Consommation en cours', '▲',
+          'Facturé en septembre 2026', '○'],
+        ['Staging', 'ok', '0', '52,35€', '220,00€', '▼'],
+        ['Production', 'Customer-facing services', 'ok', '5', '350,00€', '610,40€', '▼'],
+        ['Sandbox', 'ok', '0', '-', '-', '▼'],
       ]);
 
       await openProject(user, 'Production');
       // By the header of the list, rather than one of the tables of the project's detail
       await sortTable(user, cloudProjectsTable().tHead, /^Nom/);
 
-      expect(headerOf(cloudProjectsTable()))
-        .toEqual(['Nom▲', 'État○', 'Instances○', 'Consommation en cours○', '']);
+      expect(headerOf(cloudProjectsTable())).toEqual([
+        'Nom▲', 'État○', 'Instances○', 'Consommation en cours○', 'Facturé en septembre 2026○', '',
+      ]);
       // Each row by its first text: Production, its detail, then the other projects
       expect([...cloudProjectsTable().tBodies[0].rows].map((row) => texts(row)[0]))
         .toEqual(['Production', 'Consommation par ressource', 'Sandbox', 'Staging']);
+    });
+
+    // As the other columns (#146), by the amount, whatever the month's bills gave it: the
+    // project that no bill line of the month names comes last either way, as a project that
+    // consumed nothing does
+    it('sort by what the month billed them, the project billed nothing last', async () => {
+      const { user } = await renderDashboard();
+      await openTab(user, 'Public Cloud');
+      const projectNames = () => projectRowsShown().map(([name]) => name);
+
+      await sortTable(user, cloudProjectsTable(), /^Facturé en/);
+
+      expect(headerOf(cloudProjectsTable()).at(-2)).toBe('Facturé en septembre 2026▼');
+      expect(projectNames()).toEqual(['Production', 'Staging', 'Sandbox']);
+
+      await sortTable(user, cloudProjectsTable(), /^Facturé en/);
+
+      expect(headerOf(cloudProjectsTable()).at(-2)).toBe('Facturé en septembre 2026▲');
+      expect(projectNames()).toEqual(['Staging', 'Production', 'Sandbox']);
     });
 
     // Which ways of moving around the page keep the open project: see navigation.test.jsx (#56)
@@ -834,8 +882,10 @@ describe('Public Cloud tab', () => {
     const { user } = await renderDashboard();
     await selectLanguage(user, 'en');
     await openTab(user, 'Public Cloud');
-    expect(rowTextsOf(within(cloudProjects()).getByRole('table'))[0])
-      .toEqual(['Name', '○', 'State', '○', 'Instances', '○', 'Current consumption', '○']);
+    expect(rowTextsOf(within(cloudProjects()).getByRole('table'))[0]).toEqual([
+      'Name', '○', 'State', '○', 'Instances', '○', 'Current consumption', '○',
+      'Billed in September 2026', '○',
+    ]);
 
     await openProject(user, 'Production');
 
@@ -947,7 +997,7 @@ describe('Public Cloud tab', () => {
         'Autres services', '0',
       ]);
       expect(projectRows()).toEqual([
-        ['Production', 'Customer-facing services', 'ok', '5', '350,00€', '▼'],
+        ['Production', 'Customer-facing services', 'ok', '5', '350,00€', '610,40€', '▼'],
       ]);
 
       await selectAccount(user, 'yy2222-ovh');
@@ -964,13 +1014,13 @@ describe('Public Cloud tab', () => {
         'Registre', '1', '40,00€',
         'Autres services', '0',
       ]);
-      expect(projectRows()).toEqual([['Staging', 'ok', '0', '52,35€', '▼']]);
+      expect(projectRows()).toEqual([['Staging', 'ok', '0', '52,35€', '220,00€', '▼']]);
     });
 
     it('shows the projects of the Unknown account', async () => {
       await openOnAccount('Compte inconnu');
 
-      expect(projectRows()).toEqual([['Sandbox', 'ok', '0', '-', '▼']]);
+      expect(projectRows()).toEqual([['Sandbox', 'ok', '0', '-', '-', '▼']]);
       // Nothing billed in July, its only month
       expect(figuresOfTheTab()).toEqual([
         'Projets Cloud', '0', 'Instances', '0', 'Instances GPU', '0', 'Kubernetes', '0',
@@ -1049,6 +1099,7 @@ describe('Public Cloud tab', () => {
     describe('account column', () => {
       const WITHOUT_ACCOUNT = [
         'Nom', '○', 'État', '○', 'Instances', '○', 'Consommation en cours', '○',
+        'Facturé en septembre 2026', '○',
       ];
 
       it('names the account of each project when all accounts are shown', async () => {
@@ -1058,20 +1109,22 @@ describe('Public Cloud tab', () => {
 
         // Its name, or else its NIC handle, and the Unknown account for a project without one
         expect(rowTextsOf(cloudProjectsTable())).toEqual([
-          ['Nom', '○', 'Compte', '○', 'État', '○', 'Instances', '○', 'Consommation en cours', '○'],
+          ['Nom', '○', 'Compte', '○', 'État', '○', 'Instances', '○', 'Consommation en cours', '○',
+            'Facturé en septembre 2026', '○'],
           ['Production', 'Customer-facing services', 'Lyon subsidiary', 'ok', '5', '350,00€',
-            '▼'],
-          ['Staging', 'yy2222-ovh', 'ok', '0', '52,35€', '▼'],
-          ['Sandbox', 'Compte inconnu', 'ok', '0', '-', '▼'],
+            '610,40€', '▼'],
+          ['Staging', 'yy2222-ovh', 'ok', '0', '52,35€', '220,00€', '▼'],
+          ['Sandbox', 'Compte inconnu', 'ok', '0', '-', '-', '▼'],
         ]);
 
         await selectLanguage(user, 'en');
 
         expect(rowTextsOf(cloudProjectsTable())[0]).toEqual([
           'Name', '○', 'Account', '○', 'State', '○', 'Instances', '○', 'Current consumption', '○',
+          'Billed in September 2026', '○',
         ]);
         expect(rowTextsOf(cloudProjectsTable())[3])
-          .toEqual(['Sandbox', 'Unknown account', 'ok', '0', '-', '▼']);
+          .toEqual(['Sandbox', 'Unknown account', 'ok', '0', '-', '-', '▼']);
       });
 
       it('names no account once one is selected, and names them again with all accounts',
@@ -1084,6 +1137,7 @@ describe('Public Cloud tab', () => {
 
           expect(rowTextsOf(cloudProjectsTable())[0]).toEqual([
             'Nom', '○', 'Compte', '○', 'État', '○', 'Instances', '○', 'Consommation en cours', '○',
+            'Facturé en septembre 2026', '○',
           ]);
         });
 

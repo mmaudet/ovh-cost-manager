@@ -202,6 +202,9 @@ export const translations = {
     vpsInstances: 'VPS',
     storageServices: 'Stockage',
     cloudProjects: 'Projets Cloud',
+    // What the bills of the month selected charged each project of the list, before the month
+    // as a sentence names it (#180)
+    billedIn: 'Facturé en',
     // The products that no Public Cloud card of its own counts, and the credit (#145)
     otherServices: 'Autres services',
     cloudCreditUsed: 'Crédit Cloud utilisé',
@@ -480,6 +483,9 @@ export const translations = {
     vpsInstances: 'VPS',
     storageServices: 'Storage',
     cloudProjects: 'Cloud Projects',
+    // What the bills of the month selected charged each project of the list, before the month
+    // as a sentence names it (#180)
+    billedIn: 'Billed in',
     // The products that no Public Cloud card of its own counts, and the credit (#145)
     otherServices: 'Other services',
     cloudCreditUsed: 'Cloud credit used',

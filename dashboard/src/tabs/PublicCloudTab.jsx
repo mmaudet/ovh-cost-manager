@@ -13,6 +13,7 @@ import {
 import { downloadCSV } from '../utils/csv.js';
 import { formatMonthLabel, formatMonthName } from '../utils/format.js';
 import { cloudKindLabel } from '../utils/cloudKinds.js';
+import { projectListRows } from '../utils/projectList.js';
 import { publicCloudProductLabel } from '../utils/publicCloudProducts.js';
 
 // The Account column of the CSV files of the open project's resources (#121): when the lists
@@ -25,14 +26,15 @@ const openProjectAccountOf = (accountColumn, projectsEnriched, openProject) => {
 };
 
 // The value of a project in each column that sorts the list (#146): its account, none without
-// the Account column, and no consumption for a project that consumed nothing, which the list
-// shows as "-"
+// the Account column, no consumption for a project that consumed nothing, and no amount billed
+// for a project that no bill line of the month names (#180), which the list shows as "-"
 const projectValues = (accountColumn) => ({
   name: (p) => p.name || p.id,
   account: (p) => accountColumn?.nameOf(p.account),
   state: (p) => p.status,
   instances: (p) => p.instance_count || 0,
   consumption: (p) => (p.consumption_total > 0 ? p.consumption_total : null),
+  billed: (p) => p.billed,
 });
 
 // Downloads resources of the open project as a CSV file, with the Account column of the open
@@ -54,23 +56,27 @@ const downloadResources = (openProjectAccount, rows, columns, filename) => {
 // The Public Cloud tab, which the shell renders while it is active: what usePublicCloudTab()
 // returns, the open project and the sort order of its tables included (#146), with the shell's
 // language, translations (t), amount format (fmt) and locale, the selected month, the setter of
-// the selected project, and two of its queries that load at page start: the month's costs by
-// resource type and its GPU costs. And the Account column of the lists, null when they show
-// none (#121), and the cloud total of the selected month, which the cards add up to (#145).
+// the selected project, and three of its queries that load at page start: the month's costs by
+// resource type, its GPU costs, and its costs by project (byProject), which the list of
+// projects gives next to their current consumption (#180). And the Account column of the lists,
+// null when they show none (#121), and the cloud total of the selected month, which the cards
+// add up to (#145).
 const PublicCloudTab = ({
   projectsEnriched, publicCloudStats, projectConsumption, projectInstances, instanceCount,
   projectInstanceTotal, projectBuckets, projectVolumes, projectSnapshots, projectSavingsPlans,
   projectOtherServices, projectQuotas, setShowAllInstances, setShowAllBuckets, setShowAllVolumes,
   setShowAllSnapshots, setShowAllSavingsPlans, sortingOf,
   language, t, fmt, locale, selectedMonth, openProject, setSelectedProject,
-  byResourceType, gpuSummary, accountColumn, cloudTotal,
+  byResourceType, gpuSummary, byProject, accountColumn, cloudTotal,
 }) => {
   // The Account column of the CSV files of the open project's resources, for all of them
   const openProjectAccount = openProjectAccountOf(accountColumn, projectsEnriched, openProject);
-  // The projects in the order the user sorts them, in the server's until then (#146)
+  // The projects with what the month billed them, in the order the user sorts them, in the
+  // server's until then (#146)
   const projectSorting = sortingOf('projects');
   const projects = sortRows(
-    projectsEnriched, projectSorting.sort, projectValues(accountColumn), language,
+    projectListRows(projectsEnriched, byProject), projectSorting.sort,
+    projectValues(accountColumn), language,
   );
   return (
     <div className="space-y-6">
@@ -215,6 +221,12 @@ const PublicCloudTab = ({
                   >
                     {language === 'en' ? 'Current consumption' : 'Consommation en cours'}
                   </SortableHeader>
+                  <SortableHeader
+                    column="billed" kind="number" sorting={projectSorting} t={t}
+                    className="p-3 text-right font-medium"
+                  >
+                    {`${t('billedIn')} ${formatMonthName(selectedMonth?.value, language)}`}
+                  </SortableHeader>
                   <th className="p-3 text-center font-medium"></th>
                 </tr>
               </thead>
@@ -242,6 +254,9 @@ const PublicCloudTab = ({
                       <td className="p-3 text-right font-medium">
                         {p.consumption_total > 0 ? `${fmt(p.consumption_total)}€` : '-'}
                       </td>
+                      <td className="p-3 text-right font-medium">
+                        {p.billed === null ? '-' : `${fmt(p.billed)}€`}
+                      </td>
                       <td className="p-3 text-center">
                         <span className="text-gray-400 text-lg">
                           {openProject?.id === p.id ? '▲' : '▼'}
@@ -250,7 +265,7 @@ const PublicCloudTab = ({
                     </tr>
                     {openProject?.id === p.id && (
                       <tr>
-                        <td colSpan={accountColumn ? 6 : 5} className="p-0">
+                        <td colSpan={accountColumn ? 7 : 6} className="p-0">
                           <div className="bg-blue-50 border-l-4 border-blue-400 p-5">
                             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                               {/* Consumption by resource type */}

@@ -140,7 +140,8 @@ describe('navigation', () => {
         await user.click(within(projectBreakdown()).getByRole('button', { name: 'Staging' }));
         await settle();
 
-        expect(texts(cloudProjectRow('Staging'))).toEqual(['Staging', 'ok', '0', '52,35€', '▲']);
+        expect(texts(cloudProjectRow('Staging')))
+          .toEqual(['Staging', 'ok', '0', '52,35€', '220,00€', '▲']);
         expect(texts(cloudProjectRow('Production'))).toContain('▼');
         expect(projectDetailHeadings()).toEqual([
           ['Consommation par ressource'],

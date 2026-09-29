@@ -762,6 +762,7 @@ export default function Dashboard() {
             selectedMonth={selectedMonth}
             setSelectedProject={setSelectedProject} byResourceType={byResourceType}
             gpuSummary={gpuSummary} accountColumn={accountColumn} cloudTotal={summary?.cloudTotal}
+            byProject={byProject}
           />
         )}
 
