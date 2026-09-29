@@ -7,7 +7,7 @@ import { useTableSorts } from '../components/SortableHeader.jsx';
 import { useUnfoldedRows } from '../components/UnfoldingRow.jsx';
 import {
   fetchSummary, fetchByProject, fetchByService, fetchByResourceType, fetchBackupStats,
-  fetchProjectProducts,
+  fetchBackupServices, fetchBackupServicesByAccount, fetchProjectProducts,
 } from '../services/api.js';
 import { accountQuery } from '../utils/accounts.js';
 import { BY_MONTH_A } from '../utils/monthComparison.js';
@@ -38,9 +38,9 @@ import * as servicesQueries from './resourceTypeServicesQueries.js';
  *   (sortingOf(), see useTableSorts()), the rows unfolded into their services (unfoldingOf(),
  *   see useUnfoldedRows()), the figures of both months, which the tab shows, the query of a
  *   project's products in a month (projectProductsQuery(projectId, month)), which the
- *   comparison of the project's products runs once opened, and the query of a resource type's
- *   services in a month (resourceTypeServicesQuery(resourceType, month)), which its row runs
- *   once unfolded
+ *   comparison of the project's products runs once opened, and the queries of a resource type's
+ *   services in a month (resourceTypeServicesQuery(resourceType, month)) and of a backup row's
+ *   (backupServicesQuery(kind, month)), which the row runs once unfolded
  */
 const useCompareTab = ({ months, activeTab, selectedAccount, accountColumn }) => {
   const [compareMonthA, setCompareMonthA] = useState(null);
@@ -150,6 +150,27 @@ const useCompareTab = ({ months, activeTab, selectedAccount, accountColumn }) =>
   const resourceTypeServicesQuery = (resourceType, month) => servicesQueries
     .resourceTypeServicesQuery(selectedAccount, accountColumn, resourceType, month, asksFor(month));
 
+  // The options of the query of the services of the Veeam backups of month A or B, for
+  // useQuery: those of the account shown, or, while the lists name the account of each service,
+  // those of every account by account (#197)
+  const backupServicesOf = (month) => (accountColumn
+    ? {
+      queryKey: ['backupServicesByAccount', month?.from, month?.to],
+      queryFn: () => fetchBackupServicesByAccount(month.from, month.to),
+      enabled: asksFor(month),
+    }
+    : figureOf('backupServices', month, fetchBackupServices));
+
+  // The options of the query of a backup row's services in month A or B, for useQuery: the
+  // Veeam VMs backed up (kind 'vms') or the Enterprise licences ('enterprise') of the month
+  // (#197). Both rows' come in one answer a month, asked for once, of which each row selects
+  // its own. The row runs it once unfolded, as the other figures of the month run: on the tab,
+  // for a month of the months list.
+  const backupServicesQuery = (kind, month) => ({
+    ...backupServicesOf(month),
+    select: (services) => services[kind],
+  });
+
   return {
     compareMonthA,
     setCompareMonthA,
@@ -169,6 +190,7 @@ const useCompareTab = ({ months, activeTab, selectedAccount, accountColumn }) =>
     backupStatsB,
     projectProductsQuery,
     resourceTypeServicesQuery,
+    backupServicesQuery,
   };
 };
 

@@ -37,7 +37,9 @@ const resourceTypeValues = (byResourceTypeA, byResourceTypeB) => ({
 
 // The value of a service in the same columns, which sort the services of each row of the
 // infrastructure comparison as they sort the rows (#192): its identifier, its cost in each
-// month, and the variation from one to the other, none from 0 € or less
+// month, and the variation from one to the other, none from 0 € or less. The comparisons that
+// do not sort, of the Private Cloud and of the backups (#197), order their services by their
+// costs in months A and B alone.
 const SERVICE_VALUES = {
   type: (service) => service.identifier,
   totalA: (service) => service.valA,
@@ -45,9 +47,9 @@ const SERVICE_VALUES = {
   variation: (service) => variationPercent(service.valA, service.valB),
 };
 
-// The columns of the infrastructure and Private Cloud comparisons: the resource type, the cost
-// in months A and B, and the variation
-const RESOURCE_TYPE_COLUMNS = 4;
+// The columns of the infrastructure, Private Cloud and backup comparisons: the row, the cost in
+// months A and B, and the variation
+const COMPARISON_COLUMNS = 4;
 
 // The value of a row of the comparison by project in each column that sorts it (#146): its
 // account, none without the Account column
@@ -61,17 +63,17 @@ const projectComparisonValues = (accountColumn) => ({
 
 // The Compare tab, which the shell renders while it is active: what useCompareTab() returns,
 // the sort order of its tables, the query of a project's products, the rows unfolded into their
-// services and the query of those services included (#146, #181, #192), with the shell's
-// language, translations (t), amount format (fmt) and months list. The months and their figures
-// are those of the account selected in the header (#119). The comparison by project names the
-// account of each project in the Account column of the shell (accountColumn), when it shows
-// one: it then compares the projects by account that the hook requests, a project billed to
-// several accounts once for each.
+// services and the queries of those services included (#146, #181, #192, #197), with the
+// shell's language, translations (t), amount format (fmt) and months list. The months and their
+// figures are those of the account selected in the header (#119). The comparison by project
+// names the account of each project in the Account column of the shell (accountColumn), when it
+// shows one: it then compares the projects by account that the hook requests, a project billed
+// to several accounts once for each.
 const CompareTab = ({
   compareMonthA, setCompareMonthA, compareMonthB, setCompareMonthB, sortingOf, unfoldingOf,
   compareDataA, compareDataB, byServiceA, byServiceB, byProjectA, byProjectB,
   byResourceTypeA, byResourceTypeB, backupStatsA, backupStatsB, projectProductsQuery,
-  resourceTypeServicesQuery, language, t, fmt, months, accountColumn,
+  resourceTypeServicesQuery, backupServicesQuery, language, t, fmt, months, accountColumn,
 }) => {
   // Months A and B as the page names them, in its language (#33)
   const monthALabel = formatMonthLabel(compareMonthA?.value, language);
@@ -139,9 +141,9 @@ const CompareTab = ({
         label={label}
         detail={(
           <ResourceTypeServices
-            resourceType={key} resourceTypeServicesQuery={resourceTypeServicesQuery}
+            servicesQuery={(month) => resourceTypeServicesQuery(key, month)}
             monthA={compareMonthA} monthB={compareMonthB} sort={sortingOf(comparison).sort}
-            values={SERVICE_VALUES} columnCount={RESOURCE_TYPE_COLUMNS}
+            values={SERVICE_VALUES} columnCount={COMPARISON_COLUMNS}
             accountColumn={accountColumn} fmt={fmt} language={language} t={t}
           />
         )}
@@ -350,7 +352,8 @@ const CompareTab = ({
           </thead>
           <tbody>
             {/* The number and the cost of the Veeam VMs and Enterprise licences of months A
-                and B, as the Backup tab shows them for the selected month (#32) */}
+                and B, as the Backup tab shows them for the selected month (#32). A row that
+                either month billed unfolds into its services (#197). */}
             {[
               {
                 key: 'backup_vms',
@@ -366,14 +369,26 @@ const CompareTab = ({
               const a = backupsOf(backupStatsA, row.kind);
               const b = backupsOf(backupStatsB, row.kind);
               return (
-                <tr key={row.key} className="border-b hover:bg-gray-50 transition-colors">
-                  <td className="p-3 font-medium">{row.label}</td>
+                <UnfoldingRow
+                  key={row.key}
+                  unfolding={a.total > 0 || b.total > 0 ? unfoldingOf('backup', row.key) : null}
+                  chevronLabel={`${t('servicesOf')} ${row.label}`}
+                  label={row.label}
+                  detail={(
+                    <ResourceTypeServices
+                      servicesQuery={(month) => backupServicesQuery(row.kind, month)}
+                      monthA={compareMonthA} monthB={compareMonthB} sort={null}
+                      values={SERVICE_VALUES} columnCount={COMPARISON_COLUMNS}
+                      accountColumn={accountColumn} fmt={fmt} language={language} t={t}
+                    />
+                  )}
+                >
                   <td className="p-3 text-right font-medium">{a.count} / {fmt(a.total)}€</td>
                   <td className="p-3 text-right text-gray-500">{b.count} / {fmt(b.total)}€</td>
                   <td className="p-3 text-right">
                     <Variation from={a.total} to={b.total} language={language} t={t} />
                   </td>
-                </tr>
+                </UnfoldingRow>
               );
             })}
           </tbody>

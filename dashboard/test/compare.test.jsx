@@ -527,9 +527,11 @@ describe('Compare tab', () => {
         'Adresses IP', 'Datastores Private Cloud', 'Hôtes Private Cloud', 'Load Balancer',
         'Noms de domaine', 'Serveurs dédiés', 'Stockage', 'VPS',
       ]);
-      // The Backup and Private Cloud comparisons have two rows each: nothing to sort
+      // The Backup and Private Cloud comparisons have two rows each: nothing to sort, no header
+      // that sorts, whatever buttons their rows have to unfold (#197)
       await openComparison(user, BACKUP);
-      expect(within(comparisonTable(BACKUP)).queryAllByRole('button')).toEqual([]);
+      expect(within(comparisonTable(BACKUP)).getAllByRole('columnheader')
+        .flatMap((header) => within(header).queryAllByRole('button'))).toEqual([]);
     });
 
     // The servers that the inventory holds today have nothing to do with months A and B: the
@@ -1108,6 +1110,130 @@ describe('Compare tab', () => {
       ]);
       expect(within(within(comparisonTable(title)).getByText('example.net').closest('tr'))
         .getByTitle('cannot be computed: month A at €0 or below')).toHaveTextContent('—');
+    });
+  });
+
+  // The two rows of the backup comparison unfold into their services, month A against month B,
+  // as the infrastructure comparison's rows do (#197): the Veeam VMs backed up and the Veeam
+  // Enterprise licences
+  describe('backup rows unfolded into their services (#197)', () => {
+    // The rows of the backup comparison, each as the texts it shows, header left out
+    const backupRows = () => rowTextsOf(comparisonTable(BACKUP)).slice(1);
+    const VMS = 'VMs Veeam Backup';
+    const LICENCES = 'Licence Veeam Enterprise';
+    const LICENCE = '6f1d2c3b-4a5e-4f60-8b7c-9d0e1f2a3b4c';
+    // The VMs of August and September, as many as the row counts in each month, adding up to its
+    // cost: (40 - 25) / 25, (30 - 15) / 15, and one from nothing in August
+    const vms = [
+      ['vm-app-1.example.com', 'Veeam Managed Backup - vm-app-1.example.com',
+        '25,00€', '40,00€', '+60,0 %'],
+      ['vm-db-1.example.com', 'Veeam Managed Backup - vm-db-1.example.com',
+        '15,00€', '30,00€', '+100,0 %'],
+      ['vm-files-1.example.com', 'Veeam Managed Backup - vm-files-1.example.com',
+        '0,00€', '20,00€', '—'],
+    ];
+
+    it('unfold into their VMs and licences, asked for once a month for both rows', async () => {
+      const { user } = await renderDashboard();
+      await openTab(user, 'Comparaison');
+      await openComparison(user, BACKUP);
+      // Folded, as before
+      expect(rowsOf(comparisonTable(BACKUP))).toEqual([
+        ['Catégorie', 'Août 2026', 'Septembre 2026', 'Variation'],
+        [VMS, '2 / 40,00€', '3 / 90,00€', '+125,0 %'],
+        [LICENCES, '0 / 0,00€', '1 / 25,00€', '—'],
+      ]);
+      expect(chevron(BACKUP, VMS)).toHaveAttribute('aria-expanded', 'false');
+      expect(api.fetchBackupServices).not.toHaveBeenCalled();
+
+      await toggleRow(user, BACKUP, VMS);
+
+      for (const { from, to } of [months[1], months[0]]) {
+        expect(api.fetchBackupServices).toHaveBeenCalledWith(from, to, null);
+      }
+      expect(backupRows()).toEqual([
+        [VMS, '2 / 40,00€', '3 / 90,00€', '+125,0 %'],
+        ...vms,
+        [LICENCES, '0 / 0,00€', '1 / 25,00€', '—'],
+      ]);
+
+      await toggleRow(user, BACKUP, LICENCES);
+
+      // The services of both rows came in the same answers
+      expect(api.fetchBackupServices).toHaveBeenCalledTimes(2);
+      expect(backupRows().slice(-2)).toEqual([
+        [LICENCES, '0 / 0,00€', '1 / 25,00€', '—'],
+        [LICENCE, 'Veeam Enterprise Plus licence', '0,00€', '25,00€', '—'],
+      ]);
+
+      await toggleRow(user, BACKUP, VMS);
+
+      expect(backupRows().map(([label]) => label)).toEqual([VMS, LICENCES, LICENCE]);
+    });
+
+    // July backed nothing up, and August no licence
+    it('offer no chevron on a row that neither month billed', async () => {
+      const { user } = await renderDashboard();
+      await openTab(user, 'Comparaison');
+      await pickMonth(user, 'Août 2026', 'Juillet 2026');
+      await pickMonth(user, 'Septembre 2026', 'Août 2026');
+
+      await openComparison(user, BACKUP);
+
+      expect(backupRows()).toEqual([
+        [VMS, '0 / 0,00€', '2 / 40,00€', '—'],
+        [LICENCES, '0 / 0,00€', '0 / 0,00€', '—'],
+      ]);
+      expect(chevron(BACKUP, VMS)).toHaveAttribute('aria-expanded', 'false');
+      expect(within(comparisonTable(BACKUP))
+        .queryByRole('button', { name: `Services : ${LICENCES}` })).not.toBeInTheDocument();
+    });
+
+    // Several accounts in the instance: every Veeam backup is yy2222-ovh's. See
+    // fixtures/accounts.js.
+    describe('with several accounts', () => {
+      it('name the account of each service with all accounts shown, asked for by account',
+        async () => {
+          const { user } = await renderDashboard(severalAccounts);
+          await openTab(user, 'Comparaison');
+          await openComparison(user, BACKUP);
+
+          await toggleRow(user, BACKUP, VMS);
+
+          for (const { from, to } of [months[1], months[0]]) {
+            expect(api.fetchBackupServicesByAccount).toHaveBeenCalledWith(from, to);
+          }
+          expect(api.fetchBackupServices).not.toHaveBeenCalled();
+          expect(backupRows().slice(1, 4)).toEqual(vms.map(
+            ([identifier, ...rest]) => [identifier, '(yy2222-ovh)', ...rest],
+          ));
+        });
+
+      it('list the services of the account selected, and none of an account without backups',
+        async () => {
+          const { user } = await renderDashboard(severalAccounts);
+          await openTab(user, 'Comparaison');
+          await selectAccount(user, 'yy2222-ovh');
+          await openComparison(user, BACKUP);
+
+          await toggleRow(user, BACKUP, LICENCES);
+
+          for (const { from, to } of [months[1], months[0]]) {
+            expect(api.fetchBackupServices).toHaveBeenCalledWith(from, to, unnamedAccount.id);
+          }
+          expect(backupRows().slice(-1)).toEqual([
+            [LICENCE, 'Veeam Enterprise Plus licence', '0,00€', '25,00€', '—'],
+          ]);
+
+          await selectAccount(user, 'Lyon subsidiary');
+          await openComparison(user, BACKUP);
+
+          expect(backupRows()).toEqual([
+            [VMS, '0 / 0,00€', '0 / 0,00€', '—'],
+            [LICENCES, '0 / 0,00€', '0 / 0,00€', '—'],
+          ]);
+          expect(within(comparisonTable(BACKUP)).queryAllByRole('button')).toEqual([]);
+        });
     });
   });
 

@@ -5,7 +5,7 @@ import { useCompareTab } from '../../src/tabs/useCompareTab.js';
 import { accountColumnOf, accountsOf } from '../../src/utils/accounts.js';
 import { months } from '../fixtures/calendar.js';
 import {
-  lyonAccount, removedAccount, severalAccounts, unknownAccount,
+  lyonAccount, removedAccount, severalAccounts, unknownAccount, unnamedAccount,
 } from '../fixtures/accounts.js';
 import { api } from '../support/api.js';
 import { renderTabHook, TAB_IDS, WAITING } from '../support/hooks.jsx';
@@ -223,6 +223,8 @@ describe('useCompareTab', () => {
       // The query of a resource type's services in a month, which its row runs once unfolded
       // (#192)
       resourceTypeServicesQuery: expect.any(Function),
+      // And that of a backup row's services (#197)
+      backupServicesQuery: expect.any(Function),
     });
     // The comparison by project by month A, the most expensive first, until the user sorts it
     expect(result.current.sortingOf('projects').sort)
@@ -486,6 +488,95 @@ describe('useCompareTab', () => {
         expect(result.current.resourceTypeServicesQuery(DEDICATED_SERVERS, august).enabled)
           .toBe(true);
       });
+    });
+  });
+
+  // The services of the Veeam backups in month A or B (#197): the query that a backup row runs
+  // once unfolded, which the hook defines, one answer a month for both rows
+  describe("query of a backup row's services", () => {
+    const LICENCE = '6f1d2c3b-4a5e-4f60-8b7c-9d0e1f2a3b4c';
+    // The services of a row, as [identifier, cost], and its account when it names one
+    const servicesIn = (services) => services.map(({ domain, total, account }) => (
+      account === undefined ? [domain, total] : [domain, total, account]
+    ));
+
+    it("asks for the backups' services of a month once for both rows, each taking its own",
+      async () => {
+        const { result, keysOf } = await renderTabHook(useCompareTab, onCompare);
+        // Nothing is asked for before a row unfolds
+        expect(api.fetchBackupServices).not.toHaveBeenCalled();
+        expect(keysOf('backupServices')).toEqual([]);
+
+        const vms = result.current.backupServicesQuery('vms', september);
+        const licences = result.current.backupServicesQuery('enterprise', september);
+
+        // One key for both rows, which names no account for all accounts
+        expect(vms.queryKey).toEqual(['backupServices', '2026-09-01', '2026-09-30']);
+        expect(licences.queryKey).toEqual(vms.queryKey);
+        expect(vms.enabled).toBe(true);
+        const answer = await vms.queryFn();
+        expect(api.fetchBackupServices).toHaveBeenCalledWith('2026-09-01', '2026-09-30', null);
+        expect(servicesIn(vms.select(answer))).toEqual([
+          ['vm-app-1.example.com', 40], ['vm-db-1.example.com', 30],
+          ['vm-files-1.example.com', 20],
+        ]);
+        expect(servicesIn(licences.select(answer))).toEqual([[LICENCE, 25]]);
+      });
+
+    it('asks for those of the account shown, under a key that names it last', async () => {
+      const { result } = await renderTabHook(useCompareTab,
+        { ...onCompare, selectedAccount: unnamedAccount.id }, severalAccounts);
+
+      const query = result.current.backupServicesQuery('vms', august);
+
+      expect(query.queryKey)
+        .toEqual(['backupServices', '2026-08-01', '2026-08-31', unnamedAccount.id]);
+      expect(servicesIn(query.select(await query.queryFn())))
+        .toEqual([['vm-app-1.example.com', 25], ['vm-db-1.example.com', 15]]);
+      expect(api.fetchBackupServices)
+        .toHaveBeenCalledWith('2026-08-01', '2026-08-31', unnamedAccount.id);
+    });
+
+    // With several accounts, all of them shown, while the lists name the account of each
+    // service: see fixtures/accounts.js
+    it("asks for every account's by account while the lists name the account of each",
+      async () => {
+        const { result } = await renderTabHook(useCompareTab, {
+          ...onCompare,
+          accountColumn: accountColumnOf(
+            accountsOf(severalAccounts.accounts), null, (key) => translations.fr[key],
+          ),
+        }, severalAccounts);
+
+        const query = result.current.backupServicesQuery('vms', august);
+
+        // For all accounts, which the column shows: its key names none
+        expect(query.queryKey).toEqual(['backupServicesByAccount', '2026-08-01', '2026-08-31']);
+        expect(servicesIn(query.select(await query.queryFn()))).toEqual([
+          ['vm-app-1.example.com', 25, unnamedAccount.nic],
+          ['vm-db-1.example.com', 15, unnamedAccount.nic],
+        ]);
+        expect(api.fetchBackupServicesByAccount).toHaveBeenCalledWith('2026-08-01', '2026-08-31');
+        expect(api.fetchBackupServices).not.toHaveBeenCalled();
+      });
+
+    // As the other figures of the tab: on the tab only, for a month of the months list, once
+    // the page knows the account shown
+    it('waits for the tab, for a month of the account shown, and for that account', async () => {
+      const { result, rerender } = await renderTabHook(useCompareTab,
+        { ...monthsArrive, activeTab: 'overview' });
+
+      expect(result.current.backupServicesQuery('vms', august).enabled).toBe(false);
+
+      // An account not billed in July
+      await rerender({ ...onCompare, months: [september, august] });
+
+      expect(result.current.backupServicesQuery('vms', july).enabled).toBe(false);
+      expect(result.current.backupServicesQuery('vms', august).enabled).toBe(true);
+
+      await rerender({ ...onCompare, selectedAccount: undefined });
+
+      expect(result.current.backupServicesQuery('vms', august).enabled).toBe(false);
     });
   });
 
