@@ -1,11 +1,11 @@
 /**
  * The AI Endpoints models (see CONTEXT.md) that the bill lines of a Public Cloud project name,
  * and what the lines add up to by model (#193), in all and month by month (#196). OVHcloud
- * bills a model's use on a line per
- * charge, most often its input tokens and its output tokens, whose quantity is the number of
- * tokens: « Nombre de tokens d'entrée pour le modèle AI Endpoints gpt-oss-20b », or "Amount of
- * input tokens for AI Endpoints gpt-oss-20b model" on English bills. The model's other lines,
- * such as a speech-to-text model's seconds of audio, count in its cost only.
+ * bills a model's use on a line per charge, most often its input tokens and its output tokens,
+ * whose quantity is the number of tokens: « Nombre de tokens d'entrée pour le modèle AI
+ * Endpoints gpt-oss-20b », or "Amount of input tokens for AI Endpoints gpt-oss-20b model" on
+ * English bills. The model's other lines, such as a speech-to-text model's seconds of audio,
+ * count in its cost only.
  *
  * data/db.js selects the lines of a period, which aiEndpointsLineCondition() narrows down, and
  * modelFigures() adds them up, when the server reads the bills: no re-import. This module has

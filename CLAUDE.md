@@ -69,8 +69,8 @@ OVH API ──> data/import.js ──> SQLite (ovh-bills.db) ──> server/inde
   - `ai-endpoints.js` — pure: the AI Endpoints model of a bill line (`CONTEXT.md`), and what
     the line counts, the model's input or output tokens or its cost only, and what lines add
     up to by model (`modelFigures()`), for `/api/analysis/ai-endpoints` and the Public Cloud
-    tab's table of the models (#193). **Models are read when the server reads the bills**, like
-    the products: no re-import.
+    tab's table of the models (#193), and month by month, for the Trends tab's chart (#196).
+    **Models are read when the server reads the bills**, like the products: no re-import.
   - `storage-classes.js` — pure: the names of the storage classes that OVH gives the objects
     of a bucket, for the import and for the buckets an earlier import stored (#145).
 - **`server/`** — read-only Express API over the DB. `index.js` is the single ~1300-line

@@ -41,7 +41,8 @@ const AiEndpointsTrend = ({ aiEndpointsTrend, language, t, fmt }) => (
       {aiEndpointsTrend.models.map(({ model }) => (
         <li
           key={model}
-          className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border border-gray-300 text-gray-700"
+          className={'flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium'
+            + ' border border-gray-300 text-gray-700'}
         >
           <span
             className="inline-block w-3 h-3 rounded-full"
