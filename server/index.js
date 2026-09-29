@@ -1389,7 +1389,13 @@ function registerRoutes() {
       const { from, to } = req.query;
       const validation = validateDateRange(from, to);
       if (!validation.valid) return res.status(400).json({ error: validation.error });
-      res.json(db.analysis.aiEndpoints(from, to, req.account));
+      const { total, models } = db.analysis.aiEndpoints(from, to, req.account);
+      res.json({
+        total,
+        models: models.map(({ model, tokens, cost }) => ({
+          model, inputTokens: tokens.input, outputTokens: tokens.output, total: cost,
+        })),
+      });
     } catch (err) {
       res.status(500).json({ error: err.message });
     }
