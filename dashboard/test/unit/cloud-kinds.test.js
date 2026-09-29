@@ -16,7 +16,17 @@ describe('cloudKindLabel', () => {
     expect(cloudKindLabel('other', tIn('fr'))).toBe('Autres');
   });
 
+  // As OVH's answer named them for a project of the maintainer's, on 29 September 2026
+  it('names the types of the typed resources that OVH gives', () => {
+    expect(cloudKindLabel('gateway', tIn('fr'))).toBe('Gateways');
+    expect(cloudKindLabel('publicip', tIn('fr'))).toBe('IP publiques');
+    expect(cloudKindLabel('floatingip', tIn('en'))).toBe('Floating IPs');
+    expect(cloudKindLabel('octavia-loadbalancer', tIn('fr'))).toBe('Load balancers');
+    expect(cloudKindLabel('databases', tIn('fr'))).toBe('Bases de données');
+    expect(cloudKindLabel('s3.deeparchive.3az.size', tIn('en'))).toBe('Cold Archive storage');
+  });
+
   it('writes a kind that OVH added since as OVH names it', () => {
-    expect(cloudKindLabel('databases', tIn('fr'))).toBe('databases');
+    expect(cloudKindLabel('ai-notebook', tIn('fr'))).toBe('ai-notebook');
   });
 });

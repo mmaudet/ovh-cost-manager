@@ -16,6 +16,14 @@ const KEYS = {
   savings_plan: 'cloudKindSavingsPlan',
   certification_monthly: 'cloudKindCertification',
   registry: 'cloudKindRegistry',
+  // The types of the typed resources, as OVH's answer names them
+  gateway: 'cloudKindGateway',
+  publicip: 'cloudKindPublicIp',
+  floatingip: 'cloudKindFloatingIp',
+  'octavia-loadbalancer': 'cloudKindLoadBalancer',
+  databases: 'cloudKindDatabases',
+  // The Cold Archive class (DEEP_ARCHIVE) of the object storage of a 3-AZ region
+  's3.deeparchive.3az.size': 'cloudKindColdArchive',
   other: 'cloudKindOther',
 };
 

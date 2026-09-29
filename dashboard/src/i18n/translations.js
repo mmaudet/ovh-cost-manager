@@ -269,6 +269,12 @@ export const translations = {
     cloudKindSavingsPlan: 'Savings plans',
     cloudKindCertification: 'Certifications',
     cloudKindRegistry: 'Registre',
+    cloudKindGateway: 'Gateways',
+    cloudKindPublicIp: 'IP publiques',
+    cloudKindFloatingIp: 'Floating IP',
+    cloudKindLoadBalancer: 'Load balancers',
+    cloudKindDatabases: 'Bases de données',
+    cloudKindColdArchive: 'Stockage Cold Archive',
     cloudKindOther: 'Autres',
   },
   en: {
@@ -541,6 +547,12 @@ export const translations = {
     cloudKindSavingsPlan: 'Savings plans',
     cloudKindCertification: 'Certifications',
     cloudKindRegistry: 'Container registry',
+    cloudKindGateway: 'Gateways',
+    cloudKindPublicIp: 'Public IPs',
+    cloudKindFloatingIp: 'Floating IPs',
+    cloudKindLoadBalancer: 'Load balancers',
+    cloudKindDatabases: 'Databases',
+    cloudKindColdArchive: 'Cold Archive storage',
     cloudKindOther: 'Other',
   }
 };
