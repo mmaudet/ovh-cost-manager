@@ -66,7 +66,7 @@ New in version 3.1.0.
 - **Account Balance**: Debt, credits, and deposit tracking
 
 ### Infrastructure Inventory
-- **Public Cloud**: Projects, instances (with GPU highlighting), quotas by region, Kubernetes clusters, Object Storage (S3) buckets with cost, Container Registry, and the other services (volume backups, databases, load balancers…): the cards add up to the month's cloud total
+- **Public Cloud**: Projects, each with its current consumption and what the month's bills charged it, instances (with GPU highlighting), quotas by region, Kubernetes clusters, Object Storage (S3) buckets with cost, Container Registry, and the other services (volume backups, databases, load balancers…): the cards, and what the month billed the projects, add up to the month's cloud total
 - **Private Cloud / vSphere**: Hosts (ESXi), datastores (SSD), management fees
 - **Dedicated Servers**: Full specs (CPU, RAM, datacenter, expiration, renewal) — Scale, Advance, Infra series
 - **VPS**: Model, zone, specs, state
