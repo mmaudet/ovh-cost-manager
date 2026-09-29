@@ -51,7 +51,8 @@ class Accepted {
   }
 }
 
-// The API's address, as the ovh client calls it without an endpoint or with ovh-eu
+// The API's address, as the ovh client calls it without an endpoint or with ovh-eu: the
+// simulated clients call it whatever their endpoint
 const API_HOST = 'eu.api.ovh.com';
 const API_BASE_PATH = '/1.0';
 
@@ -62,10 +63,10 @@ const signatureOf = ({ appSecret, consumerKey }, method, url, body, timestamp) =
     .digest('hex');
 
 // What require('ovh') returns: a function of the credentials, which returns the client, with
-// the fields and the signature of the real one. The calls of a client whose credentials are
-// none of an account served get OVH's answer to an invalid key. As the real client, it takes
-// every answer but one of 200 for an error: a 202 rejects with its status and the answer's
-// message, and loses the rest of the answer.
+// the fields and the signature of the real one for the EU endpoint. The calls of a client whose
+// credentials are none of an account served get OVH's answer to an invalid key. As the real
+// client, it takes every answer but one of 200 for an error: a 202 rejects with its status and
+// the answer's message, and loses the rest of the answer.
 const ovh = (credentials) => {
   clientCredentials.push(credentials);
   return {
@@ -156,7 +157,9 @@ useDefaultConfig();
 const files = new Map();
 
 // An answer of fetch(), of a status and a body
-const fetched = (status, text) => ({ ok: status >= 200 && status < 300, status, text: async () => text });
+const fetched = (status, text) => ({
+  ok: status >= 200 && status < 300, status, text: async () => text,
+});
 
 // What a call to the API that the import signs itself, with the keys of its client, gets
 // (#179): the routes of the account whose keys signed it, as the client's calls do, with their
@@ -178,6 +181,8 @@ async function answerSignedCall(url, { method = 'GET', headers = {}, body } = {}
       ? fetched(202, JSON.stringify(answer.value))
       : fetched(200, answer === undefined ? '' : JSON.stringify(answer));
   } catch (err) {
+    // An error without an HTTP status, as a network failure: fetch() rejects
+    if (typeof err?.error !== 'number') throw err;
     return fetched(err.error, JSON.stringify({ message: err.message }));
   }
 }

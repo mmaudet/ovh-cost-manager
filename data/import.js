@@ -28,7 +28,7 @@ const {
 const { classifyService, classifyResourceTypeFromDomain } = require('./classify');
 const { footprintMonths, readFootprintFile } = require('./carbon-footprint');
 const { beyondTotal, usageRows } = require('./cloud-usage');
-const { signedRequest } = require('./ovh-signed-request');
+const { acceptingRequest } = require('./ovh-accepting-request');
 const { monthBounds } = require('./months');
 const { storageClassLabel } = require('./storage-classes');
 
@@ -1300,18 +1300,23 @@ async function importCarbonFootprint(ovh, nic, heartbeat) {
   try {
     const months = footprintMonths(new Date());
     const request = { startMonth: `${months.first}-01`, endMonth: `${months.last}-01` };
-    // The calculator accepts the request with 202, which the client takes for an error (#179)
-    const { taskID } = await withRetry(() => signedRequest(
+    // The calculator accepts the request with 202, which the client takes for an error, and
+    // may answer so while the task runs: the import makes these calls itself (#179)
+    const accepted = await withRetry(() => acceptingRequest(
       ovh, 'POST', '/me/carbonCalculator/csv', request,
     ));
     requested = true;
+    const taskID = accepted?.taskID;
+    if (!taskID) {
+      throw new Error('The carbon calculator accepted the request, but named no task');
+    }
 
     let task = { status: 'IN_PROGRESS' };
     for (let waited = 0; task.status === 'IN_PROGRESS' && waited < CARBON_WAIT_MS;
       waited += CARBON_POLL_INTERVAL_MS) {
       await new Promise(resolve => setTimeout(resolve, CARBON_POLL_INTERVAL_MS));
-      task = await withRetry(() => ovh.requestPromised(
-        'GET', `/me/carbonCalculator/task/${taskID}`,
+      task = await withRetry(() => acceptingRequest(
+        ovh, 'GET', `/me/carbonCalculator/task/${taskID}`,
       ));
       heartbeat();
     }

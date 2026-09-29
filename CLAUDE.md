@@ -195,11 +195,11 @@ everything.
 last 24 months: it calls `POST /me/carbonCalculator/csv`, which the key needs a rule for,
 polls the task every 3 seconds, for 2 minutes at most, and downloads the file from its
 pre-signed link. The calculator accepts the request with 202, which the `ovh` client takes
-for an error, losing the task's id: the import signs that call itself, with the client's
-keys (`data/ovh-signed-request.js`, #179). It replaces those months and keeps the older ones, which OVHcloud no
-longer gives, `--full` included (ADR 0003). A key without the rule gets a warning; any
-other failure, a wait that runs out included, counts among the failed items, and replaces
-nothing.
+for an error, losing the task's id: the import makes these calls itself, with the client's
+keys (`data/ovh-accepting-request.js`, #179). It replaces those months and keeps the older
+ones, which OVHcloud no longer gives, `--full` included (ADR 0003). A key without the rule
+gets a warning; any other failure, a wait that runs out included, counts among the failed
+items, and replaces nothing.
 
 A run imports every configured account, one after the other, under one import log entry;
 each differential import starts from that account's own latest bill. An account that

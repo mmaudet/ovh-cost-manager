@@ -214,6 +214,27 @@ test('waits for the task until the carbon calculator has generated the file', as
   expect(totalsOf(ACCOUNT.nic, '2026-08')).toEqual([['2026-08', 6]]);
 });
 
+// The calculator may answer 202 too while it generates the file, as when it accepts the
+// request (#179)
+test('waits for a task that the calculator answers with 202 while it runs', async () => {
+  const link = 'https://carbon.example.net/task-1.csv';
+  serveCarbonCalculator(routes, fileOf(
+    line({ month: '2026-08', manufacturing: 1, electricity: [2, 1.5], operations: [3, 2.5] }),
+  ), { taskID: 'task-1', link });
+  const inProgress = accepted({ taskID: 'task-1', status: 'IN_PROGRESS', link: null });
+  const done = ok({ taskID: 'task-1', status: 'SUCCESS', link });
+  let asked = 0;
+  routes.set('/me/carbonCalculator/task/task-1', () => {
+    asked += 1;
+    return asked === 1 ? inProgress() : done();
+  });
+
+  await runImport({ includeCarbon: true });
+
+  expect(asked).toBe(2);
+  expect(totalsOf(ACCOUNT.nic, '2026-08')).toEqual([['2026-08', 6]]);
+});
+
 test('reads the columns of the file by their names, and ignores the others', async () => {
   // The columns in another order, and one that OCM does not know
   const columns = HEADER.split(',');
@@ -364,6 +385,10 @@ describe('failures', () => {
       serveCarbonCalculator(routes, fileOf(), { taskID: 'failed' });
       routes.set('/me/carbonCalculator/task/failed',
         ok({ taskID: 'failed', status: 'ERROR', link: null }));
+    }],
+    ['a request accepted without a task', () => {
+      serveCarbonCalculator(routes, fileOf());
+      routes.set('/me/carbonCalculator/csv', accepted({}));
     }],
     ['a task still in progress after 2 minutes', serveSlowTask],
     ['a download that fails', () => {
