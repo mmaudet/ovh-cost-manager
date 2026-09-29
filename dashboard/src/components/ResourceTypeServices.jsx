@@ -1,16 +1,7 @@
-import { BY_MONTH_A, BY_MONTH_B, pairMonths } from '../utils/monthComparison.js';
+import { pairMonths } from '../utils/monthComparison.js';
 import { MonthAnswersMessage, useMonthAnswers } from './MonthAnswers.jsx';
-import { sortRows } from './SortableHeader.jsx';
+import { sortUnfolded } from './UnfoldingRow.jsx';
 import { Variation } from './Variation.jsx';
-
-// The services in the order of the comparison's sort, by the values of its columns, and of the
-// same value in its column, in their own order: by month A, the most expensive first, then by
-// month B, which the services keep until the user sorts the comparison. Sorted by month B, then
-// by month A, the services of the same cost in month A keep their order of month B.
-const inOrder = (services, sort, values, language) => sortRows(
-  sortRows(sortRows(services, BY_MONTH_B, values, language), BY_MONTH_A, values, language),
-  sort, values, language,
-);
 
 // The services of months A and B, paired by their identifier, which the server gives as
 // `domain`, whatever the service: each service that either month billed, with the description
@@ -26,7 +17,8 @@ const serviceRows = (servicesA, servicesB) => pairMonths(
  * The services of a resource type in months A and B, right under its unfolded row in a
  * comparison of the Compare tab (#192), one row each, indented, in the comparison's columns:
  * the services that the Infrastructure tab lists for each month, as it shows them, their costs
- * and the variation. They follow the comparison's sort, within their row.
+ * and the variation. They follow the comparison's sort, within their row, and come by month A,
+ * the most expensive first, then by month B, until the user sorts it (sortUnfolded()).
  * @param {object} props
  * @param {string} props.resourceType
  * @param {function(string, ?object): object} props.resourceTypeServicesQuery - The options of
@@ -62,7 +54,7 @@ const ResourceTypeServices = ({
       </tr>
     );
   }
-  return inOrder(serviceRows(dataA ?? [], dataB ?? []), sort, values, language).map(({
+  return sortUnfolded(serviceRows(dataA ?? [], dataB ?? []), sort, values, language).map(({
     identifier, description, valA, valB,
   }) => (
     <tr key={identifier} className="border-b text-gray-600">
