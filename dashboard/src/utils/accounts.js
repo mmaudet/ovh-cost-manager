@@ -190,3 +190,35 @@ export function accountQuery(account, { key, fetch, enabled = true }) {
     enabled: account !== undefined && enabled,
   };
 }
+
+/**
+ * The options of the query of a list, for useQuery, as the lists show it (#118, #194): while
+ * they name the account of each row, with all accounts shown, the rows of all accounts by
+ * account, each row, such as a project or a service, once for each account that billed it,
+ * with that account, under a key and a request that name no account, as they ask for all
+ * accounts; otherwise the rows of the account shown, as accountQuery() asks for them. A list
+ * that the page shows by account only gives no query of the account shown: it does not run
+ * then.
+ * @param {?object} accountColumn - The Account column of the lists (accountColumnOf()), null
+ *   when they name no account
+ * @param {object} query
+ * @param {{ key: Array, fetch: function(): Promise }} query.byAccount - The key of the query
+ *   by account, and what requests its answer
+ * @param {{ account: (?string|undefined), key: Array, fetch: function(?string): Promise }}
+ *   [query.ofAccountShown] - The query of the account shown, as accountQuery() takes it: that
+ *   account, its key for all accounts, and what requests its answer for an account
+ * @param {boolean} [query.enabled] - Whether it may run besides, such as once it has the month
+ *   it needs
+ * @returns {{ queryKey: Array, queryFn: function(): Promise, enabled: boolean }}
+ */
+export function listQuery(accountColumn, { byAccount, ofAccountShown, enabled = true }) {
+  if (!accountColumn && ofAccountShown) {
+    const { account, key, fetch } = ofAccountShown;
+    return accountQuery(account, { key, fetch, enabled });
+  }
+  return {
+    queryKey: byAccount.key,
+    queryFn: byAccount.fetch,
+    enabled: Boolean(accountColumn) && enabled,
+  };
+}

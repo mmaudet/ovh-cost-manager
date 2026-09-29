@@ -26,16 +26,15 @@ const useOverviewTab = ({ selectedMonth, holdsSelectedMonth, accountColumn }) =>
   // The sort order of its tables, by table (#146)
   const sortingOf = useTableSorts({ projects: BY_AMOUNT });
 
-  // The projects of the month by account, for all accounts, while the lists name the account
-  // of each: the breakdown by project, which the Public Cloud tab's list of projects reads too,
-  // and the GPU costs by project. As the shell's queries of the month, they wait until the
-  // months of the account shown hold it.
-  const enabled = accountColumn !== null && holdsSelectedMonth;
+  // The projects of the month by account, for all accounts, which run only while the lists
+  // name the account of each: the breakdown by project, which the Public Cloud tab's list of
+  // projects reads too, and the GPU costs by project. As the shell's queries of the month, they
+  // wait until the months of the account shown hold it.
   const { data: projectsByAccountOfMonth, isError: projectsByAccountFailed } = useQuery(
-    projectsByAccountQuery(selectedMonth, enabled),
+    projectsByAccountQuery(accountColumn, selectedMonth, holdsSelectedMonth),
   );
   const { data: gpuProjectsByAccount = [] } = useQuery(
-    gpuProjectsByAccountQuery(selectedMonth, enabled),
+    gpuProjectsByAccountQuery(accountColumn, selectedMonth, holdsSelectedMonth),
   );
 
   return {
