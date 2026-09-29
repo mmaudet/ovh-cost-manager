@@ -224,6 +224,17 @@ export function serve(data) {
   }
 }
 
+// Makes a function fail, or only its calls that picks() picks by their arguments,
+// as a server that answers with an error would: the request rejects as axios
+// rejects it. The other calls answer as before.
+export function failFor(fn, picks = () => true) {
+  const answer = fn.getMockImplementation();
+  fn.mockImplementation(async (...args) => {
+    if (picks(...args)) throw new Error('Request failed with status code 500');
+    return answer(...args);
+  });
+}
+
 // Holds back the answers of a function, or only those to the calls that picks()
 // picks by their arguments, as a slow server would, until release() is called.
 // Returns release.

@@ -1,7 +1,8 @@
-import { useQuery } from '@tanstack/react-query';
 import { formatMonthLabel } from '../utils/format.js';
+import { pairMonths } from '../utils/monthComparison.js';
 import { publicCloudProductLabel } from '../utils/publicCloudProducts.js';
 import { variationPercent } from '../utils/variation.js';
+import { MonthAnswersMessage, useMonthAnswers } from './MonthAnswers.jsx';
 import { SortableHeader, sortRows } from './SortableHeader.jsx';
 import { Variation } from './Variation.jsx';
 
@@ -21,13 +22,9 @@ const productValues = (t) => ({
 // The rows of the comparison, from the products of months A and B, each the most expensive
 // first: those of month A, in its order, then those of month B only, in theirs, each with its
 // cost in both months, 0 € in a month whose bills did not charge it
-const productRows = (billedA, billedB) => {
-  const costsA = new Map(billedA.products.map(({ product, total }) => [product, total]));
-  const costsB = new Map(billedB.products.map(({ product, total }) => [product, total]));
-  return [...new Set([...costsA.keys(), ...costsB.keys()])].map((product) => ({
-    product, valA: costsA.get(product) ?? 0, valB: costsB.get(product) ?? 0,
-  }));
-};
+const productRows = (billedA, billedB) => pairMonths(
+  billedA.products, billedB.products, ({ product }) => product,
+).map(({ key, valA, valB }) => ({ product: key, valA, valB }));
 
 /**
  * The comparison of a Public Cloud project's products in months A and B, from the bills of each
@@ -48,18 +45,18 @@ const productRows = (billedA, billedB) => {
 export default function ProjectProductComparison({
   productsQueryOf, monthA, monthB, sorting, fmt, language, t,
 }) {
-  const answerA = useQuery(productsQueryOf(monthA));
-  const answerB = useQuery(productsQueryOf(monthB));
-  // Until both months' answers arrive, rather than a month at 0 € or no product at all
-  if (answerA.isLoading || answerB.isLoading) {
-    return <div className="text-gray-500 text-sm">{t('loading')}</div>;
+  const { status, dataA, dataB } = useMonthAnswers(productsQueryOf, monthA, monthB);
+  // Until both months' answers arrive, rather than a month at 0 € or no product at all, or
+  // when one failed, rather than a month at 0 € (#181): in place of the table
+  if (status !== 'answered') {
+    return (
+      <div className="text-sm">
+        <MonthAnswersMessage status={status} failed={t('projectProductsFailed')} t={t} />
+      </div>
+    );
   }
-  // A month whose answer failed, rather than a month at 0 € (#181)
-  if (answerA.isError || answerB.isError) {
-    return <div className="text-red-500 text-sm">{t('projectProductsFailed')}</div>;
-  }
-  const billedA = answerA.data ?? NOTHING_BILLED;
-  const billedB = answerB.data ?? NOTHING_BILLED;
+  const billedA = dataA ?? NOTHING_BILLED;
+  const billedB = dataB ?? NOTHING_BILLED;
   const rows = productRows(billedA, billedB);
   // Whether the bills of either month used a credit
   const credited = billedA.credits !== 0 || billedB.credits !== 0;

@@ -244,14 +244,41 @@ const otherResourceTypes = [
     value: 6, detailsCount: 4, serviceCount: 4 },
 ];
 
+// A service of the Private Cloud, as its bill lines group by service: one line a month
+const privateCloudService = (domain, description, total) => ({
+  domain, description, total, line_count: 1,
+});
+
 // The account billed in September for every resource type the Infrastructure
 // tab has a card for, and a few more, on top of its own. Most expensive first,
-// as /api/analysis/by-resource-type answers.
+// as /api/analysis/by-resource-type answers. The services of its Private Cloud
+// hosts and datastores add up to their costs (#192).
 export const everyResourceType = {
   byResourceType: {
     ...account.byResourceType,
     '2026-09': [...account.byResourceType['2026-09'], ...otherResourceTypes]
       .sort((a, b) => b.value - a.value),
+  },
+  resourceTypeDetails: {
+    ...account.resourceTypeDetails,
+    private_cloud_host: {
+      '2026-09': [
+        privateCloudService('pcc-203-0-113-10/host/1234',
+          'Host Private Cloud 256 Go pcc-203-0-113-10 - 1 mois', 850),
+        privateCloudService('pcc-203-0-113-10/host/1235',
+          'Host Private Cloud 96 Go pcc-203-0-113-10 - 1 mois', 600),
+      ],
+    },
+    private_cloud_datastore: {
+      '2026-09': [
+        privateCloudService('pcc-203-0-113-10/zpool/4321',
+          'Datastore 3 To pcc-203-0-113-10 - 1 mois', 180),
+        privateCloudService('pcc-203-0-113-10/zpool/4322',
+          'Datastore 2 To pcc-203-0-113-10 - 1 mois', 120),
+        privateCloudService('pcc-203-0-113-10/ssd-4323',
+          'Datastore SSD 1 To pcc-203-0-113-10 - 1 mois', 80),
+      ],
+    },
   },
 };
 

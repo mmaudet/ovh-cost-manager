@@ -62,6 +62,10 @@ export const translations = {
     product: 'Produit',
     noProjectData: 'Aucune donnée pour ce projet',
     projectProductsFailed: 'Impossible de charger le détail de ce projet.',
+    // The chevron of a row of a comparison that unfolds into its services, before the row's
+    // label (#192)
+    servicesOf: 'Services :',
+    servicesFailed: 'Impossible de charger les services de cette ligne.',
 
     // What a click on the header of a column that sorts its table does (#146)
     sortAscending: 'Trier par ordre croissant',
@@ -365,6 +369,10 @@ export const translations = {
     product: 'Product',
     noProjectData: 'No data for this project',
     projectProductsFailed: 'The detail of this project could not be loaded.',
+    // The chevron of a row of a comparison that unfolds into its services, before the row's
+    // label (#192)
+    servicesOf: 'Services:',
+    servicesFailed: 'The services of this row could not be loaded.',
 
     // What a click on the header of a column that sorts its table does (#146)
     sortAscending: 'Sort in ascending order',
