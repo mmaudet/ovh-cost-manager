@@ -109,11 +109,11 @@ function costGrouping(column, byAccount) {
 /**
  * The services of the bill lines that a condition selects between two dates, on the bills of
  * the account (see accountCondition()), every account's by default: for each service (bill
- * `domain` field), the wording of the most expensive of its lines, what they cost and how many
- * they are, as the lists of bill lines by service show them (#123). One row per service; or,
- * with byAccount, per service and account, with the NIC handle of its account, null for the
- * Unknown account, and the wording of that account's own lines (see costGrouping()). Only the
- * services whose lines add up to more than 0 €, in the order of costGrouping().
+ * `domain` field), the description of the most expensive of its lines, what they cost and how
+ * many they are, as the lists of bill lines by service show them (#123). One row per service;
+ * or, with byAccount, per service and account, with the NIC handle of its account, null for
+ * the Unknown account, and the description of that account's own lines (see costGrouping()).
+ * Only the services whose lines add up to more than 0 €, in the order of costGrouping().
  * @param {function(string): { sql: string, params: Array }} linesOf - The condition that
  *   selects the lines, for the alias of their table
  * @param {string} fromDate
@@ -126,7 +126,7 @@ function servicesOfLines(linesOf, fromDate, toDate, account, byAccount) {
   const ofAccount = accountCondition(account, 'b.account');
   const ofLineAccount = accountCondition(account, 'b2.account');
   const grouping = costGrouping('d.domain', byAccount);
-  // By account, the wording of the row's account's own lines
+  // By account, the description of the row's account's own lines
   const sameAccount = byAccount ? 'AND b2.account IS b.account' : '';
   const lines = linesOf('d');
   const serviceLines = linesOf('d2');
@@ -1308,12 +1308,12 @@ const inventoryOps = {
   /**
    * The bill lines of a resource type between two dates, by service (bill `domain` field), on
    * the bills of the account (see accountCondition()), every account's by default (#123). Each
-   * row gives the wording of the most expensive of its lines, what they cost and how many they
-   * are. One row per service, as before the accounts; or, with byAccount, for the list that
-   * names the account of each service, per service and account, with the NIC handle of its
+   * row gives the description of the most expensive of its lines, what they cost and how many
+   * they are. One row per service, as before the accounts; or, with byAccount, for the list
+   * that names the account of each service, per service and account, with the NIC handle of its
    * account, null for the Unknown account: a service billed to several accounts, such as a
-   * server moved from an account to another, then has a row for each, with the wording of its
-   * own lines, as a bill line belongs to the account of its bill (ADR 0002).
+   * server moved from an account to another, then has a row for each, with the description of
+   * its own lines, as a bill line belongs to the account of its bill (ADR 0002).
    *
    * In the order of costGrouping(), as the costs by project (#118).
    * @param {string} resourceType

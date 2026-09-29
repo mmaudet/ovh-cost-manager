@@ -313,8 +313,8 @@ describe('GET /api/analysis/resource-type-details', () => {
   // parameters name, or for every account without one
   const detailsOf = (type, parameters = '') =>
     ocm.get(`/api/analysis/resource-type-details?type=${type}&${SEPTEMBER}${parameters}`);
-  // A service as the route lists it: its most expensive line's wording, what its lines cost,
-  // and how many they are
+  // A service as the route lists it: the description of its most expensive line, what its lines
+  // cost, and how many they are
   const billed = (domain, description, total, lineCount) => ({
     domain, description, total, line_count: lineCount,
   });
@@ -343,7 +343,7 @@ describe('GET /api/analysis/resource-type-details', () => {
     });
 
   // For the list that names the account of each service: the server that moved comes for
-  // each account that billed it, with the wording of its own lines
+  // each account that billed it, with the description of its own lines
   test('lists each service for each account that billed it, with the account, when asked to',
     async () => {
       expect(await detailsOf('dedicated_server', '&byAccount=true')).toEqual({
@@ -363,7 +363,7 @@ describe('GET /api/analysis/resource-type-details', () => {
       expect(await detailsOf('dedicated_server', `&account=${LYON}`)).toEqual({
         status: 200, body: [rise1, advance1(lyonRental, 100, 1)],
       });
-      // With the wording of the account's own lines
+      // With the description of the account's own lines
       expect(await detailsOf('dedicated_server', `&account=${PARIS}`)).toEqual({
         status: 200, body: [rise2, advance1(parisOption, 60, 1)],
       });

@@ -243,8 +243,8 @@ describe('GET /api/analysis/backup-services', () => {
       .toEqual(stats);
   });
 
-  // A service billed to two accounts has a row for each, with the wording of that account's
-  // own lines: vm-web-1, backed up by Paris, then by Lyon, in July
+  // A service billed to two accounts has a row for each, with the description of that
+  // account's own lines: vm-web-1, backed up by Paris, then by Lyon, in July
   test('gives each service once for each account that billed it, with byAccount', async () => {
     expect(listed(await servicesOf(JULY, '&byAccount=true'))).toEqual({
       status: 200,
