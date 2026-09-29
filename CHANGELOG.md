@@ -12,6 +12,22 @@ sections were written afterwards from the git history.
 
 <!-- scripts/release.sh inserts each new version above the first version heading. -->
 
+## 3.2.0 - 2026-09-29
+
+<!-- Upgrade notes and highlights of this release, if any. -->
+
+### New features
+* feat: sort the dashboard's tables by any of their columns by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/176
+### Bug fixes
+* fix: count every part of a Public Cloud project's current usage by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/172
+* fix: add the Public Cloud cards up to the month's cloud total by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/173
+* fix: say that an empty bucket has no class, and name the archive classes by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/174
+* fix: name the typed resources of a project's consumption by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/177
+### Maintenance
+* docs: show the carbon footprint tab in the README by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/175
+
+**Full Changelog**: https://github.com/mmaudet/ovh-cost-manager/compare/v3.1.0...v3.2.0
+
 ## 3.1.0 - 2026-09-28
 
 OVH Cost Manager now imports the carbon footprint that OVHcloud's carbon
