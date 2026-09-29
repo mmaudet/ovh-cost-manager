@@ -12,6 +12,44 @@ sections were written afterwards from the git history.
 
 <!-- scripts/release.sh inserts each new version above the first version heading. -->
 
+## 3.3.0 - 2026-09-29
+
+Two features, which a user of 3.2.0 asked for:
+
+- **The Compare tab's rows unfold into what they add up** (#182, #189).
+  - The rows of the infrastructure, Private Cloud and backup comparisons unfold into their services: each dedicated server, VPS, domain, IP block, Private Cloud host or datastore, each Veeam VM and licence.
+  - A Public Cloud project's products unfold into their charges: an instance's monthly plan, a flavor's hourly use in a region, a bucket's storage, an AI Endpoints model's tokens.
+  - Each gives the amount of month A, the amount of month B and the variation, and names its account while all accounts are shown.
+  - The list of the dedicated servers that the inventory holds today leaves the Compare tab, where it compared nothing.
+
+  See [Month Comparison](https://github.com/mmaudet/ovh-cost-manager/blob/v3.3.0/README.md#month-comparison) in the README.
+- **AI Endpoints by model** (#183, #190).
+  - The Public Cloud tab lists the AI Endpoints models that the month's bills name, with their input tokens, their output tokens and their cost.
+  - The Trends tab charts each model's monthly cost.
+
+  See [AI Endpoints Models](https://github.com/mmaudet/ovh-cost-manager/blob/v3.3.0/README.md#ai-endpoints-models) in the README.
+
+### Upgrade notes
+
+- **No re-import.** Both features read the bills already imported, when the server reads them.
+- **New route:** `/api/analysis/backup-services`.
+- **New route:** `/api/analysis/ai-endpoints`.
+- **Changed answer:** `/api/projects/:id/products` gives each product's `charges`.
+
+### New features
+* feat: list the month's AI Endpoints models in the Public Cloud tab by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/201
+* feat: unfold the infrastructure comparison's rows into their services by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/202
+* feat: chart the monthly cost of each AI Endpoints model in the Trends tab by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/203
+* feat: name each service's account in the Compare tab, and drop its inventory list by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/205
+* feat: unfold a project's products into their charges in the Compare tab by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/206
+* feat: unfold the backup comparison's rows into their VMs and licences by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/207
+### Maintenance
+* docs: add Service, Charge and AI Endpoints model to the glossary by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/200
+* docs: document the AI Endpoints models by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/204
+* docs: document the unfolding rows of the Compare tab by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/208
+
+**Full Changelog**: https://github.com/mmaudet/ovh-cost-manager/compare/v3.2.1...v3.3.0
+
 ## 3.2.1 - 2026-09-29
 
 Three fixes, which users of 3.2.0 reported:
