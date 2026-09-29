@@ -45,17 +45,17 @@ const projectComparisonValues = (accountColumn) => ({
 });
 
 // The Compare tab, which the shell renders while it is active: what useCompareTab() returns,
-// the sort order of its tables included (#146), with the shell's language, translations (t),
-// amount format (fmt) and months list, and the dedicated servers of the inventory, which the
-// Infrastructure hook loads, on its own tab and on this one (#35). The months and their
-// figures are those of the account selected in the header (#119). The comparison by project
-// names the account of each project in the Account column of the shell (accountColumn), when
-// it shows one: it then compares the projects by account that the hook requests, a project
-// billed to several accounts once for each.
+// the sort order of its tables and the query of a project's products included (#146, #181),
+// with the shell's language, translations (t), amount format (fmt) and months list, and the
+// dedicated servers of the inventory, which the Infrastructure hook loads, on its own tab and
+// on this one (#35). The months and their figures are those of the account selected in the
+// header (#119). The comparison by project names the account of each project in the Account
+// column of the shell (accountColumn), when it shows one: it then compares the projects by
+// account that the hook requests, a project billed to several accounts once for each.
 const CompareTab = ({
   compareMonthA, setCompareMonthA, compareMonthB, setCompareMonthB, sortingOf,
   compareDataA, compareDataB, byServiceA, byServiceB, byProjectA, byProjectB,
-  byResourceTypeA, byResourceTypeB, backupStatsA, backupStatsB,
+  byResourceTypeA, byResourceTypeB, backupStatsA, backupStatsB, projectProductsQuery,
   language, t, fmt, months, inventoryServers, accountColumn,
 }) => {
   // Months A and B as the page names them, in its language (#33)
@@ -69,9 +69,10 @@ const CompareTab = ({
     projectComparisonRows(byProjectA, byProjectB), projectSorting.sort,
     projectComparisonValues(accountColumn), language,
   );
-  // The projects whose consumption the tab compares, once each, in the order of their first
-  // rows: in the Account column, a project billed to several accounts has a row for each (#119)
-  const consumptionProjects = firstRowOfEachProject(compareProjects);
+  // The projects whose products the tab compares (#181), once each, in the order of their
+  // first rows: in the Account column, a project billed to several accounts has a row for each
+  // (#119)
+  const detailedProjects = firstRowOfEachProject(compareProjects);
 
   // Comparison chart data
   const comparisonChartData = byServiceA.map((s) => {
@@ -389,12 +390,13 @@ const CompareTab = ({
           </tbody>
         </table>
       </Accordion>
-      {/* One accordion per Public Cloud project: detailed comparison of products/services */}
-      {consumptionProjects.map((proj) => (
+      {/* One accordion per Public Cloud project: the comparison of its products (#181) */}
+      {detailedProjects.map((proj) => (
         <Accordion key={proj.projectId} title={`${proj.projectName} (${t('project')})`}>
           <ProjectProductComparison
-            projectId={proj.projectId} monthA={compareMonthA} monthB={compareMonthB}
-            sorting={sortingOf(`consumption ${proj.projectId}`)}
+            productsQueryOf={(month) => projectProductsQuery(proj.projectId, month)}
+            monthA={compareMonthA} monthB={compareMonthB}
+            sorting={sortingOf(`products ${proj.projectId}`)}
             fmt={fmt} language={language} t={t}
           />
         </Accordion>

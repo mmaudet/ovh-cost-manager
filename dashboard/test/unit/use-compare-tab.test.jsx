@@ -215,6 +215,9 @@ describe('useCompareTab', () => {
       byResourceTypeB: expect.any(Array),
       backupStatsA: expect.any(Object),
       backupStatsB: expect.any(Object),
+      // The query of a project's products in a month, which the comparison of the project's
+      // products runs once opened (#181)
+      projectProductsQuery: expect.any(Function),
     });
     // The comparison by project by month A, the most expensive first, until the user sorts it
     expect(result.current.sortingOf('projects').sort)
@@ -311,6 +314,59 @@ describe('useCompareTab', () => {
     // The answers stay
     expect(result.current.compareDataA.total).toBe(980);
     expect(result.current.compareDataB.total).toBe(1042);
+  });
+
+  // What the bills of month A or B charged a project, product by product (#181): the query that
+  // the comparison of the project's products runs once opened, which the hook defines
+  describe("query of a project's products", () => {
+    const PRODUCTION = 'project-production';
+
+    it('asks for the products of a project in a month, under a key of its own', async () => {
+      const { result } = await renderTabHook(useCompareTab, onCompare);
+
+      const query = result.current.projectProductsQuery(PRODUCTION, august);
+
+      // For all accounts, its key names none, as its request does not (ADR 0001)
+      expect(query.queryKey).toEqual(['projectProducts', PRODUCTION, '2026-08-01', '2026-08-31']);
+      expect(query.enabled).toBe(true);
+      await expect(query.queryFn()).resolves.toMatchObject({ total: 512, credits: 0 });
+      expect(api.fetchProjectProducts)
+        .toHaveBeenCalledWith(PRODUCTION, '2026-08-01', '2026-08-31', null);
+    });
+
+    // As the comparison by project, whose cost of the project they break down (#119)
+    it('asks for those of the bills of the account shown, under a key that names it',
+      async () => {
+        const { result } = await renderTabHook(useCompareTab,
+          { ...onCompare, selectedAccount: lyonAccount.id }, severalAccounts);
+
+        const query = result.current.projectProductsQuery(PRODUCTION, september);
+
+        expect(query.queryKey)
+          .toEqual(['projectProducts', PRODUCTION, '2026-09-01', '2026-09-30', lyonAccount.id]);
+        await expect(query.queryFn()).resolves.toMatchObject({ total: 610.4 });
+        expect(api.fetchProjectProducts)
+          .toHaveBeenCalledWith(PRODUCTION, '2026-09-01', '2026-09-30', lyonAccount.id);
+      });
+
+    // As the other figures of the tab: on the tab only, for a month of the months list, once
+    // the page knows the account shown
+    it('waits for the tab, for a month of the account shown, and for that account', async () => {
+      const { result, rerender } = await renderTabHook(useCompareTab,
+        { ...monthsArrive, activeTab: 'overview' });
+
+      expect(result.current.projectProductsQuery(PRODUCTION, august).enabled).toBe(false);
+
+      // An account not billed in July
+      await rerender({ ...onCompare, months: [september, august] });
+
+      expect(result.current.projectProductsQuery(PRODUCTION, july).enabled).toBe(false);
+      expect(result.current.projectProductsQuery(PRODUCTION, august).enabled).toBe(true);
+
+      await rerender({ ...onCompare, selectedAccount: undefined });
+
+      expect(result.current.projectProductsQuery(PRODUCTION, august).enabled).toBe(false);
+    });
   });
 
   // Several accounts in the instance (#119), all of them shown, where the comparison by

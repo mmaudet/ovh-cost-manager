@@ -27,8 +27,7 @@ const projects = [
 ];
 
 // What a project consumed from the 1st of the month to the last import, by
-// cloud resource kind. The import keeps that of each month from the upgrade on
-// (#54): here, September only.
+// cloud resource kind: that of September, the month of the last import.
 const usage = (fields) => ({
   period_start: '2026-09-01',
   period_end: '2026-09-15',
@@ -173,6 +172,15 @@ const quota = (id, project_id, region, cores, instances) => ({
   snapshot_date: '2026-09-14 04:01:30',
 });
 
+// The products of a project's bills over a period, as /api/projects/:id/products
+// answers them (#181): what they cost in all, each product as [product, cost],
+// the most expensive first, and the credit that the bills used
+export const billedProducts = (total, products, credits = 0) => ({
+  total,
+  products: products.map(([product, cost]) => ({ product, total: cost })),
+  credits,
+});
+
 // The figures of the Public Cloud cards, as /api/analysis/public-cloud-stats
 // answers them: those given, and nothing billed or counted for the others
 export const publicCloudFigures = (fields) => ({
@@ -216,10 +224,34 @@ export const publicCloud = {
     }),
   },
 
-  // Without a period, that of the latest month imported; for a month, what falls within it
+  // Without a period, that of the latest month imported
   projectConsumption: {
-    [PRODUCTION]: { all: productionUsage, '2026-09': productionUsage },
-    [STAGING]: { all: stagingUsage, '2026-09': stagingUsage },
+    [PRODUCTION]: { all: productionUsage },
+    [STAGING]: { all: stagingUsage },
+  },
+
+  // What the bills of each month charged a project, product by product, which
+  // the Compare tab compares (#181): with the credit, they add up to its cost
+  // in the comparison by project (account.js). In August and September, the
+  // two projects' add up to the cards above; Production used a credit in July.
+  projectProducts: {
+    [PRODUCTION]: {
+      '2026-09': billedProducts(610.4, [
+        ['instances', 538.9], ['savingsPlans', 28], ['objectStorage', 25], ['volumes', 12.5],
+        ['snapshots', 6],
+      ]),
+      '2026-08': billedProducts(512, [
+        ['instances', 440.6], ['savingsPlans', 28], ['objectStorage', 24.9], ['volumes', 12.5],
+        ['snapshots', 6],
+      ]),
+      '2026-07': billedProducts(715, [
+        ['instances', 650], ['databases', 45], ['objectStorage', 20],
+      ], -35),
+    },
+    [STAGING]: {
+      '2026-09': billedProducts(220, [['instances', 180], ['registry', 40]]),
+      '2026-08': billedProducts(190, [['instances', 150], ['registry', 40]]),
+    },
   },
 
   // In August, only the instances of Production are detailed

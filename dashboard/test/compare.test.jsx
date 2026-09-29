@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { screen, within } from '@testing-library/react';
 import { account, everyResourceType, threeBilledProjects } from './fixtures/account.js';
+import { billedProducts } from './fixtures/public-cloud.js';
 import {
   lyonAccount, removedAccount, severalAccounts, unknownAccount, unnamedAccount,
 } from './fixtures/accounts.js';
@@ -38,8 +39,8 @@ const PROJECTS = /^Comparaison par projet/;
 const INFRASTRUCTURE = /^Comparaison Infrastructure/;
 const BACKUP = /^Comparaison Backup/;
 const PRIVATE_CLOUD = /^Comparaison Private Cloud/;
-// The comparison of what the Production project consumed
-const PRODUCTION_CONSUMPTION = /^Production \(Projet\)/;
+// The comparison of the Production project's products
+const PRODUCTION_PRODUCTS = /^Production \(Projet\)/;
 const toggle = (title) => screen.getByRole('button', { name: title });
 const comparison = (title) => accordionOf(toggle(title));
 const comparisonTable = (title) => within(comparison(title)).queryByRole('table');
@@ -47,7 +48,7 @@ const openComparison = async (user, title) => {
   await user.click(toggle(title));
   await settle();
 };
-// The comparisons of the consumption of each project, by their titles
+// The comparisons of each project's products, by their titles
 const projectComparisons = () => screen
   .getAllByRole('button', { name: /\(Projet\)/ })
   .map((button) => texts(button)[0]);
@@ -83,11 +84,11 @@ describe('Compare tab', () => {
     expect(api.fetchBackupStats).toHaveBeenCalledWith('2026-09-01', '2026-09-30', null);
     // The dedicated servers of the inventory load with the tab (#35), the
     // rest of the inventory with the Infrastructure tab only, and the
-    // consumption of a project once its comparison opens
+    // products of a project once its comparison opens (#181)
     expect(api.fetchInventoryServers).toHaveBeenCalled();
     expect(api.fetchInventoryVps).not.toHaveBeenCalled();
     expect(api.fetchInventoryStorage).not.toHaveBeenCalled();
-    expect(api.fetchProjectConsumption).not.toHaveBeenCalled();
+    expect(api.fetchProjectProducts).not.toHaveBeenCalled();
   });
 
   describe('months A and B', () => {
@@ -287,14 +288,15 @@ describe('Compare tab', () => {
       ]);
       expect(within(projectTable()).getByTitle('non calculable : mois A à 0 € ou moins'))
         .toHaveTextContent('—');
-      // Its consumption is compared too
+      // Its products are compared too, from nothing in July (#181)
       expect(projectComparisons()).toEqual(['Production (Projet)', 'Staging (Projet)']);
       await openComparison(user, /^Staging \(Projet\)/);
-      expect(api.fetchProjectConsumption)
-        .toHaveBeenCalledWith('project-staging', '2026-07-01', '2026-07-31');
+      expect(api.fetchProjectProducts)
+        .toHaveBeenCalledWith('project-staging', '2026-07-01', '2026-07-31', null);
       expect(rowsOf(comparisonTable(/^Staging \(Projet\)/))).toEqual([
-        ['Produit/Type○', 'Juillet 2026○', 'Septembre 2026○', 'Variation○'],
-        ['Instances', '0,00€', '52,35€', '—'],
+        ['Produit○', 'Juillet 2026○', 'Septembre 2026○', 'Variation○'],
+        ['Instances', '0,00€', '180,00€', '—'],
+        ['Registre', '0,00€', '40,00€', '—'],
       ]);
 
       await selectLanguage(user, 'en');
@@ -606,103 +608,160 @@ describe('Compare tab', () => {
     });
   });
 
-  describe('project consumption comparisons', () => {
+  // The comparison of each project's products in months A and B, from the bills of each month
+  // (#181)
+  describe('project product comparisons', () => {
     it('are closed, one per project of the project comparison', async () => {
       const { user } = await renderDashboard();
 
       await openTab(user, 'Comparaison');
 
       expect(projectComparisons()).toEqual(['Production (Projet)', 'Staging (Projet)']);
-      expect(comparisonTable(PRODUCTION_CONSUMPTION)).not.toBeInTheDocument();
+      expect(comparisonTable(PRODUCTION_PRODUCTS)).not.toBeInTheDocument();
     });
 
-    it('compare what a project consumed by cloud resource kind, once opened', async () => {
+    // Every month that billed the project, whether OCM imported in it or not, rather than the
+    // consumption that an import records for its month only (#181)
+    it('compare the products of a project from the bills of months A and B, once opened',
+      async () => {
+        const { user } = await renderDashboard();
+        await openTab(user, 'Comparaison');
+
+        await openComparison(user, PRODUCTION_PRODUCTS);
+
+        expect(api.fetchProjectProducts)
+          .toHaveBeenCalledWith('project-production', '2026-08-01', '2026-08-31', null);
+        expect(api.fetchProjectProducts)
+          .toHaveBeenCalledWith('project-production', '2026-09-01', '2026-09-30', null);
+        // The products of month A, the most expensive first, then those of month B only. Each
+        // month's add up to Production's cost in the comparison by project: 512 € in August,
+        // 610.40 € in September.
+        expect(rowsOf(comparisonTable(PRODUCTION_PRODUCTS))).toEqual([
+          ['Produit○', 'Août 2026○', 'Septembre 2026○', 'Variation○'],
+          // (538.90 - 440.60) / 440.60
+          ['Instances', '440,60€', '538,90€', '+22,3 %'],
+          ['Savings plans', '28,00€', '28,00€', '0,0 %'],
+          ['Stockage objet', '24,90€', '25,00€', '+0,4 %'],
+          ['Volumes', '12,50€', '12,50€', '0,0 %'],
+          ['Snapshots', '6,00€', '6,00€', '0,0 %'],
+        ]);
+      });
+
+    // A credit pays for no product (CONTEXT.md), as on the Public Cloud tab
+    it('show the credit that the bills used apart, after the products', async () => {
       const { user } = await renderDashboard();
       await openTab(user, 'Comparaison');
+      await pickMonth(user, 'Août 2026', 'Juillet 2026');
 
-      await openComparison(user, PRODUCTION_CONSUMPTION);
+      await openComparison(user, PRODUCTION_PRODUCTS);
 
-      expect(api.fetchProjectConsumption)
-        .toHaveBeenCalledWith('project-production', '2026-08-01', '2026-08-31');
-      expect(api.fetchProjectConsumption)
-        .toHaveBeenCalledWith('project-production', '2026-09-01', '2026-09-30');
-      // Nothing stored for August, as when the upgrade that keeps each month's
-      // consumption came in September (#54): no variation to compute (#65)
-      expect(rowsOf(comparisonTable(PRODUCTION_CONSUMPTION))).toEqual([
-        ['Produit/Type○', 'Août 2026○', 'Septembre 2026○', 'Variation○'],
-        ['Instances', '0,00€', '234,25€', '—'],
-        ['Instances (forfait mensuel)', '0,00€', '64,00€', '—'],
-        ['Volumes', '0,00€', '7,50€', '—'],
-        ['Snapshots', '0,00€', '3,25€', '—'],
-        ['Stockage objet', '0,00€', '41,00€', '—'],
+      // July's products add up to 715 €, and with its credit to Production's 680 € in the
+      // comparison by project. There is no variation from a credit to compute (#65).
+      expect(rowsOf(comparisonTable(PRODUCTION_PRODUCTS))).toEqual([
+        ['Produit○', 'Juillet 2026○', 'Septembre 2026○', 'Variation○'],
+        // (538.90 - 650) / 650
+        ['Instances', '650,00€', '538,90€', '-17,1 %'],
+        ['Bases de données', '45,00€', '0,00€', '-100,0 %'],
+        ['Stockage objet', '20,00€', '25,00€', '+25,0 %'],
+        ['Savings plans', '0,00€', '28,00€', '—'],
+        ['Volumes', '0,00€', '12,50€', '—'],
+        ['Snapshots', '0,00€', '6,00€', '—'],
+        ['Crédit Cloud utilisé', '-35,00€', '0,00€', '—'],
       ]);
-      expect(within(comparisonTable(PRODUCTION_CONSUMPTION))
-        .getAllByTitle('non calculable : mois A à 0 € ou moins')).toHaveLength(5);
+
+      // The least expensive in July first: the credit stays last
+      await sortTable(user, comparisonTable(PRODUCTION_PRODUCTS), /^Juillet 2026/);
+      await sortTable(user, comparisonTable(PRODUCTION_PRODUCTS), /^Juillet 2026/);
+
+      expect(rowsOf(comparisonTable(PRODUCTION_PRODUCTS)).slice(-3)).toEqual([
+        ['Bases de données', '45,00€', '0,00€', '-100,0 %'],
+        ['Instances', '650,00€', '538,90€', '-17,1 %'],
+        ['Crédit Cloud utilisé', '-35,00€', '0,00€', '—'],
+      ]);
+
+      await selectLanguage(user, 'en');
+
+      expect(rowsOf(comparisonTable(/^Production \(Project\)/)).at(-1))
+        .toEqual(['Cloud credit used', '-35.00€', '0.00€', '—']);
     });
 
     // Each on its own, and still sorted once opened again (#146)
-    it('sort what a project consumed by any column, each project on its own', async () => {
+    it('sort the products of a project by any column, each project on its own', async () => {
       const { user } = await renderDashboard();
       await openTab(user, 'Comparaison');
-      await openComparison(user, PRODUCTION_CONSUMPTION);
+      await openComparison(user, PRODUCTION_PRODUCTS);
       await openComparison(user, /^Staging \(Projet\)/);
 
-      await sortTable(user, comparisonTable(PRODUCTION_CONSUMPTION), /^Septembre 2026/);
+      await sortTable(user, comparisonTable(PRODUCTION_PRODUCTS), /^Variation/);
 
-      expect(rowsOf(comparisonTable(PRODUCTION_CONSUMPTION))).toEqual([
-        ['Produit/Type○', 'Août 2026○', 'Septembre 2026▼', 'Variation○'],
-        ['Instances', '0,00€', '234,25€', '—'],
-        ['Instances (forfait mensuel)', '0,00€', '64,00€', '—'],
-        ['Stockage objet', '0,00€', '41,00€', '—'],
-        ['Volumes', '0,00€', '7,50€', '—'],
-        ['Snapshots', '0,00€', '3,25€', '—'],
+      // The largest increase first; products of the same variation keep their order
+      expect(rowsOf(comparisonTable(PRODUCTION_PRODUCTS))).toEqual([
+        ['Produit○', 'Août 2026○', 'Septembre 2026○', 'Variation▼'],
+        ['Instances', '440,60€', '538,90€', '+22,3 %'],
+        ['Stockage objet', '24,90€', '25,00€', '+0,4 %'],
+        ['Savings plans', '28,00€', '28,00€', '0,0 %'],
+        ['Volumes', '12,50€', '12,50€', '0,0 %'],
+        ['Snapshots', '6,00€', '6,00€', '0,0 %'],
       ]);
       expect(headerOf(comparisonTable(/^Staging \(Projet\)/)))
-        .toEqual(['Produit/Type○', 'Août 2026○', 'Septembre 2026○', 'Variation○']);
+        .toEqual(['Produit○', 'Août 2026○', 'Septembre 2026○', 'Variation○']);
 
-      await sortTable(user, comparisonTable(PRODUCTION_CONSUMPTION), /^Produit/);
-      await openComparison(user, PRODUCTION_CONSUMPTION);
-      await openComparison(user, PRODUCTION_CONSUMPTION);
+      await sortTable(user, comparisonTable(PRODUCTION_PRODUCTS), /^Produit/);
+      await openComparison(user, PRODUCTION_PRODUCTS);
+      await openComparison(user, PRODUCTION_PRODUCTS);
 
-      // By the name of each kind, as the table gives it
-      expect(firstColumnOf(comparisonTable(PRODUCTION_CONSUMPTION))).toEqual([
-        'Instances', 'Instances (forfait mensuel)', 'Snapshots', 'Stockage objet', 'Volumes',
+      // By the name of each product, as the table gives it
+      expect(firstColumnOf(comparisonTable(PRODUCTION_PRODUCTS))).toEqual([
+        'Instances', 'Savings plans', 'Snapshots', 'Stockage objet', 'Volumes',
       ]);
     });
 
-    it('show a variation of -100% to a month without any consumption stored (#54)', async () => {
+    // Staging was first billed in August (#55)
+    it('show a variation of -100 % to a month that billed the project nothing', async () => {
       const { user } = await renderDashboard();
       await openTab(user, 'Comparaison');
       await pickMonth(user, 'Septembre 2026', 'Juillet 2026');
       await pickMonth(user, 'Août 2026', 'Septembre 2026');
 
-      await openComparison(user, PRODUCTION_CONSUMPTION);
+      await openComparison(user, /^Staging \(Projet\)/);
 
-      // Nothing stored for July, month B, which came before the upgrade that keeps
-      // each month's consumption (#54): every cloud resource kind drops to nothing
-      expect(rowsOf(comparisonTable(PRODUCTION_CONSUMPTION))).toEqual([
-        ['Produit/Type○', 'Septembre 2026○', 'Juillet 2026○', 'Variation○'],
-        ['Instances', '234,25€', '0,00€', '-100,0 %'],
-        ['Instances (forfait mensuel)', '64,00€', '0,00€', '-100,0 %'],
-        ['Volumes', '7,50€', '0,00€', '-100,0 %'],
-        ['Snapshots', '3,25€', '0,00€', '-100,0 %'],
-        ['Stockage objet', '41,00€', '0,00€', '-100,0 %'],
+      expect(api.fetchProjectProducts)
+        .toHaveBeenCalledWith('project-staging', '2026-07-01', '2026-07-31', null);
+      // Every product drops to nothing in July, month B
+      expect(rowsOf(comparisonTable(/^Staging \(Projet\)/))).toEqual([
+        ['Produit○', 'Septembre 2026○', 'Juillet 2026○', 'Variation○'],
+        ['Instances', '180,00€', '0,00€', '-100,0 %'],
+        ['Registre', '40,00€', '0,00€', '-100,0 %'],
       ]);
     });
 
-    it('say when a project consumed nothing in months A and B', async () => {
-      const { user } = await renderDashboard();
+    it('say when the bills of months A and B charged a project nothing', async () => {
+      // Production's bill lines of August and September cost nothing, as free usage would:
+      // the server gives no product that cost nothing
+      const free = (projects) => projects.map((project) => (
+        project.projectId === 'project-production' ? { ...project, total: 0 } : project
+      ));
+      const { user } = await renderDashboard({
+        ...account,
+        byProject: {
+          ...account.byProject,
+          '2026-08': free(account.byProject['2026-08']),
+          '2026-09': free(account.byProject['2026-09']),
+        },
+        projectProducts: { ...account.projectProducts, 'project-production': {} },
+      });
       await openTab(user, 'Comparaison');
-      await pickMonth(user, 'Août 2026', 'Juillet 2026');
-      await pickMonth(user, 'Septembre 2026', 'Août 2026');
 
-      await openComparison(user, PRODUCTION_CONSUMPTION);
+      await openComparison(user, PRODUCTION_PRODUCTS);
 
-      // Production was billed both months, but they came before the upgrade that
-      // keeps each month's consumption (#54): nothing is stored for them
-      expect(within(comparison(PRODUCTION_CONSUMPTION))
+      expect(within(comparison(PRODUCTION_PRODUCTS))
         .getByText('Aucune donnée pour ce projet')).toBeInTheDocument();
-      expect(comparisonTable(PRODUCTION_CONSUMPTION)).not.toBeInTheDocument();
+      expect(comparisonTable(PRODUCTION_PRODUCTS)).not.toBeInTheDocument();
+
+      await selectLanguage(user, 'en');
+
+      expect(within(comparison(/^Production \(Project\)/))
+        .getByText('No data for this project')).toBeInTheDocument();
     });
   });
 
@@ -885,9 +944,14 @@ describe('Compare tab', () => {
       .getByTitle('cannot be computed: month A at €0 or below')).toHaveTextContent('—');
     expect(rowsOf(comparisonTable(/^Private Cloud Comparison/)).map(([type]) => type))
       .toEqual(['Type', 'Private Cloud Hosts', 'Private Cloud Datastores']);
-    expect(rowsOf(comparisonTable(/^Production \(Project\)/)).slice(0, 2)).toEqual([
-      ['Product/Type○', 'August 2026○', 'September 2026○', 'Variation○'],
-      ['Instances', '0.00€', '234.25€', '—'],
+    // Each product in English (#181)
+    expect(rowsOf(comparisonTable(/^Production \(Project\)/))).toEqual([
+      ['Product○', 'August 2026○', 'September 2026○', 'Variation○'],
+      ['Instances', '440.60€', '538.90€', '+22.3%'],
+      ['Savings plans', '28.00€', '28.00€', '0.0%'],
+      ['Object storage', '24.90€', '25.00€', '+0.4%'],
+      ['Volumes', '12.50€', '12.50€', '0.0%'],
+      ['Snapshots', '6.00€', '6.00€', '0.0%'],
     ]);
   });
 
@@ -1054,6 +1118,51 @@ describe('Compare tab', () => {
         ]);
       });
 
+      // Staging, billed to yy2222-ovh and to Lyon in September: Lyon's bills charged it 50 € of
+      // instances, its cost in Lyon's comparison by project (#181)
+      it('compare the products that the bills of the account selected charged a project',
+        async () => {
+          const lyon = severalAccounts.ofAccount[lyonAccount.id];
+          const { user } = await renderDashboard({
+            ...severalAccounts,
+            ofAccount: {
+              ...severalAccounts.ofAccount,
+              [lyonAccount.id]: {
+                ...lyon,
+                byProject: {
+                  ...lyon.byProject,
+                  '2026-09': [...lyon.byProject['2026-09'], {
+                    projectId: 'project-staging', projectName: 'Staging', total: 50,
+                    detailsCount: 1,
+                  }],
+                },
+                projectProducts: {
+                  ...lyon.projectProducts,
+                  'project-staging': { '2026-09': billedProducts(50, [['instances', 50]]) },
+                },
+              },
+            },
+          });
+          await openTab(user, 'Comparaison');
+
+          await selectAccount(user, 'Lyon subsidiary');
+          await openComparison(user, /^Staging \(Projet\)/);
+
+          expect(rowsOf(comparisonTable(PROJECTS)).slice(1)).toEqual([
+            ['Production', '512,00€', '610,40€', '+19,2 %'],
+            ['Staging', '0,00€', '50,00€', '—'],
+          ]);
+          for (const { from, to } of [months[1], months[0]]) {
+            expect(api.fetchProjectProducts)
+              .toHaveBeenCalledWith('project-staging', from, to, lyonAccount.id);
+          }
+          // Not the instances and the registry that yy2222-ovh's bills charged it
+          expect(rowsOf(comparisonTable(/^Staging \(Projet\)/))).toEqual([
+            ['Produit○', 'Août 2026○', 'Septembre 2026○', 'Variation○'],
+            ['Instances', '0,00€', '50,00€', '—'],
+          ]);
+        });
+
       it('compare the Private Cloud of the account selected', async () => {
         // Every resource type billed in September for all accounts, the Private Cloud
         // included, whose hosts and datastores Lyon was not billed for
@@ -1146,7 +1255,7 @@ describe('Compare tab', () => {
       });
 
       // Each row compares what one account paid for the project in months A and B
-      it('compares a project billed to two accounts once for each, its consumption once',
+      it('compares a project billed to two accounts once for each, its products once',
         async () => {
           const { user } = await renderDashboard(stagingMoved);
 
@@ -1159,8 +1268,17 @@ describe('Compare tab', () => {
             ['Staging', 'yy2222-ovh', '190,00€', '170,00€', '-10,5 %'],
             ['Staging', 'Lyon subsidiary', '0,00€', '50,00€', '—'],
           ]);
-          // What a project consumed is its own, whatever account billed it
+          // Its products are those of the bills of every account, as all accounts are shown
+          // (#181): in September, those of the 170 € and of the 50 €
           expect(projectComparisons()).toEqual(['Production (Projet)', 'Staging (Projet)']);
+          await openComparison(user, /^Staging \(Projet\)/);
+          expect(api.fetchProjectProducts)
+            .toHaveBeenCalledWith('project-staging', '2026-09-01', '2026-09-30', null);
+          expect(rowsOf(comparisonTable(/^Staging \(Projet\)/))).toEqual([
+            ['Produit○', 'Août 2026○', 'Septembre 2026○', 'Variation○'],
+            ['Instances', '150,00€', '180,00€', '+20,0 %'],
+            ['Registre', '40,00€', '40,00€', '0,0 %'],
+          ]);
 
           // Least expensive in month B first: in the order of their first rows
           await sortTable(user, comparisonTable(PROJECTS), /^Septembre 2026/);
