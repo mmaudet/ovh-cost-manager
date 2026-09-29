@@ -36,7 +36,8 @@ const outputTokensOf = (model) => `Amount of output tokens for AI Endpoints ${mo
 // without a bill:
 // - the Lyon subsidiary, whose bills are in French: a language model and an embedding model,
 //   besides a notebook of AI Notebooks and a service fee of AI Endpoints, which name no model,
-//   and instances; and in August, the language model's input tokens alone;
+//   and instances; in August, the language model's input tokens alone; and in July, the
+//   notebook and the fee alone;
 // - Paris, whose bills are in English: the same language model, a speech-to-text model, billed
 //   by the second of audio, and an image model, whose calls are free;
 // - and the Unknown account, whose bills end each description with its period in brackets:
@@ -51,6 +52,7 @@ function seed(db) {
   project(db, 'project-staging', 'Staging', PARIS);
   bill(db, 'FR1001', '2026-09-05', LYON);
   bill(db, 'FR1002', '2026-08-05', LYON);
+  bill(db, 'FR1003', '2026-07-05', LYON);
   bill(db, 'FR2001', '2026-09-10', PARIS);
   // Imported before OCM told accounts apart, and claimed by no account since: the writers
   // refuse such rows now, so they are written as the database held them
@@ -78,6 +80,10 @@ function seed(db) {
       'Consommation à l\'heure pour les instances b3-8 gra11', [312, 0.0385, 12.01]),
     line('FR1002-1', 'FR1002', 'project-production', `${INPUT_TOKENS} gpt-oss-20b`,
       [8000000, 0.00000008, 0.64]),
+    line('FR1003-1', 'FR1003', 'project-production', 'AI Notebooks l4-1-gpu gra',
+      [4, 1.93, 7.72]),
+    line('FR1003-2', 'FR1003', 'project-production', 'Frais de service AI Endpoints',
+      [1, 5, 5]),
     line('FR2001-1', 'FR2001', 'project-staging', inputTokensOf('gpt-oss-20b'),
       [2000000, 0.00000008, 0.16]),
     line('FR2001-2', 'FR2001', 'project-staging', outputTokensOf('gpt-oss-20b'),
@@ -229,7 +235,7 @@ describe('the monthly trend of GET /api/analysis/ai-endpoints', () => {
   });
 
   // So that the bars of the months compare: Lyon's bill of August names the language model
-  // alone, and none of its bills is of July
+  // alone
   test('gives every model of the period in each of its months, at 0 in one that billed none',
     async () => {
       expect((await aiEndpointsOf(JULY_TO_SEPTEMBER, LYON)).body.monthlyTrend).toEqual([
@@ -237,6 +243,14 @@ describe('the monthly trend of GET /api/analysis/ai-endpoints', () => {
         { month: '2026-09', costs: { 'gpt-oss-20b': 2.2, 'bge-m3': 0.3 } },
       ]);
     });
+
+  // Lyon's bill of July holds a notebook of AI Notebooks and a service fee of AI Endpoints,
+  // which name no model: the query's prefilter keeps the fee, which the reader leaves out
+  test('leaves out a month whose bills name no model', async () => {
+    const { body } = await aiEndpointsOf(JULY_TO_SEPTEMBER, LYON);
+
+    expect(body.monthlyTrend.map(({ month }) => month)).toEqual(['2026-08', '2026-09']);
+  });
 });
 
 // The tests above give the models of an account whose NIC handle the parameter gives, and of
