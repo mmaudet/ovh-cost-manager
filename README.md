@@ -715,9 +715,14 @@ charges that cost nothing are left out. Amounts are to the cent.
 | -------------------------------- | ---------------------------------- |
 | `GET /api/gpu/summary?from=&to=` | GPU costs by model, project, trend |
 | `GET /api/import/status`         | Import history and status          |
-| `GET /api/config`                | Dashboard configuration            |
+| `GET /api/config`                | Dashboard configuration, version   |
 | `GET /api/user`                  | Current authenticated user info    |
 | `GET /api/health`                | Health check endpoint              |
+
+`/api/config` also gives the `version` of OCM that the server runs, which the
+dashboard's footer shows, linked to its release notes. It is behind
+authentication, as the rest of the API: `/api/health`, which answers without
+it, does not give the version.
 
 ### CSV Exports
 

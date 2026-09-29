@@ -541,6 +541,25 @@ describe('dashboard shell', () => {
       ]);
     });
 
+    // So that whoever uses the page knows which version is deployed (#188)
+    it('shows the version of OCM that runs, with a link to its release notes', async () => {
+      await renderDashboard();
+
+      const version = screen.getByRole('link', { name: 'OVH Cost Manager v3.3.0' });
+      expect(version).toHaveAttribute(
+        'href', 'https://github.com/mmaudet/ovh-cost-manager/releases/tag/v3.3.0',
+      );
+      expect(screen.getByText("Données synchronisées via l'API OVHcloud")).toBeInTheDocument();
+    });
+
+    // As a server older than the footer's version gives none (#188)
+    it('shows no version when the server gives none', async () => {
+      await renderDashboard({ ...account, config: { ...account.config, version: undefined } });
+
+      expect(screen.getByText("Données synchronisées via l'API OVHcloud")).toBeInTheDocument();
+      expect(screen.queryByRole('link', { name: /^OVH Cost Manager/ })).not.toBeInTheDocument();
+    });
+
     // By its status as it reads, or the number of its bills (#146)
     it('sorts the import history by any column', async () => {
       const { user } = await renderDashboard();

@@ -9,6 +9,7 @@
  * data, as the name: the dashboard reloads it with the accounts once an import is over.
  */
 
+const { version } = require('../package.json');
 const { startOcm } = require('./support/ocm-server');
 const {
   LYON, PARIS, NEW_ACCOUNT, UNKNOWN_ACCOUNT, recordAccounts, credentials, bill,
@@ -35,7 +36,8 @@ async function answersOf(routes, seed, config) {
 const budgetsOf = (accounts) => accounts.map(({ id, budget }) => [id, budget]);
 
 // Its account's budget is on the accounts route: the configuration route answers as it did
-// before the accounts. The server runs the tests with imports turned off.
+// before the accounts, with the version of OCM that runs besides (#188). The server runs the
+// tests with imports turned off.
 test('gives the dashboard budget alone on the configuration route, as before the accounts',
   async () => {
     const [config, accounts] = await answersOf(['/api/config', '/api/accounts'], (db) => {
@@ -45,7 +47,7 @@ test('gives the dashboard budget alone on the configuration route, as before the
       dashboard: { budget: 80000, currency: 'EUR' },
     });
 
-    expect(config).toEqual({ budget: 80000, currency: 'EUR', importEnabled: false });
+    expect(config).toEqual({ budget: 80000, currency: 'EUR', importEnabled: false, version });
     expect(budgetsOf(accounts)).toEqual([[LYON, 20000]]);
   }, 30000);
 

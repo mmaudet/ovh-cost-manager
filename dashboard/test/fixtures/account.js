@@ -35,8 +35,8 @@ const lastImport = {
 };
 
 export const account = {
-  // Imports enabled on the server, as by default (#51)
-  config: { budget: 50000, currency: 'EUR', importEnabled: true },
+  // Imports enabled on the server, as by default (#51), and the version of OCM that runs (#188)
+  config: { budget: 50000, currency: 'EUR', importEnabled: true, version: '3.3.0' },
   // Authentication disabled
   user: { id: null, name: 'Anonymous', email: null, authEnabled: false },
   // The only account of the instance, as the accounts route lists it since #113, before
