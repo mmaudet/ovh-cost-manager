@@ -13,6 +13,7 @@ import {
   dropdown,
   firstColumnOf,
   headerOf,
+  layOutForPrint,
   openTab,
   optionsOf,
   renderDashboard,
@@ -984,6 +985,31 @@ describe('Compare tab', () => {
           .toHaveBeenCalledWith('dedicated_server', from, to, null);
       }
       expect(api.fetchResourceTypeDetailsByAccount).not.toHaveBeenCalled();
+    });
+
+    // The PDF export prints the page: the headers print without their sort marks (#146), and
+    // the rows without their chevrons
+    it('print unfolded, without their chevrons', async () => {
+      const { user } = await renderDashboard();
+      await openTab(user, 'Comparaison');
+      await openComparison(user, INFRASTRUCTURE);
+      await toggleRow(user, INFRASTRUCTURE, 'Noms de domaine');
+      // Found while they show: the comparison's title prints without its button either
+      const table = comparisonTable(INFRASTRUCTURE);
+      const chevrons = [
+        chevron(INFRASTRUCTURE, DEDICATED_SERVERS), chevron(INFRASTRUCTURE, 'Noms de domaine'),
+      ];
+
+      layOutForPrint();
+
+      for (const folding of chevrons) {
+        expect(folding).not.toBeVisible();
+      }
+      expect(within(table).getByText('Noms de domaine')).toBeVisible();
+      for (const domain of ['example.com', 'example.org', 'example.net']) {
+        expect(within(table).getByText(domain).closest('tr')).toBeVisible();
+      }
+      expect(within(table).getByText('Option DNS Anycast example.com - 1 an')).toBeVisible();
     });
   });
 
