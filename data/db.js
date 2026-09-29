@@ -791,13 +791,14 @@ const analysisOps = {
   /**
    * The AI Endpoints models that the bill lines of the Public Cloud projects name between two
    * dates (#193), each once, the projects together: the lines of the bills of the account (see
-   * accountCondition()), every account's by default, as modelFigures() adds them up. Read when
-   * the server reads the bills: no re-import.
+   * accountCondition()), every account's by default, as modelFigures() adds them up, and each
+   * line in the month of its bill (#196). Read when the server reads the bills: no re-import.
    * @param {string} fromDate
    * @param {string} toDate
    * @param {?string} [account]
-   * @returns {{total: number, models: object[]}} What the models cost in all, and each model
-   *   with its tokens and its cost (see modelFigures())
+   * @returns {{total: number, models: object[], monthlyTrend: object[]}} What the models cost
+   *   in all, each model with its tokens and its cost, and each month with the cost of each
+   *   model in it (see modelFigures())
    */
   aiEndpoints: (fromDate, toDate, account = null) => {
     const ofBills = accountCondition(account, 'b.account');
@@ -805,7 +806,7 @@ const analysisOps = {
     // which of them name a model
     const ofAiEndpointsLines = aiEndpointsLineCondition('d.description');
     return modelFigures(getDb().prepare(`
-      SELECT d.description, d.quantity, d.total_price
+      SELECT d.description, strftime('%Y-%m', b.date) as month, d.quantity, d.total_price
       FROM bill_details d
       JOIN bills b ON d.bill_id = b.id
       WHERE b.date >= ? AND b.date <= ?

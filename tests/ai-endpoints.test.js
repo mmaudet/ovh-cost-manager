@@ -1,13 +1,14 @@
 /**
- * The AI Endpoints models of a period (#193), which the Public Cloud tab lists, on the server
- * started in a child process over a database that the test seeds with several accounts, as the
- * Trends tab's account tests do for the GPU costs. The route reads the AI Endpoints model that
- * each bill line of a Public Cloud project names (see CONTEXT.md), and what the line counts:
- * a model's input tokens and output tokens, in French and in English, whose number is the
- * line's quantity, and its cost, all its lines together, the projects together. As on the
- * other routes (#115), a NIC handle that the accounts table records selects that account's
- * bills, the reserved value `unknown` the bills without an account (the Unknown account), and
- * no parameter every account. Any other value is refused.
+ * The AI Endpoints models of a period (#193), which the Public Cloud tab lists, and their cost
+ * month by month, which the Trends tab charts (#196), on the server started in a child process
+ * over a database that the test seeds with several accounts, as the Trends tab's account tests
+ * do for the GPU costs. The route reads the AI Endpoints model that each bill line of a Public
+ * Cloud project names (see CONTEXT.md), and what the line counts: a model's input tokens and
+ * output tokens, in French and in English, whose number is the line's quantity, and its cost,
+ * all its lines together, the projects together. As on the other routes (#115), a NIC handle
+ * that the accounts table records selects that account's bills, the reserved value `unknown`
+ * the bills without an account (the Unknown account), and no parameter every account. Any
+ * other value is refused.
  */
 
 const {
@@ -107,6 +108,8 @@ const ROUTE = '/api/analysis/ai-endpoints';
 // September and August 2026, as the Public Cloud tab asks for a month
 const SEPTEMBER = 'from=2026-09-01&to=2026-09-30';
 const AUGUST = 'from=2026-08-01&to=2026-08-31';
+// July to September 2026, as the Trends tab asks for its 3 months (#196)
+const JULY_TO_SEPTEMBER = 'from=2026-07-01&to=2026-09-30';
 
 // The route's answer for a period, for the account that the parameter names, or for every
 // account without one
@@ -167,6 +170,7 @@ describe('GET /api/analysis/ai-endpoints', () => {
           modelRow('gpt-oss-20b', 12500000, 4000000, 2.2),
           modelRow('bge-m3', 30000000, null, 0.3),
         ],
+        monthlyTrend: [{ month: '2026-09', models: { 'gpt-oss-20b': 2.2, 'bge-m3': 0.3 } }],
       },
     });
   });
@@ -181,6 +185,12 @@ describe('GET /api/analysis/ai-endpoints', () => {
           modelRow('gpt-oss-20b', 2000000, 500000, 0.31),
           modelRow('stable-diffusion-xl-base-v10', null, null, 0),
         ],
+        monthlyTrend: [{
+          month: '2026-09',
+          models: {
+            'whisper-large-v3': 0.36, 'gpt-oss-20b': 0.31, 'stable-diffusion-xl-base-v10': 0,
+          },
+        }],
       },
     });
   });
@@ -189,7 +199,11 @@ describe('GET /api/analysis/ai-endpoints', () => {
   test('counts the bills of the period alone', async () => {
     expect(await aiEndpointsOf(AUGUST, LYON)).toEqual({
       status: 200,
-      body: { total: 0.64, models: [modelRow('gpt-oss-20b', 8000000, null, 0.64)] },
+      body: {
+        total: 0.64,
+        models: [modelRow('gpt-oss-20b', 8000000, null, 0.64)],
+        monthlyTrend: [{ month: '2026-08', models: { 'gpt-oss-20b': 0.64 } }],
+      },
     });
   });
 
@@ -202,6 +216,27 @@ describe('GET /api/analysis/ai-endpoints', () => {
       body: { error: "'from' date (2026-09-30) must be before or equal to 'to' date (2026-09-01)" },
     });
   });
+});
+
+// The cost of each model month by month, which the Trends tab charts (#196): over the months of
+// the period whose bills name AI Endpoints models, each by the month of its bills, as the rest
+// of the tab counts them
+describe('the monthly trend of GET /api/analysis/ai-endpoints', () => {
+  // The Unknown account's bill of September charges for August: its lines count in September
+  test('gives the cost of each model in each month of its bills', async () => {
+    expect((await aiEndpointsOf(JULY_TO_SEPTEMBER, UNKNOWN_ACCOUNT)).body.monthlyTrend)
+      .toEqual([{ month: '2026-09', models: { 'gpt-oss-20b': 0.17 } }]);
+  });
+
+  // So that the bars of the months compare: Lyon's bill of August names the language model
+  // alone, and none of its bills is of July
+  test('gives every model of the period in each of its months, at 0 in one that billed none',
+    async () => {
+      expect((await aiEndpointsOf(JULY_TO_SEPTEMBER, LYON)).body.monthlyTrend).toEqual([
+        { month: '2026-08', models: { 'gpt-oss-20b': 0.64, 'bge-m3': 0 } },
+        { month: '2026-09', models: { 'gpt-oss-20b': 2.2, 'bge-m3': 0.3 } },
+      ]);
+    });
 });
 
 // The tests above give the models of an account whose NIC handle the parameter gives, and of
@@ -219,13 +254,20 @@ describe('the account parameter of GET /api/analysis/ai-endpoints', () => {
           modelRow('bge-m3', 30000000, null, 0.3),
           modelRow('stable-diffusion-xl-base-v10', null, null, 0),
         ],
+        monthlyTrend: [{
+          month: '2026-09',
+          models: {
+            'gpt-oss-20b': 2.68, 'whisper-large-v3': 0.36, 'bge-m3': 0.3,
+            'stable-diffusion-xl-base-v10': 0,
+          },
+        }],
       },
     });
   });
 
   test('gives no model for an account without a bill', async () => {
     expect(await aiEndpointsOf(SEPTEMBER, NEW_ACCOUNT))
-      .toEqual({ status: 200, body: { total: 0, models: [] } });
+      .toEqual({ status: 200, body: { total: 0, models: [], monthlyTrend: [] } });
   });
 
   // Rather than answer for all accounts, or for none, to a request that names an account
