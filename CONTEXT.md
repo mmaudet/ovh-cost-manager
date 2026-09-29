@@ -20,6 +20,18 @@ One line of an OVH bill: a description, the identifier of the billed service and
 amount.
 _Avoid_: bill detail
 
+**Service**:
+What OVHcloud bills under one identifier, which each of its bill lines names: a dedicated
+server, a VPS, a domain, an IP block, a Public Cloud project… Its identifier gives its
+resource type.
+_Avoid_: resource (what the inventory lists), subscription
+
+**Charge**:
+What a service's bill line pays for, as its description names it without the period it
+covers: an instance's monthly plan, a flavor's hourly use in a region, a model's input
+tokens… The lines that pay for one charge in two months differ only by their period.
+_Avoid_: wording, label
+
 **Resource type**:
 The kind of service a bill line pays for, derived from its service identifier:
 Public Cloud project, dedicated server, VPS, domain, Web Cloud, IP, storage, licence…
@@ -44,6 +56,13 @@ gathers the others in its other services: with the credit, the cards add up to t
 cloud total.
 _Avoid_: card (a product's figure), category, cloud resource kind (what a project's current
 consumption is split by)
+
+**AI Endpoints model**:
+A model that OVHcloud's AI Endpoints product serves, which names the charges of a Public
+Cloud project that pay for its use: most often its input tokens and its output tokens,
+priced apart; an embedding model's input tokens alone, a speech-to-text model's seconds of
+audio.
+_Avoid_: LLM, engine
 
 **Cloud resource kind**:
 What a resource of a Public Cloud project is (instance, volume…), the dimension its
