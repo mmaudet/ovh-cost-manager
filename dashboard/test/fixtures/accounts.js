@@ -1,7 +1,7 @@
 import { account } from './account.js';
 import { months } from './calendar.js';
 import { infrastructureOfSeveralAccounts } from './infrastructure.js';
-import { publicCloudFigures } from './public-cloud.js';
+import { aiEndpoints, aiEndpointsFigures, publicCloudFigures } from './public-cloud.js';
 import { trendsOf } from './trends.js';
 import { webCloudOfSeveralAccounts } from './web-cloud.js';
 
@@ -372,6 +372,39 @@ export const severalAccounts = {
       projectsEnriched: [unknownSandbox],
       ...webCloudOfSeveralAccounts.ofAccount[unknownAccount.id],
       ...infrastructureOfSeveralAccounts.ofAccount[unknownAccount.id],
+    },
+  },
+};
+
+// The accounts, with the AI Endpoints models that their projects called (#193), which
+// severalAccounts leaves out, as account.js does (see public-cloud.js): all accounts', and by
+// account, the Lyon subsidiary's projects called the language and embedding models in
+// September, the unnamed account's the speech-to-text and image models, and the Unknown
+// account's none, in July, its only month
+export const severalAccountsWithAiEndpoints = {
+  ...severalAccounts,
+  aiEndpoints,
+  ofAccount: {
+    ...severalAccounts.ofAccount,
+    [lyonAccount.id]: {
+      ...severalAccounts.ofAccount[lyonAccount.id],
+      aiEndpoints: {
+        '2026-09': aiEndpointsFigures(20.45, [
+          ['gpt-oss-120b', 48260000, 12480000, 17.46],
+          ['gpt-oss-20b', 15500000, 4800000, 2.68],
+          ['bge-m3', 30000000, null, 0.3],
+          ['Mistral-7B-Instruct-v0.3', 45000, 12300, 0.01],
+        ]),
+      },
+    },
+    [unnamedAccount.id]: {
+      ...severalAccounts.ofAccount[unnamedAccount.id],
+      aiEndpoints: {
+        '2026-09': aiEndpointsFigures(0.37, [
+          ['whisper-large-v3', null, null, 0.37],
+          ['stable-diffusion-xl-base-v10', null, null, 0],
+        ]),
+      },
     },
   },
 };

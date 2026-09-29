@@ -1,8 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import { screen, within } from '@testing-library/react';
 import { account } from './fixtures/account.js';
-import { publicCloudFigures } from './fixtures/public-cloud.js';
-import { lyonAccount, removedAccount, severalAccounts } from './fixtures/accounts.js';
+import { aiEndpoints, publicCloudFigures } from './fixtures/public-cloud.js';
+import {
+  lyonAccount, removedAccount, severalAccounts, severalAccountsWithAiEndpoints,
+} from './fixtures/accounts.js';
 import { api, holdBack } from './support/api.js';
 import {
   BOM,
@@ -12,11 +14,13 @@ import {
 } from './support/downloads.js';
 import {
   backdropOf,
+  cardOf,
   cardRowOf,
   cloudProjectRow,
   cloudProjects,
   cloudProjectsTable,
   cloudTotalCard,
+  firstColumnOf,
   headerOf,
   monthSelector,
   openTab,
@@ -218,6 +222,227 @@ describe('Public Cloud tab', () => {
       .toEqual(['Other services: Databases 30.00€ · Load balancers 5.50€']);
     expect(texts(screen.getByText(/^Cloud credit used:/)))
       .toEqual(['Cloud credit used: -10.00€']);
+  });
+
+  // The AI Endpoints models that the month shown billed, the projects together (#193)
+  describe('AI Endpoints models', () => {
+    // The synthetic account, whose projects called AI Endpoints models
+    const withAiEndpoints = { ...account, aiEndpoints };
+    const AI_ENDPOINTS = /^(AI Endpoints par modèle|AI Endpoints by model)$/;
+    // The table of the models, found by its heading
+    const aiEndpointsTable = () =>
+      within(cardOf(screen.getByRole('heading', { name: AI_ENDPOINTS }))).getByRole('table');
+    // The texts of the row of a model, found by its name
+    const modelRowTexts = (model) =>
+      rowTextsOf(aiEndpointsTable()).find(([name]) => name === model);
+    // The rows of the table, as the texts they show, without its header
+    const tableRows = () => rowTextsOf(aiEndpointsTable()).slice(1);
+
+    it('load for the month shown once the tab opens, not before', async () => {
+      const { user } = await renderDashboard(withAiEndpoints);
+      expect(api.fetchAiEndpoints).not.toHaveBeenCalled();
+
+      await openTab(user, 'Public Cloud');
+
+      // For all accounts
+      expect(api.fetchAiEndpoints).toHaveBeenCalledWith('2026-09-01', '2026-09-30', null);
+    });
+
+    it('are listed with their input and output tokens, in millions, and their cost',
+      async () => {
+        const { user } = await renderDashboard(withAiEndpoints);
+
+        await openTab(user, 'Public Cloud');
+
+        expect(modelRowTexts('gpt-oss-120b'))
+          .toEqual(['gpt-oss-120b', '48,3 M', '12,5 M', '17,46€']);
+        expect(modelRowTexts('gpt-oss-20b'))
+          .toEqual(['gpt-oss-20b', '15,5 M', '4,8 M', '2,68€']);
+      });
+
+    // Rather than 0, which would read as tokens counted: an embedding model counts its input
+    // tokens alone, and a speech-to-text model the seconds of audio, which its cost counts
+    it('read « — » for the tokens that none of a model\'s lines counts', async () => {
+      const { user } = await renderDashboard(withAiEndpoints);
+
+      await openTab(user, 'Public Cloud');
+
+      expect(modelRowTexts('bge-m3')).toEqual(['bge-m3', '30,0 M', '—', '0,30€']);
+      expect(modelRowTexts('whisper-large-v3'))
+        .toEqual(['whisper-large-v3', '—', '—', '0,37€']);
+    });
+
+    // Rather than « 0,0 M »: 45 000 and 12 300 tokens
+    it('read fewer than 0.1 M tokens with more decimals, so that a model in use never reads 0',
+      async () => {
+        const { user } = await renderDashboard(withAiEndpoints);
+
+        await openTab(user, 'Public Cloud');
+
+        expect(modelRowTexts('Mistral-7B-Instruct-v0.3'))
+          .toEqual(['Mistral-7B-Instruct-v0.3', '0,045 M', '0,012 M', '0,01€']);
+      });
+
+    // Those of every model, such as a free one, which shows as used
+    it('add up to the month\'s AI Endpoints cost, in the foot of their table', async () => {
+      const { user } = await renderDashboard(withAiEndpoints);
+
+      await openTab(user, 'Public Cloud');
+
+      expect(modelRowTexts('stable-diffusion-xl-base-v10'))
+        .toEqual(['stable-diffusion-xl-base-v10', '—', '—', '0,00€']);
+      expect(texts(aiEndpointsTable().tFoot)).toEqual(['Total AI Endpoints', '20,82€']);
+    });
+
+    // As every table (#146): a model without a figure in the column comes last either way
+    it('sort by any column, the most expensive first until then, their total under them',
+      async () => {
+        const { user } = await renderDashboard(withAiEndpoints);
+        await openTab(user, 'Public Cloud');
+
+        expect(headerOf(aiEndpointsTable()))
+          .toEqual(['Modèle○', 'Tokens d\'entrée○', 'Tokens de sortie○', 'Coût▼']);
+        expect(firstColumnOf(aiEndpointsTable())).toEqual([
+          'gpt-oss-120b', 'gpt-oss-20b', 'whisper-large-v3', 'bge-m3', 'Mistral-7B-Instruct-v0.3',
+          'stable-diffusion-xl-base-v10',
+        ]);
+
+        await sortTable(user, aiEndpointsTable(), /^Tokens de sortie/);
+
+        expect(headerOf(aiEndpointsTable()))
+          .toEqual(['Modèle○', 'Tokens d\'entrée○', 'Tokens de sortie▼', 'Coût○']);
+        expect(firstColumnOf(aiEndpointsTable())).toEqual([
+          'gpt-oss-120b', 'gpt-oss-20b', 'Mistral-7B-Instruct-v0.3', 'whisper-large-v3', 'bge-m3',
+          'stable-diffusion-xl-base-v10',
+        ]);
+
+        await sortTable(user, aiEndpointsTable(), /^Tokens de sortie/);
+
+        expect(firstColumnOf(aiEndpointsTable())).toEqual([
+          'Mistral-7B-Instruct-v0.3', 'gpt-oss-20b', 'gpt-oss-120b', 'whisper-large-v3', 'bge-m3',
+          'stable-diffusion-xl-base-v10',
+        ]);
+
+        await sortTable(user, aiEndpointsTable(), /^Modèle/);
+
+        expect(firstColumnOf(aiEndpointsTable())).toEqual([
+          'bge-m3', 'gpt-oss-20b', 'gpt-oss-120b', 'Mistral-7B-Instruct-v0.3',
+          'stable-diffusion-xl-base-v10', 'whisper-large-v3',
+        ]);
+        expect(texts(aiEndpointsTable().tFoot)).toEqual(['Total AI Endpoints', '20,82€']);
+      });
+
+    // The month of the bills that the tab's sentence names, as the cards above do
+    it('follow the month selected', async () => {
+      const { user } = await renderDashboard(withAiEndpoints);
+      await openTab(user, 'Public Cloud');
+
+      await selectMonth(user, 'Août 2026');
+
+      expect(tableRows()).toEqual([
+        ['gpt-oss-20b', '9,0 M', '2,1 M', '1,35€'],
+        ['bge-m3', '12,0 M', '—', '0,12€'],
+        ['Total AI Endpoints', '1,47€'],
+      ]);
+    });
+
+    // So that the tab does not grow for a product that the month did not bill
+    it('show no table for a month without any', async () => {
+      const { user } = await renderDashboard(withAiEndpoints);
+      await openTab(user, 'Public Cloud');
+
+      await selectMonth(user, 'Juillet 2026');
+
+      expect(screen.queryByRole('heading', { name: AI_ENDPOINTS })).not.toBeInTheDocument();
+    });
+
+    // A detail of the month's costs: after the cards, and the credit that the bills used, and
+    // before the list of projects
+    it('show between the cards and the list of projects', async () => {
+      const { user } = await renderDashboard({
+        ...withAiEndpoints,
+        publicCloudStats: {
+          '2026-09': { ...account.publicCloudStats['2026-09'], credits: { total: -10 } },
+        },
+      });
+
+      await openTab(user, 'Public Cloud');
+
+      // The parts of the tab, in the order of the page
+      const parts = [...figures().parentElement.children];
+      expect(parts.indexOf(figures())).toBeLessThan(parts.indexOf(cardOf(aiEndpointsTable())));
+      expect(parts.slice(-3)).toEqual([
+        screen.getByText(/^Crédit Cloud utilisé :/),
+        cardOf(aiEndpointsTable()),
+        cloudProjects(),
+      ]);
+    });
+
+    // As the cards, each model once, adding up every account's lines when all are shown
+    it('are those of the account selected', async () => {
+      const { user } = await renderDashboard(severalAccountsWithAiEndpoints);
+      await openTab(user, 'Public Cloud');
+
+      expect(firstColumnOf(aiEndpointsTable())).toEqual([
+        'gpt-oss-120b', 'gpt-oss-20b', 'whisper-large-v3', 'bge-m3', 'Mistral-7B-Instruct-v0.3',
+        'stable-diffusion-xl-base-v10',
+      ]);
+      expect(texts(aiEndpointsTable().tFoot)).toEqual(['Total AI Endpoints', '20,82€']);
+
+      await selectAccount(user, 'Lyon subsidiary');
+
+      expect(api.fetchAiEndpoints)
+        .toHaveBeenCalledWith('2026-09-01', '2026-09-30', lyonAccount.id);
+      expect(firstColumnOf(aiEndpointsTable())).toEqual([
+        'gpt-oss-120b', 'gpt-oss-20b', 'bge-m3', 'Mistral-7B-Instruct-v0.3',
+      ]);
+      expect(texts(aiEndpointsTable().tFoot)).toEqual(['Total AI Endpoints', '20,45€']);
+
+      await selectAccount(user, 'yy2222-ovh');
+
+      expect(tableRows()).toEqual([
+        ['whisper-large-v3', '—', '—', '0,37€'],
+        ['stable-diffusion-xl-base-v10', '—', '—', '0,00€'],
+        ['Total AI Endpoints', '0,37€'],
+      ]);
+
+      await selectAccount(user, 'Compte inconnu');
+
+      expect(screen.queryByRole('heading', { name: AI_ENDPOINTS })).not.toBeInTheDocument();
+    });
+
+    // The month selected stays until the months list of the account loads, and says it lacks
+    // it: the header then selects the account's latest month, August (#115, #120)
+    it('ask for none of a month that the account selected lacks', async () => {
+      const { user } = await renderDashboard(severalAccountsWithAiEndpoints);
+      await openTab(user, 'Public Cloud');
+
+      await selectAccount(user, 'zz3333-ovh (non configuré)');
+
+      expect(api.fetchAiEndpoints)
+        .not.toHaveBeenCalledWith('2026-09-01', '2026-09-30', removedAccount.id);
+      expect(api.fetchAiEndpoints)
+        .toHaveBeenCalledWith('2026-08-01', '2026-08-31', removedAccount.id);
+    });
+
+    it('speak English when the page does', async () => {
+      const { user } = await renderDashboard(withAiEndpoints);
+      await selectLanguage(user, 'en');
+
+      await openTab(user, 'Public Cloud');
+
+      expect(screen.getByRole('heading', { name: 'AI Endpoints by model' })).toBeInTheDocument();
+      expect(rowTextsOf(aiEndpointsTable())).toEqual([
+        ['Model', '○', 'Input tokens', '○', 'Output tokens', '○', 'Cost', '▼'],
+        ['gpt-oss-120b', '48.3 M', '12.5 M', '17.46€'],
+        ['gpt-oss-20b', '15.5 M', '4.8 M', '2.68€'],
+        ['whisper-large-v3', '—', '—', '0.37€'],
+        ['bge-m3', '30.0 M', '—', '0.30€'],
+        ['Mistral-7B-Instruct-v0.3', '0.045 M', '0.012 M', '0.01€'],
+        ['stable-diffusion-xl-base-v10', '—', '—', '0.00€'],
+        ['AI Endpoints Total', '20.82€'],
+      ]);
+    });
   });
 
   describe('projects', () => {

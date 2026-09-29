@@ -1380,6 +1380,27 @@ function registerRoutes() {
     }
   });
 
+  // The AI Endpoints models that the bills of a period name (#193), which the Public Cloud tab
+  // lists: each model's input tokens, output tokens and cost, the most expensive first, and
+  // what they cost in all. Those of the bills of the account the request asks for, or of every
+  // account without one.
+  app.get('/api/analysis/ai-endpoints', accountParameter, (req, res) => {
+    try {
+      const { from, to } = req.query;
+      const validation = validateDateRange(from, to);
+      if (!validation.valid) return res.status(400).json({ error: validation.error });
+      const { total, models } = db.analysis.aiEndpoints(from, to, req.account);
+      res.json({
+        total,
+        models: models.map(({ model, tokens, cost }) => ({
+          model, inputTokens: tokens.input, outputTokens: tokens.output, total: cost,
+        })),
+      });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   // The Veeam backups of a month: those of the account the request asks for, or of every
   // account without one (#119), as the Compare and Backup tabs show them
   app.get('/api/analysis/backup-stats', accountParameter, (req, res) => {

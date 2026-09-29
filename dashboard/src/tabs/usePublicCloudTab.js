@@ -7,7 +7,7 @@ import { useTableSorts } from '../components/SortableHeader.jsx';
 import {
   fetchProjectsEnriched, fetchProjectConsumption, fetchProjectInstances, fetchProjectQuotas,
   fetchProjectVolumes, fetchProjectSnapshots, fetchProjectSavingsPlans, fetchProjectBuckets,
-  fetchProjectInstanceTotal, fetchPublicCloudStats, fetchProjectOtherServices,
+  fetchProjectInstanceTotal, fetchPublicCloudStats, fetchProjectOtherServices, fetchAiEndpoints,
 } from '../services/api.js';
 import { accountQuery } from '../utils/accounts.js';
 
@@ -22,12 +22,16 @@ import { accountQuery } from '../utils/accounts.js';
 // What a project's detail shows of its other services until they load
 const NO_OTHER_SERVICES = { total: 0, products: [], credits: 0 };
 
+// The table of the AI Endpoints models sorts by cost, the most expensive first, until the user
+// sorts it by another column (#146, #193)
+const BY_COST = { column: 'total', kind: 'number', direction: 'desc' };
+
 const usePublicCloudTab = ({
   selectedMonth, holdsSelectedMonth, activeTab, selectedProject, selectedAccount,
 }) => {
   // The sort order of its tables, by table (#146): those of the open project's resources are
   // shared by their panel and their "show all" modal, and stay when another project opens
-  const sortingOf = useTableSorts();
+  const sortingOf = useTableSorts({ aiEndpoints: BY_COST });
   const [showAllBuckets, setShowAllBuckets] = useState(false);
   const [showAllInstances, setShowAllInstances] = useState(false);
   const [showAllVolumes, setShowAllVolumes] = useState(false);
@@ -122,6 +126,14 @@ const usePublicCloudTab = ({
     enabled: holdsSelectedMonth && activeTab === 'inventory',
   }));
 
+  // The AI Endpoints models of the month (#193), the projects together, as the figures of the
+  // month: those of the account shown
+  const { data: aiEndpoints } = useQuery(accountQuery(selectedAccount, {
+    key: ['aiEndpoints', selectedMonth?.from, selectedMonth?.to],
+    fetch: (account) => fetchAiEndpoints(selectedMonth.from, selectedMonth.to, account),
+    enabled: holdsSelectedMonth && activeTab === 'inventory',
+  }));
+
   return {
     sortingOf,
     showAllBuckets,
@@ -148,6 +160,7 @@ const usePublicCloudTab = ({
     projectInstanceTotal,
     projectOtherServices,
     publicCloudStats,
+    aiEndpoints,
   };
 };
 

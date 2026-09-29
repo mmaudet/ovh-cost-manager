@@ -181,6 +181,39 @@ export const billedProducts = (total, products, credits = 0) => ({
   credits,
 });
 
+// The AI Endpoints models that the bills of a month name, as
+// /api/analysis/ai-endpoints answers them (#193): what they cost in all, and
+// each model as [model, input tokens, output tokens, cost], the most expensive
+// first, a token figure null when none of the model's lines counts those tokens
+export const aiEndpointsFigures = (total, models) => ({
+  total,
+  models: models.map(([model, inputTokens, outputTokens, cost]) => ({
+    model, inputTokens, outputTokens, total: cost,
+  })),
+});
+
+// The AI Endpoints models that the projects of the synthetic account called,
+// by month, which its figures above leave out, so that they stay as they are:
+// the tests of the table of the models give them to the page. In September,
+// language models billed in input and output tokens, one of them little used,
+// an embedding model, which counts its input tokens alone, a speech-to-text
+// model, billed by the second of audio, and an image model, whose calls are
+// free; in August, two of them; none in July.
+export const aiEndpoints = {
+  '2026-09': aiEndpointsFigures(20.82, [
+    ['gpt-oss-120b', 48260000, 12480000, 17.46],
+    ['gpt-oss-20b', 15500000, 4800000, 2.68],
+    ['whisper-large-v3', null, null, 0.37],
+    ['bge-m3', 30000000, null, 0.3],
+    ['Mistral-7B-Instruct-v0.3', 45000, 12300, 0.01],
+    ['stable-diffusion-xl-base-v10', null, null, 0],
+  ]),
+  '2026-08': aiEndpointsFigures(1.47, [
+    ['gpt-oss-20b', 9000000, 2100000, 1.35],
+    ['bge-m3', 12000000, null, 0.12],
+  ]),
+};
+
 // The figures of the Public Cloud cards, as /api/analysis/public-cloud-stats
 // answers them: those given, and nothing billed or counted for the others
 export const publicCloudFigures = (fields) => ({

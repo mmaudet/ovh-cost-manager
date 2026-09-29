@@ -130,6 +130,19 @@ const fmtMemory = (megabytes, language = 'fr') => (
     : formatSize(megabytes * 1024 ** 2, language, 1024)
 );
 
+// A number of tokens in millions, in the number format of the language (#193): with one
+// decimal, 12,5 M in French, 12.5 M in English, and below 0.1 M to its first two significant
+// digits, 0,045 M, so that tokens counted never read 0. No number, null, reads "—": a model's
+// tokens that none of its lines counts.
+const formatTokens = (tokens, language = 'fr') => {
+  if (tokens === null || tokens === undefined) return '—';
+  const millions = tokens / 1e6;
+  const digits = millions !== 0 && Math.abs(millions) < 0.1
+    ? { maximumSignificantDigits: 2 }
+    : { minimumFractionDigits: 1, maximumFractionDigits: 1 };
+  return `${new Intl.NumberFormat(localeOf(language), digits).format(millions)} M`;
+};
+
 // Whether a count takes the singular in the language, as its plural rules say: 0 and 1 in
 // French (0 jour, 1 jour, 2 jours), 1 only in English (0 days, 1 day, 2 days)
 const takesSingular = (count, language = 'fr') =>
@@ -137,5 +150,6 @@ const takesSingular = (count, language = 'fr') =>
 
 export {
   localeOf, formatCurrency, formatWholeNumber, formatDecimal, formatPercent, formatYearMonth,
-  formatMonthLabel, formatMonthName, yearMonthOf, fmtBytes, fmtMemory, takesSingular,
+  formatMonthLabel, formatMonthName, yearMonthOf, fmtBytes, fmtMemory, formatTokens,
+  takesSingular,
 };
