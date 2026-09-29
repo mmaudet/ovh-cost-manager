@@ -84,8 +84,8 @@ export function accountColumnOf(accounts, selectedAccount, t) {
 /**
  * How a line that names a service, rather than a row of a table, names its account too, after
  * the service, when the lists show the Account column (#123): in brackets, so that it does not
- * read as part of the service's name. The Overview's services about to expire and the Compare
- * tab's dedicated servers name it so.
+ * read as part of the service's name. The Overview's services about to expire and the services
+ * of the rows that the Compare tab unfolds name it so (#194).
  * @param {?{ nameOf: function(?string): string }} accountColumn - The Account column of the
  *   lists (accountColumnOf()), null when they show none
  * @param {?string} account - The NIC handle of the service's account, null for the Unknown

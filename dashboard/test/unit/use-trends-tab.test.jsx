@@ -2,8 +2,11 @@ import { describe, it, expect } from 'vitest';
 import { act } from '@testing-library/react';
 import { useTrendsTab } from '../../src/tabs/useTrendsTab.js';
 import { account } from '../fixtures/account.js';
-import { lyonAccount, severalAccounts } from '../fixtures/accounts.js';
+import {
+  lyonAccount, severalAccounts, severalAccountsWithAiEndpoints,
+} from '../fixtures/accounts.js';
 import { months } from '../fixtures/calendar.js';
+import { aiEndpoints } from '../fixtures/public-cloud.js';
 import { sinceJuly2025 } from '../fixtures/trends.js';
 import { api } from '../support/api.js';
 import { renderTabHook, TAB_IDS, WAITING } from '../support/hooks.jsx';
@@ -158,6 +161,122 @@ describe('useTrendsTab', () => {
         ['gpuTrend', '2024-09-01', '2026-08-31'],
       ]);
     });
+
+  // The cost of each AI Endpoints model month by month (#196), over the months of the GPU
+  // trend: see fixtures/public-cloud.js and fixtures/accounts.js
+  describe('AI Endpoints trend', () => {
+    // The synthetic account, whose projects called AI Endpoints models
+    const withAiEndpoints = { ...account, aiEndpoints };
+    // The models of an answer, by name, in its order
+    const models = ({ models: list }) => list.map(({ model }) => model);
+
+    it.each(TAB_IDS.filter((tab) => tab !== 'trends'))(
+      'is left out while the %s tab is active',
+      async (activeTab) => {
+        const { result } = await renderTabHook(useTrendsTab,
+          shellProps({ months, selectedMonth: september, activeTab }), withAiEndpoints);
+
+        expect(api.fetchAiEndpoints).not.toHaveBeenCalled();
+        expect(result.current.aiEndpointsTrend).toBeUndefined();
+      },
+    );
+
+    it('is requested over the period once the tab opens', async () => {
+      const { result, rerender } = await renderTabHook(useTrendsTab,
+        shellProps({ months, selectedMonth: september, activeTab: 'overview' }),
+        withAiEndpoints);
+
+      await rerender(shellProps({ months, selectedMonth: september, activeTab: 'trends' }));
+
+      // The months of the GPU trend, from their first day to their last
+      expect(api.fetchAiEndpoints).toHaveBeenCalledWith('2026-07-01', '2026-09-30', allAccounts);
+      expect(result.current.aiEndpointsTrend).toEqual(aiEndpoints['2026-07/2026-09']);
+    });
+
+    it('waits for a month', async () => {
+      const { result, queryClient } = await renderTabHook(useTrendsTab,
+        shellProps({ months: [], selectedMonth: null, activeTab: 'trends' }), withAiEndpoints);
+
+      expect(api.fetchAiEndpoints).not.toHaveBeenCalled();
+      expect(queryClient.getQueryState(['aiEndpointsTrend', undefined, undefined]))
+        .toMatchObject(WAITING);
+      expect(result.current.aiEndpointsTrend).toBeUndefined();
+    });
+
+    // A trend up to a month that the account lacks would never show (#115, #120)
+    it('waits until the months list holds the month selected', async () => {
+      const { result } = await renderTabHook(useTrendsTab,
+        shellProps({ months: [august, july], selectedMonth: september, activeTab: 'trends' }),
+        withAiEndpoints);
+
+      expect(api.fetchAiEndpoints).not.toHaveBeenCalled();
+      expect(result.current.aiEndpointsTrend).toBeUndefined();
+    });
+
+    it('follows the period and the month selected', async () => {
+      const { result, rerender, queryClient, keysOf } = await renderTabHook(useTrendsTab,
+        shellProps({ months: fifteenMonths, selectedMonth: september, activeTab: 'trends' }),
+        { ...billedSinceJuly2025, aiEndpoints });
+
+      act(() => result.current.setTrendPeriod(24));
+      await settle(queryClient);
+
+      expect(api.fetchAiEndpoints)
+        .toHaveBeenLastCalledWith('2024-10-01', '2026-09-30', allAccounts);
+      expect(models(result.current.aiEndpointsTrend)).toEqual([
+        'gpt-oss-120b', 'gpt-oss-20b', 'bge-m3', 'whisper-large-v3', 'Mistral-7B-Instruct-v0.3',
+        'stable-diffusion-xl-base-v10',
+      ]);
+
+      await rerender(
+        shellProps({ months: fifteenMonths, selectedMonth: august, activeTab: 'trends' }),
+      );
+
+      expect(api.fetchAiEndpoints)
+        .toHaveBeenLastCalledWith('2024-09-01', '2026-08-31', allAccounts);
+      // The same months as the GPU trend's, and for all accounts, keys that name none
+      expect(keysOf('aiEndpointsTrend')).toEqual([
+        ['aiEndpointsTrend', '2026-04-01', '2026-09-30'],
+        ['aiEndpointsTrend', '2024-10-01', '2026-09-30'],
+        ['aiEndpointsTrend', '2024-09-01', '2026-08-31'],
+      ]);
+    });
+
+    it('is requested for the account shown, under a key that names it', async () => {
+      const lyonMonths = severalAccounts.ofAccount[lyonAccount.id].months;
+      const { result, keysOf } = await renderTabHook(useTrendsTab,
+        shellProps({
+          months: lyonMonths, selectedMonth: september, activeTab: 'trends',
+          selectedAccount: lyonAccount.id,
+        }),
+        severalAccountsWithAiEndpoints);
+
+      expect(api.fetchAiEndpoints)
+        .toHaveBeenCalledWith('2026-07-01', '2026-09-30', lyonAccount.id);
+      expect(models(result.current.aiEndpointsTrend)).toEqual([
+        'gpt-oss-120b', 'gpt-oss-20b', 'bge-m3', 'Mistral-7B-Instruct-v0.3',
+      ]);
+      // The account after the other parts of the key (ADR 0001)
+      expect(keysOf('aiEndpointsTrend'))
+        .toEqual([['aiEndpointsTrend', '2026-07-01', '2026-09-30', lyonAccount.id]]);
+    });
+
+    // An account remembered from an earlier visit, until the accounts list tells whether the
+    // page still offers it
+    it('waits until the page knows the account shown', async () => {
+      const { result, queryClient } = await renderTabHook(useTrendsTab,
+        shellProps({
+          months, selectedMonth: september, activeTab: 'trends', selectedAccount: undefined,
+        }),
+        severalAccountsWithAiEndpoints);
+
+      expect(api.fetchAiEndpoints).not.toHaveBeenCalled();
+      expect(queryClient.getQueryState(
+        ['aiEndpointsTrend', '2026-07-01', '2026-09-30', undefined],
+      )).toMatchObject(WAITING);
+      expect(result.current.aiEndpointsTrend).toBeUndefined();
+    });
+  });
 
   // As while the months list of the account just selected loads, or when that account lacks
   // the month selected, until the shell selects its latest month (#115): the shell then says

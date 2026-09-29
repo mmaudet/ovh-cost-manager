@@ -42,9 +42,10 @@ const storageServices = (inventory) => inventory
 const billLines = (lines) => lines.map(({ domain, total }) => [domain, total]);
 
 describe('useInfrastructureTab', () => {
-  // The page opens on the Overview, with no resource type open: nothing loads with it. The
-  // Compare tab loads the dedicated servers (#35), see below.
-  it.each(TAB_IDS.filter((tab) => !['infrastructure', 'compare'].includes(tab)))(
+  // The page opens on the Overview, with no resource type open: nothing loads with it. Nor
+  // does anything load on the Compare tab, which no longer lists the dedicated servers of the
+  // inventory, but those billed (#194).
+  it.each(TAB_IDS.filter((tab) => tab !== 'infrastructure'))(
     'requests nothing while the %s tab is active',
     async (activeTab) => {
       const { result } = await renderTabHook(useInfrastructureTab,
@@ -96,25 +97,6 @@ describe('useInfrastructureTab', () => {
       .toEqual([['vps-0a1b2c3d.vps.ovh.net', 'vps-le-2-2-40', 'Region OpenStack: os-gra7']]);
     expect(storageServices(result.current.inventoryStorage))
       .toEqual([['netapp-5f2c9a1e', 'shared-files', 'netapp']]);
-  });
-
-  // The Compare tab lists the servers this hook returns, which the shell passes on: they
-  // load on that tab too, under the same key, before the Infrastructure tab opens (#35)
-  it('requests the servers, and only them, while the Compare tab is active (#35)', async () => {
-    const { result, keysOf } = await renderTabHook(useInfrastructureTab,
-      { ...onInfrastructure, activeTab: 'compare' });
-
-    expect(api.fetchInventoryServers).toHaveBeenCalled();
-    expect(api.fetchInventoryVps).not.toHaveBeenCalled();
-    expect(api.fetchInventoryStorage).not.toHaveBeenCalled();
-    expect(api.fetchResourceTypeDetails).not.toHaveBeenCalled();
-    expect(servers(result.current.inventoryServers)).toEqual([
-      ['ns3000001.ip-203-0-113.eu', 'backup-server'],
-      ['ns3000002.ip-198-51-100.eu', 'ns3000002.ip-198-51-100.eu'],
-    ]);
-    expect(result.current.inventoryVps).toEqual([]);
-    expect(result.current.inventoryStorage).toEqual([]);
-    expect(keysOf('inventoryServers')).toEqual([['inventoryServers']]);
   });
 
   it('requests the bill lines of the open resource type in the selected month', async () => {
@@ -281,10 +263,10 @@ describe('useInfrastructureTab', () => {
       ]);
     });
 
-    // The servers that the Compare tab lists too (#35)
-    it('requests the servers of the account selected on the Compare tab', async () => {
-      const { result } = await renderTabHook(useInfrastructureTab,
-        shown('unknown', { activeTab: 'compare' }), severalAccounts);
+    // Those that no account claimed
+    it('requests the servers of the Unknown account', async () => {
+      const { result } = await renderTabHook(useInfrastructureTab, shown('unknown'),
+        severalAccounts);
 
       expect(api.fetchInventoryServers).toHaveBeenCalledWith('unknown');
       expect(servers(result.current.inventoryServers))

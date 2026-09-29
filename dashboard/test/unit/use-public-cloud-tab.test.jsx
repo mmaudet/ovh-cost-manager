@@ -77,7 +77,7 @@ describe('usePublicCloudTab', () => {
       projectsEnriched: expect.any(Array),
       projectsLoaded: true,
       publicCloudStats: expect.any(Object),
-      aiEndpoints: { total: 0, models: [] },
+      aiEndpoints: { total: 0, models: [], monthlyTrend: [] },
       openProject: production,
       projectConsumption: expect.any(Array),
       projectInstances: expect.any(Array),
@@ -410,7 +410,7 @@ describe('usePublicCloudTab', () => {
       await rerender({ ...onTheTab, selectedAccount: unknownAccount.id });
 
       expect(api.fetchAiEndpoints).toHaveBeenCalledWith('2026-09-01', '2026-09-30', 'unknown');
-      expect(result.current.aiEndpoints).toEqual({ total: 0, models: [] });
+      expect(result.current.aiEndpoints).toEqual({ total: 0, models: [], monthlyTrend: [] });
 
       await rerender(onTheTab);
 

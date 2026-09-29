@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { pairMonths } from '../../src/utils/monthComparison.js';
+import { byNameAndAccount, pairMonths } from '../../src/utils/monthComparison.js';
 
 // The rows of a comparison of months A and B of the Compare tab, from what each month gave:
 // the products of a Public Cloud project (#181), or the services of a resource type (#192),
@@ -54,12 +54,61 @@ describe('pairMonths', () => {
       { product: 'instances', total: instances }, { product: 'object_storage', total: storage },
     ];
 
-    expect(amounts(pairMonths(products(440.6, 24.9), products(538.9, 25), ({ product }) => product)))
+    const byProduct = ({ product }) => product;
+
+    expect(amounts(pairMonths(products(440.6, 24.9), products(538.9, 25), byProduct)))
       .toEqual([['instances', 440.6, 538.9], ['object_storage', 24.9, 25]]);
     expect(amounts(pairMonths(
       [{ id: 'vm-1', account: 'xx1111-ovh', total: 10 }],
       [{ id: 'vm-1', account: 'yy2222-ovh', total: 20 }],
       ({ id, account }) => `${id} ${account}`,
     ))).toEqual([['vm-1 xx1111-ovh', 10, 0], ['vm-1 yy2222-ovh', 0, 20]]);
+  });
+});
+
+// What makes a row of month A and one of month B the same: what it names, and its account, as
+// the lists that name the account of each row ask for them by account (#194)
+describe('byNameAndAccount', () => {
+  const byServiceAndAccount = byNameAndAccount(({ domain }) => domain);
+  // The pairs, each as [name, account, amount in month A, amount in month B]
+  const namedPairs = (pairs) => pairs.map(({ rowA, rowB, valA, valB }) => {
+    const { domain, account } = rowB ?? rowA;
+    return [domain, account, valA, valB];
+  });
+  const billedTo = (account, identifier, total) => ({ ...service(identifier, total), account });
+
+  it('pairs the rows of the same name and account, a name of two accounts once for each', () => {
+    expect(namedPairs(pairMonths(
+      [billedTo('xx1111-ovh', 'example.com', 15)],
+      [billedTo('xx1111-ovh', 'example.com', 10), billedTo('yy2222-ovh', 'example.com', 7)],
+      byServiceAndAccount,
+    ))).toEqual([
+      ['example.com', 'xx1111-ovh', 15, 10],
+      ['example.com', 'yy2222-ovh', 0, 7],
+    ]);
+  });
+
+  // The Unknown account, null, apart from the others
+  it("pairs the Unknown account's rows apart from the other accounts'", () => {
+    expect(namedPairs(pairMonths(
+      [billedTo(null, 'ns3000004', 90)],
+      [billedTo('xx1111-ovh', 'ns3000004', 40)],
+      byServiceAndAccount,
+    ))).toEqual([
+      ['ns3000004', null, 90, 0],
+      ['ns3000004', 'xx1111-ovh', 0, 40],
+    ]);
+  });
+
+  // As the lists that name no account ask for them
+  it('pairs the rows that name no account by their names', () => {
+    expect(namedPairs(pairMonths(
+      [service('example.com', 15), service('example.org', 15)],
+      [service('example.com', 17)],
+      byServiceAndAccount,
+    ))).toEqual([
+      ['example.com', undefined, 15, 17],
+      ['example.org', undefined, 15, 0],
+    ]);
   });
 });
