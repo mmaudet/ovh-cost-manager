@@ -195,7 +195,7 @@ export const aiEndpointsFigures = (total, models, months) => ({
   })),
   monthlyTrend: months.map(([month, costs]) => ({
     month,
-    models: Object.fromEntries(models.map(([model], index) => [model, costs[index]])),
+    costs: Object.fromEntries(models.map(([model], index) => [model, costs[index]])),
   })),
 });
 

@@ -170,7 +170,7 @@ describe('GET /api/analysis/ai-endpoints', () => {
           modelRow('gpt-oss-20b', 12500000, 4000000, 2.2),
           modelRow('bge-m3', 30000000, null, 0.3),
         ],
-        monthlyTrend: [{ month: '2026-09', models: { 'gpt-oss-20b': 2.2, 'bge-m3': 0.3 } }],
+        monthlyTrend: [{ month: '2026-09', costs: { 'gpt-oss-20b': 2.2, 'bge-m3': 0.3 } }],
       },
     });
   });
@@ -187,7 +187,7 @@ describe('GET /api/analysis/ai-endpoints', () => {
         ],
         monthlyTrend: [{
           month: '2026-09',
-          models: {
+          costs: {
             'whisper-large-v3': 0.36, 'gpt-oss-20b': 0.31, 'stable-diffusion-xl-base-v10': 0,
           },
         }],
@@ -202,7 +202,7 @@ describe('GET /api/analysis/ai-endpoints', () => {
       body: {
         total: 0.64,
         models: [modelRow('gpt-oss-20b', 8000000, null, 0.64)],
-        monthlyTrend: [{ month: '2026-08', models: { 'gpt-oss-20b': 0.64 } }],
+        monthlyTrend: [{ month: '2026-08', costs: { 'gpt-oss-20b': 0.64 } }],
       },
     });
   });
@@ -225,7 +225,7 @@ describe('the monthly trend of GET /api/analysis/ai-endpoints', () => {
   // The Unknown account's bill of September charges for August: its lines count in September
   test('gives the cost of each model in each month of its bills', async () => {
     expect((await aiEndpointsOf(JULY_TO_SEPTEMBER, UNKNOWN_ACCOUNT)).body.monthlyTrend)
-      .toEqual([{ month: '2026-09', models: { 'gpt-oss-20b': 0.17 } }]);
+      .toEqual([{ month: '2026-09', costs: { 'gpt-oss-20b': 0.17 } }]);
   });
 
   // So that the bars of the months compare: Lyon's bill of August names the language model
@@ -233,8 +233,8 @@ describe('the monthly trend of GET /api/analysis/ai-endpoints', () => {
   test('gives every model of the period in each of its months, at 0 in one that billed none',
     async () => {
       expect((await aiEndpointsOf(JULY_TO_SEPTEMBER, LYON)).body.monthlyTrend).toEqual([
-        { month: '2026-08', models: { 'gpt-oss-20b': 0.64, 'bge-m3': 0 } },
-        { month: '2026-09', models: { 'gpt-oss-20b': 2.2, 'bge-m3': 0.3 } },
+        { month: '2026-08', costs: { 'gpt-oss-20b': 0.64, 'bge-m3': 0 } },
+        { month: '2026-09', costs: { 'gpt-oss-20b': 2.2, 'bge-m3': 0.3 } },
       ]);
     });
 });
@@ -256,7 +256,7 @@ describe('the account parameter of GET /api/analysis/ai-endpoints', () => {
         ],
         monthlyTrend: [{
           month: '2026-09',
-          models: {
+          costs: {
             'gpt-oss-20b': 2.68, 'whisper-large-v3': 0.36, 'bge-m3': 0.3,
             'stable-diffusion-xl-base-v10': 0,
           },

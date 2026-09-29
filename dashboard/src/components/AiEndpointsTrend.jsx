@@ -58,7 +58,7 @@ const AiEndpointsTrend = ({ aiEndpointsTrend, language, t, fmt }) => (
             <Bar
               key={model}
               name={model}
-              dataKey={(month) => month.models[model]}
+              dataKey={(row) => row.costs[model]}
               stackId="models"
               fill={colourOf(index)}
             />

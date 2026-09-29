@@ -1396,7 +1396,7 @@ function registerRoutes() {
         models: models.map(({ model, tokens, cost }) => ({
           model, inputTokens: tokens.input, outputTokens: tokens.output, total: cost,
         })),
-        monthlyTrend: monthlyTrend.map(({ month, costs }) => ({ month, models: costs })),
+        monthlyTrend,
       });
     } catch (err) {
       res.status(500).json({ error: err.message });
