@@ -35,7 +35,8 @@ const productRows = (billedA, billedB) => {
  * add up, with the credit that the bills used, to the project's cost in the comparison by
  * project. The credit shows apart, after the products, as it pays for none. The products keep
  * the order of their months until the user sorts them (sorting, which the Compare tab's hook
- * holds for each project: see SortableHeader.jsx).
+ * holds for each project: see SortableHeader.jsx). It says that it loads until the answers of
+ * both months arrive.
  * @param {object} props
  * @param {function(?object): object} props.productsQueryOf - The options of the query of the
  *   project's products in a month, for useQuery (useCompareTab()'s projectProductsQuery())
@@ -47,8 +48,14 @@ const productRows = (billedA, billedB) => {
 export default function ProjectProductComparison({
   productsQueryOf, monthA, monthB, sorting, fmt, language, t,
 }) {
-  const { data: billedA = NOTHING_BILLED } = useQuery(productsQueryOf(monthA));
-  const { data: billedB = NOTHING_BILLED } = useQuery(productsQueryOf(monthB));
+  const answerA = useQuery(productsQueryOf(monthA));
+  const answerB = useQuery(productsQueryOf(monthB));
+  // Until both months' answers arrive, rather than a month at 0 € or no product at all
+  if (answerA.isLoading || answerB.isLoading) {
+    return <div className="text-gray-500 text-sm">{t('loading')}</div>;
+  }
+  const billedA = answerA.data ?? NOTHING_BILLED;
+  const billedB = answerB.data ?? NOTHING_BILLED;
   const rows = productRows(billedA, billedB);
   // Whether the bills of either month used a credit
   const credited = billedA.credits !== 0 || billedB.credits !== 0;

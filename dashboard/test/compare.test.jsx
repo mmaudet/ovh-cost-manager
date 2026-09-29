@@ -6,7 +6,7 @@ import {
   lyonAccount, removedAccount, severalAccounts, unknownAccount, unnamedAccount,
 } from './fixtures/accounts.js';
 import { months } from './fixtures/calendar.js';
-import { api } from './support/api.js';
+import { api, holdBack } from './support/api.js';
 import {
   accordionOf,
   cardOf,
@@ -646,6 +646,36 @@ describe('Compare tab', () => {
           ['Snapshots', '6,00€', '6,00€', '0,0 %'],
         ]);
       });
+
+    // Rather than that the bills charged the project nothing, or nothing in a month whose
+    // answer has yet to arrive
+    it('say that they load until the products of both months arrive', async () => {
+      const { user } = await renderDashboard();
+      await openTab(user, 'Comparaison');
+      // August's products arrive, then July becomes month B while the comparison is closed
+      await openComparison(user, PRODUCTION_PRODUCTS);
+      await openComparison(user, PRODUCTION_PRODUCTS);
+      await pickMonth(user, 'Septembre 2026', 'Juillet 2026');
+      const release = holdBack(api.fetchProjectProducts,
+        (projectId, from) => from === '2026-07-01');
+
+      await user.click(toggle(PRODUCTION_PRODUCTS));
+
+      expect(within(comparison(PRODUCTION_PRODUCTS)).getByText('Chargement des données...'))
+        .toBeInTheDocument();
+      expect(within(comparison(PRODUCTION_PRODUCTS))
+        .queryByText('Aucune donnée pour ce projet')).not.toBeInTheDocument();
+      expect(comparisonTable(PRODUCTION_PRODUCTS)).not.toBeInTheDocument();
+
+      release();
+      await settle();
+
+      expect(rowsOf(comparisonTable(PRODUCTION_PRODUCTS)).slice(0, 2)).toEqual([
+        ['Produit○', 'Août 2026○', 'Juillet 2026○', 'Variation○'],
+        // (650 - 440.60) / 440.60
+        ['Instances', '440,60€', '650,00€', '+47,5 %'],
+      ]);
+    });
 
     // A credit pays for no product (CONTEXT.md), as on the Public Cloud tab
     it('show the credit that the bills used apart, after the products', async () => {
