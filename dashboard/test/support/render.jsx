@@ -86,10 +86,15 @@ export async function passTime(ms) {
   await settle();
 }
 
-export async function openTab(user, name) {
-  // The tab bar is the group of buttons that holds the Overview tab
+// The button of a tab, in the tab bar: the group of buttons that holds the Overview tab. Other
+// buttons of the page may bear the name of a tab, such as the Overview's links to the tabs.
+export function tabButton(name) {
   const overview = screen.getByRole('button', { name: /^(Vue d'ensemble|Overview)$/ });
-  await user.click(within(overview.parentElement).getByRole('button', { name }));
+  return within(overview.parentElement).getByRole('button', { name });
+}
+
+export async function openTab(user, name) {
+  await user.click(tabButton(name));
   await settle();
 }
 
@@ -231,6 +236,13 @@ export function cardOf(labelOrElement) {
 // The row of cards that holds the card showing a label
 export function cardRowOf(label) {
   return cardOf(label).parentElement;
+}
+
+// The KPI card of the month's Cloud total, found among the KPI cards of the month's cost by their
+// labels, in French unless told otherwise: the Overview's breakdown by project and the Public
+// Cloud tab's list of projects end with a row of the same label
+export function cloudTotalCard(label = 'Total Cloud', monthCost = 'Coût total du mois') {
+  return cardOf(within(cardRowOf(monthCost)).getByText(label));
 }
 
 // The panel a heading heads within a card: the heading with its actions, and

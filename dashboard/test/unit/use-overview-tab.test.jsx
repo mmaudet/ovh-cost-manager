@@ -81,6 +81,27 @@ describe('useOverviewTab', () => {
       .toEqual([['gpuProjectsByAccount', '2026-09-01', '2026-09-30']]);
   });
 
+  // Which the Public Cloud tab's list of projects waits for, rather than show that nothing was
+  // billed (#180)
+  it('tells once the projects by account of the month have loaded', async () => {
+    const { result, rerender } = await renderTabHook(
+      useOverviewTab, { ...withAccountColumn, holdsSelectedMonth: false }, severalAccounts,
+    );
+
+    expect(result.current.projectsByAccountLoaded).toBe(false);
+
+    await rerender(withAccountColumn);
+
+    expect(result.current.projectsByAccountLoaded).toBe(true);
+
+    api.fetchProjectsByAccount.mockRejectedValue(new Error('Request failed with status code 500'));
+    await rerender({ ...withAccountColumn, selectedMonth: august });
+
+    // August's could not load
+    expect(result.current.projectsByAccount).toEqual([]);
+    expect(result.current.projectsByAccountLoaded).toBe(false);
+  });
+
   // As the shell's queries of the month: while the months of the account shown load, or lack
   // the month selected
   it('requests nothing until the months hold the month selected', async () => {
@@ -101,10 +122,14 @@ describe('useOverviewTab', () => {
   it('returns the sort orders of its tables and the projects by account', async () => {
     const { result } = await renderTabHook(useOverviewTab, withoutAccountColumn);
 
-    // What the shell spreads over the tab, and nothing else: the budget is the shell's
+    // What the shell spreads over the tab, and nothing else: the budget is the shell's. And
+    // whether the projects by account have loaded, which the shell reads for the Public Cloud
+    // tab (#180)
     expect(result.current).toEqual({
       sortingOf: expect.any(Function),
       projectsByAccount: [],
+      projectsByAccountLoaded: false,
+      projectsByAccountFailed: false,
       gpuProjectsByAccount: [],
     });
     // The project breakdown by amount, the most expensive first, until the user sorts it; the

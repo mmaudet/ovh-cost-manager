@@ -177,11 +177,16 @@ export default function Dashboard() {
     enabled: holdsSelectedMonth,
   }));
 
-  const { data: byProject = [] } = useQuery(accountQuery(selectedAccount, {
-    key: ['byProject', selectedMonth?.from, selectedMonth?.to],
-    fetch: (account) => fetchByProject(selectedMonth.from, selectedMonth.to, account),
-    enabled: holdsSelectedMonth,
-  }));
+  // Its costs by project, undefined until they load: the Public Cloud tab's list of projects
+  // waits for them (#180)
+  const { data: byProjectOfMonth, isError: byProjectFailed } = useQuery(
+    accountQuery(selectedAccount, {
+      key: ['byProject', selectedMonth?.from, selectedMonth?.to],
+      fetch: (account) => fetchByProject(selectedMonth.from, selectedMonth.to, account),
+      enabled: holdsSelectedMonth,
+    }),
+  );
+  const byProject = byProjectOfMonth ?? [];
 
   const { data: byResourceType = [] } = useQuery(accountQuery(selectedAccount, {
     key: ['byResourceType', selectedMonth?.from, selectedMonth?.to],
@@ -228,6 +233,18 @@ export default function Dashboard() {
   // before the loading screen, so that the tab keeps them while another one is open (ADR 0001)
 
   const overviewTab = useOverviewTab({ selectedMonth, holdsSelectedMonth, accountColumn });
+  // What the month billed each project, which the Public Cloud tab's list of projects gives
+  // (#180): by account while the lists name the account of each project, as the Overview's
+  // breakdown does, from the projects by account that the Overview hook loads, or else the costs
+  // by project of the account shown. Undefined until they load, or when they cannot: the list
+  // then gives no amount, rather than show that nothing was billed.
+  const billedProjects = accountColumn
+    ? (overviewTab.projectsByAccountLoaded ? overviewTab.projectsByAccount : undefined)
+    : byProjectOfMonth;
+  // Whether they could not load, which the list says rather than leave its amounts blank
+  const billedProjectsFailed = accountColumn
+    ? overviewTab.projectsByAccountFailed
+    : byProjectFailed;
 
   const compareTab = useCompareTab({ months, activeTab, selectedAccount, accountColumn });
 
@@ -762,6 +779,7 @@ export default function Dashboard() {
             selectedMonth={selectedMonth}
             setSelectedProject={setSelectedProject} byResourceType={byResourceType}
             gpuSummary={gpuSummary} accountColumn={accountColumn} cloudTotal={summary?.cloudTotal}
+            billedProjects={billedProjects} billedProjectsFailed={billedProjectsFailed}
           />
         )}
 

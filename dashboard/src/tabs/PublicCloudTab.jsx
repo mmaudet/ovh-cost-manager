@@ -13,6 +13,7 @@ import {
 import { downloadCSV } from '../utils/csv.js';
 import { formatMonthLabel, formatMonthName } from '../utils/format.js';
 import { cloudKindLabel } from '../utils/cloudKinds.js';
+import { projectListRows } from '../utils/projectList.js';
 import { publicCloudProductLabel } from '../utils/publicCloudProducts.js';
 
 // The Account column of the CSV files of the open project's resources (#121): when the lists
@@ -25,15 +26,40 @@ const openProjectAccountOf = (accountColumn, projectsEnriched, openProject) => {
 };
 
 // The value of a project in each column that sorts the list (#146): its account, none without
-// the Account column, and no consumption for a project that consumed nothing, which the list
-// shows as "-"
+// the Account column, no consumption for a project that consumed nothing, and no amount billed
+// for a project that no bill line of the month names (#180), which the list shows as "-". A
+// project billed that the inventory of the account lacks has no state, instance count or
+// consumption there.
 const projectValues = (accountColumn) => ({
   name: (p) => p.name || p.id,
   account: (p) => accountColumn?.nameOf(p.account),
   state: (p) => p.status,
-  instances: (p) => p.instance_count || 0,
+  instances: (p) => (p.inInventory ? p.instance_count || 0 : null),
   consumption: (p) => (p.consumption_total > 0 ? p.consumption_total : null),
+  billed: (p) => p.billed,
 });
+
+// The row of a project billed in the month that the list lacks, as the inventory of the account
+// whose bills charged it lacks it (#180): its name, marked as a bucket billed but gone from the
+// inventory is, and its id, as the server may not name it; that account in the Account column,
+// and what the month billed it. The list has none of its resources: it has no detail to open.
+const ProjectNotInInventoryRow = ({ project, accountColumn, t, fmt }) => (
+  <tr className="border-b opacity-60">
+    <td className="p-3 font-medium">
+      <span>{project.name}</span>
+      <span className="ml-1 text-gray-400" title={t('projectNotInInventory')}>†</span>
+      <div className="text-xs text-gray-400">{project.id}</div>
+    </td>
+    {accountColumn && (
+      <td className="p-3 text-gray-600">{accountColumn.nameOf(project.account)}</td>
+    )}
+    <td className="p-3">-</td>
+    <td className="p-3 text-right">-</td>
+    <td className="p-3 text-right font-medium">-</td>
+    <td className="p-3 text-right font-medium">{fmt(project.billed)}€</td>
+    <td className="p-3"></td>
+  </tr>
+);
 
 // Downloads resources of the open project as a CSV file, with the Account column of the open
 // project after the name of each resource, when there is one: the file leaves the project's
@@ -55,22 +81,34 @@ const downloadResources = (openProjectAccount, rows, columns, filename) => {
 // returns, the open project and the sort order of its tables included (#146), with the shell's
 // language, translations (t), amount format (fmt) and locale, the selected month, the setter of
 // the selected project, and two of its queries that load at page start: the month's costs by
-// resource type and its GPU costs. And the Account column of the lists, null when they show
-// none (#121), and the cloud total of the selected month, which the cards add up to (#145).
+// resource type and its GPU costs. And what the month billed each project (billedProjects), which
+// the list of projects gives next to their current consumption (#180): the costs by project of
+// the account shown, or, while the lists name the account of each project, those by account of
+// the Overview's breakdown (#118), which the shell picks, undefined until they load, and
+// whether they could not (billedProjectsFailed). And the Account column of the lists, null when
+// they show none (#121), and the cloud total of the selected month, which the cards and the list
+// add up to (#145, #180).
 const PublicCloudTab = ({
-  projectsEnriched, publicCloudStats, projectConsumption, projectInstances, instanceCount,
-  projectInstanceTotal, projectBuckets, projectVolumes, projectSnapshots, projectSavingsPlans,
-  projectOtherServices, projectQuotas, setShowAllInstances, setShowAllBuckets, setShowAllVolumes,
-  setShowAllSnapshots, setShowAllSavingsPlans, sortingOf,
+  projectsEnriched, projectsLoaded, publicCloudStats, projectConsumption, projectInstances,
+  instanceCount, projectInstanceTotal, projectBuckets, projectVolumes, projectSnapshots,
+  projectSavingsPlans, projectOtherServices, projectQuotas, setShowAllInstances,
+  setShowAllBuckets, setShowAllVolumes, setShowAllSnapshots, setShowAllSavingsPlans, sortingOf,
   language, t, fmt, locale, selectedMonth, openProject, setSelectedProject,
-  byResourceType, gpuSummary, accountColumn, cloudTotal,
+  byResourceType, gpuSummary, billedProjects, billedProjectsFailed, accountColumn, cloudTotal,
 }) => {
   // The Account column of the CSV files of the open project's resources, for all of them
   const openProjectAccount = openProjectAccountOf(accountColumn, projectsEnriched, openProject);
-  // The projects in the order the user sorts them, in the server's until then (#146)
+  // Whether what the month billed the projects has loaded: until then, as after a change of
+  // month, or when it cannot load, the list gives no amount, rather than show that nothing was
+  // billed, nor the total that the amounts add up to, nor the projects billed that it lacks
+  const amountsLoaded = billedProjects !== undefined;
+  // The projects of the account shown once they have loaded (projectsLoaded), with what the
+  // month billed them, and those billed that the list lacks, in the order the user sorts them,
+  // in the server's until then (#146)
   const projectSorting = sortingOf('projects');
   const projects = sortRows(
-    projectsEnriched, projectSorting.sort, projectValues(accountColumn), language,
+    projectsLoaded ? projectListRows(projectsEnriched, billedProjects ?? []) : [],
+    projectSorting.sort, projectValues(accountColumn), language,
   );
   return (
     <div className="space-y-6">
@@ -175,8 +213,9 @@ const PublicCloudTab = ({
         </p>
       ) : null}
 
-      {/* Cloud Projects Table with inline detail */}
-      {projectsEnriched.length > 0 && (
+      {/* Cloud Projects Table with inline detail: the projects of the inventory, and those
+          billed in the month that it lacks (#180) */}
+      {projects.length > 0 && (
         <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
           <h3 className="font-semibold text-gray-900 mb-4">{t('cloudProjects')}</h3>
           <div className="overflow-x-auto">
@@ -215,12 +254,23 @@ const PublicCloudTab = ({
                   >
                     {language === 'en' ? 'Current consumption' : 'Consommation en cours'}
                   </SortableHeader>
+                  <SortableHeader
+                    column="billed" kind="number" sorting={projectSorting} t={t}
+                    className="p-3 text-right font-medium"
+                  >
+                    {`${t('billedIn')} ${formatMonthName(selectedMonth?.value, language)}`}
+                  </SortableHeader>
                   <th className="p-3 text-center font-medium"></th>
                 </tr>
               </thead>
               <tbody>
                 {/* A project's detail shows right under it, whatever the order */}
-                {projects.map(p => (
+                {projects.map(p => (!p.inInventory ? (
+                  <ProjectNotInInventoryRow
+                    key={`not in inventory ${p.id} ${p.account}`} project={p}
+                    accountColumn={accountColumn} t={t} fmt={fmt}
+                  />
+                ) : (
                   <Fragment key={p.id}>
                     <tr
                       className={`border-b hover:bg-gray-50 cursor-pointer ${openProject?.id === p.id ? 'bg-blue-50' : ''}`}
@@ -242,6 +292,9 @@ const PublicCloudTab = ({
                       <td className="p-3 text-right font-medium">
                         {p.consumption_total > 0 ? `${fmt(p.consumption_total)}€` : '-'}
                       </td>
+                      <td className="p-3 text-right font-medium">
+                        {amountsLoaded && (p.billed === null ? '-' : `${fmt(p.billed)}€`)}
+                      </td>
                       <td className="p-3 text-center">
                         <span className="text-gray-400 text-lg">
                           {openProject?.id === p.id ? '▲' : '▼'}
@@ -250,7 +303,7 @@ const PublicCloudTab = ({
                     </tr>
                     {openProject?.id === p.id && (
                       <tr>
-                        <td colSpan={accountColumn ? 6 : 5} className="p-0">
+                        <td colSpan={accountColumn ? 7 : 6} className="p-0">
                           <div className="bg-blue-50 border-l-4 border-blue-400 p-5">
                             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                               {/* Consumption by resource type */}
@@ -534,10 +587,25 @@ const PublicCloudTab = ({
                       </tr>
                     )}
                   </Fragment>
-                ))}
+                )))}
               </tbody>
+              {/* What the column of the amounts billed adds up to: the month's Cloud total, as
+                  under the Overview's breakdown by project (#180) */}
+              {amountsLoaded && cloudTotal !== undefined && (
+                <tfoot>
+                  <tr className="bg-gray-50 font-semibold">
+                    <td className="p-3" colSpan={accountColumn ? 5 : 4}>{t('cloudTotal')}</td>
+                    <td className="p-3 text-right">{fmt(cloudTotal)}€</td>
+                    <td className="p-3"></td>
+                  </tr>
+                </tfoot>
+              )}
             </table>
           </div>
+          {/* Rather than blank amounts that could as well be loading (#62, #64) */}
+          {billedProjectsFailed && (
+            <p className="mt-3 text-sm text-red-500">{t('billedAmountsFailed')}</p>
+          )}
         </div>
       )}
 

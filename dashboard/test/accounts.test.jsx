@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { screen, within } from '@testing-library/react';
+import { screen } from '@testing-library/react';
 import {
   lyonAccount, removedAccount, severalAccounts, unknownAccount, unnamedAccount,
 } from './fixtures/accounts.js';
@@ -8,6 +8,7 @@ import {
   accountSelector,
   cardOf,
   cardRowOf,
+  cloudTotalCard,
   emptyState,
   monthSelector,
   openTab,
@@ -20,11 +21,9 @@ import {
   texts,
 } from './support/render.jsx';
 
-// The KPI cards of the month's figures, as the user reads them. The Cloud total is found
-// among them: the Overview's breakdown by project ends with a row of the same label.
+// The KPI cards of the month's figures, as the user reads them
 const monthCost = () => texts(cardOf('Coût total du mois'));
-const cloudTotal = () =>
-  texts(cardOf(within(cardRowOf('Coût total du mois')).getByText('Total Cloud')));
+const cloudTotal = () => texts(cloudTotalCard());
 const dailyAverage = () => texts(cardOf('Coût moyen / jour'));
 const activeProjects = () => texts(cardOf('Projets actifs'));
 

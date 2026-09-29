@@ -8,7 +8,7 @@ import { api, holdBack, serve } from './support/api.js';
 import { captureFileDownloads } from './support/downloads.js';
 import {
   cardOf,
-  cardRowOf,
+  cloudTotalCard,
   disclosure,
   dropdown,
   emptyState,
@@ -38,10 +38,6 @@ import {
 
 // The month selector of the header offers every billed month
 const monthSelector = () => dropdown('Juillet 2026');
-// The Cloud total card, among the KPI cards of the month's cost: the Overview's breakdown by
-// project ends with a row of the same label
-const cloudTotalCard = (label = 'Total Cloud', monthCost = 'Coût total du mois') =>
-  cardOf(within(cardRowOf(monthCost)).getByText(label));
 
 // The shell: the header, the KPI cards, the tab bar, the sync warning banner
 // and the footer, around whatever tab is open.
