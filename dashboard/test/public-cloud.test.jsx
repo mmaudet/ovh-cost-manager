@@ -12,6 +12,7 @@ import {
 } from './support/downloads.js';
 import {
   backdropOf,
+  cardOf,
   cardRowOf,
   cloudProjectRow,
   cloudProjects,
@@ -33,9 +34,16 @@ import {
 // The Public Cloud figures of the month, one card each
 const figures = () => cardRowOf('Kubernetes');
 // The rows of the list of projects, each as the texts it shows, in the order shown: without its
-// header, nor what shows under the rows
+// header, nor its total
 const projectRowsShown = () => [...cloudProjectsTable().tBodies[0].rows]
   .map((row) => texts(row));
+// The total under the list of projects, as the texts it shows (#180)
+const projectListTotal = () => texts(cloudProjectsTable().tFoot);
+// The KPI card of the month's Cloud total, which the bill lines of the month that name a
+// project add up to
+const cloudTotalCard = (label = 'Total Cloud', monthCost = 'Coût total du mois') => cardOf(
+  within(cardRowOf(monthCost)).getByText(label),
+);
 const openProject = async (user, name) => {
   await user.click(within(cloudProjects()).getByText(name));
   await settle();
@@ -221,6 +229,7 @@ describe('Public Cloud tab', () => {
           ['Staging', 'ok', '0', '52,35€', '220,00€', '▼'],
           // Nothing consumed, and no bill line of the month
           ['Sandbox', 'ok', '0', '-', '-', '▼'],
+          ['Total Cloud', '830,40€'],
         ]);
         expect(detailHeadings()).toEqual([]);
       });
@@ -242,6 +251,8 @@ describe('Public Cloud tab', () => {
           ['Staging', 'ok', '0', '52,35€', '190,00€', '▼'],
           ['Sandbox', 'ok', '0', '-', '-', '▼'],
         ]);
+        expect(projectListTotal()).toEqual(['Total Cloud', '702,00€']);
+        expect(texts(cloudTotalCard())).toEqual(['Total Cloud', '702,00€', 'Public Cloud']);
       });
 
     it('show the detail of a project under it on a click, until a second click', async () => {
@@ -292,6 +303,8 @@ describe('Public Cloud tab', () => {
         ['Staging', 'ok', '0', '52,35€', '220,00€', '▼'],
         ['Production', 'Customer-facing services', 'ok', '5', '350,00€', '610,40€', '▼'],
         ['Sandbox', 'ok', '0', '-', '-', '▼'],
+        // The total stays under them
+        ['Total Cloud', '830,40€'],
       ]);
 
       await openProject(user, 'Production');
@@ -304,6 +317,18 @@ describe('Public Cloud tab', () => {
       // Each row by its first text: Production, its detail, then the other projects
       expect([...cloudProjectsTable().tBodies[0].rows].map((row) => texts(row)[0]))
         .toEqual(['Production', 'Consommation par ressource', 'Sandbox', 'Staging']);
+    });
+
+    // What the reporter of #180 looked for: amounts by project that add up to the Cloud total
+    // of the month, which the list gives under them
+    it('add up what the month billed them to its Cloud total', async () => {
+      const { user } = await renderDashboard();
+
+      await openTab(user, 'Public Cloud');
+
+      // 610,40€ + 220,00€
+      expect(projectListTotal()).toEqual(['Total Cloud', '830,40€']);
+      expect(texts(cloudTotalCard())).toEqual(['Total Cloud', '830,40€', 'Public Cloud']);
     });
 
     // As the other columns (#146), by the amount, whatever the month's bills gave it: the
@@ -886,6 +911,7 @@ describe('Public Cloud tab', () => {
       'Name', '○', 'State', '○', 'Instances', '○', 'Current consumption', '○',
       'Billed in September 2026', '○',
     ]);
+    expect(projectListTotal()).toEqual(['Cloud Total', '830.40€']);
 
     await openProject(user, 'Production');
 
@@ -953,7 +979,6 @@ describe('Public Cloud tab', () => {
     // resource type and the GPU costs that the shell loads for the Overview (#118). The GPU
     // instances are those of the inventory that /api/gpu/summary lists, whatever the month.
     const figuresOfTheTab = () => [...figures().children].map((card) => texts(card)).flat();
-    const projectRows = () => rowTextsOf(within(cloudProjects()).getByRole('table')).slice(1);
     const openOnAccount = async (label) => {
       const { user } = await renderDashboard(severalAccounts);
       await openTab(user, 'Public Cloud');
@@ -978,7 +1003,9 @@ describe('Public Cloud tab', () => {
         'Registre', '1', '40,00€',
         'Autres services', '0',
       ]);
-      expect(projectRows().map(([name]) => name)).toEqual(['Production', 'Staging', 'Sandbox']);
+      expect(projectRowsShown().map(([name]) => name))
+        .toEqual(['Production', 'Staging', 'Sandbox']);
+      expect(projectListTotal()).toEqual(['Total Cloud', '830,40€']);
     });
 
     it('shows the projects and figures of the account selected', async () => {
@@ -996,9 +1023,12 @@ describe('Public Cloud tab', () => {
         'Registre', '0',
         'Autres services', '0',
       ]);
-      expect(projectRows()).toEqual([
+      expect(projectRowsShown()).toEqual([
         ['Production', 'Customer-facing services', 'ok', '5', '350,00€', '610,40€', '▼'],
       ]);
+      // What the account's bills of the month charged its projects: its Cloud total (#180)
+      expect(projectListTotal()).toEqual(['Total Cloud', '610,40€']);
+      expect(texts(cloudTotalCard())).toEqual(['Total Cloud', '610,40€', 'Public Cloud']);
 
       await selectAccount(user, 'yy2222-ovh');
 
@@ -1014,13 +1044,16 @@ describe('Public Cloud tab', () => {
         'Registre', '1', '40,00€',
         'Autres services', '0',
       ]);
-      expect(projectRows()).toEqual([['Staging', 'ok', '0', '52,35€', '220,00€', '▼']]);
+      expect(projectRowsShown()).toEqual([['Staging', 'ok', '0', '52,35€', '220,00€', '▼']]);
+      expect(projectListTotal()).toEqual(['Total Cloud', '220,00€']);
+      expect(texts(cloudTotalCard())).toEqual(['Total Cloud', '220,00€', 'Public Cloud']);
     });
 
     it('shows the projects of the Unknown account', async () => {
       await openOnAccount('Compte inconnu');
 
-      expect(projectRows()).toEqual([['Sandbox', 'ok', '0', '-', '-', '▼']]);
+      expect(projectRowsShown()).toEqual([['Sandbox', 'ok', '0', '-', '-', '▼']]);
+      expect(projectListTotal()).toEqual(['Total Cloud', '0,00€']);
       // Nothing billed in July, its only month
       expect(figuresOfTheTab()).toEqual([
         'Projets Cloud', '0', 'Instances', '0', 'Instances GPU', '0', 'Kubernetes', '0',
@@ -1115,6 +1148,7 @@ describe('Public Cloud tab', () => {
             '610,40€', '▼'],
           ['Staging', 'yy2222-ovh', 'ok', '0', '52,35€', '220,00€', '▼'],
           ['Sandbox', 'Compte inconnu', 'ok', '0', '-', '-', '▼'],
+          ['Total Cloud', '830,40€'],
         ]);
 
         await selectLanguage(user, 'en');

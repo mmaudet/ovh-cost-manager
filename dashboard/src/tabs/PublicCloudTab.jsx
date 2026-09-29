@@ -551,6 +551,17 @@ const PublicCloudTab = ({
                   </Fragment>
                 ))}
               </tbody>
+              {/* What the column of the amounts billed adds up to: the month's Cloud total, as
+                  under the Overview's breakdown by project (#180) */}
+              {cloudTotal !== undefined && (
+                <tfoot>
+                  <tr className="bg-gray-50 font-semibold">
+                    <td className="p-3" colSpan={accountColumn ? 5 : 4}>{t('cloudTotal')}</td>
+                    <td className="p-3 text-right">{fmt(cloudTotal)}€</td>
+                    <td className="p-3"></td>
+                  </tr>
+                </tfoot>
+              )}
             </table>
           </div>
         </div>
