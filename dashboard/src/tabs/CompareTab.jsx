@@ -4,7 +4,7 @@ import {
 import Accordion from '../components/Accordion.jsx';
 import { SortableHeader, sortRows } from '../components/SortableHeader.jsx';
 import ProjectProductComparison from '../components/ProjectProductComparison.jsx';
-import { ResourceTypeServices } from '../components/ResourceTypeServices.jsx';
+import { UnfoldedRowServices } from '../components/UnfoldedRowServices.jsx';
 import { UnfoldingRow } from '../components/UnfoldingRow.jsx';
 import { Variation } from '../components/Variation.jsx';
 import { formatMonthLabel } from '../utils/format.js';
@@ -137,7 +137,7 @@ const CompareTab = ({
         chevronLabel={`${t('servicesOf')} ${label}`}
         label={label}
         detail={(
-          <ResourceTypeServices
+          <UnfoldedRowServices
             servicesQuery={(month) => resourceTypeServicesQuery(key, month)}
             monthA={compareMonthA} monthB={compareMonthB} sort={sortingOf(comparison).sort}
             values={SERVICE_VALUES} columnCount={COMPARISON_COLUMNS}
@@ -372,7 +372,7 @@ const CompareTab = ({
                   chevronLabel={`${t('servicesOf')} ${row.label}`}
                   label={row.label}
                   detail={(
-                    <ResourceTypeServices
+                    <UnfoldedRowServices
                       servicesQuery={(month) => backupServicesQuery(row.kind, month)}
                       monthA={compareMonthA} monthB={compareMonthB} sort={null}
                       values={SERVICE_VALUES} columnCount={COMPARISON_COLUMNS}
