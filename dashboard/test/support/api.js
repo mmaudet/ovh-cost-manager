@@ -66,8 +66,8 @@ const emptyAnswers = {
     loadBalancers: { count: 0, total: 0 },
   }),
   backupStats: () => ({ vms: { count: 0, total: 0 }, enterprise: { count: 0, total: 0 } }),
-  // No AI Endpoints model over the period (#193)
-  aiEndpoints: () => ({ total: 0, models: [] }),
+  // No AI Endpoints model over the period (#193), nor any month of them (#196)
+  aiEndpoints: () => ({ total: 0, models: [], monthlyTrend: [] }),
   // Nothing billed to the project over the period (#181)
   projectProducts: () => ({ total: 0, products: [], credits: 0 }),
   // No carbon footprint for any of the 12 months that end on a month (#154)

@@ -1,6 +1,7 @@
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line,
 } from 'recharts';
+import { AiEndpointsTrend } from '../components/AiEndpointsTrend.jsx';
 import { formatYearMonth } from '../utils/format.js';
 import { growthOverPeriod } from '../utils/periodGrowth.js';
 import { PERIOD_OPTIONS } from '../utils/trendPeriods.js';
@@ -18,7 +19,7 @@ const GROWTH_TONES = {
 // with the shell's language, translations (t) and amount format (fmt).
 const TrendsTab = ({
   trendPeriod, monthlyTrend, trendByCategory, hiddenCategories, toggleCategory, gpuTrend,
-  language, t, fmt,
+  aiEndpointsTrend, language, t, fmt,
 }) => {
   const currentPeriodLabel = (PERIOD_OPTIONS.find(o => o.months === trendPeriod) || {}).key;
   // The growth over the period, in percent, from its first month to its last, as the page
@@ -149,6 +150,14 @@ const TrendsTab = ({
             </ResponsiveContainer>
           </div>
         </div>
+      )}
+
+      {/* The cost of each AI Endpoints model month by month (#196), once two months of the
+          period have some, as the GPU trend: a single bar is no trend */}
+      {aiEndpointsTrend?.monthlyTrend.length > 1 && (
+        <AiEndpointsTrend
+          aiEndpointsTrend={aiEndpointsTrend} language={language} t={t} fmt={fmt}
+        />
       )}
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
