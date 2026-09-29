@@ -56,8 +56,9 @@ New in version 3.1.0.
 - **Resource Type Classification**: Automatic categorization (Public Cloud, Dedicated Servers, VPS, Storage, Load Balancers, IP, Domains, Private Cloud Hosts, Private Cloud Datastores, Licenses, Backup, Telephony)
 - **Resource Type Detail**: Expandable cost breakdown per individual service within each category
 - **GPU Cost Consolidation**: Dedicated view for GPU costs by model (NVIDIA L4, L40S, A100, H100) and by project
+- **AI Endpoints Models**: each AI Endpoints model that the month's bills name, with its input tokens, its output tokens and its cost, in the Public Cloud tab, and its monthly cost in the Trends tab (see [AI Endpoints Models](#ai-endpoints-models))
 - **Month Comparison**: Side-by-side comparison between two months with variation tracking, including infrastructure, backup, Private Cloud, and per-project product breakdowns
-- **Trend Analysis**: Historical trends with configurable period (3-36 months) and GPU evolution chart
+- **Trend Analysis**: Historical trends with configurable period (3-36 months), and GPU and AI Endpoints evolution charts
 - **Budget Tracking**: Visual budget consumption with configurable targets
 
 ### Real-time Monitoring
@@ -484,6 +485,26 @@ The tab follows the month and the account selected in the header:
 
 With all accounts shown, the footprint adds up the accounts that have one, and names the others. What the others cost counts in the covered share as not covered, and so does what the Unknown account costs: it never has a footprint, which is imported account by account. OVHcloud's file gives no footprint per Public Cloud project.
 
+## AI Endpoints Models
+
+OVHcloud's AI Endpoints serves AI models through an API, and bills each model's use on the bill lines of the Public Cloud project that called it, one per charge: most often the model's input tokens and its output tokens, priced apart, such as « Nombre de tokens d'entrée pour le modèle AI Endpoints gpt-oss-20b », or "Amount of input tokens for AI Endpoints gpt-oss-20b model" on English bills, whose quantity is the number of tokens. OCM reads the model that each line names, and what the line counts, when the server reads the bills: the bills already imported show them, without a new import.
+
+Both tabs follow the account selected in the header, and add up the accounts' lines when all are shown.
+
+### What the Public Cloud Tab Shows
+
+Between the cards and the list of projects, the **AI Endpoints by model** table lists the models that the month's bills name, the bills that the cards count, one row per model, the projects together:
+
+- **Model**: as the bills name it, such as `gpt-oss-20b`.
+- **Input tokens** and **output tokens**: in millions, such as 12.5 M, and to two significant digits below 0.1 M, so that a model in use never reads 0. A model whose lines count no such tokens shows « — » rather than 0: an embedding model counts its input tokens alone, so its output tokens show « — », and a speech-to-text model is billed by the second of audio, so both its token columns do.
+- **Cost**: all the model's lines together, those that count no tokens included. A model that the bills charge nothing for, such as a free one, shows its tokens and a cost of 0.
+
+The table sorts by cost, the most expensive first, until a header is clicked, and its last row gives the month's AI Endpoints cost. It shows only for a month whose bills name an AI Endpoints model. AI Notebooks, AI Training and AI Deploy name no model: they stay in the AI product of the other services, which may therefore cost more than the table's total.
+
+### What the Trends Tab Shows
+
+The **AI Endpoints cost evolution by model** chart gives each model's cost month by month, over the tab's period up to the month selected in the header: a stacked bar per month of the bills, one color per model, with a legend of the models, the most expensive over the period first, and a tooltip that gives each model's cost in the month. A model keeps its color from one period or account to the next, though two models may share one. As the GPU chart, it shows once two months of the period have AI Endpoints lines.
+
 ## Docker Deployment
 
 Two deployment modes are available. The [deployment guide](docs/deployment.md) describes both, with every setting, and is the reference for them:
@@ -564,6 +585,7 @@ The route lists the accounts that the imports recorded: those that the configura
 | `GET /api/analysis/by-resource-type?from=&to=`            | Costs grouped by resource type                |
 | `GET /api/analysis/resource-type-details?type=&from=&to=` | Detail for a specific resource type           |
 | `GET /api/analysis/public-cloud-stats?from=&to=`          | Public Cloud cards, `other` included          |
+| `GET /api/analysis/ai-endpoints?from=&to=`                | Cost and tokens of each AI Endpoints model    |
 | `GET /api/analysis/backup-stats?from=&to=`                | Backup stats (Veeam VMs, Enterprise licenses) |
 | `GET /api/analysis/daily-trend?from=&to=&account=`        | Daily cost trend                              |
 | `GET /api/analysis/monthly-trend?months=6&end=YYYY-MM`    | Monthly cost trend, `months` ending on `end`  |
@@ -573,6 +595,16 @@ default, that end on the `end` month, that one included: `?months=3&end=2026-09`
 covers July to September 2026. Without `end`, it ends on the month of the
 latest bill. It gives each of those months, at 0 for a month without any bill,
 or none when none of them has a bill.
+
+`/api/analysis/ai-endpoints` gives the AI Endpoints models that the bills of
+the period name, the projects together, which the Public Cloud and Trends tabs
+show (see [AI Endpoints Models](#ai-endpoints-models)): `total`, what they cost
+in all, and `models`, each with its `model`, as the bills name it, its
+`inputTokens` and `outputTokens`, `null` when none of its lines counts those
+tokens, and its `total`, the most expensive first. `monthlyTrend` gives each
+`month`, `YYYY-MM`, of the period whose bills name a model, by the month of its
+bills, the earliest first, with the `costs` of every model of the period in it,
+at 0 for a model that the month did not bill. Amounts are to the cent.
 
 ### Consumption & Account
 
