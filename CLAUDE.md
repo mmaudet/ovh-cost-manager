@@ -194,7 +194,9 @@ everything.
 `--include-carbon` asks OVHcloud's carbon calculator for each account's footprint of the
 last 24 months: it calls `POST /me/carbonCalculator/csv`, which the key needs a rule for,
 polls the task every 3 seconds, for 2 minutes at most, and downloads the file from its
-pre-signed link. It replaces those months and keeps the older ones, which OVHcloud no
+pre-signed link. The calculator accepts the request with 202, which the `ovh` client takes
+for an error, losing the task's id: the import signs that call itself, with the client's
+keys (`data/ovh-signed-request.js`, #179). It replaces those months and keeps the older ones, which OVHcloud no
 longer gives, `--full` included (ADR 0003). A key without the rule gets a warning; any
 other failure, a wait that runs out included, counts among the failed items, and replaces
 nothing.
