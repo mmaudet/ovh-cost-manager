@@ -348,8 +348,8 @@ describe('Trends tab', () => {
       expect(api.fetchAiEndpoints).toHaveBeenCalledWith('2026-07-01', '2026-09-30', allAccounts);
     });
 
-    // Stacked bars, one colour per model, which the tooltip of each month details
-    it('charts the cost of each model month by month, with a legend of the models', async () => {
+    // What shows around the chart, which draws nothing in the tests (see setup.js)
+    it('is headed by its title, and names each model in its legend', async () => {
       const { user } = await renderDashboard(withAiEndpoints);
 
       await openTab(user, 'Tendances');
@@ -360,9 +360,23 @@ describe('Trends tab', () => {
         'gpt-oss-120b', 'gpt-oss-20b', 'bge-m3', 'whisper-large-v3', 'Mistral-7B-Instruct-v0.3',
         'stable-diffusion-xl-base-v10',
       ]);
-      const colours = legendOf(aiEndpointsTrend())
-        .map((item) => swatchOf(item).style.backgroundColor);
-      expect(new Set(colours).size).toBe(6);
+      expect(legendOf(aiEndpointsTrend())).toHaveLength(6);
+    });
+
+    // Rather than a color by its rank, which the models of another period, month or account
+    // would change
+    it('gives each model its color whatever the account shown', async () => {
+      const { user } = await renderDashboard(severalAccountsWithAiEndpoints);
+      await openTab(user, 'Tendances');
+      // The color of a model's swatch in the legend
+      const colorOf = (model) =>
+        swatchOf(within(aiEndpointsTrend()).getByText(model)).style.backgroundColor;
+      const colors = ['gpt-oss-120b', 'bge-m3', 'Mistral-7B-Instruct-v0.3'].map(colorOf);
+
+      await selectAccount(user, 'Lyon subsidiary');
+
+      // Mistral-7B-Instruct-v0.3 comes 4th of Lyon's models rather than 5th
+      expect(['gpt-oss-120b', 'bge-m3', 'Mistral-7B-Instruct-v0.3'].map(colorOf)).toEqual(colors);
     });
 
     // As the GPU trend: a single bar is no trend
