@@ -6,7 +6,8 @@
  */
 
 const {
-  ok, fail, routes, files, calls, CREDENTIALS, serveAccount, useConfig, useThrowawayImport,
+  ok, accepted, fail, routes, files, calls, CREDENTIALS, serveAccount, useConfig,
+  useThrowawayImport,
 } = require('./support/simulated-ovh');
 const { ACCOUNT, PARIS } = require('./support/accounts');
 const { footprintLine } = require('./support/carbon');
@@ -65,12 +66,14 @@ function line({
 // The file of these lines
 const fileOf = (...lines) => [HEADER, ...lines].join('\n');
 
-// Serves the carbon calculator on these routes: the generation of a CSV, whose task is done
-// when asked, and whose link leads to this file
+// Serves the carbon calculator on these routes: the generation of a CSV, which it accepts with
+// 202 Accepted, as OVHcloud does (#179), or with the answer given, whose task is done when
+// asked, and whose link leads to this file
 function serveCarbonCalculator(accountRoutes, file, {
   taskID = 'xx1111-ovh_202409_202608', link = 'https://carbon.example.net/footprint.csv',
+  answer = accepted,
 } = {}) {
-  accountRoutes.set('/me/carbonCalculator/csv', ok({ taskID }));
+  accountRoutes.set('/me/carbonCalculator/csv', answer({ taskID }));
   accountRoutes.set(`/me/carbonCalculator/task/${taskID}`, ok({ taskID, status: 'SUCCESS', link }));
   files.set(link, file);
 }
@@ -114,6 +117,18 @@ test('imports the carbon footprint of the last 24 months with --include-carbon',
     manufacturing: 18.33, electricity: 93.05, operations: 16.24, total: 127.62,
     marketBasedTotal: 56.48,
   });
+});
+
+// OVHcloud accepts the request of the file with 202 (#179): a calculator that answers 200
+// works as well
+test('imports the carbon footprint when the calculator answers the request with 200', async () => {
+  serveCarbonCalculator(routes, fileOf(line({
+    month: '2026-08', manufacturing: 5.12, electricity: [15.41, 15.06], operations: [6.98, 6.96],
+  })), { answer: ok });
+
+  await runImport({ includeCarbon: true });
+
+  expect(db.carbon.getMonthFootprint('2026-08', ACCOUNT.nic)).toMatchObject({ total: 27.51 });
 });
 
 // A footprint line of an account for a month, as an earlier import stored it, whose emissions
@@ -186,6 +201,27 @@ test('waits for the task until the carbon calculator has generated the file', as
   // In progress when first asked
   const link = 'https://carbon.example.net/task-1.csv';
   const inProgress = ok({ taskID: 'task-1', status: 'IN_PROGRESS', link: null });
+  const done = ok({ taskID: 'task-1', status: 'SUCCESS', link });
+  let asked = 0;
+  routes.set('/me/carbonCalculator/task/task-1', () => {
+    asked += 1;
+    return asked === 1 ? inProgress() : done();
+  });
+
+  await runImport({ includeCarbon: true });
+
+  expect(asked).toBe(2);
+  expect(totalsOf(ACCOUNT.nic, '2026-08')).toEqual([['2026-08', 6]]);
+});
+
+// The calculator may answer 202 too while it generates the file, as when it accepts the
+// request (#179)
+test('waits for a task that the calculator answers with 202 while it runs', async () => {
+  const link = 'https://carbon.example.net/task-1.csv';
+  serveCarbonCalculator(routes, fileOf(
+    line({ month: '2026-08', manufacturing: 1, electricity: [2, 1.5], operations: [3, 2.5] }),
+  ), { taskID: 'task-1', link });
+  const inProgress = accepted({ taskID: 'task-1', status: 'IN_PROGRESS', link: null });
   const done = ok({ taskID: 'task-1', status: 'SUCCESS', link });
   let asked = 0;
   routes.set('/me/carbonCalculator/task/task-1', () => {
@@ -349,6 +385,10 @@ describe('failures', () => {
       serveCarbonCalculator(routes, fileOf(), { taskID: 'failed' });
       routes.set('/me/carbonCalculator/task/failed',
         ok({ taskID: 'failed', status: 'ERROR', link: null }));
+    }],
+    ['a request accepted without a task', () => {
+      serveCarbonCalculator(routes, fileOf());
+      routes.set('/me/carbonCalculator/csv', accepted({}));
     }],
     ['a task still in progress after 2 minutes', serveSlowTask],
     ['a download that fails', () => {

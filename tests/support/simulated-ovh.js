@@ -14,6 +14,7 @@
  * whose routes are `routes`, and those that serveAccount() adds.
  */
 
+const crypto = require('crypto');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
@@ -43,12 +44,42 @@ const clientCredentials = [];
 const sameCredentials = (credentials, served) =>
   Object.keys(served).every(key => credentials?.[key] === served[key]);
 
-// What require('ovh') returns: a function of the credentials, which returns the client. The
-// calls of a client whose credentials are none of an account served get OVH's answer to an
-// invalid key.
+// An answer of 202 Accepted, as the carbon calculator gives to the request of a file (#179)
+class Accepted {
+  constructor(value) {
+    this.value = value;
+  }
+}
+
+// The API's address, as the ovh client calls it without an endpoint or with ovh-eu: the
+// simulated clients call it whatever their endpoint
+const API_HOST = 'eu.api.ovh.com';
+const API_BASE_PATH = '/1.0';
+
+// The signature of a call, as the ovh client signs it (its signRequest())
+const signatureOf = ({ appSecret, consumerKey }, method, url, body, timestamp) => '$1$'
+  + crypto.createHash('sha1')
+    .update([appSecret, consumerKey, method, url, body || '', timestamp].join('+'))
+    .digest('hex');
+
+// What require('ovh') returns: a function of the credentials, which returns the client, with
+// the fields and the signature of the real one for the EU endpoint. The calls of a client whose
+// credentials are none of an account served get OVH's answer to an invalid key. As the real
+// client, it takes every answer but one of 200 for an error: a 202 rejects with its status and
+// the answer's message, and loses the rest of the answer.
 const ovh = (credentials) => {
   clientCredentials.push(credentials);
   return {
+    appKey: credentials?.appKey,
+    appSecret: credentials?.appSecret,
+    consumerKey: credentials?.consumerKey ?? null,
+    host: API_HOST,
+    port: 443,
+    basePath: API_BASE_PATH,
+    // Measured at the first call by the real client: the simulated API's clock is the tests'
+    apiTimeDiff: 0,
+    signRequest: (method, url, body, timestamp) =>
+      signatureOf(credentials, method, url, body, timestamp),
     requestPromised: (method, route, params) => {
       calls.push({ consumerKey: credentials?.consumerKey, method, route, params });
       const served = accounts.get(credentials?.consumerKey);
@@ -56,9 +87,10 @@ const ovh = (credentials) => {
         return Promise.reject({ error: 403, message: 'This credential is not valid' });
       }
       const handler = served.routes.get(route);
-      return handler
-        ? handler(params)
-        : Promise.reject({ error: 404, message: `Not found: ${route}` });
+      if (!handler) return Promise.reject({ error: 404, message: `Not found: ${route}` });
+      return handler(params).then((answer) => (answer instanceof Accepted
+        ? Promise.reject({ error: 202, message: answer.value?.message })
+        : answer));
     },
   };
 };
@@ -124,18 +156,52 @@ useDefaultConfig();
 // OVH authentication. Their content, or the error that downloading them rejects with.
 const files = new Map();
 
+// An answer of fetch(), of a status and a body
+const fetched = (status, text) => ({
+  ok: status >= 200 && status < 300, status, text: async () => text,
+});
+
+// What a call to the API that the import signs itself, with the keys of its client, gets
+// (#179): the routes of the account whose keys signed it, as the client's calls do, with their
+// status, 202 included, and their body. Recorded with the clients' calls.
+async function answerSignedCall(url, { method = 'GET', headers = {}, body } = {}) {
+  const route = url.slice(`https://${API_HOST}${API_BASE_PATH}`.length);
+  const consumerKey = headers['X-Ovh-Consumer'];
+  calls.push({ consumerKey, method, route, params: body ? JSON.parse(body) : undefined });
+  const served = accounts.get(consumerKey);
+  const signed = served && headers['X-Ovh-Application'] === served.credentials.appKey
+    && headers['X-Ovh-Signature']
+      === signatureOf(served.credentials, method, url, body, headers['X-Ovh-Timestamp']);
+  if (!signed) return fetched(403, JSON.stringify({ message: 'This credential is not valid' }));
+  const handler = served.routes.get(route);
+  if (!handler) return fetched(404, JSON.stringify({ message: `Not found: ${route}` }));
+  try {
+    const answer = await handler(body ? JSON.parse(body) : undefined);
+    return answer instanceof Accepted
+      ? fetched(202, JSON.stringify(answer.value))
+      : fetched(200, answer === undefined ? '' : JSON.stringify(answer));
+  } catch (err) {
+    // An error without an HTTP status, as a network failure: fetch() rejects
+    if (typeof err?.error !== 'number') throw err;
+    return fetched(err.error, JSON.stringify({ message: err.message }));
+  }
+}
+
 // What the import downloads a link with, in place of the global fetch: it serves `files`, and
-// answers 404 to any other link, as an expired link does
-const simulatedFetch = async (url) => {
+// answers 404 to any other link, as an expired link does; and the calls to the API that the
+// import signs itself
+const simulatedFetch = async (url, init) => {
+  if (String(url).startsWith(`https://${API_HOST}${API_BASE_PATH}/`)) {
+    return answerSignedCall(String(url), init);
+  }
   const content = files.get(String(url));
   if (content instanceof Error) throw content;
-  return content === undefined
-    ? { ok: false, status: 404, text: async () => 'Not Found' }
-    : { ok: true, status: 200, text: async () => content };
+  return content === undefined ? fetched(404, 'Not Found') : fetched(200, content);
 };
 
-// Handlers: an answer, or an error as the ovh client rejects with it
+// Handlers: an answer, one of 202 Accepted, or an error as the ovh client rejects with it
 const ok = (value) => () => Promise.resolve(value);
+const accepted = (value) => () => Promise.resolve(new Accepted(value));
 const fail = (error, message) => () => Promise.reject({ error, message });
 
 // What GET /me answers for an account, its fields that the import reads
@@ -230,5 +296,5 @@ function useThrowawayImport(prefix) {
 
 module.exports = {
   ovh, jsonfile, client, routes, files, calls, clientCredentials, CREDENTIALS, CONFIG_FILES, ok,
-  fail, me, serveAccount, useConfig, useConfigFiles, useThrowawayImport,
+  accepted, fail, me, serveAccount, useConfig, useConfigFiles, useThrowawayImport,
 };

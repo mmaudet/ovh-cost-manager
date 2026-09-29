@@ -216,6 +216,8 @@ export const severalAccounts = {
         '2026-09': { cloud_project: 610.4, dedicated_server: 270, license: 10 },
       }),
       projectsEnriched: [lyonProduction],
+      // What its bills charged its Production project, product by product (#181)
+      projectProducts: { [production.id]: account.projectProducts[production.id] },
       // What its Production project consumed: 350 € over 14 days, 750 € over 30
       ...consumptionOf({ current: 350, forecast: 750, progress: 47 }),
       // Its Cloud total of September: every figure of all accounts but those of Staging
@@ -314,6 +316,8 @@ export const severalAccounts = {
         '2026-09': { cloud_project: 220, backup: 90, domain: 35, license: 15 },
       }),
       projectsEnriched: [unnamedStaging],
+      // What its bills charged its Staging project, product by product (#181)
+      projectProducts: { [staging.id]: account.projectProducts[staging.id] },
       // What its Staging project consumed
       ...consumptionOf({ current: 52.35, forecast: 112.18, progress: 47 }),
       // Its Cloud total of September: the instances of Staging, and the registry

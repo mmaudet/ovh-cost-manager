@@ -64,9 +64,10 @@ const projectComparisonRows = (projectsA, projectsB) => {
 
 /**
  * The first row of each project among rows of the project comparison, in their order: the
- * projects whose consumption the Compare tab compares, once each. In the Account column, a
- * project billed to several accounts has a row for each (#119), but what it consumed is its
- * own, whatever account billed it. Rows that name no account have a project each already.
+ * projects whose products the Compare tab compares, once each (#181). In the Account column, a
+ * project billed to several accounts has a row for each (#119), but its products, with all
+ * accounts shown, are those of every account's bills. Rows that name no account have a project
+ * each already.
  * @param {object[]} rows - Rows that projectComparisonRows() gives, in any order
  * @returns {object[]} The first row of each project, in the order of the rows
  */

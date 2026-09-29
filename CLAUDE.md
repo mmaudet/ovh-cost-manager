@@ -60,8 +60,9 @@ OVH API ──> data/import.js ──> SQLite (ovh-bills.db) ──> server/inde
     counts, the typed resources such as the registry included, and `other` holds what no
     part names, so that a project's rows add up to the total OVH gives it (#145).
   - `public-cloud-products.js` — pure: the Public Cloud product of a bill line (`CONTEXT.md`),
-    and what lines add up to by product (`productFigures()`), for the Public Cloud cards and a
-    project's other services. Each line has one; those without a card of their own go to the
+    and what lines add up to by product (`productFigures()`), for the Public Cloud cards, a
+    project's other services, and the products of a project that the Compare tab compares
+    month by month (#181). Each line has one; those without a card of their own go to the
     other services, so that the cards and the credit add up to the month's cloud total (#145).
     **Products are read when the server reads the bills**, like the ties: changing the rules
     needs no re-import.
@@ -106,12 +107,15 @@ NIC handle:
   through the `accountParameter` middleware (`server/account-parameter.js`), into
   `req.account`: a NIC handle that the `accounts` table records, `unknown`, or none for all
   accounts; anything else gets a 400. The routes of one bill or one project need none, as
-  that bill or project belongs to one account. Without it, a route answers as before the
-  accounts, and the account-wide figures (consumption, forecast, balance, consumption
-  history, carbon footprint) add up the accounts. `byAccount=true` opts a list of projects
-  or services into one row per account, and the CSV exports gain a last `account` column
-  once `/api/accounts` lists two entries (`sendCsv()`). `GET /api/accounts` lists the
-  recorded accounts, then the Unknown account while rows without an account remain.
+  that bill or project belongs to one account, but for `/api/projects/:id/products`, which
+  breaks down what `/api/analysis/by-project` gives a project for an account: a project's
+  bill lines belong to the account of their bill, which may not be the project's own.
+  Without it, a route answers as before the accounts, and the account-wide figures
+  (consumption, forecast, balance, consumption history, carbon footprint) add up the
+  accounts. `byAccount=true` opts a list of projects or services into one row per account,
+  and the CSV exports gain a last `account` column once `/api/accounts` lists two entries
+  (`sendCsv()`). `GET /api/accounts` lists the recorded accounts, then the Unknown account
+  while rows without an account remain.
 - **Dashboard.** The shell holds the selected account (`useSelectedAccount()`, remembered
   in the browser, per ADR 0001) and passes `selectedAccount` to the tab hooks: `null` for
   all accounts, the default, or the `id` that `/api/accounts` gives. A query that follows
@@ -194,10 +198,12 @@ everything.
 `--include-carbon` asks OVHcloud's carbon calculator for each account's footprint of the
 last 24 months: it calls `POST /me/carbonCalculator/csv`, which the key needs a rule for,
 polls the task every 3 seconds, for 2 minutes at most, and downloads the file from its
-pre-signed link. It replaces those months and keeps the older ones, which OVHcloud no
-longer gives, `--full` included (ADR 0003). A key without the rule gets a warning; any
-other failure, a wait that runs out included, counts among the failed items, and replaces
-nothing.
+pre-signed link. The calculator accepts the request with 202, which the `ovh` client takes
+for an error, losing the task's id: the import makes these calls itself, with the client's
+keys (`data/ovh-accepting-request.js`, #179). It replaces those months and keeps the older
+ones, which OVHcloud no longer gives, `--full` included (ADR 0003). A key without the rule
+gets a warning; any other failure, a wait that runs out included, counts among the failed
+items, and replaces nothing.
 
 A run imports every configured account, one after the other, under one import log entry;
 each differential import starts from that account's own latest bill. An account that

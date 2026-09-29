@@ -6,6 +6,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useTableSorts } from '../components/SortableHeader.jsx';
 import {
   fetchSummary, fetchByProject, fetchByService, fetchByResourceType, fetchBackupStats,
+  fetchProjectProducts,
 } from '../services/api.js';
 import { accountQuery } from '../utils/accounts.js';
 import { holdsMonth } from '../utils/months.js';
@@ -32,13 +33,15 @@ const BY_MONTH_A = { column: 'totalA', kind: 'number', direction: 'desc' };
  *   Account column of the lists (accountColumnOf()), null when they name no account: while
  *   it shows, the comparison by project names the account of each project
  * @returns {object} Months A and B and their setters, the sort order of the tab's tables
- *   (sortingOf(), see useTableSorts()), and the figures of both months, which the tab shows
+ *   (sortingOf(), see useTableSorts()), the figures of both months, which the tab shows, and
+ *   the query of a project's products in a month (projectProductsQuery(projectId, month)),
+ *   which the comparison of the project's products runs once opened
  */
 const useCompareTab = ({ months, activeTab, selectedAccount, accountColumn }) => {
   const [compareMonthA, setCompareMonthA] = useState(null);
   const [compareMonthB, setCompareMonthB] = useState(null);
   // The sort order of its tables, by table (#146): the comparison by project, the
-  // infrastructure comparison, and the comparison of what each project consumed, by project
+  // infrastructure comparison, and the comparison of each project's products, by project
   const sortingOf = useTableSorts({ projects: BY_MONTH_A });
 
   // Whether the months list holds each month compared: not before months A and B have their
@@ -120,6 +123,16 @@ const useCompareTab = ({ months, activeTab, selectedAccount, accountColumn }) =>
     figureOf('backupStats', compareMonthB, fetchBackupStats),
   );
 
+  // The options of the query of a project's products in month A or B, for useQuery: what the
+  // bills of the month charged the project, for the account shown, as its cost in the
+  // comparison by project (#181). The comparison of the project's products runs it once
+  // opened, as the other figures of the month run: on the tab, for a month of the months list.
+  const projectProductsQuery = (projectId, month) => accountQuery(selectedAccount, {
+    key: ['projectProducts', projectId, month?.from, month?.to],
+    fetch: (account) => fetchProjectProducts(projectId, month.from, month.to, account),
+    enabled: asksFor(month),
+  });
+
   return {
     compareMonthA,
     setCompareMonthA,
@@ -136,6 +149,7 @@ const useCompareTab = ({ months, activeTab, selectedAccount, accountColumn }) =>
     byResourceTypeB,
     backupStatsA,
     backupStatsB,
+    projectProductsQuery,
   };
 };
 
