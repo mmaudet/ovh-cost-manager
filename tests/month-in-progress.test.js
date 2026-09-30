@@ -3,45 +3,17 @@
  * a child process over a database that the test seeds: the month of today, while a recurring
  * service, one that the bills of each of the three months before charged, has no bill line in
  * it. OVHcloud bills some accounts early in the month, others late: the mark goes as soon as the
- * import stores the bill of each recurring service. The server tells the month of today from its
- * local date, so the bills are dated from the real date, the month of today and the three months
- * before, as the Infrastructure tab's tests date the services about to expire.
+ * import stores the bill of each recurring service. The bills are dated from the real date (see
+ * support/month-in-progress.js).
  */
 
 const {
-  LYON, PARIS, UNKNOWN_ACCOUNT, bill, project,
+  LYON, PARIS, UNKNOWN_ACCOUNT, project,
 } = require('./support/accounts');
+const {
+  DAY_OF_TODAY, MONTH_BEFORE, MONTH_OF_TODAY, MONTHS_BEFORE, TWO_MONTHS_BEFORE, billOf,
+} = require('./support/month-in-progress');
 const { startOcm } = require('./support/ocm-server');
-const { shiftMonth } = require('../data/months');
-
-// The month of today, YYYY-MM, and the day of today, YYYY-MM-DD, from the local date, as the
-// server tells them
-const today = new Date();
-const MONTH_OF_TODAY = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
-const DAY_OF_TODAY = `${MONTH_OF_TODAY}-${String(today.getDate()).padStart(2, '0')}`;
-// The three months before it, the latest first
-const [MONTH_BEFORE, TWO_MONTHS_BEFORE, THREE_MONTHS_BEFORE] = [1, 2, 3]
-  .map((months) => shiftMonth(MONTH_OF_TODAY, -months));
-const MONTHS_BEFORE = [THREE_MONTHS_BEFORE, TWO_MONTHS_BEFORE, MONTH_BEFORE];
-
-/**
- * A bill of an account, dated on a day, and its lines: one for each service that it charges.
- * @param {object} db - The data layer (data/db.js)
- * @param {string} id - The bill's id, which starts the ids of its lines
- * @param {?string} account - The NIC handle of its account, null for the Unknown account
- * @param {string} date - YYYY-MM-DD
- * @param {Array<[string, string, number]>} charges - Each service that it charges: its
- *   identifier, its resource type and the amount; a Public Cloud project's identifier is its id
- */
-function billOf(db, id, account, date, charges) {
-  bill(db, id, date, account);
-  db.details.insertMany(charges.map(([service, resourceType, price], index) => ({
-    id: `${id}-${index + 1}`, bill_id: id,
-    project_id: resourceType === 'cloud_project' ? service : null,
-    domain: service, description: `${service} - 1 mois`, quantity: 1, unit_price: price,
-    total_price: price, service_type: 'Other', resource_type: resourceType,
-  })));
-}
 
 // The months of an answer of /api/months, the latest first, and the months that it marks in
 // progress, with their mark
