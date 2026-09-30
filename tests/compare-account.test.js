@@ -32,6 +32,11 @@ const licenceLine = (
   id, bill_id: billId, project_id: null, domain: licence, description, quantity: 1,
   unit_price: price, total_price: price, service_type: 'Other', resource_type: 'license',
 });
+// A VM backed up with Veeam Enterprise, as OVH identifies it, which gives its bill lines the
+// backup resource type, and the charge of its one bill line, which names Enterprise: OVH rents
+// the Enterprise licence for each VM it backs up, on that VM's line (#223)
+const ENTERPRISE_VM = 'vm-123456';
+const ENTERPRISE_BACKUP = 'Veeam Backup Enterprise Rental for 1 month';
 // A bill line of the Staging project
 const stagingLine = (id, billId, description, price) => ({
   id, bill_id: billId, project_id: STAGING, domain: STAGING, description, quantity: 1,
@@ -48,7 +53,8 @@ const CHARGES = {
 
 // Two accounts and the Unknown account, whose bills of September back VMs up, and Lyon's of
 // August too. In July, Lyon's bill backed vm-web-1 up with extra storage, and gave a licence
-// its support, and Paris's backed vm-web-1 up too, before Lyon took it over. The bills of each
+// its support, and Paris's backed vm-web-1 up too, before Lyon took it over. In June, Lyon's
+// bill backed a VM up with Veeam Enterprise, on that VM's one line (#223). The bills of each
 // account billed the Staging project in September, and Lyon's in August. Every NIC handle,
 // name, identifier and amount is made up.
 function seed(db) {
@@ -59,6 +65,7 @@ function seed(db) {
   bill(db, 'FR1001', '2026-09-05', LYON);
   bill(db, 'FR1002', '2026-08-05', LYON);
   bill(db, 'FR1003', '2026-07-05', LYON);
+  bill(db, 'FR1004', '2026-06-05', LYON);
   bill(db, 'FR2001', '2026-09-10', PARIS);
   bill(db, 'FR2002', '2026-07-10', PARIS);
   // Imported before OCM told accounts apart, and claimed by no account since: the writers
@@ -80,6 +87,7 @@ function seed(db) {
     licenceLine('FR1003-4', 'FR1003', 'veeam-licence-2', 5,
       'Veeam Enterprise Plus licence - support'),
     backupLine('FR2002-1', 'FR2002', 'vm-web-1', 5),
+    backupLine('FR1004-1', 'FR1004', ENTERPRISE_VM, 45, ENTERPRISE_BACKUP),
     stagingLine('FR1001-3', 'FR1001', CHARGES.instances, 50),
     stagingLine('FR1002-2', 'FR1002', CHARGES.instances, 150),
     stagingLine('FR1002-3', 'FR1002', 'Utilisation du credit cloud', -10),
@@ -92,6 +100,7 @@ function seed(db) {
 const SEPTEMBER = 'from=2026-09-01&to=2026-09-30';
 const AUGUST = 'from=2026-08-01&to=2026-08-31';
 const JULY = 'from=2026-07-01&to=2026-07-31';
+const JUNE = 'from=2026-06-01&to=2026-06-30';
 
 let ocm;
 
@@ -137,6 +146,13 @@ describe('GET /api/analysis/backup-stats', () => {
     expect(await backupsOf(SEPTEMBER, NEW_ACCOUNT)).toEqual(backups([0, 0], [0, 0]));
   });
 
+  // Its one bill line names Enterprise, but the licence is that VM's backup, rented for it,
+  // not a charge of its own: counted as a licence too, it doubled the Backup tab's cost (#223)
+  test('counts a VM backed up with Veeam Enterprise among the VMs, not as a licence',
+    async () => {
+      expect(await backupsOf(JUNE)).toEqual(backups([1, 45], [0, 0]));
+    });
+
   // Rather than answer for all accounts, or for none, to a request that names an account
   test.each([
     ['a NIC handle that no import recorded', 'account=ww4444-ovh'],
@@ -151,9 +167,10 @@ describe('GET /api/analysis/backup-stats', () => {
 
 // The services of the Veeam backups of a month (#197), which the Compare tab's backup comparison
 // unfolds its two rows into: the VMs backed up, the services of the backup resource type's
-// lines, and the Enterprise licences, those of the lines that name Veeam and Enterprise, the
-// very lines whose services the Veeam backups count. Each is a row as the bill lines of a
-// resource type by service give it (#123), and the route takes the account parameter as they do.
+// lines, and the Enterprise licences, those of the other lines that name Veeam and Enterprise
+// (#223), the very lines whose services the Veeam backups count. Each is a row as the bill
+// lines of a resource type by service give it (#123), and the route takes the account
+// parameter as they do.
 describe('GET /api/analysis/backup-services', () => {
   const route = '/api/analysis/backup-services';
   // The answer of the route for a month, with the parameters given besides
@@ -218,6 +235,12 @@ describe('GET /api/analysis/backup-services', () => {
       .toEqual({ status: 200, vms: [], enterprise: [] });
   });
 
+  // Its one bill line names Enterprise, but the licence is that VM's backup (#223)
+  test('lists a VM backed up with Veeam Enterprise among the VMs only', async () => {
+    expect(await listedOf(JUNE))
+      .toEqual({ status: 200, vms: [[ENTERPRISE_VM, 45]], enterprise: [] });
+  });
+
   // A row of the backup comparison counts the services it unfolds into, whose costs add up to
   // its own, but in the cases that getBackupServices() names, which these requests avoid
   test.each([
@@ -227,6 +250,7 @@ describe('GET /api/analysis/backup-services', () => {
     ['September, the Unknown account', SEPTEMBER, UNKNOWN_ACCOUNT],
     ['August, Lyon', AUGUST, LYON],
     ['July, all accounts', JULY, undefined],
+    ['June, all accounts', JUNE, undefined],
   ])('are as many as the Veeam backups count, and add up to their cost: %s', async (
     _, month, account,
   ) => {

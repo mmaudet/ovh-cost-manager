@@ -91,6 +91,12 @@ const consumption = (db, projectId, [from, to], total) => db.cloudDetails.insert
   unit_price: 0, total_price: total, region: 'GRA11',
 });
 
+// The month-end forecast that OVH gives a Public Cloud project for the month of `from`, its
+// first day, as the import stores it (#224); its account is its project's
+const projectForecast = (db, projectId, from, total) => db.cloudDetails.upsertForecast({
+  project_id: projectId, period_start: from, total_price: total,
+});
+
 // The month of the current consumption that the import of an account's consumption recorded,
 // its first day
 const consumptionMonth = (db, account, month) => write(db, 'import_state', {
@@ -160,6 +166,6 @@ const REFUSED = {
 
 module.exports = {
   ACCOUNT, SQLITE_TIME, LYON, PARIS, NEW_ACCOUNT, UNKNOWN_ACCOUNT, recordAccounts, credentials,
-  project, bill, REFUSED, consumption, consumptionMonth, snapshot, historyEntry, balance,
-  movement, server, vps, storage,
+  project, bill, REFUSED, consumption, projectForecast, consumptionMonth, snapshot, historyEntry,
+  balance, movement, server, vps, storage,
 };

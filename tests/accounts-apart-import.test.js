@@ -7,7 +7,9 @@
 const {
   routes, ok, fail, me, calls, serveAccount, useConfig, useThrowawayImport,
 } = require('./support/simulated-ovh');
-const { ACCOUNT, LYON, PARIS, bill, project } = require('./support/accounts');
+const {
+  ACCOUNT, LYON, PARIS, bill, project, projectForecast,
+} = require('./support/accounts');
 const { ROOT_TABLES, asBefore114 } = require('./support/database-before');
 
 jest.mock('ovh', () => require('./support/simulated-ovh').ovh);
@@ -521,8 +523,8 @@ function storeBill(id, date, nic) {
 
 // What an earlier import stored for the account, whose rows `tag` tells apart: a bill of
 // August, a service of each inventory, its balance and consumption snapshots, a credit
-// movement, its consumption history, a project whose consumption is kept, with the month of
-// that consumption, and a project with an instance
+// movement, its consumption history, a project whose consumption and forecast are kept, with
+// the month of that consumption, and a project with an instance
 function storeDataOf(nic, tag) {
   storeBill(`FR-${tag}0`, '2026-08-01', nic);
   storeServer(`ns-${tag}`, nic);
@@ -549,6 +551,7 @@ function storeDataOf(nic, tag) {
     resource_type: 'instance', resource_id: 'inst-1', resource_name: 'b2-7', quantity: 100,
     unit: 'Hour', unit_price: 0, total_price: 12.25, region: 'GRA11',
   });
+  projectForecast(db, `proj-${tag}-used`, '2026-09-01', 26.25);
   db.cloudDetails.setCurrentConsumptionMonth('2026-09-01', nic);
   storeProject(`proj-${tag}-idle`, nic);
   db.cloudDetails.upsertInstance({
@@ -572,18 +575,20 @@ function contentOf(nic) {
       SELECT d.* FROM bill_details d JOIN bills b ON b.id = d.bill_id WHERE b.account = ?
     `),
     project_consumption: ofItsProjects('project_consumption'),
+    project_forecasts: ofItsProjects('project_forecasts'),
     cloud_instances: ofItsProjects('cloud_instances'),
     import_state: rows('SELECT * FROM import_state WHERE account = ?'),
   };
 }
 
-// The ids of the account's rows in each table, as contentOf() gives them
+// The ids of the account's rows in each table, as contentOf() gives them: a forecast's is its
+// project
 const idsOf = (nic) => Object.fromEntries(Object.entries(contentOf(nic))
-  .map(([table, rows]) => [table, rows.map(row => row.id ?? row.key)]));
+  .map(([table, rows]) => [table, rows.map(row => row.id ?? row.key ?? row.project_id)]));
 
 // What the account holds once a full import cleared it, and imported again a bill of
 // September and no project: the consumption of a project, which OVH cannot give again, is
-// kept, with the project and the month of its last import
+// kept, with its forecast (#224), the project and the month of its last import
 const clearedAndImportedAgain = (tag) => ({
   bills: [`FR-${tag}1`],
   projects: [`proj-${tag}-used`],
@@ -596,6 +601,7 @@ const clearedAndImportedAgain = (tag) => ({
   credit_movements: [],
   bill_details: [`FR-${tag}1_D1`],
   project_consumption: [expect.any(Number)],
+  project_forecasts: [`proj-${tag}-used`],
   cloud_instances: [],
   import_state: ['consumption_month'],
 });
