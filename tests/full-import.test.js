@@ -4,7 +4,7 @@
  */
 
 const { routes, ok, useThrowawayImport } = require('./support/simulated-ovh');
-const { ACCOUNT } = require('./support/accounts');
+const { ACCOUNT, projectForecast } = require('./support/accounts');
 
 jest.mock('ovh', () => require('./support/simulated-ovh').ovh);
 jest.mock('jsonfile', () => require('./support/simulated-ovh').jsonfile);
@@ -130,6 +130,28 @@ describe('a full import', () => {
     }).toEqual({
       bills: [], billLines: [], projects: [], instances: [], volumes: [], servers: [], vps: [],
     });
+  });
+
+  // The cards read them together, and only an import with the cloud details fetches them
+  // again (#224)
+  test('keeps the forecast of each project, as it keeps their consumption', async () => {
+    storeProject(PROJECT);
+    storeProject('proj-idle');
+    storeConsumption(PROJECT, '2026-09', 12.25);
+    projectForecast(db, PROJECT, '2026-09-01', 30);
+    projectForecast(db, 'proj-idle', '2026-09-01', 5);
+    serveProjects(PROJECT);
+
+    await importFull();
+
+    expect(db.importLog.getLatest()).toMatchObject({ type: 'full', status: 'success' });
+    expect(db.getDb().prepare('SELECT * FROM project_forecasts ORDER BY project_id').all())
+      .toEqual([
+        { project_id: PROJECT, period_start: '2026-09-01', total_price: 30 },
+        { project_id: 'proj-idle', period_start: '2026-09-01', total_price: 5 },
+      ]);
+    // With the project of a forecast, which consumed nothing yet
+    expect(db.projects.getAll().map(p => p.id)).toEqual([PROJECT, 'proj-idle']);
   });
 
   // Its own entry is the one that the other imports check while it runs
