@@ -214,9 +214,156 @@ describe('GET /api/analysis/by-project with projected=true (#219)', () => {
   });
 });
 
+describe('GET /api/projects/:id/products with projected=true (#219)', () => {
+  const productsOf = ([projectId], parameters, account) => answerOf(
+    `/api/projects/${projectId}/products`, parameters, account,
+  );
+  // The products of a project as the route gives them with projected=true: what they cost in all
+  // and its projected part, each product as [product, cost, projected part, charges], each charge
+  // as [charge, cost, projected part], and the credit that the bills used and its projected part
+  const projectedProducts = ([total, projected], products, [credits, projectedCredits]) => ({
+    total,
+    projected,
+    products: products.map(([product, cost, part, charges]) => ({
+      product,
+      total: cost,
+      projected: part,
+      charges: charges.map(([charge, chargeCost, chargePart]) => ({
+        charge, total: chargeCost, projected: chargePart,
+      })),
+    })),
+    credits,
+    projectedCredits,
+  });
+  // The same without the parameter, as before: without the projected parts
+  const billedProducts = (total, products, credits) => ({
+    total,
+    products: products.map(([product, cost, charges]) => ({
+      product,
+      total: cost,
+      charges: charges.map(([charge, chargeCost]) => ({ charge, total: chargeCost })),
+    })),
+    credits,
+  });
+  // Staging's products in the month of today, which its lines of the month before alone make,
+  // their charges, and the credit that they used
+  const STAGING_PROJECTED = projectedProducts([150.5, 150.5], [
+    ['instances', 110, 110, [[hourlyUse('b3-16'), 110, 110]]],
+    ['registry', 40.5, 40.5, [[REGISTRY, 40.5, 40.5]]],
+  ], [-20, -20]);
+  // Legacy's, whose charge is named without the period that its line ends with, as the lines of
+  // the months before name it (#195)
+  const LEGACY_PROJECTED = projectedProducts([8, 8], [
+    ['instances', 8, 8, [[hourlyUse('d2-4'), 8, 8]]],
+  ], [0, 0]);
+  const NOTHING = projectedProducts([0, 0], [], [0, 0]);
+
+  // Its credit is projected with its other lines, as one of them (#214)
+  test('gives a project that only projected lines make its products, charges and credit',
+    async () => {
+      expect(await productsOf(STAGING, `${OF_TODAY}&projected=true`))
+        .toEqual({ status: 200, body: STAGING_PROJECTED });
+    });
+
+  test('gives no projected part to the products and charges of a project that the month billed',
+    async () => {
+      expect(await productsOf(PRODUCTION, `${OF_TODAY}&projected=true`)).toEqual({
+        status: 200,
+        body: projectedProducts([340, 0], [
+          ['instances', 320, 0, [[hourlyUse('b3-8'), 320, 0]]],
+          ['objectStorage', 20, 0, [[BUCKET_STORAGE, 20, 0]]],
+        ], [0, 0]),
+      });
+    });
+
+  test.each([
+    ['without the parameter', OF_TODAY],
+    ['with projected=false', `${OF_TODAY}&projected=false`],
+  ])('answers as before %s: what the month billed so far', async (_, parameters) => {
+    expect(await productsOf(STAGING, parameters))
+      .toEqual({ status: 200, body: billedProducts(0, [], 0) });
+    expect(await productsOf(PRODUCTION, parameters)).toEqual({
+      status: 200,
+      body: billedProducts(340, [
+        ['instances', 320, [[hourlyUse('b3-8'), 320]]],
+        ['objectStorage', 20, [[BUCKET_STORAGE, 20]]],
+      ], 0),
+    });
+  });
+
+  test('projects nothing over a complete month', async () => {
+    const { body: billed } = await productsOf(STAGING, OF_MONTH_BEFORE);
+
+    expect(await productsOf(STAGING, `${OF_MONTH_BEFORE}&projected=true`)).toEqual({
+      status: 200,
+      body: projectedProducts([150.5, 0], [
+        ['instances', 110, 0, [[hourlyUse('b3-16'), 110, 0]]],
+        ['registry', 40.5, 0, [[REGISTRY, 40.5, 0]]],
+      ], [-20, 0]),
+    });
+    expect(billed).toEqual(billedProducts(150.5, [
+      ['instances', 110, [[hourlyUse('b3-16'), 110]]],
+      ['registry', 40.5, [[REGISTRY, 40.5]]],
+    ], -20));
+  });
+
+  // The lines of the month before, and the same again, projected, in the month in progress
+  test('projects the month in progress over a period that covers it', async () => {
+    expect(await productsOf(STAGING, `${UP_TO_TODAY}&projected=true`)).toEqual({
+      status: 200,
+      body: projectedProducts([301, 150.5], [
+        ['instances', 220, 110, [[hourlyUse('b3-16'), 220, 110]]],
+        ['registry', 81, 40.5, [[REGISTRY, 81, 40.5]]],
+      ], [-40, -20]),
+    });
+  });
+
+  // A project's bill lines belong to the account of their bill (ADR 0002), and so do its
+  // projected lines, those of its bills of the month before
+  test.each([
+    [...LYON_BILLED_LATE, STAGING, STAGING_PROJECTED],
+    [...ALL_ACCOUNTS, STAGING, STAGING_PROJECTED],
+    // Which never billed Staging
+    [...PARIS_BILLED, STAGING, NOTHING],
+    [...UNKNOWN_BILLED_LATE, LEGACY, LEGACY_PROJECTED],
+    [...ALL_ACCOUNTS, LEGACY, LEGACY_PROJECTED],
+    // The charge of its disks named without the period of their line
+    [...PARIS_BILLED, PARIS_PROJECT, projectedProducts([50, 0], [
+      ['volumes', 50, 0, [[DISKS, 50, 0]]],
+    ], [0, 0])],
+  ])('projects the products of %s', async (_, account, projectOfAccount, products) => {
+    expect(await productsOf(projectOfAccount, `${OF_TODAY}&projected=true`, account))
+      .toEqual({ status: 200, body: products });
+  });
+
+  // What the Compare tab's detail of a project breaks down: its row of the comparison by
+  // project, of the same account and period, its projected part included
+  test.each([
+    [...LYON_BILLED_LATE, STAGING, OF_TODAY],
+    [...ALL_ACCOUNTS, STAGING, OF_TODAY],
+    [...UNKNOWN_BILLED_LATE, LEGACY, OF_TODAY],
+    [...LYON_BILLED_LATE, PRODUCTION, OF_TODAY],
+    [...ALL_ACCOUNTS, STAGING, UP_TO_TODAY],
+  ])('add up, with the credit, to the cost by project of %s, and to its projected part',
+    async (_, account, projectOfAccount, parameters) => {
+      const { body: { total, projected, credits, projectedCredits } } = await productsOf(
+        projectOfAccount, `${parameters}&projected=true`, account,
+      );
+      const { body: projects } = await answerOf(
+        '/api/analysis/by-project', `${parameters}&projected=true`, account,
+      );
+      const [projectId] = projectOfAccount;
+
+      expect(projects.find((row) => row.projectId === projectId))
+        .toMatchObject({ total: total + credits, projected: projected + projectedCredits });
+    });
+});
+
 test.each([
   ['/api/analysis/by-project', 'projected=yes'],
   ['/api/analysis/by-project', 'projected=true&projected=true'],
+  [`/api/projects/${STAGING[0]}/products`, 'projected=yes'],
+  [`/api/projects/${STAGING[0]}/products`, 'projected=true&projected=true'],
 ])('%s refuses a projected parameter that is neither true nor false: %s',
   async (route, parameter) => {
     expect(await ocm.get(`${route}?${OF_TODAY}&${parameter}`)).toEqual({

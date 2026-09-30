@@ -1648,13 +1648,18 @@ function registerRoutes() {
   // month by month, and unfolds each product into. Those of the bills of the account the
   // request asks for, or of every account without one, as /api/analysis/by-project, whose cost
   // of the project they break down: a project's bill lines belong to the account of their bill,
-  // which may not be the project's own (ADR 0002).
-  app.get('/api/projects/:id/products', accountParameter, (req, res) => {
+  // which may not be the project's own (ADR 0002). With projected=true, the month in progress
+  // counts the project's projected lines too, as /api/analysis/by-project counts them: the
+  // products, each product and each charge give their projected parts, `projected`, and the
+  // credit its own, `projectedCredits` (#219).
+  app.get('/api/projects/:id/products', accountParameter, projectedParameter, (req, res) => {
     try {
       const { from, to } = req.query;
       const validation = validateDateRange(from, to);
       if (!validation.valid) return res.status(400).json({ error: validation.error });
-      res.json(db.cloudDetails.getProductsByProject(req.params.id, from, to, req.account));
+      res.json(db.cloudDetails.getProductsByProject(
+        req.params.id, from, to, req.account, { projected: req.projected },
+      ));
     } catch (err) {
       res.status(500).json({ error: err.message });
     }

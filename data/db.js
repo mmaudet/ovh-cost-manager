@@ -1877,22 +1877,29 @@ function allocateSwiftArchive(db, rows, projectId, fromDate, toDate) {
 
 /**
  * The bill lines of a Public Cloud project over a period, as productFigures() reads them: those
- * of the bills of the account (see accountCondition()), every account's by default.
+ * of the bills of the account (see accountCondition()), every account's by default. With the
+ * projected option, when the dates cover the month in progress, its projected lines of the
+ * project too (linesOfPeriod(), #219): all the project's lines of the month before, its credit's
+ * included, when the month in progress has not billed it yet. Each line gives its projected
+ * part, 0 for a bill line.
  * @param {string} projectId
  * @param {string} fromDate
  * @param {string} toDate
  * @param {?string} [account]
- * @returns {{description: ?string, domain: ?string, total_price: number}[]}
+ * @param {object} [options]
+ * @param {boolean} [options.projected] - Whether to add the projected lines of the month in
+ *   progress
+ * @returns {{description: ?string, domain: ?string, total_price: number, projected: number}[]}
  */
-function projectBillLines(projectId, fromDate, toDate, account = null) {
-  const ofAccount = accountCondition(account, 'b.account');
+function projectBillLines(projectId, fromDate, toDate, account = null, {
+  projected = false,
+} = {}) {
+  const lines = linesOfPeriod(fromDate, toDate, account, { projected });
   return getDb().prepare(`
-    SELECT d.description, d.domain, d.total_price
-    FROM bill_details d
-    JOIN bills b ON d.bill_id = b.id
-    WHERE d.project_id = ? AND b.date >= ? AND b.date <= ?
-      AND ${ofAccount.sql}
-  `).all(projectId, fromDate, toDate, ...ofAccount.params);
+    SELECT l.description, l.domain, l.total_price, l.projected
+    FROM (${lines.sql}) l
+    WHERE l.project_id = ?
+  `).all(...lines.params, projectId);
 }
 
 // Cloud detail operations (Phase 4)
@@ -2315,22 +2322,36 @@ const cloudDetailOps = {
    * which has none (#181, #195): what the Compare tab compares for a project, month by month,
    * and unfolds each product into. With the credit, the products add up to the project's cost
    * in analysis.byProject(), for the same account.
+   *
+   * With the projected option, the month in progress, when the dates cover it, counts the
+   * project's projected lines too, as analysis.byProject() counts them (#219): a product or a
+   * charge that they alone make is listed, and the products, each product and each of its
+   * charges give their projected parts, `projected`, 0 for none, and the credit its own,
+   * `projectedCredits`. With the credit's, the products' parts add up to the project's in
+   * analysis.byProject().
    * @param {string} projectId
    * @param {string} fromDate
    * @param {string} toDate
    * @param {?string} [account] - The account whose bills count (see accountCondition()): every
    *   account's by default. A project's bill lines belong to the account of their bill, which
    *   may not be the project's own, as for a project moved to another account (ADR 0002).
-   * @returns {{total: number, products: {product: string, total: number, charges: {charge:
-   *   string, total: number}[]}[], credits: number}} Each product's charges as productFigures()
-   *   gives them: what their lines add up to, to the cent, the most expensive first, those at
-   *   0 € left out
+   * @param {object} [options]
+   * @param {boolean} [options.projected] - Whether to add the projected lines of the month in
+   *   progress
+   * @returns {{total: number, projected: (number|undefined), products: {product: string,
+   *   total: number, projected: (number|undefined), charges: {charge: string, total: number,
+   *   projected: (number|undefined)}[]}[], credits: number,
+   *   projectedCredits: (number|undefined)}} Each product's charges as productFigures() gives
+   *   them: what their lines add up to, to the cent, the most expensive first, those at 0 € left
+   *   out; the projected parts with the projected option only
    */
-  getProductsByProject: (projectId, fromDate, toDate, account = null) => {
+  getProductsByProject: (projectId, fromDate, toDate, account = null, {
+    projected = false,
+  } = {}) => {
     // No product set apart, so that the products that productFigures() names `others` are
     // every one of them, the credit aside
     const { figuresOf, others: everyProduct, credits } = productFigures(
-      projectBillLines(projectId, fromDate, toDate, account), [],
+      projectBillLines(projectId, fromDate, toDate, account, { projected }), [], { projected },
     );
     return {
       ...everyProduct,
@@ -2338,6 +2359,7 @@ const cloudDetailOps = {
         ...entry, charges: figuresOf(entry.product).charges,
       })),
       credits,
+      ...(projected ? { projectedCredits: figuresOf('credits').projected } : {}),
     };
   },
 
