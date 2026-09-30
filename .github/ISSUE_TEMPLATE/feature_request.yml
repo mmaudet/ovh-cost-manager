@@ -1,0 +1,38 @@
+name: Feature request
+description: Something OCM could show or do
+labels: ["feature", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the idea. The maintainers triage new issues together, about once a week, and either accept a feature into a milestone or explain why not: see [how issues are handled](https://github.com/mmaudet/ovh-cost-manager/blob/main/CONTRIBUTING.md#how-issues-are-handled).
+  - type: input
+    id: version
+    attributes:
+      label: OCM version
+      description: The dashboard's footer shows it, such as « OVH Cost Manager v3.3.3 ».
+      placeholder: v3.3.3
+    validations:
+      required: true
+  - type: textarea
+    id: need
+    attributes:
+      label: What you need
+      description: The question you want OCM to answer, or the task it should make easier, and why it matters to you.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What you propose
+      description: How OCM could show or do it, if you have an idea.
+  - type: textarea
+    id: today
+    attributes:
+      label: What you do today
+      description: How you work around it now, in OCM or elsewhere (OVHcloud's pages, a spreadsheet…).
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: Screenshots or mock-ups
+      description: Hide any figure or name that you do not want to publish.

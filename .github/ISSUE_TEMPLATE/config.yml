@@ -1,0 +1,6 @@
+# Every issue goes through a form, which sets the needs-triage label (CONTRIBUTING.md)
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/mmaudet/ovh-cost-manager/security/advisories/new
+    about: Report it privately, as SECURITY.md describes, rather than in a public issue.
