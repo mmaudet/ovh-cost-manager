@@ -360,6 +360,38 @@ function validateDateRange(from, to) {
   return { valid: true };
 }
 
+/**
+ * The middleware of a boolean parameter of the data routes, such as byAccount or projected: it
+ * puts its value in req[name], true or false, false without it, and answers 400 to any other
+ * value, naming the parameter.
+ * @param {string} name - The parameter, as the query names it
+ * @returns {function} An Express middleware
+ */
+function booleanParameter(name) {
+  return (req, res, next) => {
+    const value = req.query[name];
+    if (value !== undefined && value !== 'true' && value !== 'false') {
+      return res.status(400).json({ error: `Invalid '${name}' parameter: expected true or false` });
+    }
+    req[name] = value === 'true';
+    return next();
+  };
+}
+
+/**
+ * What a row of the answer of a route that takes the projected parameter gives of its projected
+ * part (#217): `projected`, which partOf() reads, while the request asks for the projected cost
+ * of the month in progress; nothing otherwise, so that the route answers as before without the
+ * parameter.
+ * @param {object} req - The request, whose req.projected projectedParameter sets
+ * @param {function(): *} partOf - Reads the row's projected part, only while the request asks
+ *   for it
+ * @returns {{ projected: * } | {}} What to spread into the row
+ */
+function projectedPartOf(req, partOf) {
+  return req.projected ? { projected: partOf() } : {};
+}
+
 // ========================
 // Route registration function
 // ========================
@@ -375,33 +407,13 @@ function registerRoutes() {
   // The byAccount parameter of the lists of the costs of projects (#118), and of the bill lines
   // of a resource type or of the Veeam backups by service (#123, #197): req.byAccount, whether a
   // request asks for each project or service once for each account that billed it, with that
-  // account, as the lists that name the account of each row do, rather than once. true or
-  // false, false without it; any other value is refused.
-  const byAccountParameter = (req, res, next) => {
-    const { byAccount } = req.query;
-    if (byAccount !== undefined && byAccount !== 'true' && byAccount !== 'false') {
-      return res.status(400).json({
-        error: "Invalid 'byAccount' parameter: expected true or false",
-      });
-    }
-    req.byAccount = byAccount === 'true';
-    return next();
-  };
+  // account, as the lists that name the account of each row do, rather than once
+  const byAccountParameter = booleanParameter('byAccount');
 
   // The projected parameter of the routes of the Trends tab (#217): req.projected, whether a
   // request asks for the projected cost of the month in progress (CONTEXT.md), when its period
-  // covers it, with each row's projected part. true or false, false without it; any other value
-  // is refused.
-  const projectedParameter = (req, res, next) => {
-    const { projected } = req.query;
-    if (projected !== undefined && projected !== 'true' && projected !== 'false') {
-      return res.status(400).json({
-        error: "Invalid 'projected' parameter: expected true or false",
-      });
-    }
-    req.projected = projected === 'true';
-    return next();
-  };
+  // covers it, with each row's projected part (projectedPartOf())
+  const projectedParameter = booleanParameter('projected');
 
   // ========================
   // Projects Endpoints
@@ -628,7 +640,7 @@ function registerRoutes() {
           month: monthNames[parseInt(month) - 1],
           yearMonth: row.month,
           cost: Math.round(row.total * 100) / 100,
-          ...(req.projected ? { projected: Math.round(row.projected * 100) / 100 } : {}),
+          ...projectedPartOf(req, () => Math.round(row.projected * 100) / 100),
         };
       });
 
@@ -674,24 +686,24 @@ function registerRoutes() {
         // query gives every resource type in every month, at 0 when it was not billed (#65).
         // And, with projected=true, the projected part of each (#217).
         const byMonth = {};
-        const projectedByMonth = {};
         for (const r of rows) {
           byMonth[r.month] = byMonth[r.month] || {};
-          byMonth[r.month][r.resource_type] = Math.round(r.total * 100) / 100;
-          projectedByMonth[r.month] = projectedByMonth[r.month] || {};
-          projectedByMonth[r.month][r.resource_type] = Math.round(r.projected * 100) / 100;
+          byMonth[r.month][r.resource_type] = r;
         }
-        // The values of the categories in a month, in their order
-        const ofCategories = (values) => Object.fromEntries(
-          categories.map(({ key }) => [key, values[key]]),
-        );
+        // What a value of each resource type's row of a month is, in the order of the
+        // categories, to the cent
+        const ofResourceTypes = (rowsOfMonth, valueOf) => Object.fromEntries(categories.map(
+          ({ key }) => [key, Math.round(valueOf(rowsOfMonth[key]) * 100) / 100],
+        ));
 
         const data = Object.keys(byMonth)
           .sort((a, b) => a.localeCompare(b))
           .map((yearMonth) => ({
             yearMonth,
-            ...ofCategories(byMonth[yearMonth]),
-            ...(req.projected ? { projected: ofCategories(projectedByMonth[yearMonth]) } : {}),
+            ...ofResourceTypes(byMonth[yearMonth], (row) => row.total),
+            ...projectedPartOf(req, () => ofResourceTypes(
+              byMonth[yearMonth], (row) => row.projected,
+            )),
           }));
 
         res.json({ categories, data });
