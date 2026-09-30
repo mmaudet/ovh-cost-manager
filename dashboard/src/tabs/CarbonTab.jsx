@@ -5,6 +5,7 @@ import { SortableHeader, sortRows } from '../components/SortableHeader.jsx';
 import TableActions from '../components/TableActions.jsx';
 import { accountCsvColumns, withAccountNames } from '../utils/accounts.js';
 import { downloadCSV } from '../utils/csv.js';
+import { FIGURE_CARD, SUMMARY_FIGURE } from '../utils/figureCards.js';
 import {
   formatDecimal, formatMonthLabel, formatMonthName, formatPercent, formatWholeNumber,
   formatYearMonth,
@@ -30,11 +31,12 @@ const PANEL = 'bg-white rounded-xl shadow-sm border border-gray-100';
 // What goes before a colon: a space in French, none in English
 const beforeColon = (language) => (language === 'en' ? '' : ' ');
 
-// A card of the footprint: its label, its emissions in kg CO2eq, and what it adds to them
+// A card of the footprint: its label, its emissions in kg CO2eq, and what it adds to them. Two
+// a row on a phone (see figureCards.js).
 const FootprintCard = ({ label, value, fmt, emphasis = false, children = null }) => (
-  <div className={`${PANEL} p-5`}>
+  <div className={`${FIGURE_CARD} border border-gray-100`}>
     <span className="text-gray-500 text-sm">{label}</span>
-    <div className={`text-3xl font-bold mt-2 ${emphasis ? 'text-green-700' : 'text-gray-800'}`}>
+    <div className={`${SUMMARY_FIGURE} mt-2 ${emphasis ? 'text-green-700' : 'text-gray-800'}`}>
       {fmt(value)} kgCO₂e
     </div>
     {children}
@@ -351,7 +353,11 @@ const TrendPanel = ({ carbonTrend, loadingTrend, failedTrend, sorting, language,
       heading={`${t('carbonTrend')} (kgCO₂e)`} loading={loadingTrend} failed={failedTrend}
       failedLabel={t('carbonTrendFailed')} t={t}
     >
-      <ul aria-label={t('emissionSources')} className="flex gap-4 text-sm text-gray-600">
+      {/* Its sources wrap onto a second line on a phone (#226) */}
+      <ul
+        aria-label={t('emissionSources')}
+        className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-gray-600"
+      >
         {EMISSION_SOURCES.map(source => (
           <li key={source} className="flex items-center gap-2">
             <span
@@ -404,55 +410,58 @@ const TrendPanel = ({ carbonTrend, loadingTrend, failedTrend, sorting, language,
       <p className="text-xs text-gray-500">{t('coveredShareUnderMonths')}</p>
       <details>
         <summary className="cursor-pointer text-sm text-gray-500">{t('seeFigures')}</summary>
-        <table className="w-full text-sm mt-2">
-          <thead>
-            <tr className="text-gray-500">
-              <SortableHeader
-                column="month" kind="date" sorting={sorting} t={t}
-                className="text-left font-medium py-1"
-              >
-                {t('month')}
-              </SortableHeader>
-              {EMISSION_SOURCES.map(source => (
+        {/* Its six columns scroll sideways within the panel on a phone (#226) */}
+        <div className="overflow-x-auto mt-2">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-gray-500">
                 <SortableHeader
-                  key={source} column={source} kind="number" sorting={sorting} t={t}
+                  column="month" kind="date" sorting={sorting} t={t}
+                  className="text-left font-medium py-1"
+                >
+                  {t('month')}
+                </SortableHeader>
+                {EMISSION_SOURCES.map(source => (
+                  <SortableHeader
+                    key={source} column={source} kind="number" sorting={sorting} t={t}
+                    className="text-right font-medium py-1"
+                  >
+                    {t(source)}
+                  </SortableHeader>
+                ))}
+                <SortableHeader
+                  column="total" kind="number" sorting={sorting} t={t}
                   className="text-right font-medium py-1"
                 >
-                  {t(source)}
+                  Total
                 </SortableHeader>
-              ))}
-              <SortableHeader
-                column="total" kind="number" sorting={sorting} t={t}
-                className="text-right font-medium py-1"
-              >
-                Total
-              </SortableHeader>
-              <SortableHeader
-                column="coveredShare" kind="number" sorting={sorting} t={t}
-                className="text-right font-medium py-1"
-              >
-                {t('coveredShare')}
-              </SortableHeader>
-            </tr>
-          </thead>
-          <tbody>
-            {sortRows(
-              carbonTrend ?? [], sorting.sort, TREND_VALUES, language,
-            ).map(({ month, footprint, coveredShare }) => (
-              <tr key={month} className="border-t border-gray-100">
-                <td className="py-1">{formatMonthLabel(month, language)}</td>
-                {[...EMISSION_SOURCES, 'total'].map(key => (
-                  <td key={key} className="text-right py-1">
-                    {footprint ? fmt(footprint[key]) : '—'}
-                  </td>
-                ))}
-                <td className="text-right py-1">
-                  {coveredShare == null ? '—' : formatPercent(coveredShare, language)}
-                </td>
+                <SortableHeader
+                  column="coveredShare" kind="number" sorting={sorting} t={t}
+                  className="text-right font-medium py-1"
+                >
+                  {t('coveredShare')}
+                </SortableHeader>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {sortRows(
+                carbonTrend ?? [], sorting.sort, TREND_VALUES, language,
+              ).map(({ month, footprint, coveredShare }) => (
+                <tr key={month} className="border-t border-gray-100">
+                  <td className="py-1">{formatMonthLabel(month, language)}</td>
+                  {[...EMISSION_SOURCES, 'total'].map(key => (
+                    <td key={key} className="text-right py-1">
+                      {footprint ? fmt(footprint[key]) : '—'}
+                    </td>
+                  ))}
+                  <td className="text-right py-1">
+                    {coveredShare == null ? '—' : formatPercent(coveredShare, language)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </details>
     </CarbonPanel>
   );

@@ -224,6 +224,18 @@ CREATE TABLE IF NOT EXISTS project_consumption (
 CREATE INDEX IF NOT EXISTS idx_project_consumption_project ON project_consumption(project_id);
 CREATE INDEX IF NOT EXISTS idx_project_consumption_period ON project_consumption(period_start, period_end);
 
+-- The month-end forecast that OVH gives each cloud project (#224), from
+-- GET /cloud/project/{id}/usage/forecast: the latest that an import stored, which the next
+-- replaces, of the month that its own period gives. The consumption cards read those of the
+-- month of the current consumption. A row reaches its account through its project, as a
+-- project's consumption does.
+CREATE TABLE IF NOT EXISTS project_forecasts (
+  project_id TEXT PRIMARY KEY,
+  period_start DATE NOT NULL,       -- The first day of the month that it forecasts
+  total_price REAL NOT NULL,        -- What OVH forecasts the project to cost in that month
+  FOREIGN KEY (project_id) REFERENCES projects(id)
+);
+
 -- What the imports record for the readers, by key and by account (#114).
 -- 'consumption_month': the first day of the month that the last import of the account's
 -- project consumption covered. A row without an account is one recorded before the accounts.

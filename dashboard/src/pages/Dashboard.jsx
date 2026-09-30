@@ -7,6 +7,7 @@ import {
   fetchExpiringServices,
   fetchByResourceType, fetchGpuSummary,
 } from '../services/api';
+import { useActiveTabInView } from '../hooks/useActiveTabInView.js';
 import { useLanguage } from '../hooks/useLanguage.jsx';
 import { useMonthInProgressProjection } from '../hooks/useMonthInProgressProjection.js';
 import { useSelectedAccount } from '../hooks/useSelectedAccount.js';
@@ -20,6 +21,7 @@ import {
   accountColumnOf, accountLabel, accountQuery, accountsOf, budgetOf, importStateOf,
   offersAccounts, scopeLabel,
 } from '../utils/accounts.js';
+import { FIGURE_CARD } from '../utils/figureCards.js';
 import { formatCurrency, formatMonthLabel, yearMonthOf } from '../utils/format.js';
 import { parseSqliteDate } from '../utils/sqliteDate.js';
 import { generateMarkdownReport, reportFileName } from '../utils/markdownReport.js';
@@ -82,10 +84,20 @@ const VARIATION_TONES = {
   neutral: 'text-gray-500',
 };
 
+// The row of a KPI card's title and of its date or mark: the date or mark goes under the title
+// when they lack room, as on a phone (#226)
+const KPI_TITLE_ROW = 'flex flex-wrap justify-between items-start gap-x-2 mb-3';
+// The figure of a KPI card, one size smaller below sm, as that of a summary card of a tab
+// (figureCards.js)
+const KPI_FIGURE = 'text-xl sm:text-2xl font-bold text-gray-900';
+
 export default function Dashboard() {
   const { language, setLanguage, t } = useLanguage();
   const [selectedMonth, setSelectedMonth] = useState(null);
   const [activeTab, setActiveTab] = useState('overview');
+  // The refs of the tab bar's buttons, whose bar scrolls to the active tab whenever it
+  // changes, where the bar scrolls sideways (#226)
+  const tabRef = useActiveTabInView(activeTab);
   // The dashboard budget, which the page compares the figures of all accounts with: that of
   // config.json once the configuration loads, which the user may change for the visit
   const [dashboardBudget, setDashboardBudget] = useState(50000); // Default budget
@@ -487,19 +499,21 @@ export default function Dashboard() {
         {/* Header */}
         <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
           <div className="flex items-center gap-3 shrink-0">
-            {/* What the logo and the tab bar keep open: ADR 0001 (#56) */}
+            {/* What the logo and the tab bar keep open: ADR 0001 (#56). The logo keeps its
+                width, whatever the room that the title leaves it (#226) */}
             <button
               onClick={() => {
                 setActiveTab('overview');
                 setSelectedProject(null);
                 setSelectedResourceType(null);
               }}
-              className="cursor-pointer"
+              className="cursor-pointer shrink-0"
             >
               <Logo className="h-14" />
             </button>
-            {/* The title, and the subtitle under it, each on one line */}
-            <div className="whitespace-nowrap">
+            {/* The title, and the subtitle under it, each on one line from sm up: on a phone,
+                the subtitle wraps rather than squeeze the logo (#226) */}
+            <div className="sm:whitespace-nowrap">
               <h1 className="text-2xl font-bold text-gray-900">{t('appTitle')}</h1>
               <p className="text-gray-500 text-sm">{t('appSubtitle')}</p>
             </div>
@@ -599,10 +613,10 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* KPI Cards */}
+        {/* KPI Cards, two a row on a phone (see figureCards.js) */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <div className="bg-white rounded-xl p-5 shadow-sm border-2 border-blue-500">
-            <div className="flex justify-between items-start mb-3">
+          <div className={`${FIGURE_CARD} border-2 border-blue-500`}>
+            <div className={KPI_TITLE_ROW}>
               <span className="text-gray-500 text-sm font-medium">{t('totalCost')}</span>
               {/* The month in progress says so: its cost lacks bills to come (#216) */}
               {selectedMonthInProgress && (
@@ -614,7 +628,7 @@ export default function Dashboard() {
                 </span>
               )}
             </div>
-            <div className="text-2xl font-bold text-gray-900">{fmt(total)}€</div>
+            <div className={KPI_FIGURE}>{fmt(total)}€</div>
             {!variation.why ? (
               <div className={`flex items-center mt-2 text-sm ${VARIATION_TONES[variation.tone]}`}>
                 {variation.text} {t('vsPreviousMonth')}
@@ -633,41 +647,43 @@ export default function Dashboard() {
             )}
           </div>
 
-          <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
-            <div className="flex justify-between items-start mb-3">
+          <div className={`${FIGURE_CARD} border border-gray-100`}>
+            <div className={KPI_TITLE_ROW}>
               <span className="text-gray-500 text-sm font-medium">{t('cloudTotal')}</span>
             </div>
-            <div className="text-2xl font-bold text-gray-900">{fmt(summary?.cloudTotal || 0)}€</div>
+            <div className={KPI_FIGURE}>{fmt(summary?.cloudTotal || 0)}€</div>
             <div className="text-sm text-gray-500 mt-2">{t('publicCloud')}</div>
           </div>
 
-          <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
-            <div className="flex justify-between items-start mb-3">
+          <div className={`${FIGURE_CARD} border border-gray-100`}>
+            <div className={KPI_TITLE_ROW}>
               <span className="text-gray-500 text-sm font-medium">{t('dailyAverage')}</span>
             </div>
-            <div className="text-2xl font-bold text-gray-900">{fmt(summary?.dailyAverage || 0)}€</div>
+            <div className={KPI_FIGURE}>{fmt(summary?.dailyAverage || 0)}€</div>
             <div className="text-sm text-gray-500 mt-2">{t('over30Days')}</div>
           </div>
 
-          <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
-            <div className="flex justify-between items-start mb-3">
+          <div className={`${FIGURE_CARD} border border-gray-100`}>
+            <div className={KPI_TITLE_ROW}>
               <span className="text-gray-500 text-sm font-medium">{t('activeProjects')}</span>
             </div>
-            <div className="text-2xl font-bold text-gray-900">{summary?.projectsCount || 0}</div>
+            <div className={KPI_FIGURE}>{summary?.projectsCount || 0}</div>
             <div className="text-sm text-gray-500 mt-2">{t('withConsumption')}</div>
           </div>
         </div>
 
-        {/* Consumption, Forecast and Resource Count KPI Cards */}
+        {/* Consumption, Forecast and Resource Count KPI Cards: one a row below md, where three
+            would leave each too little room for its title, date and figure, but three on
+            paper, as before: A4 or Letter in portrait prints at about 730 px, below md (#226) */}
         {(consumptionCurrent || byResourceType.length > 0) && (
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 print:grid-cols-3 gap-4">
             {consumptionCurrent && (
-              <div className="bg-white rounded-xl p-5 shadow-sm border-2 border-emerald-500">
-                <div className="flex justify-between items-start mb-3">
+              <div className={`${FIGURE_CARD} border-2 border-emerald-500`}>
+                <div className={KPI_TITLE_ROW}>
                   <span className="text-gray-500 text-sm font-medium">{t('currentConsumption')}</span>
                   <span className="text-xs text-gray-400">{new Date().toLocaleDateString(locale, { day: 'numeric', month: 'long', year: 'numeric' })}</span>
                 </div>
-                <div className="text-2xl font-bold text-gray-900">{fmt(consumptionCurrent.current_total || 0)}€</div>
+                <div className={KPI_FIGURE}>{fmt(consumptionCurrent.current_total || 0)}€</div>
                 {consumptionForecast?.progress > 0 && (
                   <div className="w-full bg-gray-200 rounded-full h-1.5 mt-3">
                     <div
@@ -686,14 +702,14 @@ export default function Dashboard() {
               </div>
             )}
             {consumptionForecast && (
-              <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
-                <div className="flex justify-between items-start mb-3">
+              <div className={`${FIGURE_CARD} border border-gray-100`}>
+                <div className={KPI_TITLE_ROW}>
                   <span className="text-gray-500 text-sm font-medium">{t('forecastEndOfMonth')}</span>
                   <span className="text-xs text-gray-400">
                     {formatMonthLabel(yearMonthOf(new Date()), language)}
                   </span>
                 </div>
-                <div className="text-2xl font-bold text-gray-900">{fmt(consumptionForecast.forecast_total || 0)}€</div>
+                <div className={KPI_FIGURE}>{fmt(consumptionForecast.forecast_total || 0)}€</div>
                 {consumptionForecast.progress > 0 && (
                   <div className="w-full bg-gray-200 rounded-full h-1.5 mt-3">
                     <div
@@ -719,11 +735,11 @@ export default function Dashboard() {
               const cloudCount = byResourceType.find(r => r.resource_type === 'cloud_project')?.serviceCount || 0;
               const totalCount = byResourceType.reduce((sum, r) => sum + (r.serviceCount || 0), 0);
               return (
-                <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
-                  <div className="flex justify-between items-start mb-3">
+                <div className={`${FIGURE_CARD} border border-gray-100`}>
+                  <div className={KPI_TITLE_ROW}>
                     <span className="text-gray-500 text-sm font-medium">{t('totalResources')}</span>
                   </div>
-                  <div className="text-2xl font-bold text-gray-900">{totalCount}</div>
+                  <div className={KPI_FIGURE}>{totalCount}</div>
                   <div className="text-sm text-gray-500 mt-2">
                     {srvCount} {t('dedicatedServers')} · {vpsCount} {t('vpsInstances')} · {cloudCount} {t('cloudProjects')}
                   </div>
@@ -733,11 +749,12 @@ export default function Dashboard() {
           </div>
         )}
 
-        {/* Tabs, and the Trends tab's period selector, which goes whole to a line of its own
-            when it lacks room, with the checkbox that projects the month in progress (#217),
-            rather than squeeze the tabs' names */}
-        <div className="flex flex-wrap items-center gap-4">
-          <div className="flex gap-1 bg-white p-1 rounded-xl shadow-sm">
+        {/* Tabs. Where the bar lacks room, as on a phone, it scrolls sideways within the page
+            rather than widen it, each label on one line, and the Trends period selector goes to
+            a line of its own rather than squeeze the bar (#226), whole, with the checkbox that
+            projects the month in progress (#217) */}
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+          <div className="flex gap-1 bg-white p-1 rounded-xl shadow-sm max-w-full overflow-x-auto">
             {[
               { id: 'overview', labelKey: 'overview' },
               { id: 'compare', labelKey: 'compare' },
@@ -750,12 +767,15 @@ export default function Dashboard() {
             ].map(tab => (
               <button
                 key={tab.id}
+                ref={tabRef(tab.id)}
                 onClick={() => setActiveTab(tab.id)}
-                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                className={[
+                  'px-3 sm:px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap shrink-0',
+                  'transition-all',
                   activeTab === tab.id
                     ? 'bg-blue-600 text-white shadow-md'
-                    : 'text-gray-600 hover:bg-gray-100'
-                }`}
+                    : 'text-gray-600 hover:bg-gray-100',
+                ].join(' ')}
               >
                 {t(tab.labelKey)}
               </button>

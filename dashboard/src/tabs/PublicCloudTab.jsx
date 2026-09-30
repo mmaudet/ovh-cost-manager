@@ -1,6 +1,8 @@
 import { Fragment } from 'react';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
 import Modal from '../components/Modal.jsx';
+import { PieLabelLine, pieLabel } from '../components/PieLabels.jsx';
+import { PieLegend } from '../components/PieLegend.jsx';
 import TableActions from '../components/TableActions.jsx';
 import { SortableHeader, sortRows } from '../components/SortableHeader.jsx';
 import { AiEndpointsByModel } from '../components/AiEndpointsByModel.jsx';
@@ -12,6 +14,7 @@ import {
   InstancesTable, instanceCsvColumns, instanceCsvRows
 } from '../components/InstancesTable.jsx';
 import { downloadCSV } from '../utils/csv.js';
+import { FIGURE_CARD, SUMMARY_FIGURE } from '../utils/figureCards.js';
 import { formatMonthLabel, formatMonthName } from '../utils/format.js';
 import { cloudKindLabel } from '../utils/cloudKinds.js';
 import { projectListRows } from '../utils/projectList.js';
@@ -128,71 +131,89 @@ const PublicCloudTab = ({
         </p>
       )}
 
-      {/* Cloud Summary Cards */}
+      {/* Cloud Summary Cards, two a row on a phone (see figureCards.js) */}
       <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
-        <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
+        <div className={`${FIGURE_CARD} border border-gray-100`}>
           <span className="text-gray-500 text-sm">{t('cloudProjects')}</span>
-          <div className="text-3xl font-bold text-blue-600 mt-2">{byResourceType.find(r => r.resource_type === 'cloud_project')?.serviceCount || 0}</div>
+          <div className={`${SUMMARY_FIGURE} text-blue-600 mt-2`}>
+            {byResourceType.find(r => r.resource_type === 'cloud_project')?.serviceCount || 0}
+          </div>
         </div>
-        <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
+        <div className={`${FIGURE_CARD} border border-gray-100`}>
           <span className="text-gray-500 text-sm">{t('instances')}</span>
-          <div className="text-3xl font-bold text-indigo-600 mt-2">
+          <div className={`${SUMMARY_FIGURE} text-indigo-600 mt-2`}>
             {projectsEnriched.reduce((sum, p) => sum + (p.instance_count || 0), 0)}
           </div>
           {publicCloudStats?.instances?.total > 0 && (
             <p className="text-xs text-gray-400">{fmt(publicCloudStats.instances.total)}€</p>
           )}
         </div>
-        <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
+        <div className={`${FIGURE_CARD} border border-gray-100`}>
           <span className="text-gray-500 text-sm">{language === 'en' ? 'GPU Instances' : 'Instances GPU'}</span>
-          <div className="text-3xl font-bold text-purple-600 mt-2">{gpuSummary?.instances?.length || 0}</div>
+          <div className={`${SUMMARY_FIGURE} text-purple-600 mt-2`}>
+            {gpuSummary?.instances?.length || 0}
+          </div>
         </div>
-        <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
+        <div className={`${FIGURE_CARD} border border-gray-100`}>
           <span className="text-gray-500 text-sm">Kubernetes</span>
-          <div className="text-3xl font-bold text-cyan-600 mt-2">{publicCloudStats?.kubernetes?.count || 0}</div>
+          <div className={`${SUMMARY_FIGURE} text-cyan-600 mt-2`}>
+            {publicCloudStats?.kubernetes?.count || 0}
+          </div>
           {publicCloudStats?.kubernetes?.total > 0 && (
             <p className="text-xs text-gray-400">{fmt(publicCloudStats.kubernetes.total)}€</p>
           )}
         </div>
-        <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
+        <div className={`${FIGURE_CARD} border border-gray-100`}>
           <span className="text-gray-500 text-sm">{language === 'en' ? 'Object Storage' : 'Stockage Objet'}</span>
-          <div className="text-3xl font-bold text-green-600 mt-2">{publicCloudStats?.objectStorage?.count || 0}</div>
+          <div className={`${SUMMARY_FIGURE} text-green-600 mt-2`}>
+            {publicCloudStats?.objectStorage?.count || 0}
+          </div>
           {publicCloudStats?.objectStorage?.total > 0 && (
             <p className="text-xs text-gray-400">{fmt(publicCloudStats.objectStorage.total)}€</p>
           )}
         </div>
-        <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
+        <div className={`${FIGURE_CARD} border border-gray-100`}>
           <span className="text-gray-500 text-sm">{language === 'en' ? 'Volumes' : 'Volumes'}</span>
-          <div className="text-3xl font-bold text-teal-600 mt-2">{publicCloudStats?.volumes?.count || 0}</div>
+          <div className={`${SUMMARY_FIGURE} text-teal-600 mt-2`}>
+            {publicCloudStats?.volumes?.count || 0}
+          </div>
           {publicCloudStats?.volumes?.total > 0 && (
             <p className="text-xs text-gray-400">{fmt(publicCloudStats.volumes.total)}€</p>
           )}
         </div>
-        <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
+        <div className={`${FIGURE_CARD} border border-gray-100`}>
           <span className="text-gray-500 text-sm">Snapshots</span>
-          <div className="text-3xl font-bold text-amber-600 mt-2">{publicCloudStats?.snapshots?.count || 0}</div>
+          <div className={`${SUMMARY_FIGURE} text-amber-600 mt-2`}>
+            {publicCloudStats?.snapshots?.count || 0}
+          </div>
           {publicCloudStats?.snapshots?.total > 0 && (
             <p className="text-xs text-gray-400">{fmt(publicCloudStats.snapshots.total)}€</p>
           )}
         </div>
-        <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
+        <div className={`${FIGURE_CARD} border border-gray-100`}>
           <span className="text-gray-500 text-sm">{language === 'en' ? 'Savings plans' : 'Savings plans'}</span>
-          <div className="text-3xl font-bold text-rose-600 mt-2">{publicCloudStats?.savingsPlans?.count || 0}</div>
+          <div className={`${SUMMARY_FIGURE} text-rose-600 mt-2`}>
+            {publicCloudStats?.savingsPlans?.count || 0}
+          </div>
           {publicCloudStats?.savingsPlans?.total > 0 && (
             <p className="text-xs text-gray-400">{fmt(publicCloudStats.savingsPlans.total)}€</p>
           )}
         </div>
-        <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
+        <div className={`${FIGURE_CARD} border border-gray-100`}>
           <span className="text-gray-500 text-sm">{language === 'en' ? 'Container Registry' : 'Registre'}</span>
-          <div className="text-3xl font-bold text-orange-600 mt-2">{publicCloudStats?.registry?.count || 0}</div>
+          <div className={`${SUMMARY_FIGURE} text-orange-600 mt-2`}>
+            {publicCloudStats?.registry?.count || 0}
+          </div>
           {publicCloudStats?.registry?.total > 0 && (
             <p className="text-xs text-gray-400">{fmt(publicCloudStats.registry.total)}€</p>
           )}
         </div>
         {/* What no card of its own counts: its products, and their cost (#145) */}
-        <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
+        <div className={`${FIGURE_CARD} border border-gray-100`}>
           <span className="text-gray-500 text-sm">{t('otherServices')}</span>
-          <div className="text-3xl font-bold text-slate-600 mt-2">{publicCloudStats?.other?.products?.length || 0}</div>
+          <div className={`${SUMMARY_FIGURE} text-slate-600 mt-2`}>
+            {publicCloudStats?.other?.products?.length || 0}
+          </div>
           {publicCloudStats?.other?.products?.length > 0 && (
             <p className="text-xs text-gray-400">{fmt(publicCloudStats.other.total)}€</p>
           )}
@@ -227,7 +248,8 @@ const PublicCloudTab = ({
       {projects.length > 0 && (
         <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
           <h3 className="font-semibold text-gray-900 mb-4">{t('cloudProjects')}</h3>
-          <div className="overflow-x-auto">
+          {/* A query container, which an open project's detail keeps to (#226) */}
+          <div className="overflow-x-auto [container-type:inline-size]">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b bg-gray-50">
@@ -313,7 +335,14 @@ const PublicCloudTab = ({
                     {openProject?.id === p.id && (
                       <tr>
                         <td colSpan={accountColumn ? 7 : 6} className="p-0">
-                          <div className="bg-blue-50 border-l-4 border-blue-400 p-5">
+                          {/* Where the list scrolls sideways, as on a phone, the detail keeps
+                              to the part of the list in view, as wide as its box (100cqw),
+                              and held at its left edge, rather than span the whole table
+                              (#226) */}
+                          <div
+                            className={'bg-blue-50 border-l-4 border-blue-400 p-5 sticky left-0'
+                              + ' max-w-[100cqw]'}
+                          >
                             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                               {/* Consumption by resource type */}
                               {(() => {
@@ -322,19 +351,28 @@ const PublicCloudTab = ({
                                   const key = c.resource_type || 'other';
                                   byType[key] = (byType[key] || 0) + (c.total_price || 0);
                                 });
+                                const typeColors = [
+                                  '#3b82f6', '#ef4444', '#f59e0b', '#10b981', '#8b5cf6', '#ec4899',
+                                  '#6b7280',
+                                ];
+                                // Each resource kind, the most expensive first, with its
+                                // colour, for the pie and its legend
                                 const chartData = Object.entries(byType)
                                   .map(([kind, value]) => ({
                                     name: cloudKindLabel(kind, t),
                                     value: Math.round(value * 100) / 100,
                                   }))
-                                  .sort((a, b) => b.value - a.value);
-                                const typeColors = ['#3b82f6', '#ef4444', '#f59e0b', '#10b981', '#8b5cf6', '#ec4899', '#6b7280'];
+                                  .sort((a, b) => b.value - a.value)
+                                  .map((slice, i) => ({
+                                    ...slice, color: typeColors[i % typeColors.length],
+                                  }));
+                                const heading = language === 'en'
+                                  ? 'Consumption by resource'
+                                  : 'Consommation par ressource';
 
                                 return chartData.length > 0 ? (
                                   <div>
-                                    <h4 className="font-medium text-gray-700 mb-3">
-                                      {language === 'en' ? 'Consumption by resource' : 'Consommation par ressource'}
-                                    </h4>
+                                    <h4 className="font-medium text-gray-700 mb-3">{heading}</h4>
                                     <ResponsiveContainer width="100%" height={220}>
                                       <PieChart>
                                         <Pie
@@ -345,15 +383,25 @@ const PublicCloudTab = ({
                                           innerRadius={35}
                                           dataKey="value"
                                           nameKey="name"
-                                          label={({ name, value }) => `${name}: ${fmt(value)}€`}
+                                          label={pieLabel(
+                                            ({ name, value }) => `${name}: ${fmt(value)}€`,
+                                          )}
+                                          labelLine={<PieLabelLine />}
                                         >
-                                          {chartData.map((_, i) => (
-                                            <Cell key={i} fill={typeColors[i % typeColors.length]} />
+                                          {chartData.map((slice, i) => (
+                                            <Cell key={i} fill={slice.color} />
                                           ))}
                                         </Pie>
                                         <Tooltip formatter={(v) => `${fmt(v)}€`} />
                                       </PieChart>
                                     </ResponsiveContainer>
+                                    {/* Its legend, as those of the Overview: the pie leaves out
+                                        the labels of its thinnest slices, and all of them on a
+                                        phone (#226) */}
+                                    <PieLegend
+                                      data={chartData} fmt={fmt} label={heading}
+                                      className="space-y-1 mt-2"
+                                    />
                                   </div>
                                 ) : (
                                   <div className="flex items-center justify-center h-32 text-gray-400 text-sm">

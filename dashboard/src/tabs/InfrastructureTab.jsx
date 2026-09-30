@@ -4,6 +4,7 @@ import { SortableHeader, sortRows } from '../components/SortableHeader.jsx';
 import { ServersTable, serverCsvColumns } from '../components/ServersTable.jsx';
 import { withAccountNames } from '../utils/accounts.js';
 import { downloadCSV } from '../utils/csv.js';
+import { FIGURE_CARD, SUMMARY_FIGURE } from '../utils/figureCards.js';
 import { fmtBytes, fmtMemory, formatMonthLabel } from '../utils/format.js';
 
 // Resource types the Infrastructure tab leaves out: Public Cloud has its own
@@ -122,7 +123,7 @@ const InfrastructureTab = ({
 
   return (
     <div className="space-y-6">
-      {/* Infrastructure Summary Cards */}
+      {/* Infrastructure Summary Cards, two a row on a phone (see figureCards.js) */}
       <div className="grid grid-cols-2 lg:grid-cols-4 xl:grid-cols-8 gap-4">
         {[
           {
@@ -161,14 +162,15 @@ const InfrastructureTab = ({
             <div
               key={card.type}
               className={[
-                'bg-white rounded-xl p-5 shadow-sm border cursor-pointer transition-all',
+                FIGURE_CARD,
+                'border cursor-pointer transition-all',
                 'hover:shadow-md',
                 isActive ? `ring-2 ${card.ring} border-transparent` : 'border-gray-100',
               ].join(' ')}
               onClick={() => setSelectedResourceType(isActive ? null : card.type)}
             >
               <span className="text-gray-500 text-sm">{card.label}</span>
-              <div className={`text-3xl font-bold ${card.color} mt-2`}>
+              <div className={`${SUMMARY_FIGURE} ${card.color} mt-2`}>
                 {entry?.serviceCount || 0}
               </div>
               <div className="text-xs text-gray-400 mt-1">{fmt(entry?.value || 0)}€</div>

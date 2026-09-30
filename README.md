@@ -62,8 +62,8 @@ New in version 3.1.0.
 - **Budget Tracking**: Visual budget consumption with configurable targets
 
 ### Real-time Monitoring
-- **Current Consumption**: Live consumption data from OVH API with today's date
-- **End-of-month Forecast**: Projected monthly total with progress indicator
+- **Current Consumption**: What the Public Cloud projects consumed this month, as OVH's Public Cloud page gives it (`--include-cloud-details`, which `--all` includes), or else the account's consumption from `/me/consumption` (`--include-consumption`)
+- **End-of-month Forecast**: The forecast that OVH gives each Public Cloud project, or its consumption extrapolated to the end of the month, never below what it consumed, with a progress indicator (`--include-cloud-details`); or else the forecast of `/me/consumption`
 - **Account Balance**: Debt, credits, and deposit tracking
 
 ### Infrastructure Inventory
@@ -390,13 +390,15 @@ npm run import -- --from 2025-01-01 --to 2025-12-31
 # Differential import (new data since last import)
 npm run import:diff
 
-# Include consumption data (real-time + forecast)
+# Include the account's /me/consumption and its history, which the consumption and forecast
+# cards read when no Public Cloud project consumed in the month
 npm run import -- --from 2025-01-01 --include-consumption
 
 # Include infrastructure inventory (servers, VPS, storage)
 npm run import -- --from 2025-01-01 --include-inventory
 
-# Include cloud project details (instances, quotas)
+# Include cloud project details: each project's consumption and month-end forecast, which the
+# consumption and forecast cards read, its instances and its quotas
 npm run import -- --from 2025-01-01 --include-cloud-details
 
 # Include the carbon footprint of the last 24 months, which OVHcloud's carbon calculator gives
