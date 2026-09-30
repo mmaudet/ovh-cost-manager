@@ -107,27 +107,28 @@ const useCompareTab = ({
     projected: projectsMonthInProgress,
   });
 
-  // A figure of month A or B, for the account shown (#119), which fetchFigure(from, to,
-  // account) requests, under the key of the same figure that the shell loads for its selected
+  // A figure of month A or B, for the account shown (#119), under a key that starts with `key`,
+  // its name and what it is of, such as a project, and names the month, which fetchFigure(from,
+  // to, account) requests: under the key of the same figure that the shell loads for its selected
   // month, or the Backup tab for the Veeam backups, for the same account (ADR 0001); and for the
   // month in progress while the page projects it, at its projected cost, which fetchFigure(from,
-  // to, account, { projected: true }) requests, under a key of its own (#218)
-  const figureOf = (name, month, fetchFigure) => projectedQuery(selectedAccount, {
-    key: [name, month?.from, month?.to],
+  // to, account, { projected: true }) requests, under a key of its own (#218, #219)
+  const figureOf = (key, month, fetchFigure) => projectedQuery(selectedAccount, {
+    key: [...key, month?.from, month?.to],
     fetch: (account, ...options) => fetchFigure(month.from, month.to, account, ...options),
     projected: isProjected(month),
     enabled: asksFor(month),
   });
 
   // Comparison data
-  const { data: compareDataA } = useQuery(figureOf('summary', compareMonthA, fetchSummary));
-  const { data: compareDataB } = useQuery(figureOf('summary', compareMonthB, fetchSummary));
+  const { data: compareDataA } = useQuery(figureOf(['summary'], compareMonthA, fetchSummary));
+  const { data: compareDataB } = useQuery(figureOf(['summary'], compareMonthB, fetchSummary));
 
   const { data: byServiceA = [] } = useQuery(
-    figureOf('byService', compareMonthA, fetchByService),
+    figureOf(['byService'], compareMonthA, fetchByService),
   );
   const { data: byServiceB = [] } = useQuery(
-    figureOf('byService', compareMonthB, fetchByService),
+    figureOf(['byService'], compareMonthB, fetchByService),
   );
 
   // The projects of month A or B: once each, for the account shown, under the key of the
@@ -148,33 +149,29 @@ const useCompareTab = ({
   // each resource type, under the key of those the page loads for its selected month, and
   // the Veeam backups, under the key of those the Backup tab loads for it
   const { data: byResourceTypeA = [] } = useQuery(
-    figureOf('byResourceType', compareMonthA, fetchByResourceType),
+    figureOf(['byResourceType'], compareMonthA, fetchByResourceType),
   );
   const { data: byResourceTypeB = [] } = useQuery(
-    figureOf('byResourceType', compareMonthB, fetchByResourceType),
+    figureOf(['byResourceType'], compareMonthB, fetchByResourceType),
   );
 
   const { data: backupStatsA } = useQuery(
-    figureOf('backupStats', compareMonthA, fetchBackupStats),
+    figureOf(['backupStats'], compareMonthA, fetchBackupStats),
   );
   const { data: backupStatsB } = useQuery(
-    figureOf('backupStats', compareMonthB, fetchBackupStats),
+    figureOf(['backupStats'], compareMonthB, fetchBackupStats),
   );
 
   // The options of the query of a project's products in month A or B, for useQuery: what the
   // bills of the month charged the project, for the account shown, as its cost in the
-  // comparison by project (#181). The comparison of the project's products runs it once
-  // opened, as the other figures of the month run: on the tab, for a month of the months list.
-  // Those of the month in progress, while the page projects it, at its projected cost, as the
-  // comparison by project asks for it (#219).
-  const projectProductsQuery = (projectId, month) => projectedQuery(selectedAccount, {
-    key: ['projectProducts', projectId, month?.from, month?.to],
-    fetch: (account, ...options) => fetchProjectProducts(
-      projectId, month.from, month.to, account, ...options,
-    ),
-    projected: isProjected(month),
-    enabled: asksFor(month),
-  });
+  // comparison by project (#181), a figure of the month, under a key of its own. The comparison
+  // of the project's products runs it once opened, as the other figures of the month run: on the
+  // tab, for a month of the months list. Those of the month in progress, while the page projects
+  // it, at its projected cost, as the comparison by project asks for it (#219).
+  const projectProductsQuery = (projectId, month) => figureOf(
+    ['projectProducts', projectId], month,
+    (...request) => fetchProjectProducts(projectId, ...request),
+  );
 
   // The options of the query of a resource type's services in month A or B, for useQuery: those
   // that the Infrastructure tab lists for the resource type in the month, as it asks for them,
