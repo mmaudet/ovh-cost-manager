@@ -12,6 +12,19 @@ sections were written afterwards from the git history.
 
 <!-- scripts/release.sh inserts each new version above the first version heading. -->
 
+## 3.3.3 - 2026-09-30
+
+<!-- Upgrade notes and highlights of this release, if any. -->
+
+### New features
+* feat: tell the month in progress apart by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/228
+### Bug fixes
+* fix: count a VM's Veeam Enterprise backup once by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/229
+* fix: read the Public Cloud projects' consumption and forecast in the header cards by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/230
+* fix: fit the dashboard to phone and tablet screens by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/231
+
+**Full Changelog**: https://github.com/mmaudet/ovh-cost-manager/compare/v3.3.2...v3.3.3
+
 ## 3.3.2 - 2026-09-30
 
 The dashboard's header holds on one line again, from 1280 px wide screens up: the
