@@ -25,9 +25,12 @@ month billed each project from the projects by account that the Overview hook lo
 The shell reads no tab hook's result for what it shows itself: the "vs previous month" KPI
 runs its own query of the summary of the month before the selected one (#50). When a month
 the Compare tab compares is one the shell loads, the Compare hook's queries of that month
-share their keys with those the shell and the Backup hook run for it. When the page opens,
-month B is the latest month, the selected one: its summary, costs by resource type and
-Veeam backups share their keys (`summary`, `byResourceType`, `backupStats`). Month A is the
+share their keys with those the shell and the Backup hook run for it, but for the month in
+progress while the page projects it (#218): the Compare hook then asks for its figures at
+its projected cost, under keys of their own, which the shell and the Backup hook, whose
+figures are never projected, do not share. When the page opens, month B is the latest
+month, the selected one: its summary, costs by resource type and Veeam backups share their
+keys (`summary`, `byResourceType`, `backupStats`), unless projected. Month A is the
 second latest billed month (`months[1]`): when it is the month just before the latest one,
 as it is unless nothing was billed that month, its summary shares its key with the shell's
 month before. While the lists show the Account column, with all accounts shown, the Compare
@@ -44,7 +47,10 @@ those of its products (#181). The Compare hook owns the months it picks, and a s
 only means a shared cache, not a shared owner. A query that follows the account selected in
 the header carries that account in its key, after the other parts, and none when all
 accounts are shown, as its request names the account or not (#115): two queries share a key
-only for the same account, or both for all accounts.
+only for the same account, or both for all accounts. A query of the month in progress at
+its projected cost names the flag in its key (`projected`), after the other parts and
+before the account, as its request asks for it (#217, #218): it shares no key with a query
+of what the month billed, such as the Infrastructure hook's services of a resource type.
 
 What stays open depends on how the user moves around the page (#56):
 
