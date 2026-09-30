@@ -140,7 +140,7 @@ export default function Dashboard() {
   const scope = scopeLabel(accounts, selectedAccount, t);
   // Whether the page projects the month in progress (#214), page-wide, and what turns it on or
   // off: the Trends tab shows it next to its period selector, and its trends follow it (#217)
-  const projection = useMonthInProgressProjection();
+  const projectionSetting = useMonthInProgressProjection();
 
   // The months billed to the account shown
   const { data: months = [], isSuccess: monthsLoaded } = useQuery(accountQuery(selectedAccount, {
@@ -259,7 +259,7 @@ export default function Dashboard() {
 
   const trendsTab = useTrendsTab({
     months, selectedMonth, holdsSelectedMonth, selectedAccount, activeTab,
-    projectsMonthInProgress: projection.projectsMonthInProgress,
+    projectsMonthInProgress: projectionSetting.projectsMonthInProgress,
   });
 
   const publicCloudTab = usePublicCloudTab({
@@ -762,7 +762,7 @@ export default function Dashboard() {
             ))}
           </div>
           {activeTab === 'trends' && (
-            <TrendsPeriodSelector {...trendsTab} {...projection} t={t} />
+            <TrendsPeriodSelector {...trendsTab} {...projectionSetting} t={t} />
           )}
         </div>
 

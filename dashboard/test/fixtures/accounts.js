@@ -443,11 +443,13 @@ export const severalAccountsWithAiEndpoints = {
 // lines of August (#217)
 const lyonBilledInSeptember = Object.fromEntries(Object.entries(lyonCosts['2026-09'])
   .filter(([resourceType]) => resourceType !== 'dedicated_server'));
-const lyonProjection = { '2026-09': { dedicated_server: lyonCosts['2026-08'].dedicated_server } };
+const lyonProjectedParts = {
+  '2026-09': { dedicated_server: lyonCosts['2026-08'].dedicated_server },
+};
 // The costs of each resource type in September at its projected cost: the other resource types
 // as billed, and the dedicated servers at their cost of August
 const withProjectedServers = (september) => ({
-  ...september, ...lyonProjection['2026-09'],
+  ...september, ...lyonProjectedParts['2026-09'],
 });
 
 // The accounts while Lyon, billed late, has not been billed yet in September for a recurring
@@ -464,7 +466,7 @@ export const lyonBilledLate = {
   ...projectedTrendsOf('2026-07', '2026-09', {
     ...costsOfAccount,
     '2026-09': withProjectedServers(costsOfAccount['2026-09']),
-  }, lyonProjection),
+  }, lyonProjectedParts),
   ofAccount: {
     ...severalAccounts.ofAccount,
     [lyonAccount.id]: {
@@ -473,7 +475,7 @@ export const lyonBilledLate = {
       ...trendsOf('2026-07', '2026-09', { ...lyonCosts, '2026-09': lyonBilledInSeptember }),
       ...projectedTrendsOf('2026-07', '2026-09', {
         ...lyonCosts, '2026-09': withProjectedServers(lyonBilledInSeptember),
-      }, lyonProjection),
+      }, lyonProjectedParts),
     },
   },
 };

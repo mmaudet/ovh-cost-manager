@@ -146,13 +146,13 @@ const answers = {
   fetchGpuProjectsByAccount: entryForPeriod('gpuProjectsByAccount', emptyAnswers.list),
   // Trends: by the month they end on, then by their number of months, and those of the
   // account the page selects (#120). Asked with the projection of the month in progress, those of
-  // its own entries (#217): projectedMonthlyTrend and projectedMonthlyTrendByCategory.
+  // its own entries (#217): projectedMonthlyTrend and projectedMonthlyTrendByResourceType.
   fetchMonthlyTrend: (data, months, end, account, { projected = false } = {}) =>
     ofAccount(data, account)[projected ? 'projectedMonthlyTrend' : 'monthlyTrend']
       ?.[end]?.[months] ?? emptyAnswers.list(),
   fetchMonthlyTrendByCategory: (data, months, end, account, { projected = false } = {}) =>
     ofAccount(data, account)[
-      projected ? 'projectedMonthlyTrendByCategory' : 'monthlyTrendByCategory'
+      projected ? 'projectedMonthlyTrendByResourceType' : 'monthlyTrendByCategory'
     ]?.[end]?.[months] ?? emptyAnswers.trendByCategory(),
   fetchImportStatus: entry('importStatus', emptyAnswers.importStatus),
   triggerImport: () => ({ started: true }),

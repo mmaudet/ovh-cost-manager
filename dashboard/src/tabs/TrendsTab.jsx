@@ -83,7 +83,7 @@ const TrendsTab = ({
     parts: lineParts(rows, monthInProgress), monthInProgress, projected, fmt, t,
   });
   const totalChart = chartOf(monthlyTrend);
-  const categoryChart = chartOf(trendByCategory.data);
+  const resourceTypeChart = chartOf(trendByCategory.data);
   // The months as the tooltips name them: the month in progress « Septembre 2026 (en cours) »,
   // as the month selectors of the Compare tab do
   const monthLabel = (yearMonth) => formatMonthLabel(yearMonth, language, {
@@ -177,7 +177,7 @@ const TrendsTab = ({
                       key: c.key, name: c.label, color: c.color, width: 2, dot: false,
                       dotRadius: 4, activeRadius: 5,
                       projectedPartOf: (row) => row.projected?.[c.key] ?? 0,
-                    }, categoryChart))}
+                    }, resourceTypeChart))}
                 </LineChart>
               </ResponsiveContainer>
             </div>

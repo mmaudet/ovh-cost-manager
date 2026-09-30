@@ -256,7 +256,7 @@ export function trendsOf(first, last, billed) {
  *   as trendsOf() takes them
  * @param {object} projected - What the projected lines of the month in progress add to each
  *   resource type, such as { '2026-09': { dedicated_server: 270 } }
- * @returns {{ projectedMonthlyTrend: object, projectedMonthlyTrendByCategory: object }}
+ * @returns {{ projectedMonthlyTrend: object, projectedMonthlyTrendByResourceType: object }}
  */
 export function projectedTrendsOf(first, last, costs, projected) {
   const { monthlyTrend, monthlyTrendByCategory } = trendsOf(first, last, costs);
@@ -272,7 +272,7 @@ export function projectedTrendsOf(first, last, costs, projected) {
         })),
       },
     },
-    projectedMonthlyTrendByCategory: {
+    projectedMonthlyTrendByResourceType: {
       [last]: {
         [count]: {
           categories,
