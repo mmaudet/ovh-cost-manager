@@ -789,7 +789,7 @@ export default function Dashboard() {
 
         {/* Tab Content - Trends */}
         {activeTab === 'trends' && (
-          <TrendsTab {...trendsTab} months={months} language={language} t={t} fmt={fmt} />
+          <TrendsTab {...trendsTab} language={language} t={t} fmt={fmt} />
         )}
 
         {/* Tab Content - Web Cloud */}

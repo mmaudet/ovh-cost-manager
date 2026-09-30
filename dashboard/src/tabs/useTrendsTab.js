@@ -7,6 +7,7 @@ import {
   fetchMonthlyTrend, fetchMonthlyTrendByCategory, fetchGpuSummary, fetchAiEndpoints,
 } from '../services/api.js';
 import { accountQuery, projectedQuery } from '../utils/accounts.js';
+import { comparedMonthsOf } from '../utils/monthComparison.js';
 import { monthInProgressWithin } from '../utils/months.js';
 import { monthsBetween, availablePeriodsFor } from '../utils/trendPeriods.js';
 import { monthWindowEndingOn } from '../utils/monthWindow.js';
@@ -44,6 +45,11 @@ const useTrendsTab = ({
   // and their keys name the flag only then (projectedQuery()).
   const monthInProgress = monthInProgressWithin(months, trendWindow);
   const projected = projectsMonthInProgress && monthInProgress !== null;
+  // What the tab's cards compare, the first and the last months of the period: the month in
+  // progress, when the period covers it, at its projected cost while the trends project it
+  const periodMonths = comparedMonthsOf(
+    months, trendWindow && { value: trendWindow.from.slice(0, 7) }, selectedMonth, { projected },
+  );
 
   // The trends wait until the months list holds the month selected. It does not while the
   // months of the account just selected load, nor when that account lacks the month, until
@@ -101,6 +107,7 @@ const useTrendsTab = ({
     aiEndpointsTrend,
     monthInProgress,
     projected,
+    periodMonths,
   };
 };
 

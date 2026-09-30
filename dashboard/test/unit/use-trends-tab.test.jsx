@@ -507,6 +507,9 @@ describe('useTrendsTab', () => {
           .toEqual([['2026-07', 980], ['2026-08', 1042], ['2026-09', 1250.4]]);
         expect(result.current.monthInProgress).toBe('2026-09');
         expect(result.current.projected).toBe(true);
+        // What the cards compare: September at its projected cost
+        expect(result.current.periodMonths)
+          .toEqual({ includesMonthInProgress: true, projected: true });
         // Under keys that name the flag, after the other parts
         expect(keysOf('monthlyTrend')).toEqual([['monthlyTrend', 3, '2026-09', 'projected']]);
         expect(keysOf('monthlyTrendByCategory'))
@@ -526,6 +529,9 @@ describe('useTrendsTab', () => {
         .toEqual([['2026-07', 980], ['2026-08', 1042], ['2026-09', 980.4]]);
       expect(result.current.monthInProgress).toBe('2026-09');
       expect(result.current.projected).toBe(false);
+      // What the cards compare: September at what it billed so far
+      expect(result.current.periodMonths)
+        .toEqual({ includesMonthInProgress: true, projected: false });
       expect(keysOf('monthlyTrend')).toEqual([['monthlyTrend', 3, '2026-09']]);
     });
 
@@ -539,6 +545,8 @@ describe('useTrendsTab', () => {
       expect(api.fetchMonthlyTrendByCategory).toHaveBeenCalledWith(3, '2026-08', allAccounts);
       expect(result.current.monthInProgress).toBeNull();
       expect(result.current.projected).toBe(false);
+      expect(result.current.periodMonths)
+        .toEqual({ includesMonthInProgress: false, projected: false });
       expect(keysOf('monthlyTrend')).toEqual([['monthlyTrend', 3, '2026-08']]);
     });
 

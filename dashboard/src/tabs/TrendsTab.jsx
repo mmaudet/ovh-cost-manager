@@ -4,8 +4,6 @@ import {
 import { AiEndpointsTrend } from '../components/AiEndpointsTrend.jsx';
 import { ProjectionCheckbox } from '../components/ProjectionCheckbox.jsx';
 import { formatYearMonth } from '../utils/format.js';
-import { comparedMonthsOf } from '../utils/monthComparison.js';
-import { isMonthInProgress } from '../utils/months.js';
 import { lineParts, trendAmount, trendMonthLabel } from '../utils/trendLines.js';
 import { PERIOD_OPTIONS } from '../utils/trendPeriods.js';
 import { comparedVariation, comparesPartialMonth } from '../utils/variation.js';
@@ -73,10 +71,10 @@ const seriesLines = (
 };
 
 // The Trends tab, which the shell renders while it is active: what useTrendsTab() returns,
-// with the shell's months list, language, translations (t) and amount format (fmt).
+// with the shell's language, translations (t) and amount format (fmt).
 const TrendsTab = ({
   trendPeriod, monthlyTrend, trendByCategory, hiddenCategories, toggleCategory, gpuTrend,
-  aiEndpointsTrend, monthInProgress, projected, months, language, t, fmt,
+  aiEndpointsTrend, monthInProgress, projected, periodMonths, language, t, fmt,
 }) => {
   const currentPeriodLabel = (PERIOD_OPTIONS.find(o => o.months === trendPeriod) || {}).key;
   // What each line chart draws of the month in progress that the period covers (#217): the
@@ -101,17 +99,14 @@ const TrendsTab = ({
   const spansTwoMonths = monthlyTrend.length > 1;
   const growth = spansTwoMonths
     ? comparedVariation(
-      comparedMonthsOf(
-        months, { value: firstMonth.yearMonth }, { value: lastMonth.yearMonth }, { projected },
-      ),
-      firstMonth.cost, lastMonth.cost, language, { notComputable: 'periodGrowthNotComputable' },
+      periodMonths, firstMonth.cost, lastMonth.cost, language,
+      { notComputable: 'periodGrowthNotComputable' },
     )
     : null;
   // The annual projection, 12 times the cost of the last month: none, "—" with a tooltip, while
-  // that month is the month in progress at what it billed so far (#216, #217)
-  const lastMonthPartial = lastMonth !== undefined && comparesPartialMonth({
-    includesMonthInProgress: isMonthInProgress(months, { value: lastMonth.yearMonth }), projected,
-  });
+  // that month is the month in progress at what it billed so far (#216, #217), the only month in
+  // progress that the period may hold, since it is always the latest
+  const lastMonthPartial = monthlyTrend.length > 0 && comparesPartialMonth(periodMonths);
 
   return (
     <div className="space-y-6">
