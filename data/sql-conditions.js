@@ -62,14 +62,21 @@ function idInList(column, ids) {
 // The conditions that keep the bill lines of the Veeam backups, by what they pay for, each for
 // the alias of the bill lines' table in the query, to join with AND to its WHERE clause, with
 // their parameters: the VMs backed up, the lines of the backup resource type, and the
-// Enterprise licences, the lines whose description names Veeam and Enterprise. The Veeam
-// backups count their services (#32), which the Compare tab's backup comparison unfolds its
-// two rows into (#197).
+// Enterprise licences, the other lines whose description names Veeam and Enterprise. No line
+// is both. The Veeam backups count their services (#32), which the Compare tab's backup
+// comparison unfolds its two rows into (#197).
 const ofBackupLines = {
   vms: (alias) => ({ sql: `${alias}.resource_type = ?`, params: ['backup'] }),
+  // The Enterprise licences: the lines that name Veeam and Enterprise, but the VMs'. OVH bills
+  // each VM that it backs up with Veeam Enterprise on one line, of the backup resource type,
+  // "Veeam Backup Enterprise Rental for 1 month": the licence, rented for that VM, is its
+  // backup, which the VMs count, not a charge of its own. Counted among the licences too, that
+  // line doubled the cost of the backups (#223). IS NOT keeps the lines stored without a
+  // resource type, which the VMs do not count.
   enterprise: (alias) => ({
-    sql: `(LOWER(${alias}.description) LIKE ? AND LOWER(${alias}.description) LIKE ?)`,
-    params: ['%veeam%', '%enterprise%'],
+    sql: `(LOWER(${alias}.description) LIKE ? AND LOWER(${alias}.description) LIKE ?
+      AND ${alias}.resource_type IS NOT ?)`,
+    params: ['%veeam%', '%enterprise%', 'backup'],
   }),
 };
 
