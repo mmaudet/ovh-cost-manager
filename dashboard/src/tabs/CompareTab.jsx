@@ -9,7 +9,7 @@ import { UnfoldingRow } from '../components/UnfoldingRow.jsx';
 import { Variation } from '../components/Variation.jsx';
 import { formatMonthLabel } from '../utils/format.js';
 import { comparisonValues, whileInProgress } from '../utils/monthComparison.js';
-import { isInProgress, monthLabel } from '../utils/months.js';
+import { isMonthInProgress, monthLabel } from '../utils/months.js';
 import { firstRowOfEachProject, projectComparisonRows } from '../utils/projectComparison.js';
 import { variationPercent } from '../utils/variation.js';
 
@@ -78,8 +78,8 @@ const CompareTab = ({
   const monthBLabel = formatMonthLabel(compareMonthB?.value, language);
   // Whether either is the month in progress, as the months list marks it: no variation from one
   // to the other is computed then, as it would compare a partial month with a complete one (#216)
-  const monthInProgress = isInProgress(months, compareMonthA)
-    || isInProgress(months, compareMonthB);
+  const monthInProgress = isMonthInProgress(months, compareMonthA)
+    || isMonthInProgress(months, compareMonthB);
 
   // The projects of months A and B, paired by id (#55), and by account in the Account column
   // (#119), in the order the user sorts them, by month A until then (#146)

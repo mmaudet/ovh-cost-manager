@@ -22,7 +22,7 @@ import {
 import { formatCurrency, formatMonthLabel, yearMonthOf } from '../utils/format.js';
 import { parseSqliteDate } from '../utils/sqliteDate.js';
 import { generateMarkdownReport, reportFileName } from '../utils/markdownReport.js';
-import { holdsMonth, isInProgress } from '../utils/months.js';
+import { holdsMonth, isMonthInProgress } from '../utils/months.js';
 import { shiftMonths } from '../utils/monthWindow.js';
 import { variationDisplay, variationPercent } from '../utils/variation.js';
 import { useWebCloudTab } from '../tabs/useWebCloudTab.js';
@@ -347,7 +347,7 @@ export default function Dashboard() {
   const isFirstBilledMonth = selectedMonth?.value === months[months.length - 1]?.value;
   // Whether the month selected is the month in progress, whose cost lacks that of the recurring
   // services that it has not billed yet (#216), as the months list marks it now
-  const selectedMonthInProgress = isInProgress(months, selectedMonth);
+  const selectedMonthInProgress = isMonthInProgress(months, selectedMonth);
 
   // Calculations
   const total = summary?.total || 0;
@@ -558,7 +558,7 @@ export default function Dashboard() {
                       const md = generateMarkdownReport(
                         summary, byService, byProject, selectedMonth, language, {
                           scope,
-                          inProgress: selectedMonthInProgress ? t('monthInProgress') : null,
+                          inProgressLabel: selectedMonthInProgress ? t('monthInProgress') : null,
                         },
                       );
                       const blob = new Blob([md], { type: 'text/markdown' });

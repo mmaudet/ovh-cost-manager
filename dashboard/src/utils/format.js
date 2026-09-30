@@ -57,10 +57,13 @@ const formatYearMonth = (yearMonth, language = 'fr') => (
 
 // The long name of a 'YYYY-MM' month and its year, capitalised as in the label of
 // /api/months, which is always in French (#33): Septembre 2026 in French, September 2026
-// in English, as the month selectors and the report show it
-const formatMonthLabel = (yearMonth, language = 'fr') => (
-  formatMonth(yearMonth, language, { name: 'long', capitalised: true })
-);
+// in English, as the month selectors and the report show it. The month in progress follows it
+// with what the page calls it, inProgressLabel, in brackets, where they give one (#216):
+// Septembre 2026 (en cours).
+const formatMonthLabel = (yearMonth, language = 'fr', { inProgressLabel = null } = {}) => {
+  const label = formatMonth(yearMonth, language, { name: 'long', capitalised: true });
+  return label && inProgressLabel ? `${label} (${inProgressLabel})` : label;
+};
 
 // A 'YYYY-MM' month and its year as a sentence names it, by the month's long name: août 2026 in
 // French, August 2026 in English
