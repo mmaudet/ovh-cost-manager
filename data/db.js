@@ -2349,8 +2349,9 @@ const cloudDetailOps = {
     projected = false,
   } = {}) => {
     // No product set apart, so that the products that productFigures() names `others` are
-    // every one of them, the credit aside
-    const { figuresOf, others: everyProduct, credits } = productFigures(
+    // every one of them, the credit aside: what the bills used, `credits`, and with the projected
+    // option, its projected part, `projectedCredits`
+    const { figuresOf, others: everyProduct, ...credit } = productFigures(
       projectBillLines(projectId, fromDate, toDate, account, { projected }), [], { projected },
     );
     return {
@@ -2358,8 +2359,7 @@ const cloudDetailOps = {
       products: everyProduct.products.map((entry) => ({
         ...entry, charges: figuresOf(entry.product).charges,
       })),
-      credits,
-      ...(projected ? { projectedCredits: figuresOf('credits').projected } : {}),
+      ...credit,
     };
   },
 

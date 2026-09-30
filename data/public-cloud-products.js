@@ -72,7 +72,13 @@ function chargeOf(description) {
 
 const toCents = (amount) => Math.round(amount * 100) / 100;
 
-// What entries add up to, to the cent, by what amountOf() reads of each
+/**
+ * What entries add up to, to the cent: the products of the other services, their costs or their
+ * projected parts (productFigures()).
+ * @param {object[]} entries
+ * @param {function(object): number} amountOf - What an entry counts, such as its cost
+ * @returns {number}
+ */
 const sumOf = (entries, amountOf) => toCents(
   entries.reduce((sum, entry) => sum + amountOf(entry), 0),
 );
@@ -84,11 +90,11 @@ const nonZeroByCost = (entries, nameOf) => entries
   .sort((a, b) => b.total - a.total || nameOf(a).localeCompare(nameOf(b)));
 
 // A product's charges, from what its lines add up to by charge: each to the cent, those at 0 €
-// left out, as the products at 0 € are, the most expensive first, then by charge; and what
-// partOf() gives of the projected part of each (productFigures())
-const chargeList = (charges, partOf) => nonZeroByCost(
+// left out, as the products at 0 € are, the most expensive first, then by charge; and the
+// projected part of each, to the cent, as projectedField() gives it (productFigures())
+const chargeList = (charges, projectedField) => nonZeroByCost(
   [...charges].map(([charge, { total, projected }]) => ({
-    charge, total: toCents(total), ...partOf(projected),
+    charge, total: toCents(total), ...projectedField(() => toCents(projected)),
   })),
   ({ charge }) => charge,
 );
@@ -100,8 +106,8 @@ const chargeList = (charges, partOf) => nonZeroByCost(
  * projected lines of the month in progress (linesOfPeriod() in data/db.js), each with its
  * projected part, `projected`: its whole cost for a projected line, 0 for a bill line (#219).
  * Each product, its charges and the products of `others` then give their projected parts too,
- * `projected`, what the projected parts of their lines add up to, to the cent, 0 for none; the
- * credit's is figuresOf('credits').projected. Without it, the figures give none, as before.
+ * `projected`, what the projected parts of their lines add up to, to the cent, 0 for none, and
+ * the credit its own, `projectedCredits`. Without it, the figures give none, as before.
  * @param {{description: ?string, domain: ?string, total_price: number,
  *   projected: (number|undefined)}[]} lines
  * @param {string[]} [apart] - Products that the caller shows on their own, left out of `others`
@@ -111,15 +117,15 @@ const chargeList = (charges, partOf) => nonZeroByCost(
  *   services: number, descriptions: number, charges: {charge: string, total: number,
  *   projected: (number|undefined)}[]}, others: {total: number, projected: (number|undefined),
  *   products: {product: string, total: number, projected: (number|undefined)}[]},
- *   credits: number}} Each product's cost, the number of services and of descriptions that bill
- *   it, and its charges, each with what its lines add up to (see chargeList()); the products
- *   that no card of their own counts, nor `apart`, that cost anything, the most expensive first,
- *   and their total; and the credit that the lines used
+ *   credits: number, projectedCredits: (number|undefined)}} Each product's cost, the number of
+ *   services and of descriptions that bill it, and its charges, each with what its lines add up
+ *   to (see chargeList()); the products that no card of their own counts, nor `apart`, that cost
+ *   anything, the most expensive first, and their total; and the credit that the lines used
  */
 function productFigures(lines, apart = CARD_PRODUCTS, { projected = false } = {}) {
-  // What a figure gives of its projected part: with the projected option only, so that the
-  // figures read as before without it
-  const partOf = (amount) => (projected ? { projected: toCents(amount) } : {});
+  // The field of a figure that gives its projected part, `projected`, which readPart() reads:
+  // with the projected option only, so that the figures read as before without it
+  const projectedField = (readPart) => (projected ? { projected: readPart() } : {});
   const byProduct = new Map();
   for (const line of lines) {
     const product = publicCloudProductOf(line.description);
@@ -140,30 +146,34 @@ function productFigures(lines, apart = CARD_PRODUCTS, { projected = false } = {}
       projected: ofCharge.projected + (line.projected || 0),
     });
   }
-  const figuresOf = (product) => ({
+  // What a product's lines add up to, to the cent, and their projected part
+  const amountsOf = (product) => ({
     total: toCents(byProduct.get(product)?.total || 0),
-    ...partOf(byProduct.get(product)?.projected || 0),
+    ...projectedField(() => toCents(byProduct.get(product)?.projected || 0)),
+  });
+  const figuresOf = (product) => ({
+    ...amountsOf(product),
     services: byProduct.get(product)?.services.size || 0,
     descriptions: byProduct.get(product)?.descriptions.size || 0,
-    charges: chargeList(byProduct.get(product)?.charges ?? [], partOf),
+    charges: chargeList(byProduct.get(product)?.charges ?? [], projectedField),
   });
   const products = nonZeroByCost(
     [...byProduct.keys()]
       .filter((product) => !apart.includes(product) && product !== 'credits')
-      .map((product) => {
-        const { total, projected: part } = figuresOf(product);
-        return { product, total, ...partOf(part) };
-      }),
+      .map((product) => ({ product, ...amountsOf(product) })),
     ({ product }) => product,
   );
+  // The Public Cloud credit that the lines used, which pays for no product
+  const credit = amountsOf('credits');
   return {
     figuresOf,
     others: {
       total: sumOf(products, ({ total }) => total),
-      ...partOf(sumOf(products, ({ projected: part = 0 }) => part)),
+      ...projectedField(() => sumOf(products, (entry) => entry.projected)),
       products,
     },
-    credits: figuresOf('credits').total,
+    credits: credit.total,
+    ...(projected ? { projectedCredits: credit.projected } : {}),
   };
 }
 
