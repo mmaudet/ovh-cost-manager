@@ -4,6 +4,7 @@ import {
 import { AiEndpointsTrend } from '../components/AiEndpointsTrend.jsx';
 import { ProjectedAmount } from '../components/ProjectedAmount.jsx';
 import { ProjectionCheckbox } from '../components/ProjectionCheckbox.jsx';
+import { FIGURE_CARD, SUMMARY_FIGURE } from '../utils/figureCards.js';
 import { formatMonthLabel, formatYearMonth } from '../utils/format.js';
 import { lineParts, trendAmount } from '../utils/trendLines.js';
 import { PERIOD_OPTIONS } from '../utils/trendPeriods.js';
@@ -119,6 +120,10 @@ const TrendsTab = ({
       { notComputable: 'periodGrowthNotComputable' },
     )
     : null;
+  // A card of the period, faded while no month of it has a bill
+  const periodCard = `${FIGURE_CARD} border border-gray-100${monthlyTrend.length === 0
+    ? ' opacity-50'
+    : ''}`;
   // The most expensive month of the period, the first of those that cost the same, and whether
   // its cost is the month in progress's projected cost, partly projected, which the card marks
   // so (#217)
@@ -242,11 +247,13 @@ const TrendsTab = ({
         />
       )}
 
+      {/* The cards of the period, which give a figure each (see figureCards.js): one a row on a
+          phone, where their amounts need the room, three a row from md */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className={`bg-white rounded-xl p-5 shadow-sm border border-gray-100 ${monthlyTrend.length === 0 ? 'opacity-50' : ''}`}>
+        <div className={periodCard}>
           <span className="text-gray-500 text-sm">{t('periodGrowth')}</span>
           <div
-            className={`text-3xl font-bold mt-2 ${growth === null || growth.why
+            className={`${SUMMARY_FIGURE} mt-2 ${growth === null || growth.why
               ? 'text-gray-400'
               : GROWTH_TONES[growth.tone]}`}
             title={growth?.why ? t(growth.why) : undefined}
@@ -258,9 +265,13 @@ const TrendsTab = ({
           {spansTwoMonths && lastMonthPartial && <MonthInProgressNote t={t} />}
           <p className="text-sm text-gray-500 mt-1">{t('overPeriod')} {t(currentPeriodLabel)}</p>
         </div>
-        <div className={`bg-white rounded-xl p-5 shadow-sm border border-gray-100 ${monthlyTrend.length === 0 ? 'opacity-50' : ''}`}>
+        <div className={periodCard}>
           <span className="text-gray-500 text-sm">{t('mostExpensiveMonth')}</span>
-          <div className={`text-3xl font-bold mt-2 ${monthlyTrend.length > 0 ? 'text-red-600' : 'text-gray-400'}`}>
+          <div
+            className={`${SUMMARY_FIGURE} mt-2 ${monthlyTrend.length > 0
+              ? 'text-red-600'
+              : 'text-gray-400'}`}
+          >
             {mostExpensive ? formatYearMonth(mostExpensive.yearMonth, language) : 'N/A'}
           </div>
           <p className="text-sm text-gray-500 mt-1">
@@ -277,10 +288,10 @@ const TrendsTab = ({
             )}
           </p>
         </div>
-        <div className={`bg-white rounded-xl p-5 shadow-sm border border-gray-100 ${monthlyTrend.length === 0 ? 'opacity-50' : ''}`}>
+        <div className={periodCard}>
           <span className="text-gray-500 text-sm">{t('annualProjection')}</span>
           <div
-            className={`text-3xl font-bold mt-2 ${monthlyTrend.length > 0 && !lastMonthPartial
+            className={`${SUMMARY_FIGURE} mt-2 ${monthlyTrend.length > 0 && !lastMonthPartial
               ? 'text-blue-600'
               : 'text-gray-400'}`}
             title={lastMonthPartial ? t('annualProjectionMonthInProgress') : undefined}
