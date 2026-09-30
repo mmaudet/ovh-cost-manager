@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { render } from '@testing-library/react';
-import { pieLabel, pieLabelLine } from '../../src/components/pieLabels.jsx';
+import { PieLabelLine, pieLabel } from '../../src/components/PieLabels.jsx';
 
 // What Recharts gives the label and the line of a slice of a pie: its share of the pie among
 // them, and the ends of the line, from the slice to its label
@@ -28,9 +28,9 @@ describe('pieLabel', () => {
   });
 });
 
-describe('pieLabelLine', () => {
+describe('PieLabelLine', () => {
   it('draws the line to the label of a slice that has one, as Recharts does', () => {
-    const { container } = render(<svg>{pieLabelLine(slice(0.2))}</svg>);
+    const { container } = render(<svg><PieLabelLine {...slice(0.2)} /></svg>);
 
     const line = container.querySelector('path.recharts-pie-label-line');
     expect(line).toHaveAttribute('d', 'M10,10L30,20');
@@ -38,6 +38,8 @@ describe('pieLabelLine', () => {
   });
 
   it('draws none to a slice without a label', () => {
-    expect(pieLabelLine(slice(0.01))).toBeNull();
+    const { container } = render(<svg><PieLabelLine {...slice(0.01)} /></svg>);
+
+    expect(container.querySelector('path')).toBeNull();
   });
 });

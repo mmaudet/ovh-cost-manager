@@ -2,7 +2,8 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell,
 } from 'recharts';
-import { pieLabel } from '../components/pieLabels.jsx';
+import { pieLabel } from '../components/PieLabels.jsx';
+import { PieLegend } from '../components/PieLegend.jsx';
 import { SortableHeader, sortRows } from '../components/SortableHeader.jsx';
 import { accountInBrackets } from '../utils/accounts.js';
 import { formatPercent, takesSingular } from '../utils/format.js';
@@ -93,15 +94,10 @@ const OverviewTab = ({
             </PieChart>
           </ResponsiveContainer>
         </div>
-        <div className="grid grid-cols-2 gap-2 mt-4">
-          {byService.map(s => (
-            <div key={s.name} className="flex items-center gap-2 text-sm">
-              <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: s.color }} />
-              <span className="text-gray-600 truncate">{s.name}</span>
-              <span className="ml-auto font-medium">{fmt(s.value)}€</span>
-            </div>
-          ))}
-        </div>
+        <PieLegend
+          data={byService} fmt={fmt} label={t('serviceBreakdown')}
+          className="grid grid-cols-2 gap-2 mt-4" truncate
+        />
       </div>
 
       {/* Bar Chart */}
@@ -160,13 +156,10 @@ const OverviewTab = ({
               </ResponsiveContainer>
             </div>
             <div className="flex flex-col justify-center gap-2">
-              {byResourceType.map(s => (
-                <div key={s.name} className="flex items-center gap-2 text-sm">
-                  <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: s.color }} />
-                  <span className="text-gray-600">{s.name}</span>
-                  <span className="ml-auto font-medium">{fmt(s.value)}€</span>
-                </div>
-              ))}
+              <PieLegend
+                data={byResourceType} fmt={fmt} label={t('resourceTypeBreakdown')}
+                className="space-y-2"
+              />
               <button
                 onClick={() => { setActiveTab('infrastructure'); setSelectedResourceType(null); }}
                 className="text-xs text-blue-600 hover:underline mt-1 text-left"
@@ -227,15 +220,10 @@ const OverviewTab = ({
                   </PieChart>
                 </ResponsiveContainer>
               </div>
-              <div className="space-y-1 mt-2">
-                {gpuSummary.byModel.map(m => (
-                  <div key={m.gpu_model} className="flex items-center gap-2 text-sm">
-                    <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: m.color }} />
-                    <span className="text-gray-600">{m.gpu_model}</span>
-                    <span className="ml-auto font-medium">{fmt(m.total)}€</span>
-                  </div>
-                ))}
-              </div>
+              <PieLegend
+                data={gpuSummary.byModel} nameKey="gpu_model" dataKey="total" fmt={fmt}
+                label={t('gpuByModel')} className="space-y-1 mt-2"
+              />
             </div>
 
             {/* GPU by project */}

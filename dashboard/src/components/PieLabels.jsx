@@ -1,7 +1,7 @@
 import { Curve } from 'recharts';
 
 // The share of its pie under which a slice gets no label (#226): the labels of thinner slices
-// run into those of their neighbours, and the legend next to every pie names each slice
+// run into those of their neighbours, and the legend of every pie (PieLegend) names each slice
 const MIN_LABELLED_SHARE = 0.03;
 
 // Whether a slice gets a label, from what Recharts gives its label or line: its share of the pie
@@ -18,13 +18,14 @@ const isLabelled = ({ percent }) => percent >= MIN_LABELLED_SHARE;
 const pieLabel = (text) => (slice) => (isLabelled(slice) ? text(slice) : null);
 
 /**
- * The line from a pie's slice to its label, for the labelLine prop of Recharts' Pie: the line
- * that Recharts draws by default, and none on a slice without a label (pieLabel()).
+ * The line from a pie's slice to its label, for the labelLine prop of Recharts' Pie, which
+ * gives each slice's line the props of this element (labelLine={<PieLabelLine />}): the line
+ * that Recharts draws by default, and none to a slice without a label (pieLabel()).
  * @param {object} props - What Recharts gives the line of a slice
  * @returns {?JSX.Element}
  */
-const pieLabelLine = (props) => (isLabelled(props)
+const PieLabelLine = (props) => (isLabelled(props)
   ? <Curve {...props} type="linear" className="recharts-pie-label-line" />
   : null);
 
-export { pieLabel, pieLabelLine };
+export { PieLabelLine, pieLabel };

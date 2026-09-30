@@ -1,7 +1,8 @@
 import { Fragment } from 'react';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
 import Modal from '../components/Modal.jsx';
-import { pieLabel, pieLabelLine } from '../components/pieLabels.jsx';
+import { PieLabelLine, pieLabel } from '../components/PieLabels.jsx';
+import { PieLegend } from '../components/PieLegend.jsx';
 import TableActions from '../components/TableActions.jsx';
 import { SortableHeader, sortRows } from '../components/SortableHeader.jsx';
 import { AiEndpointsByModel } from '../components/AiEndpointsByModel.jsx';
@@ -350,15 +351,21 @@ const PublicCloudTab = ({
                                   const key = c.resource_type || 'other';
                                   byType[key] = (byType[key] || 0) + (c.total_price || 0);
                                 });
+                                const typeColors = [
+                                  '#3b82f6', '#ef4444', '#f59e0b', '#10b981', '#8b5cf6', '#ec4899',
+                                  '#6b7280',
+                                ];
+                                // Each resource kind, the most expensive first, with its
+                                // colour, for the pie and its legend
                                 const chartData = Object.entries(byType)
                                   .map(([kind, value]) => ({
-                                    kind,
                                     name: cloudKindLabel(kind, t),
                                     value: Math.round(value * 100) / 100,
                                   }))
-                                  .sort((a, b) => b.value - a.value);
-                                const typeColors = ['#3b82f6', '#ef4444', '#f59e0b', '#10b981', '#8b5cf6', '#ec4899', '#6b7280'];
-                                const colorOf = (i) => typeColors[i % typeColors.length];
+                                  .sort((a, b) => b.value - a.value)
+                                  .map((slice, i) => ({
+                                    ...slice, color: typeColors[i % typeColors.length],
+                                  }));
                                 const heading = language === 'en'
                                   ? 'Consumption by resource'
                                   : 'Consommation par ressource';
@@ -379,35 +386,22 @@ const PublicCloudTab = ({
                                           label={pieLabel(
                                             ({ name, value }) => `${name}: ${fmt(value)}€`,
                                           )}
-                                          labelLine={pieLabelLine}
+                                          labelLine={<PieLabelLine />}
                                         >
-                                          {chartData.map((_, i) => (
-                                            <Cell key={i} fill={colorOf(i)} />
+                                          {chartData.map((slice, i) => (
+                                            <Cell key={i} fill={slice.color} />
                                           ))}
                                         </Pie>
                                         <Tooltip formatter={(v) => `${fmt(v)}€`} />
                                       </PieChart>
                                     </ResponsiveContainer>
-                                    {/* Its legend, each resource with its amount, as those of
-                                        the Overview: the pie leaves out the labels of its
-                                        thinnest slices, and all of them on a phone (#226) */}
-                                    <ul aria-label={heading} className="space-y-1 mt-2">
-                                      {chartData.map((entry, i) => (
-                                        <li
-                                          key={entry.kind}
-                                          className="flex items-center gap-2 text-sm"
-                                        >
-                                          <span
-                                            className="w-2.5 h-2.5 rounded-full flex-shrink-0"
-                                            style={{ backgroundColor: colorOf(i) }}
-                                          />
-                                          <span className="text-gray-600">{entry.name}</span>
-                                          <span className="ml-auto font-medium">
-                                            {fmt(entry.value)}€
-                                          </span>
-                                        </li>
-                                      ))}
-                                    </ul>
+                                    {/* Its legend, as those of the Overview: the pie leaves out
+                                        the labels of its thinnest slices, and all of them on a
+                                        phone (#226) */}
+                                    <PieLegend
+                                      data={chartData} fmt={fmt} label={heading}
+                                      className="space-y-1 mt-2"
+                                    />
                                   </div>
                                 ) : (
                                   <div className="flex items-center justify-center h-32 text-gray-400 text-sm">
