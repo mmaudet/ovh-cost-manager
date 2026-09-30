@@ -10,7 +10,7 @@ This project and everyone participating in it is governed by our [Code of Conduc
 
 ### Reporting Bugs
 
-Before creating bug reports, please check the existing issues to avoid duplicates. When you create a bug report, include as many details as possible:
+Before creating bug reports, please check the existing issues to avoid duplicates. Open a bug report with the **Bug report** form, which asks for your version of OCM, and include as many details as possible:
 
 - **Use a clear and descriptive title**
 - **Describe the exact steps to reproduce the problem**
@@ -22,7 +22,7 @@ To report a security vulnerability, do not open an issue: see [SECURITY.md](SECU
 
 ### Suggesting Enhancements
 
-Enhancement suggestions are tracked as GitHub issues. When creating an enhancement suggestion:
+Enhancement suggestions are tracked as GitHub issues, opened with the **Feature request** form. When creating an enhancement suggestion:
 
 - **Use a clear and descriptive title**
 - **Provide a detailed description of the suggested enhancement**
@@ -52,6 +52,13 @@ Enhancement suggestions are tracked as GitHub issues. When creating an enhanceme
 - Use the imperative mood ("Move cursor to..." not "Moves cursor to...")
 - Limit the first line to 72 characters or less
 - Reference issues and pull requests when relevant
+
+## How issues are handled
+
+- **Triage.** Every new issue gets the `needs-triage` label, which the forms set. The maintainers triage the new issues together, about once a week. Each one then gets a single answer: the milestone it goes to, the reason it will not be done (`wontfix`), or a question (`needs-info`).
+- **Milestones.** An accepted issue goes to the milestone of the version that will bring it, so the [milestones](https://github.com/mmaudet/ovh-cost-manager/milestones) show what comes next.
+- **Releases.** A minor version comes out once its milestone is complete. Between two of them, a patch version comes out only for a bug that makes figures wrong, breaks the dashboard, or touches security. Anything else waits for the next minor version.
+- **Follow-up.** The pull request that fixes an issue closes it, and the release notes list it. The maintainers comment on an issue at a release only when you need to act, such as re-importing, or to confirm the fix.
 
 ## Pull Requests and the Changelog
 

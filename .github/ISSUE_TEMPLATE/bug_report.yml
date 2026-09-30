@@ -1,0 +1,56 @@
+name: Bug report
+description: Something OCM shows or does wrong
+labels: ["bug", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report it. The maintainers triage new issues together, about once a week: see [how issues are handled](https://github.com/mmaudet/ovh-cost-manager/blob/main/CONTRIBUTING.md#how-issues-are-handled).
+
+        To report a security vulnerability, do not open an issue: see [SECURITY.md](https://github.com/mmaudet/ovh-cost-manager/blob/main/SECURITY.md).
+  - type: input
+    id: version
+    attributes:
+      label: OCM version
+      description: The dashboard's footer shows it, such as « OVH Cost Manager v3.3.3 ».
+      placeholder: v3.3.3
+    validations:
+      required: true
+  - type: dropdown
+    id: deployment
+    attributes:
+      label: How you run OCM
+      options:
+        - Docker image (docker-compose.yml)
+        - Docker image with SSO (docker-compose.sso.yml)
+        - Kubernetes or another orchestrator
+        - From the sources (npm)
+    validations:
+      required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What OCM showed or did, in which tab, for which month and which account.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+      description: What you expected instead, such as the figure that OVHcloud's own pages show.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open the Compare tab
+        2. Pick the month in progress as month B
+        3. …
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: Screenshots or logs
+      description: A screenshot of what you see, or the import's log. Hide any figure or name that you do not want to publish.
