@@ -12,6 +12,23 @@ sections were written afterwards from the git history.
 
 <!-- scripts/release.sh inserts each new version above the first version heading. -->
 
+## 3.4.0 - 2026-10-01
+
+<!-- Upgrade notes and highlights of this release, if any. -->
+
+### New features
+* feat: project the month in progress in the Trends tab by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/233
+* feat: lead from the header's badge to the services about to expire by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/234
+* feat: project the month in progress in the Compare tab's totals, infrastructure and backup by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/238
+* feat: project the month in progress in the Compare tab's projects and their products by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/240
+### Bug fixes
+* fix: set the budget apart from the consumed amount on a phone by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/239
+### Maintenance
+* docs: add issue forms and describe how issues are handled by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/237
+* docs: document the month in progress and its projection by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/241
+
+**Full Changelog**: https://github.com/mmaudet/ovh-cost-manager/compare/v3.3.3...v3.4.0
+
 ## 3.3.3 - 2026-09-30
 
 Three fixes that a user of 3.3.2 reported, and the month in progress told apart:
