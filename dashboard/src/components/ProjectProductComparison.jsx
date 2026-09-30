@@ -1,5 +1,7 @@
 import { formatMonthLabel } from '../utils/format.js';
-import { comparisonValues, pairMonths, valuesAsShown } from '../utils/monthComparison.js';
+import {
+  amountsOf, comparisonValues, pairMonths, valuesAsShown,
+} from '../utils/monthComparison.js';
 import { publicCloudProductLabel } from '../utils/publicCloudProducts.js';
 import { MonthAnswersMessage, useMonthAnswers } from './MonthAnswers.jsx';
 import { ComparedAmount } from './ProjectedAmount.jsx';
@@ -10,9 +12,17 @@ import { Variation } from './Variation.jsx';
 // What the server answers for a month whose bills charged the project nothing
 const NOTHING_BILLED = { total: 0, products: [], credits: 0 };
 
-// What projected lines make of an amount of a month (#219): the part that the server gives it,
-// for the month in progress at its projected cost, 0 for none, as in a complete month
-const projectedPartOf = (row) => row?.projected ?? 0;
+/**
+ * The Public Cloud credit that the bills of a month used, which pays for no product, as the
+ * comparison reads the amounts of its rows (amountsOf()): what it adds up to, and what projected
+ * lines make of it, 0 for none, for the month in progress at its projected cost (#219).
+ * @param {{ credits: number, projectedCredits: (number|undefined) }} answer - What the server
+ *   answers for the month's products
+ * @returns {{ total: number, projected: number }}
+ */
+const creditOf = ({ credits, projectedCredits }) => amountsOf({
+  total: credits, projected: projectedCredits,
+});
 
 // The value of a product in each column that sorts the comparison (#146): its name as the table
 // gives it, its cost in months A and B, and the variation from one to the other
@@ -24,15 +34,17 @@ const productValues = (t) => comparisonValues(
 // the products (#195): the charge itself, its cost in months A and B, and the variation
 const CHARGE_VALUES = comparisonValues('product', (row) => row.charge);
 
-// The rows of the comparison, from the products of months A and B, each the most expensive
-// first: those of month A, in its order, then those of month B only, in theirs, each with its
-// cost and its charges in both months, 0 € and none in a month whose bills did not charge it,
-// and what projected lines make of each cost (#219)
-const productRows = (billedA, billedB) => pairMonths(
-  billedA.products, billedB.products, ({ product }) => product,
-).map(({ key, rowA, rowB, valA, valB }) => ({
+// The rows of the comparison, from what the server answers for the products of months A and B,
+// each the most expensive first: those of month A, in its order, then those of month B only, in
+// theirs, each with its cost and its charges in both months, 0 € and none in a month whose bills
+// did not charge it, and what projected lines make of each cost, as pairMonths() gives it (#219)
+const productRows = (answerA, answerB) => pairMonths(
+  answerA.products, answerB.products, ({ product }) => product,
+).map(({
+  key, rowA, rowB, valA, valB, projectedA, projectedB,
+}) => ({
   product: key, chargesA: rowA?.charges ?? [], chargesB: rowB?.charges ?? [], valA, valB,
-  projectedA: projectedPartOf(rowA), projectedB: projectedPartOf(rowB),
+  projectedA, projectedB,
 }));
 
 /**
@@ -61,8 +73,10 @@ const ProductCharges = ({
   chargesA, chargesB, sort, comparedMonths, fmt, language, t,
 }) => sortUnfolded(
   pairMonths(chargesA, chargesB, ({ charge }) => charge)
-    .map(({ key, rowA, rowB, valA, valB }) => ({
-      charge: key, valA, valB, projectedA: projectedPartOf(rowA), projectedB: projectedPartOf(rowB),
+    .map(({
+      key, valA, valB, projectedA, projectedB,
+    }) => ({
+      charge: key, valA, valB, projectedA, projectedB,
     })),
   sort, valuesAsShown(comparedMonths, CHARGE_VALUES), language,
 ).map(({
@@ -116,11 +130,15 @@ export default function ProjectProductComparison({
       </div>
     );
   }
-  const billedA = dataA ?? NOTHING_BILLED;
-  const billedB = dataB ?? NOTHING_BILLED;
-  const rows = productRows(billedA, billedB);
-  // Whether the bills of either month used a credit
-  const credited = billedA.credits !== 0 || billedB.credits !== 0;
+  // What the server answers for each month, at its projected cost for the month in progress
+  // while the page projects it (#219)
+  const answerA = dataA ?? NOTHING_BILLED;
+  const answerB = dataB ?? NOTHING_BILLED;
+  const rows = productRows(answerA, answerB);
+  const creditA = creditOf(answerA);
+  const creditB = creditOf(answerB);
+  // Whether the bills of either month used a credit, or projected lines use one
+  const credited = creditA.total !== 0 || creditB.total !== 0;
 
   if (rows.length === 0 && !credited) {
     return <div className="text-gray-400 text-sm">{t('noProjectData')}</div>;
@@ -204,12 +222,12 @@ export default function ProjectProductComparison({
             <td className={LABEL_PADDING}>{t('cloudCreditUsed')}</td>
             <td className="p-3 text-right">
               <ComparedAmount
-                amount={billedA.credits} projectedPart={billedA.projectedCredits} fmt={fmt} t={t}
+                amount={creditA.total} projectedPart={creditA.projected} fmt={fmt} t={t}
               />
             </td>
             <td className="p-3 text-right">
               <ComparedAmount
-                amount={billedB.credits} projectedPart={billedB.projectedCredits} fmt={fmt} t={t}
+                amount={creditB.total} projectedPart={creditB.projected} fmt={fmt} t={t}
               />
             </td>
             {/* No variation of a credit to compute (#65) */}

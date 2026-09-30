@@ -1,4 +1,4 @@
-import { byNameAndAccount } from './monthComparison.js';
+import { amountsOf, byNameAndAccount } from './monthComparison.js';
 import { variationPercent } from './variation.js';
 
 // The rows of the project comparison of the Compare tab, from the projects of months A and B
@@ -30,20 +30,21 @@ const projectOf = ({ projectId, projectName }) => (
 // account when they name one, as the other comparisons of the tab pair their rows
 const identity = byNameAndAccount(projectOf);
 
-// The row of a project, as month A lists it, or as month B does when month A does not
+// The row of a project, as month A lists it, or as month B does when month A does not, with its
+// amounts in each month, as every comparison of the tab reads them (amountsOf())
 const row = (projectA, projectB) => {
   const project = projectA ?? projectB;
   const { projectId, projectName } = project;
-  const totalA = projectA?.total ?? 0;
-  const totalB = projectB?.total ?? 0;
+  const { total: totalA, projected: projectedA } = amountsOf(projectA);
+  const { total: totalB, projected: projectedB } = amountsOf(projectB);
   return {
     projectId,
     projectName,
     ...('account' in project ? { account: project.account } : {}),
     totalA,
     totalB,
-    projectedA: projectA?.projected ?? 0,
-    projectedB: projectB?.projected ?? 0,
+    projectedA,
+    projectedB,
     variation: variationPercent(totalA, totalB),
   };
 };
