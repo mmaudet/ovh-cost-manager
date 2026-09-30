@@ -59,6 +59,7 @@ New in version 3.1.0.
 - **AI Endpoints Models** (new in version 3.3.0): each AI Endpoints model that the month's bills name, with its input tokens, its output tokens and its cost, in the Public Cloud tab, and its monthly cost in the Trends tab (see [AI Endpoints Models](#ai-endpoints-models))
 - **Month Comparison**: Side-by-side comparison between two months with variation tracking, including infrastructure, backup, Private Cloud, and per-project product breakdowns, whose rows unfold into their services and charges since version 3.3.0 (see [Month Comparison](#month-comparison))
 - **Trend Analysis**: Historical trends with configurable period (3-36 months), and GPU and AI Endpoints evolution charts
+- **Month in Progress** (marked since version 3.3.3, projected since 3.4.0): the month whose bills still lack a service billed every month is marked in progress rather than compared as a complete month, and a checkbox projects its cost in the Trends and Compare tabs (see [Month in Progress](#month-in-progress))
 - **Budget Tracking**: Visual budget consumption with configurable targets
 
 ### Real-time Monitoring
@@ -549,6 +550,44 @@ The services and charges of a row follow the table's sort, within their row, by 
 
 The services and charges are those of the account selected in the header, and, for the Unknown account, those of the bills without an account. With all accounts shown, a project's products and their charges add up the bills of every account. When the instance holds several accounts, the lists then name each row's account: each service names its own in brackets, by its name, or else its NIC handle, and the Unknown account as such. A service that two accounts billed shows once for each, so that its rows add up to the row's amounts.
 
+## Month in Progress
+
+OVHcloud bills some accounts early in the month and others late. So the bills of the month of today may still lack some of the services billed every month: its cost so far is below what the month will cost, and comparing it with a complete month would show a drop that is not one. Since version 3.3.3, OCM tells that month apart; since version 3.4.0, it can project its cost.
+
+The words are those of the [glossary](CONTEXT.md):
+
+- **Recurring service**: a service that the bills of each of the three months before the month of today charged.
+- **Month in progress**: the month of today, as the server's clock gives it, while it has not billed each recurring service yet. Once the import brings the last late bill, the month is complete, however early it is. A month of today without any bill yet is not listed.
+- **Projected cost**: the cost of the month in progress with each recurring service that it has not billed yet counted at its cost of the month before, assuming it stays the same.
+
+OCM tells them when the server reads the bills: the bills already imported show them, without a new import. A yearly renewal or a one-off purchase is not a recurring service, and keeps no month in progress.
+
+### How the Page Marks It
+
+- **Header**: the « Coût total du mois » card says « en cours », and its variation against the month before reads « — », with a tooltip that says why. The header's month selector shows no mark, for the room it would take.
+- **Compare tab**: the month selectors name it « Septembre 2026 (en cours) », and every variation that involves it reads « — »: in the totals, in the tables, and in the services and charges they unfold into.
+- **Trends tab**: both line charts draw the segment to it dashed, with a hollow point, and their tooltip gives what it billed so far. The growth over the period and the annual projection read « — », marked « mois en cours ».
+- **Markdown report**: it names the month « (en cours) ».
+
+### Projecting Its Cost
+
+The « Projeter le mois en cours » checkbox ("Project the month in progress") projects it. It sits next to the Trends tab's period and next to the Compare tab's months, and it is one setting for the whole page, off by default, which the browser remembers. While it is ticked:
+
+- **Trends tab**: both line charts end on the projected cost, still dashed, and their tooltip gives what the month billed and its projected cost. The growth and the annual projection are computed on it, and the most expensive month, when it is the month in progress, reads « projeté ».
+- **Compare tab**: the month in progress counts at its projected cost everywhere:
+  - in the totals, the service type chart, and the infrastructure, Private Cloud and backup comparisons;
+  - in the comparison by project and each project's products;
+  - in the services and charges they unfold into.
+
+  An amount that includes a projected part is in italics and marked « projeté », with a tooltip that gives what was billed and the projected cost; in the chart, the projected part is stacked on the billed bar, lighter and dashed. A service, product or charge that only the projection brings is marked « projeté ». The variations are computed on the projected cost.
+- **Everywhere else**: the header's cards, the Overview and the other tabs show what was billed, whatever the setting.
+
+A service not billed yet counts as its bill lines of the month before, with their resource type, service type, project, product and charge: it shows where it showed then. So does a Public Cloud project's credit, with the rest of its project's lines, when the month has not billed that project yet. In the chart, a projected credit lowers its service type's bar rather than add a segment to it: the bar's height is always the month's projected cost.
+
+### Several Accounts
+
+Each account's recurring services are its own. With all accounts shown, the month is in progress while any account lacks one of its recurring services, and the projection adds up the accounts'. A service that another account billed this month, such as one moved from an account to another, is not missing.
+
 ## Docker Deployment
 
 Two deployment modes are available. The [deployment guide](docs/deployment.md) describes both, with every setting, and is the reference for them:
@@ -621,7 +660,7 @@ The route lists the accounts that the imports recorded: those that the configura
 
 | Endpoint                                                  | Description                                   |
 | --------------------------------------------------------- | --------------------------------------------- |
-| `GET /api/months`                                         | Available months for selection                |
+| `GET /api/months`                                         | Available months; the month in progress has `inProgress: true` |
 | `GET /api/summary?from=&to=`                              | Summary with totals                           |
 | `GET /api/bills?from=&to=&account=`                       | List bills in date range                      |
 | `GET /api/analysis/by-project?from=&to=`                  | Costs grouped by project                      |
@@ -640,6 +679,24 @@ default, that end on the `end` month, that one included: `?months=3&end=2026-09`
 covers July to September 2026. Without `end`, it ends on the month of the
 latest bill. It gives each of those months, at 0 for a month without any bill,
 or none when none of them has a bill.
+
+`projected=true` asks for the projected cost of the month in progress (see
+[Month in Progress](#month-in-progress)). These routes take it:
+
+- the monthly trends: `/api/analysis/monthly-trend` and
+  `/api/analysis/monthly-trend-by-category`;
+- the totals and costs: `/api/summary`, `/api/analysis/by-service`,
+  `/api/analysis/by-resource-type` and `/api/analysis/by-project`;
+- the services: `/api/analysis/resource-type-details`,
+  `/api/analysis/backup-stats` and `/api/analysis/backup-services`;
+- a project's products: `/api/projects/:id/products`.
+
+When their period covers the month in progress, they count its projected cost,
+and each row gives its projected part as `projected`, 0 when it has none: a
+project, a product, a charge… A row that only the projection brings is listed
+too. `/api/projects/:id/products` gives the projected part of the credit as
+`projectedCredits`, next to `credits`. Without the parameter, or with
+`projected=false`, they answer as before; any other value gets a 400.
 
 `/api/analysis/ai-endpoints` gives the AI Endpoints models that the bills of
 the period name, the projects together, which the Public Cloud and Trends tabs
