@@ -1609,8 +1609,9 @@ describe('dashboard shell', () => {
     });
   });
 
-  // One setting for the whole page, which the shell holds (ADR 0001): the Trends tab shows it
-  // (#217), and the browser remembers it, as it does the language and the account selected
+  // One setting for the whole page, which the shell holds (ADR 0001): the Trends (#217) and
+  // Compare (#218) tabs show it, and the browser remembers it, as it does the language and the
+  // account selected
   describe('projection of the month in progress (#214)', () => {
     const withSeptemberInProgress = { ...account, ...septemberInProgress };
 
@@ -1631,6 +1632,24 @@ describe('dashboard shell', () => {
       await openTab(user, 'Tendances');
 
       expect(projectionCheckbox()).toBeChecked();
+    });
+
+    // The Compare tab shows it next to its months A and B (#218)
+    it('is the same setting in the Trends and Compare tabs', async () => {
+      const { user } = await renderDashboard(withSeptemberInProgress);
+      await openTab(user, 'Comparaison');
+      expect(projectionCheckbox()).not.toBeChecked();
+      await openTab(user, 'Tendances');
+      await toggleProjection(user);
+
+      await openTab(user, 'Comparaison');
+
+      expect(projectionCheckbox()).toBeChecked();
+
+      await toggleProjection(user);
+      await openTab(user, 'Tendances');
+
+      expect(projectionCheckbox()).not.toBeChecked();
     });
 
     it('opens as it was set on an earlier visit', async () => {

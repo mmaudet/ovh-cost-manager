@@ -7,7 +7,7 @@ import {
   COLD_ARCHIVE, DB_1_PLAN, billedProducts, bucketStorage, hourlyUse,
 } from './fixtures/public-cloud.js';
 import {
-  lyonAccount, removedAccount, severalAccounts, unknownAccount, unnamedAccount,
+  lyonAccount, lyonBilledLate, removedAccount, severalAccounts, unknownAccount, unnamedAccount,
 } from './fixtures/accounts.js';
 import { enterpriseLicence } from './fixtures/backup.js';
 import { months } from './fixtures/calendar.js';
@@ -2304,6 +2304,56 @@ describe('Compare tab', () => {
         ['Datastores Private Cloud', '0,00€', '0,00€', '—'],
       ]);
     });
+
+    // Rather than keep their order, as while the variations are not computed (#216)
+    it('sorts the rows by their variations on the projected cost, while ticked', async () => {
+      const { user } = await renderDashboard(billedLate);
+      await openTab(user, 'Comparaison');
+      await openComparison(user, INFRASTRUCTURE);
+      await toggleProjection(user);
+
+      await sortTable(user, comparisonTable(INFRASTRUCTURE), /^Variation/);
+
+      // The domains, +16,7 %, the servers, 0,0 %, then the rows without a variation
+      expect(firstColumnOf(comparisonTable(INFRASTRUCTURE))).toEqual([
+        'Noms de domaine', 'Serveurs dédiés', 'VPS', 'Stockage', 'Load Balancer', 'Adresses IP',
+        'Hôtes Private Cloud', 'Datastores Private Cloud',
+      ]);
+
+      await toggleProjection(user);
+
+      expect(firstColumnOf(comparisonTable(INFRASTRUCTURE))).toEqual([
+        'Serveurs dédiés', 'VPS', 'Stockage', 'Load Balancer', 'Adresses IP', 'Noms de domaine',
+        'Hôtes Private Cloud', 'Datastores Private Cloud',
+      ]);
+    });
+
+    // As the months list of the account shown marks it (#216): see fixtures/accounts.js
+    it('asks for the figures projected of the account shown while its month is in progress',
+      async () => {
+        const { user } = await renderDashboard(lyonBilledLate);
+        await openTab(user, 'Comparaison');
+        await toggleProjection(user);
+
+        expect(api.fetchSummary).toHaveBeenCalledWith(...SEPTEMBER, PROJECTED);
+
+        await selectAccount(user, 'Lyon subsidiary');
+
+        for (const fetchFigure of figures()) {
+          expect(fetchFigure)
+            .toHaveBeenCalledWith('2026-09-01', '2026-09-30', lyonAccount.id, PROJECTED);
+        }
+
+        // Whose bills of September came in
+        await selectAccount(user, 'yy2222-ovh');
+
+        for (const fetchFigure of figures()) {
+          expect(fetchFigure)
+            .toHaveBeenCalledWith('2026-09-01', '2026-09-30', unnamedAccount.id);
+          expect(fetchFigure)
+            .not.toHaveBeenCalledWith('2026-09-01', '2026-09-30', unnamedAccount.id, PROJECTED);
+        }
+      });
 
     // Until they project it too (#219): what September billed them so far, compared with no
     // variation, as without the projection

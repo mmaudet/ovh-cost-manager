@@ -636,8 +636,8 @@ describe('Trends tab', () => {
   describe('month in progress', () => {
     const billedLate = { ...account, ...septemberInProgress, ...septemberBilledLate };
 
-    // Next to the period selector
-    it('offers to project it on the Trends tab only, off by default', async () => {
+    // Next to the period selector; the Compare tab offers it too, next to its months (#218)
+    it('offers to project it on the Trends tab, off by default', async () => {
       const { user } = await renderDashboard();
       expect(projectionCheckbox()).not.toBeInTheDocument();
 
