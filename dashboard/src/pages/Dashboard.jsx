@@ -22,7 +22,7 @@ import {
 import { formatCurrency, formatMonthLabel, yearMonthOf } from '../utils/format.js';
 import { parseSqliteDate } from '../utils/sqliteDate.js';
 import { generateMarkdownReport, reportFileName } from '../utils/markdownReport.js';
-import { holdsMonth, isInProgress, monthLabel } from '../utils/months.js';
+import { holdsMonth, isInProgress } from '../utils/months.js';
 import { shiftMonths } from '../utils/monthWindow.js';
 import { variationDisplay, variationPercent } from '../utils/variation.js';
 import { useWebCloudTab } from '../tabs/useWebCloudTab.js';
@@ -544,7 +544,7 @@ export default function Dashboard() {
                 >
                   {months.map(m => (
                     <option key={m.value} value={m.value}>
-                      {monthLabel(m, language, t)}
+                      {formatMonthLabel(m.value, language)}
                     </option>
                   ))}
                 </HeaderSelect>

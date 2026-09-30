@@ -139,19 +139,23 @@ describe('dashboard shell', () => {
       expect(monthSelector()).toHaveDisplayValue('Septembre 2026');
     });
 
-    // So that no one reads a partial month as a complete one; the page still opens on it
-    it('names the month in progress so, in the language of the page (#216)', async () => {
-      const { user } = await renderDashboard({ ...account, ...septemberInProgress });
+    // The card of the month's cost, right under it, says that the month is in progress: a
+    // dropdown is as wide as its longest option, and the mark would push the header's controls
+    // onto a second line (#213). The page still opens on the month in progress.
+    it('lists the month in progress without its mark, which the card below gives (#216)',
+      async () => {
+        const { user } = await renderDashboard({ ...account, ...septemberInProgress });
 
-      expect(optionsOf(monthSelector()))
-        .toEqual(['Septembre 2026 (en cours)', 'Août 2026', 'Juillet 2026']);
-      expect(monthSelector()).toHaveDisplayValue('Septembre 2026 (en cours)');
+        expect(optionsOf(monthSelector()))
+          .toEqual(['Septembre 2026', 'Août 2026', 'Juillet 2026']);
+        expect(monthSelector()).toHaveDisplayValue('Septembre 2026');
+        expect(texts(cardOf('Coût total du mois'))).toContain('en cours');
 
-      await selectLanguage(user, 'en');
+        await selectLanguage(user, 'en');
 
-      expect(optionsOf(dropdown('July 2026')))
-        .toEqual(['September 2026 (in progress)', 'August 2026', 'July 2026']);
-    });
+        expect(optionsOf(dropdown('July 2026')))
+          .toEqual(['September 2026', 'August 2026', 'July 2026']);
+      });
 
     it('shows the figures of the month the user selects', async () => {
       const { user } = await renderDashboard();
@@ -342,7 +346,6 @@ describe('dashboard shell', () => {
       // (360 - 230) / 230
       expect(texts(totalCostCard()))
         .toEqual(['Coût total du mois', '360,00€', '+56,5 % vs mois précédent']);
-      expect(optionsOf(dropdown('Août 2026'))).toEqual(['Septembre 2026', 'Août 2026']);
 
       await selectAccount(user, 'Lyon subsidiary');
 
@@ -1071,8 +1074,6 @@ describe('dashboard shell', () => {
       // (1 300.40 - 1 042) / 1 042
       expect(texts(cardOf('Coût total du mois')))
         .toEqual(['Coût total du mois', '1 300,40€', '+24,8 % vs mois précédent']);
-      expect(optionsOf(dropdown('Juillet 2026')))
-        .toEqual(['Septembre 2026', 'Août 2026', 'Juillet 2026']);
     });
 
     it('shows the figures of an import already over at the refresh after a resync', async () => {
