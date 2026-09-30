@@ -487,15 +487,16 @@ export default function Dashboard() {
             >
               <Logo className="h-14" />
             </button>
-            {/* The title on one line, and the subtitle under it, as wide as the title */}
-            <div className="w-min">
-              <h1 className="text-2xl font-bold text-gray-900 whitespace-nowrap">{t('appTitle')}</h1>
+            {/* The title, and the subtitle under it, each on one line */}
+            <div className="whitespace-nowrap">
+              <h1 className="text-2xl font-bold text-gray-900">{t('appTitle')}</h1>
               <p className="text-gray-500 text-sm">{t('appSubtitle')}</p>
             </div>
           </div>
-          {/* The controls, on the header's line, each whole: when they lack room, the last ones
-              go to a line of their own, rather than squeeze the title or wrap a name */}
-          <div className="flex flex-wrap items-center justify-end gap-3">
+          {/* The controls, 8 px apart so as to share the title's line from a 1280 px screen up.
+              When they lack room, the last ones go whole to a line of their own, rather than
+              squeeze the title or wrap a name. Below md, under the title, they align left */}
+          <div className="flex flex-wrap items-center md:justify-end gap-2">
             {/* Manual resync */}
             {importsEnabled && <ResyncButton t={t} />}
             {/* Expiration badge */}
@@ -507,7 +508,10 @@ export default function Dashboard() {
             )}
             {/* User info */}
             {userData?.id && (
-              <div className="flex items-center gap-2 px-3 py-1.5 bg-gray-100 rounded-lg whitespace-nowrap">
+              <div
+                className={'flex items-center gap-2 px-3 py-1.5 bg-gray-100 rounded-lg'
+                  + ' whitespace-nowrap'}
+              >
                 <span className="text-sm text-gray-700">{userData.name}</span>
                 {userData.authEnabled && (
                   <a
@@ -540,48 +544,43 @@ export default function Dashboard() {
                     </option>
                   ))}
                 </HeaderSelect>
-                <div className="flex items-center gap-2">
-                  <span className="text-sm text-gray-600">{t('export')}:</span>
-                  <select
-                    onChange={(e) => {
-                      const format = e.target.value;
-                      if (format === 'md') {
-                        // The figures of the account shown, which the shell holds (#115, #118)
-                        const md = generateMarkdownReport(
-                          summary, byService, byProject, selectedMonth, language, { scope },
-                        );
-                        const blob = new Blob([md], { type: 'text/markdown' });
-                        const url = URL.createObjectURL(blob);
-                        const a = document.createElement('a');
-                        a.href = url;
-                        a.download = reportFileName(selectedMonth.value, selectedAccount);
-                        a.click();
-                        URL.revokeObjectURL(url);
-                      } else if (format === 'pdf') {
-                        // Under a title that names what the page shows (see above, #124)
-                        window.print();
-                      }
-                      e.target.value = '';
-                    }}
-                    className="px-3 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium cursor-pointer"
-                    defaultValue=""
-                  >
-                    <option value="" disabled>{t('choose')}</option>
-                    <option value="md">{t('markdown')}</option>
-                    <option value="pdf">{t('pdf')}</option>
-                  </select>
-                </div>
+                {/* The export, named by its placeholder */}
+                <select
+                  onChange={(e) => {
+                    const format = e.target.value;
+                    if (format === 'md') {
+                      // The figures of the account shown, which the shell holds (#115, #118)
+                      const md = generateMarkdownReport(
+                        summary, byService, byProject, selectedMonth, language, { scope },
+                      );
+                      const blob = new Blob([md], { type: 'text/markdown' });
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement('a');
+                      a.href = url;
+                      a.download = reportFileName(selectedMonth.value, selectedAccount);
+                      a.click();
+                      URL.revokeObjectURL(url);
+                    } else if (format === 'pdf') {
+                      // Under a title that names what the page shows (see above, #124)
+                      window.print();
+                    }
+                    e.target.value = '';
+                  }}
+                  className={'px-3 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium'
+                    + ' cursor-pointer'}
+                  defaultValue=""
+                >
+                  <option value="" disabled>{t('export')}</option>
+                  <option value="md">{t('markdown')}</option>
+                  <option value="pdf">{t('pdf')}</option>
+                </select>
               </>
             )}
-            {/* The page's language, last of the controls and in line with them */}
-            <select
-              value={language}
-              onChange={(e) => setLanguage(e.target.value)}
-              className="px-2 py-2 text-sm bg-gray-100 border border-gray-200 rounded-lg cursor-pointer"
-            >
+            {/* The page's language, last of the controls, with the look of the other selectors */}
+            <HeaderSelect value={language} onChange={(e) => setLanguage(e.target.value)}>
               <option value="fr">FR</option>
               <option value="en">EN</option>
-            </select>
+            </HeaderSelect>
           </div>
         </div>
 

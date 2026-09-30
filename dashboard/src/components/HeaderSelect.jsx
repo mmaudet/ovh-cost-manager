@@ -1,4 +1,5 @@
-// The look of the selectors of the header, the account's and the month's (#115)
+// The look of the selectors of the header: the account's and the month's (#115), and the
+// language's
 const HEADER_SELECT_CLASSES = 'px-4 py-2 bg-white border border-gray-200 rounded-lg text-sm'
   + ' shadow-sm cursor-pointer';
 
