@@ -35,7 +35,9 @@ second latest billed month (`months[1]`): when it is the month just before the l
 as it is unless nothing was billed that month, its summary shares its key with the shell's
 month before. While the lists show the Account column, with all accounts shown, the Compare
 hook asks for the projects of its months by account, under the key of the Overview hook's
-projects by account (`projectsByAccount`, #119). The services of a resource type that the
+projects by account (`projectsByAccount`, #119), but for the month in progress while the page
+projects it (#219): the Overview's projects, which the Public Cloud tab's list reads too (#180),
+are never projected. The services of a resource type that the
 Compare tab lists under a row it unfolds, for a month and the account shown, share the key
 of the bill lines that the Infrastructure hook loads for the same resource type, month and
 account (`resourceTypeDetails`, #192), and while the lists show the Account column, with
