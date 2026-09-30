@@ -45,6 +45,13 @@ const CHART_COLOURS = {
   moisB: { billed: '#94a3b8', projected: '#e2e8f0' },
 };
 
+// A month of the chart's legend, which Recharts writes in the colour of its bars: that of the
+// projected part of a month, too light to read on white, in the colour of the month (#218)
+const legendLabel = (value, { dataKey, color }) => {
+  const month = String(dataKey).replace(/Projected$/, '');
+  return <span style={{ color: CHART_COLOURS[month]?.billed ?? color }}>{value}</span>;
+};
+
 // The cost of a service type in month A or B, in the chart's row (#218): what the month billed,
 // under the month's key, and what projected lines add, under its key with Projected, 0 for none
 const chartCostsOf = (month, serviceType) => {
@@ -358,7 +365,7 @@ const CompareTab = ({
               <XAxis dataKey="name" tick={{ fontSize: 10 }} />
               <YAxis tickFormatter={(v) => `${v}€`} />
               <Tooltip formatter={(v) => `${fmt(v)}€`} />
-              <Legend />
+              <Legend formatter={legendLabel} />
               {monthBars('moisA', monthALabel)}
               {monthBars('moisB', monthBLabel)}
             </BarChart>
