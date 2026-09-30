@@ -22,6 +22,7 @@ const rows = (monthA, monthB) => projectComparisonRows(monthA, monthB)
   ));
 
 describe('projectComparisonRows', () => {
+  // Without a projected part, as complete months give none (#219)
   it('pairs the projects billed in both months, with their variation from A to B', () => {
     expect(projectComparisonRows(
       [production(400), staging(200)],
@@ -29,13 +30,34 @@ describe('projectComparisonRows', () => {
     )).toEqual([
       {
         projectId: 'project-production', projectName: 'Production',
-        totalA: 400, totalB: 500, variation: 25,
+        totalA: 400, totalB: 500, projectedA: 0, projectedB: 0, variation: 25,
       },
       {
         projectId: 'project-staging', projectName: 'Staging',
-        totalA: 200, totalB: 150, variation: -25,
+        totalA: 200, totalB: 150, projectedA: 0, projectedB: 0, variation: -25,
       },
     ]);
+  });
+
+  // The month in progress at its projected cost, while the page projects it (#219): Staging,
+  // which it has not billed yet, at its cost of the month before, which projected lines make
+  it('gives each cost its projected part, and the variation of the projected cost', () => {
+    const projected = (project, part) => ({ ...project, projected: part });
+
+    expect(projectComparisonRows(
+      [production(400), staging(200)],
+      [projected(production(500), 0), projected(staging(200), 200)],
+    ).map(({ projectName, totalA, totalB, projectedA, projectedB, variation }) => [
+      projectName, totalA, totalB, projectedA, projectedB, variation,
+    ])).toEqual([
+      ['Production', 400, 500, 0, 0, 25],
+      ['Staging', 200, 200, 0, 200, 0],
+    ]);
+    // Month A, the month in progress, and a project that it alone lists
+    expect(projectComparisonRows([projected(staging(200), 200)], [])
+      .map(({ totalA, totalB, projectedA, projectedB }) => [totalA, totalB, projectedA,
+        projectedB]))
+      .toEqual([[200, 0, 200, 0]]);
   });
 
   it('gives a project billed in month A only 0 € in month B, down 100 %', () => {
@@ -163,11 +185,11 @@ describe('projectComparisonRows', () => {
       )).toEqual([
         {
           projectId: 'project-sandbox', projectName: 'Sandbox', account: null,
-          totalA: 80, totalB: 100, variation: 25,
+          totalA: 80, totalB: 100, projectedA: 0, projectedB: 0, variation: 25,
         },
         {
           projectId: 'project-sandbox', projectName: 'Sandbox', account: 'yy2222-ovh',
-          totalA: 0, totalB: 20, variation: null,
+          totalA: 0, totalB: 20, projectedA: 0, projectedB: 0, variation: null,
         },
       ]);
     });

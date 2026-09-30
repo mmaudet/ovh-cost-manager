@@ -1,7 +1,8 @@
-// The comparisons of months A and B of the Compare tab: how they pair what each month gave,
-// such as the products of a Public Cloud project (#181) or the services of a resource type
-// (#192), the order that their rows keep until the user sorts them (#146), the values that
-// sort them, and what a comparison knows of its months (#216).
+// The comparisons of months A and B of the Compare tab: how they read what each month gave, its
+// amount and projected part (#219), and pair it, such as the products of a Public Cloud project
+// (#181) or the services of a resource type (#192), the order that their rows keep until the
+// user sorts them (#146), the values that sort them, and what a comparison knows of its months
+// (#216).
 
 import { isMonthInProgress } from './months.js';
 import { comparesPartialMonth, variationPercent } from './variation.js';
@@ -12,16 +13,30 @@ const BY_MONTH_A = { column: 'totalA', kind: 'number', direction: 'desc' };
 const BY_MONTH_B = { column: 'totalB', kind: 'number', direction: 'desc' };
 
 /**
+ * What a month gave for a row of a comparison, as the comparison's cells show it: its amount, 0
+ * in a month that gave nothing for it, and what projected lines make of it, 0 for none, as the
+ * routes give it for the month in progress at its projected cost (#218, #219). The comparisons
+ * read so what months A and B gave: a project, a product, a charge, a service, and the credit
+ * that a project's bills used.
+ * @param {?{ total: number, projected: (number|undefined) }} row - What the month gave for the
+ *   row, with its amount (total) and, at the projected cost, its projected part (projected); none
+ *   when the month gave nothing for it
+ * @returns {{ total: number, projected: number }}
+ */
+const amountsOf = (row) => ({ total: row?.total ?? 0, projected: row?.projected ?? 0 });
+
+/**
  * The rows of a comparison of months A and B, from what each month gave: one for each key that
  * either month gives, those of month A first, in their order, then those of month B only, in
  * theirs, each with what each month gave for it, and its amount in each month, 0 in a month
- * that gave nothing for it.
- * @param {object[]} rowsA - What month A gave, each key once, each with its amount (total)
+ * that gave nothing for it, and what projected lines make of it, 0 for none (amountsOf()).
+ * @param {object[]} rowsA - What month A gave, each key once, each with its amount (total), and
+ *   its projected part (projected) at the projected cost of the month in progress
  * @param {object[]} rowsB - What month B gave, the same way
  * @param {function(object): *} keyOf - What makes a row of month A and one of month B the same:
  *   a text or a number, which Map compares
  * @returns {{ key: *, rowA: (object|undefined), rowB: (object|undefined), valA: number,
- *   valB: number }[]}
+ *   valB: number, projectedA: number, projectedB: number }[]}
  */
 const pairMonths = (rowsA, rowsB, keyOf) => {
   const ofMonthA = new Map(rowsA.map((row) => [keyOf(row), row]));
@@ -29,7 +44,12 @@ const pairMonths = (rowsA, rowsB, keyOf) => {
   return [...new Set([...ofMonthA.keys(), ...ofMonthB.keys()])].map((key) => {
     const rowA = ofMonthA.get(key);
     const rowB = ofMonthB.get(key);
-    return { key, rowA, rowB, valA: rowA?.total ?? 0, valB: rowB?.total ?? 0 };
+    const amountsA = amountsOf(rowA);
+    const amountsB = amountsOf(rowB);
+    return {
+      key, rowA, rowB, valA: amountsA.total, valB: amountsB.total,
+      projectedA: amountsA.projected, projectedB: amountsB.projected,
+    };
   });
 };
 
@@ -111,6 +131,6 @@ const valuesAsShown = (comparedMonths, values) => (
 const byNameAndAccount = (nameOf) => (row) => JSON.stringify([nameOf(row), row.account ?? null]);
 
 export {
-  BY_MONTH_A, BY_MONTH_B, byNameAndAccount, comparedMonthsOf, comparisonValues, pairMonths,
-  valuesAsShown, withoutVariation,
+  BY_MONTH_A, BY_MONTH_B, amountsOf, byNameAndAccount, comparedMonthsOf, comparisonValues,
+  pairMonths, valuesAsShown, withoutVariation,
 };

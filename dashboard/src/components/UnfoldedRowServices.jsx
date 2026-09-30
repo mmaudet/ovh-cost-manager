@@ -8,16 +8,17 @@ import { DETAIL_PADDING, DetailRow, sortUnfolded } from './UnfoldingRow.jsx';
 // name the account of each service (#194): a service billed to two accounts has a row for each.
 // Each service that either month billed, with its account, the description of its most
 // expensive bill line, month B's when month B billed it, and its cost in each month, 0 € in a
-// month that did not bill it. And the projected part of each cost, 0 for none: that of a service
-// that the month in progress has not billed yet, its whole cost, while the page projects it
-// (#218).
+// month that did not bill it. And the projected part of each cost, 0 for none, as pairMonths()
+// gives it: that of a service that the month in progress has not billed yet, its whole cost,
+// while the page projects it (#218).
 const serviceRows = (servicesA, servicesB) => pairMonths(
   servicesA, servicesB, byNameAndAccount(({ domain }) => domain),
-).map(({ key, rowA, rowB, valA, valB }) => {
+).map(({
+  key, rowA, rowB, valA, valB, projectedA, projectedB,
+}) => {
   const { domain, account, description } = rowB ?? rowA;
   return {
-    key, identifier: domain, account, description, valA, valB,
-    projectedA: rowA?.projected ?? 0, projectedB: rowB?.projected ?? 0,
+    key, identifier: domain, account, description, valA, valB, projectedA, projectedB,
   };
 });
 

@@ -14,17 +14,11 @@ const {
   LYON, PARIS, UNKNOWN_ACCOUNT, project,
 } = require('./support/accounts');
 const {
-  MONTH_BEFORE, MONTH_OF_TODAY, MONTHS_BEFORE, billOf,
+  ALL_ACCOUNTS, LYON_BILLED_LATE, MONTH_BEFORE, MONTH_IN_PROGRESS, MONTH_OF_TODAY, MONTHS_BEFORE,
+  OF_BOTH_MONTHS, OF_MONTH_BEFORE, OF_TODAY, PARIS_BILLED, UNKNOWN_BILLED_LATE, billOf,
 } = require('./support/month-in-progress');
 const { startOcm } = require('./support/ocm-server');
-const { monthBounds } = require('../data/months');
 
-// The month of today and the month before, as the Compare tab asks for them
-const MONTH_IN_PROGRESS = monthBounds(MONTH_OF_TODAY);
-const COMPLETE_MONTH = monthBounds(MONTH_BEFORE);
-const period = ({ from, to }) => `from=${from}&to=${to}`;
-const OF_TODAY = period(MONTH_IN_PROGRESS);
-const OF_MONTH_BEFORE = period(COMPLETE_MONTH);
 // The days of the month of today, which the summary's daily average divides its total by
 const DAYS_OF_TODAY = Number(MONTH_IN_PROGRESS.to.slice(8));
 const dailyAverage = (total) => Math.round((total / DAYS_OF_TODAY) * 100) / 100;
@@ -170,9 +164,7 @@ describe('the routes of the Compare tab with projected=true (#218)', () => {
     // The month before and the month in progress: the projected lines, of the month before, count
     // in the month in progress too
     test('projects the month in progress over a period that covers it', async () => {
-      const { body } = await summaryOf(
-        `from=${COMPLETE_MONTH.from}&to=${MONTH_IN_PROGRESS.to}&projected=true`,
-      );
+      const { body } = await summaryOf(`${OF_BOTH_MONTHS}&projected=true`);
 
       expect(body).toMatchObject({ total: 1020 + BILLED + PROJECTED, projected: PROJECTED });
     });
@@ -505,11 +497,6 @@ describe('the routes of the Compare tab with projected=true and several accounts
   // parameter names, or for every account without one, and with the parameters given besides
   const projectedOf = (route, account, parameters = '') => ocm.get(`${route}?${OF_TODAY}`
     + `${parameters}&projected=true${account === undefined ? '' : `&account=${account}`}`);
-  // The accounts that the parameter names, and all accounts, without it
-  const LYON_BILLED_LATE = ['an account billed late', LYON];
-  const PARIS_BILLED = ['an account whose bills of the month of today came', PARIS];
-  const UNKNOWN_BILLED_LATE = ['the Unknown account, billed late', UNKNOWN_ACCOUNT];
-  const ALL_ACCOUNTS = ['all accounts', undefined];
   // A service of a resource type or of the backups, as the routes give it: its description, the
   // service followed by « 1 mois », or that of a backup
   const service = (domain, total, projected, description = `${domain} - 1 mois`) => ({

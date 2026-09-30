@@ -13,6 +13,7 @@ import { formatBilledAndProjected, formatMonthLabel } from '../utils/format.js';
 import { comparisonValues, valuesAsShown } from '../utils/monthComparison.js';
 import { monthLabel } from '../utils/months.js';
 import { firstRowOfEachProject, projectComparisonRows } from '../utils/projectComparison.js';
+import { serviceTypeBars } from '../utils/serviceTypeChart.js';
 import { variationPercent } from '../utils/variation.js';
 
 // The cost of a resource type in a month, from its costs by resource type (#32), and what
@@ -35,12 +36,17 @@ const backupsOf = (backupStats, kind) => ({
 // the months' names under it, rather than in the headline's
 const HEADLINE_MARK = 'text-sm font-medium';
 
-// Months A and B in the chart of the service types, by the key of what each billed in the chart's
-// rows: the key of its projected part, stacked on what it billed (#218), and their colours, the
-// projected part lighter, and dashed
+// Months A and B in the chart of the service types, by the key of each one's bars in the chart's
+// rows: the key of what stacks on them, their projected part (#218), that of what projected lines
+// make of the type's cost, which the tooltip gives, and their colours, the projected part
+// lighter, and dashed
 const CHART_MONTHS = {
-  moisA: { projectedKey: 'moisAProjected', billed: '#3b82f6', projected: '#bfdbfe' },
-  moisB: { projectedKey: 'moisBProjected', billed: '#94a3b8', projected: '#e2e8f0' },
+  moisA: {
+    projectedKey: 'moisAProjected', partKey: 'moisAPart', billed: '#3b82f6', projected: '#bfdbfe',
+  },
+  moisB: {
+    projectedKey: 'moisBProjected', partKey: 'moisBPart', billed: '#94a3b8', projected: '#e2e8f0',
+  },
 };
 
 // A series of the chart's legend, which Recharts writes in the colour of its bars: the projected
@@ -51,15 +57,14 @@ const legendLabel = (value, { dataKey, color }) => {
   return <span style={{ color: monthOfPart?.billed ?? color }}>{value}</span>;
 };
 
-// The cost of a service type in month A or B, in the chart's row (#218): what the month billed,
-// under the month's key, and what projected lines add, under the key of its projected part, 0
-// for none
+// The cost of a service type in month A or B, in the chart's row (#218): its bar under the
+// month's key, what stacks on it under the key of its projected part, 0 for nothing, which add up
+// to the type's cost, and what projected lines make of that cost, 0 for none, a part below 0
+// included, which draws no stacked part (serviceTypeBars(), #219)
 const chartCostsOf = (month, serviceType) => {
-  const projected = serviceType?.projected || 0;
-  return {
-    [month]: (serviceType?.value || 0) - projected,
-    [CHART_MONTHS[month].projectedKey]: projected,
-  };
+  const { bar, stacked, projected } = serviceTypeBars(serviceType);
+  const { projectedKey, partKey } = CHART_MONTHS[month];
+  return { [month]: bar, [projectedKey]: stacked, [partKey]: projected };
 };
 
 // The value of a resource type of the infrastructure comparison in each column that sorts it
@@ -109,12 +114,12 @@ const projectComparisonValues = (accountColumn) => ({
 // its setter (useMonthInProgressProjection()), show as a checkbox next to months A and B (#218):
 // while it is on, the totals, the service types, and the infrastructure, backup and Private
 // Cloud comparisons, their services included, count the month in progress at its projected cost,
-// as the hook asks for them, and mark the amounts that projected lines make. What the hook knows
-// of months A and B decides the variations and the sort of the tables: comparedMonths, and
-// billedMonths for the projects and their products, at what the month in progress billed so far
-// until #219 projects them too.
+// as the hook asks for them, and mark the amounts that projected lines make; and so do the
+// comparison by project and each project's products, their charges and credit included (#219).
+// What the hook knows of months A and B, comparedMonths, decides the variations and the sort of
+// the tables.
 const CompareTab = ({
-  compareMonthA, setCompareMonthA, compareMonthB, setCompareMonthB, comparedMonths, billedMonths,
+  compareMonthA, setCompareMonthA, compareMonthB, setCompareMonthB, comparedMonths,
   sortingOf, unfoldingOf, compareDataA, compareDataB, byServiceA, byServiceB, byProjectA,
   byProjectB, byResourceTypeA, byResourceTypeB, backupStatsA, backupStatsB, projectProductsQuery,
   resourceTypeServicesQuery, backupServicesQuery, projectsMonthInProgress = false,
@@ -125,11 +130,13 @@ const CompareTab = ({
   const monthBLabel = formatMonthLabel(compareMonthB?.value, language);
 
   // The projects of months A and B, paired by id (#55), and by account in the Account column
-  // (#119), in the order the user sorts them, by month A until then (#146)
+  // (#119), in the order the user sorts them, by month A until then (#146), and by the costs
+  // that the table shows, those of the month in progress at its projected cost while the page
+  // projects it (#219)
   const projectSorting = sortingOf('projects');
   const compareProjects = sortRows(
     projectComparisonRows(byProjectA, byProjectB), projectSorting.sort,
-    valuesAsShown(billedMonths, projectComparisonValues(accountColumn)), language,
+    valuesAsShown(comparedMonths, projectComparisonValues(accountColumn)), language,
   );
   // The projects whose products the tab compares (#181), once each, in the order of their
   // first rows: in the Account column, a project billed to several accounts has a row for each
@@ -148,22 +155,25 @@ const CompareTab = ({
     };
   });
   // Whether a month's bars stack a projected part on what it billed: those of the month in
-  // progress, while the page projects it, when its projected lines cost anything
+  // progress, while the page projects it, when projected lines add anything to a type's cost
   const stacksProjectedPart = (month) => comparisonChartData
     .some((row) => row[CHART_MONTHS[month].projectedKey]);
-  // The formatter of the tooltip of what a month billed of a service type: its cost, or, with a
-  // projected part, what the month billed and its projected cost, which its bars add up to
-  const tooltipFormatterOf = (month) => (billed, name, { payload }) => {
-    const projectedPart = payload[CHART_MONTHS[month].projectedKey];
+  // The formatter of the tooltip of a service type's bar in a month: its cost, which its bars add
+  // up to, or, with a projected part, what the month billed and its projected cost
+  const tooltipFormatterOf = (month) => (bar, name, { payload }) => {
+    const { projectedKey, partKey } = CHART_MONTHS[month];
+    const cost = bar + payload[projectedKey];
+    const projectedPart = payload[partKey];
     return [
       projectedPart
-        ? formatBilledAndProjected(billed + projectedPart, projectedPart, fmt, t)
-        : `${fmt(billed)}€`,
+        ? formatBilledAndProjected(cost, projectedPart, fmt, t)
+        : `${fmt(cost)}€`,
       name,
     ];
   };
-  // The bars of a month: what it billed, and while it has one, its projected part, stacked on
-  // it, lighter and dashed, which the legend names and the tooltip leaves to the billed bar
+  // The bars of a month: what it billed, or its projected cost when projected lines take from it,
+  // and while it has one, its projected part, stacked on it, lighter and dashed, which the legend
+  // names and the tooltip leaves to the bar under it
   const monthBars = (month, label) => {
     const { projectedKey, billed, projected } = CHART_MONTHS[month];
     const stacked = stacksProjectedPart(month);
@@ -413,11 +423,16 @@ const CompareTab = ({
                 {accountColumn && (
                   <td className="p-3 text-gray-600">{accountColumn.nameOf(p.account)}</td>
                 )}
-                <td className="p-3 text-right font-medium">{fmt(p.totalA)}€</td>
-                <td className="p-3 text-right text-gray-500">{fmt(p.totalB)}€</td>
+                {/* Its cost in each month, and what projected lines make of it (#219) */}
+                <td className="p-3 text-right font-medium">
+                  <ComparedAmount amount={p.totalA} projectedPart={p.projectedA} fmt={fmt} t={t} />
+                </td>
+                <td className="p-3 text-right text-gray-500">
+                  <ComparedAmount amount={p.totalB} projectedPart={p.projectedB} fmt={fmt} t={t} />
+                </td>
                 <td className="p-3 text-right">
                   <Variation
-                    from={p.totalA} to={p.totalB} comparedMonths={billedMonths}
+                    from={p.totalA} to={p.totalB} comparedMonths={comparedMonths}
                     language={language} t={t}
                   />
                 </td>
@@ -525,7 +540,8 @@ const CompareTab = ({
       </Accordion>
       {/* One accordion per Public Cloud project: the comparison of its products (#181), each of
           which unfolds into its charges, the products unfolded held for each project (#195). As
-          the comparison by project, at what the month in progress billed so far (#219). */}
+          the comparison by project, the month in progress at its projected cost while the page
+          projects it (#219). */}
       {detailedProjects.map((proj) => {
         // The name of the project's comparison, under which the hook holds its sort and the
         // products unfolded
@@ -534,7 +550,7 @@ const CompareTab = ({
           <Accordion key={proj.projectId} title={`${proj.projectName} (${t('project')})`}>
             <ProjectProductComparison
               productsQueryOf={(month) => projectProductsQuery(proj.projectId, month)}
-              monthA={compareMonthA} monthB={compareMonthB} comparedMonths={billedMonths}
+              monthA={compareMonthA} monthB={compareMonthB} comparedMonths={comparedMonths}
               sorting={sortingOf(productsComparison)}
               unfoldingOf={(product) => unfoldingOf(productsComparison, product)}
               fmt={fmt} language={language} t={t}

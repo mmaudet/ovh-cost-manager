@@ -410,7 +410,7 @@ function registerRoutes() {
   // account, as the lists that name the account of each row do, rather than once
   const byAccountParameter = booleanParameter('byAccount');
 
-  // The projected parameter of the routes of the Trends (#217) and Compare (#218) tabs:
+  // The projected parameter of the routes of the Trends (#217) and Compare (#218, #219) tabs:
   // req.projected, whether a request asks for the projected cost of the month in progress
   // (CONTEXT.md), when its period covers it, with each row's projected part (projectedPartOf())
   const projectedParameter = booleanParameter('projected');
@@ -524,31 +524,38 @@ function registerRoutes() {
   // The costs of each project of a period, for the account the request asks for, or for
   // every account without one (#118). Once each, as before, or, by account, once for each
   // account that billed it, with that account: its NIC handle, or null for the Unknown
-  // account.
-  app.get('/api/analysis/by-project', accountParameter, byAccountParameter, (req, res) => {
-    try {
-      const { from, to } = req.query;
-      const validation = validateDateRange(from, to);
-      if (!validation.valid) {
-        return res.status(400).json({ error: validation.error });
+  // account. With projected=true, the month in progress costs its projected cost, and each
+  // project gives its projected part, a project that the month has not billed yet included, its
+  // credit counted with its other lines of the month before (#219). The Overview and the Public
+  // Cloud tab never ask for it: only the Compare tab's comparison by project does.
+  app.get('/api/analysis/by-project', accountParameter, byAccountParameter, projectedParameter,
+    (req, res) => {
+      try {
+        const { from, to } = req.query;
+        const validation = validateDateRange(from, to);
+        if (!validation.valid) {
+          return res.status(400).json({ error: validation.error });
+        }
+
+        const data = db.analysis.byProject(from, to, req.account, {
+          byAccount: req.byAccount, projected: req.projected,
+        });
+
+        // Format response
+        const result = data.map(row => ({
+          projectId: row.project_id,
+          projectName: row.project_name || 'Unknown',
+          total: Math.round(row.total * 100) / 100,
+          detailsCount: row.details_count,
+          ...(req.byAccount ? { account: row.account } : {}),
+          ...projectedPartOf(req, () => Math.round(row.projected * 100) / 100),
+        }));
+
+        res.json(result);
+      } catch (err) {
+        res.status(500).json({ error: err.message });
       }
-
-      const data = db.analysis.byProject(from, to, req.account, { byAccount: req.byAccount });
-
-      // Format response
-      const result = data.map(row => ({
-        projectId: row.project_id,
-        projectName: row.project_name || 'Unknown',
-        total: Math.round(row.total * 100) / 100,
-        detailsCount: row.details_count,
-        ...(req.byAccount ? { account: row.account } : {})
-      }));
-
-      res.json(result);
-    } catch (err) {
-      res.status(500).json({ error: err.message });
-    }
-  });
+    });
 
   // The costs of each service type of a period, for the account the request asks for, or for
   // every account without one (#118). With projected=true, the month in progress costs its
@@ -1641,13 +1648,18 @@ function registerRoutes() {
   // month by month, and unfolds each product into. Those of the bills of the account the
   // request asks for, or of every account without one, as /api/analysis/by-project, whose cost
   // of the project they break down: a project's bill lines belong to the account of their bill,
-  // which may not be the project's own (ADR 0002).
-  app.get('/api/projects/:id/products', accountParameter, (req, res) => {
+  // which may not be the project's own (ADR 0002). With projected=true, the month in progress
+  // counts the project's projected lines too, as /api/analysis/by-project counts them: the
+  // products, each product and each charge give their projected parts, `projected`, and the
+  // credit its own, `projectedCredits` (#219).
+  app.get('/api/projects/:id/products', accountParameter, projectedParameter, (req, res) => {
     try {
       const { from, to } = req.query;
       const validation = validateDateRange(from, to);
       if (!validation.valid) return res.status(400).json({ error: validation.error });
-      res.json(db.cloudDetails.getProductsByProject(req.params.id, from, to, req.account));
+      res.json(db.cloudDetails.getProductsByProject(
+        req.params.id, from, to, req.account, { projected: req.projected },
+      ));
     } catch (err) {
       res.status(500).json({ error: err.message });
     }

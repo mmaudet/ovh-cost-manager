@@ -37,7 +37,7 @@ export const fetchAccounts = async () => {
 // The parameter that asks a route for the projected cost of the month in progress (#217): none
 // unless asked, so that a request without it names nothing. The functions that take
 // { projected } after the account, or after the period for all accounts, ask for it so: those of
-// the Trends tab (#217) and of the Compare tab (#218).
+// the Trends tab (#217) and of the Compare tab (#218, #219).
 const projectionParams = (projected) => (projected ? { projected: true } : {});
 
 // The months billed to the account
@@ -61,10 +61,13 @@ export const fetchProjectsEnriched = async (account = null) => {
   return data;
 };
 
-// The costs of each project billed to the account, once each
-export const fetchByProject = async (from, to, account = null) => {
+// The costs of each project billed to the account, once each. With `projected`, those of the
+// month in progress at its projected cost, each project with its projected part, those not
+// billed yet included (#219): the Compare tab's comparison by project asks for them so, never
+// the Overview nor the Public Cloud tab.
+export const fetchByProject = async (from, to, account = null, { projected = false } = {}) => {
   const { data } = await api.get('/analysis/by-project', {
-    params: { from, to, ...accountParams(account) },
+    params: { from, to, ...accountParams(account), ...projectionParams(projected) },
   });
   return data;
 };
@@ -73,10 +76,12 @@ export const fetchByProject = async (from, to, account = null) => {
 // for each account whose bills billed it, with that account, rather than once. The costs by
 // project, which the Overview's breakdown by project (#118) and the Compare tab's comparison
 // by project (#119) show, and the GPU costs by project, which the Overview shows. The tabs
-// ask for them through tabs/projectsByAccountQueries.js.
-export const fetchProjectsByAccount = async (from, to) => {
+// ask for them through tabs/projectsByAccountQueries.js. With `projected`, the costs by
+// project of the month in progress at its projected cost, as the Compare tab asks for them
+// (#219).
+export const fetchProjectsByAccount = async (from, to, { projected = false } = {}) => {
   const { data } = await api.get('/analysis/by-project', {
-    params: { from, to, byAccount: true },
+    params: { from, to, byAccount: true, ...projectionParams(projected) },
   });
   return data;
 };
@@ -267,10 +272,15 @@ export const fetchProjectOtherServices = async (projectId, from, to) => {
 };
 
 // Every product of a project over a period, from the bills of the account, and the credit
-// that they used (#181): what the Compare tab compares for a project, month by month
-export const fetchProjectProducts = async (projectId, from, to, account = null) => {
+// that they used (#181): what the Compare tab compares for a project, month by month. With
+// `projected`, those of the month in progress at its projected cost: the products, each product
+// and each charge with their projected parts, those not billed yet included, and the credit's,
+// projectedCredits (#219).
+export const fetchProjectProducts = async (
+  projectId, from, to, account = null, { projected = false } = {},
+) => {
   const { data } = await api.get(`/projects/${projectId}/products`, {
-    params: { from, to, ...accountParams(account) },
+    params: { from, to, ...accountParams(account), ...projectionParams(projected) },
   });
   return data;
 };

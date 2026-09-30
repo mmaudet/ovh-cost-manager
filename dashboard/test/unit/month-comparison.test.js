@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  byNameAndAccount, comparedMonthsOf, comparisonValues, pairMonths, valuesAsShown,
+  amountsOf, byNameAndAccount, comparedMonthsOf, comparisonValues, pairMonths, valuesAsShown,
   withoutVariation,
 } from '../../src/utils/monthComparison.js';
 import { months } from '../fixtures/calendar.js';
@@ -14,14 +14,35 @@ const byIdentifier = ({ domain }) => domain;
 // The pairs, each as [key, amount in month A, amount in month B]
 const amounts = (pairs) => pairs.map(({ key, valA, valB }) => [key, valA, valB]);
 
+// What a month gave for a row, as the cells of every comparison read it (#219)
+describe('amountsOf', () => {
+  it('gives the amount of a row, and 0 as its projected part when it gives none', () => {
+    expect(amountsOf(service('ns3000001', 120))).toEqual({ total: 120, projected: 0 });
+  });
+
+  // The month in progress at its projected cost: a project that it has not billed yet, and a
+  // credit, which projected lines make below 0
+  it('gives the projected part of a row, below 0 included', () => {
+    expect(amountsOf({ projectId: 'project-staging', total: 190, projected: 190 }))
+      .toEqual({ total: 190, projected: 190 });
+    expect(amountsOf({ total: -20, projected: -20 })).toEqual({ total: -20, projected: -20 });
+  });
+
+  it('gives 0 for a row that a month did not give', () => {
+    expect(amountsOf(undefined)).toEqual({ total: 0, projected: 0 });
+  });
+});
+
 describe('pairMonths', () => {
+  // Without a projected part, as complete months give none (#219)
   it('pairs what months A and B gave by key, with what each month gave', () => {
     const serverA = service('ns3000001', 120);
     const serverB = service('ns3000001', 140);
 
-    expect(pairMonths([serverA], [serverB], byIdentifier)).toEqual([
-      { key: 'ns3000001', rowA: serverA, rowB: serverB, valA: 120, valB: 140 },
-    ]);
+    expect(pairMonths([serverA], [serverB], byIdentifier)).toEqual([{
+      key: 'ns3000001', rowA: serverA, rowB: serverB, valA: 120, valB: 140,
+      projectedA: 0, projectedB: 0,
+    }]);
   });
 
   it('gives 0 in a month that gave nothing for a key', () => {
@@ -29,9 +50,29 @@ describe('pairMonths', () => {
     const inB = service('ns3000002', 60);
 
     expect(pairMonths([inA], [inB], byIdentifier)).toEqual([
-      { key: 'ns3000003', rowA: inA, rowB: undefined, valA: 150, valB: 0 },
-      { key: 'ns3000002', rowA: undefined, rowB: inB, valA: 0, valB: 60 },
+      {
+        key: 'ns3000003', rowA: inA, rowB: undefined, valA: 150, valB: 0,
+        projectedA: 0, projectedB: 0,
+      },
+      {
+        key: 'ns3000002', rowA: undefined, rowB: inB, valA: 0, valB: 60,
+        projectedA: 0, projectedB: 0,
+      },
     ]);
+  });
+
+  // The month in progress at its projected cost, month B here (#218, #219): a server that it has
+  // not billed yet, at its cost of month A, which projected lines make, and one that it billed
+  it('gives what projected lines make of each amount, 0 for none', () => {
+    const projected = (row, part) => ({ ...row, projected: part });
+
+    expect(pairMonths(
+      [service('ns3000001', 120), service('ns3000002', 60)],
+      [projected(service('ns3000001', 120), 120), projected(service('ns3000002', 65), 0)],
+      byIdentifier,
+    ).map(({ key, valA, valB, projectedA, projectedB }) => [
+      key, valA, valB, projectedA, projectedB,
+    ])).toEqual([['ns3000001', 120, 120, 0, 120], ['ns3000002', 60, 65, 0, 0]]);
   });
 
   it("keeps month A's keys in their order, then those of month B only in theirs", () => {

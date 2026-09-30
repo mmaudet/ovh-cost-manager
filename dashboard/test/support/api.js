@@ -128,12 +128,24 @@ const ofAccount = (data, account = null) => {
 const entryForPeriodOfAccount = (key, empty) => (data, from, to, account) =>
   entryForPeriod(key, empty)(ofAccount(data, account), from, to);
 
-// The same for a request that may ask for the projected cost of the month in
-// progress, with { projected: true } after the account (#218): then from the
-// entry of its own key, such as projectedSummary for summary
+// The key of the entry that answers a request that may ask for the projected
+// cost of the month in progress, with { projected: true } after its other
+// arguments (#217, #218, #219): the entry of its own key while it does, such
+// as projectedSummary for summary
+const keyAnswering = (key, projectedKey, { projected = false } = {}) => (
+  projected ? projectedKey : key
+);
+
+// Answers that read the entry of such a request for its period: of all
+// accounts, as the lists by account ask for them, or of the account that it
+// names, the last argument before { projected }
+const projectableEntryForPeriod = (key, projectedKey, empty) => (data, from, to, options) =>
+  entryForPeriod(keyAnswering(key, projectedKey, options), empty)(data, from, to);
 const projectableEntryForPeriodOfAccount = (key, projectedKey, empty) => (
-  data, from, to, account, { projected = false } = {},
-) => entryForPeriod(projected ? projectedKey : key, empty)(ofAccount(data, account), from, to);
+  data, from, to, account, options,
+) => projectableEntryForPeriod(key, projectedKey, empty)(
+  ofAccount(data, account), from, to, options,
+);
 
 // Every function of src/services/api.js, with how it answers:
 // (dataset, ...arguments of the call) => answer
@@ -150,24 +162,30 @@ const answers = {
   // So do the Public Cloud projects and figures (#121), not the resources of a project
   fetchProjectsEnriched: (data, account) =>
     entry('projectsEnriched', emptyAnswers.list)(ofAccount(data, account)),
-  // The Overview's figures follow it too (#118)
-  fetchByProject: entryForPeriodOfAccount('byProject', emptyAnswers.list),
+  // The Overview's figures follow it too (#118). Asked with the projection of the month in
+  // progress, the costs by project answer from their own entries too (#219).
+  fetchByProject: projectableEntryForPeriodOfAccount(
+    'byProject', 'projectedByProject', emptyAnswers.list,
+  ),
   fetchByService: projectableEntryForPeriodOfAccount(
     'byService', 'projectedByService', emptyAnswers.list,
   ),
-  // And its lists by account, for all accounts only (#118)
-  fetchProjectsByAccount: entryForPeriod('projectsByAccount', emptyAnswers.list),
+  // And its lists by account, for all accounts only (#118), the costs by project from their own
+  // entry with the projection (#219)
+  fetchProjectsByAccount: projectableEntryForPeriod(
+    'projectsByAccount', 'projectedProjectsByAccount', emptyAnswers.list,
+  ),
   fetchGpuProjectsByAccount: entryForPeriod('gpuProjectsByAccount', emptyAnswers.list),
   // Trends: by the month they end on, then by their number of months, and those of the
   // account the page selects (#120). Asked with the projection of the month in progress, those of
   // its own entries (#217): projectedMonthlyTrend and projectedMonthlyTrendByResourceType.
-  fetchMonthlyTrend: (data, months, end, account, { projected = false } = {}) =>
-    ofAccount(data, account)[projected ? 'projectedMonthlyTrend' : 'monthlyTrend']
+  fetchMonthlyTrend: (data, months, end, account, options) =>
+    ofAccount(data, account)[keyAnswering('monthlyTrend', 'projectedMonthlyTrend', options)]
       ?.[end]?.[months] ?? emptyAnswers.list(),
-  fetchMonthlyTrendByCategory: (data, months, end, account, { projected = false } = {}) =>
-    ofAccount(data, account)[
-      projected ? 'projectedMonthlyTrendByResourceType' : 'monthlyTrendByCategory'
-    ]?.[end]?.[months] ?? emptyAnswers.trendByCategory(),
+  fetchMonthlyTrendByCategory: (data, months, end, account, options) =>
+    ofAccount(data, account)[keyAnswering(
+      'monthlyTrendByCategory', 'projectedMonthlyTrendByResourceType', options,
+    )]?.[end]?.[months] ?? emptyAnswers.trendByCategory(),
   fetchImportStatus: entry('importStatus', emptyAnswers.importStatus),
   triggerImport: () => ({ started: true }),
   fetchConfig: entry('config', emptyAnswers.config),
@@ -191,13 +209,15 @@ const answers = {
     'byResourceType', 'projectedByResourceType', emptyAnswers.list,
   ),
   // So do the bill lines of a resource type, by type and period (#123)
-  fetchResourceTypeDetails: (data, type, from, to, account, { projected = false } = {}) =>
-    ofAccount(data, account)[projected ? 'projectedResourceTypeDetails' : 'resourceTypeDetails']
-      ?.[type]?.[periodKey(from, to)] ?? emptyAnswers.list(),
+  fetchResourceTypeDetails: (data, type, from, to, account, options) =>
+    ofAccount(data, account)[keyAnswering(
+      'resourceTypeDetails', 'projectedResourceTypeDetails', options,
+    )]?.[type]?.[periodKey(from, to)] ?? emptyAnswers.list(),
   // And those by account, for all accounts only (#123)
-  fetchResourceTypeDetailsByAccount: (data, type, from, to, { projected = false } = {}) =>
-    data[projected ? 'projectedResourceTypeDetailsByAccount' : 'resourceTypeDetailsByAccount']
-      ?.[type]?.[periodKey(from, to)] ?? emptyAnswers.list(),
+  fetchResourceTypeDetailsByAccount: (data, type, from, to, options) =>
+    data[keyAnswering(
+      'resourceTypeDetailsByAccount', 'projectedResourceTypeDetailsByAccount', options,
+    )]?.[type]?.[periodKey(from, to)] ?? emptyAnswers.list(),
   fetchProjectConsumption: entryForProject('projectConsumption', emptyAnswers.list),
   fetchProjectInstances: entryForProject('projectInstances', emptyAnswers.list),
   fetchProjectVolumes: entryForProject('projectVolumes', emptyAnswers.list),
@@ -211,10 +231,12 @@ const answers = {
   fetchProjectOtherServices: entryForProject('projectOtherServices',
     () => ({ total: 0, products: [], credits: 0 })),
   // The products of a project from the bills of a period, of the account the page selects,
-  // as the costs by project (#181)
-  fetchProjectProducts: (data, projectId, from, to, account) =>
-    entryForProject('projectProducts', emptyAnswers.projectProducts)(
-      ofAccount(data, account), projectId, from, to),
+  // as the costs by project (#181); with the projection of the month in progress, from their own
+  // entry, projectedProjectProducts (#219)
+  fetchProjectProducts: (data, projectId, from, to, account, options) => entryForProject(
+    keyAnswering('projectProducts', 'projectedProjectProducts', options),
+    emptyAnswers.projectProducts,
+  )(ofAccount(data, account), projectId, from, to),
   fetchProjectInstanceTotal: entryForProject('projectInstanceTotal', emptyAnswers.instanceTotal),
   // The GPU costs of a period, of the account the page selects (#120)
   fetchGpuSummary: entryForPeriodOfAccount('gpuSummary', emptyAnswers.gpuSummary),
@@ -230,10 +252,9 @@ const answers = {
   fetchBackupServices: projectableEntryForPeriodOfAccount(
     'backupServices', 'projectedBackupServices', emptyAnswers.backupServices,
   ),
-  fetchBackupServicesByAccount: (data, from, to, { projected = false } = {}) => entryForPeriod(
-    projected ? 'projectedBackupServicesByAccount' : 'backupServicesByAccount',
-    emptyAnswers.backupServices,
-  )(data, from, to),
+  fetchBackupServicesByAccount: projectableEntryForPeriod(
+    'backupServicesByAccount', 'projectedBackupServicesByAccount', emptyAnswers.backupServices,
+  ),
   // The carbon footprint of a month, by that month, of the account the page selects (#147)
   fetchCarbonFootprint: (data, month, account) =>
     ofAccount(data, account).carbonFootprint?.[month]
