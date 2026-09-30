@@ -78,6 +78,15 @@ OVH API ──> data/import.js ──> SQLite (ovh-bills.db) ──> server/inde
     `/api/analysis/ai-endpoints` and the Public Cloud tab's table of the models (#193), and
     month by month, for the Trends tab's chart (#196). **Models are read when the server reads
     the bills**, like the products: no re-import.
+  - `month-in-progress.js` — pure: the month in progress (`CONTEXT.md`, #216), the month of
+    today, as the server's local date gives it (`monthOfDate()` in `months.js`), while a
+    recurring service, one that bills of each of the three months before charged, by identifier
+    and account, has no bill line in it that any account's bill names.
+    `db.details.getBilledServices()` reads the services that the bills charged, with the ids of
+    their lines, `recurringServicesNotBilled()` tells those not billed yet, and
+    `db.bills.getMonthInProgress()` composes the two for `GET /api/months`, which marks the
+    month `inProgress: true` for the account asked. **Read when the server reads the bills**,
+    like the products: no re-import.
   - `storage-classes.js` — pure: the names of the storage classes that OVH gives the objects
     of a bucket, for the import and for the buckets an earlier import stored (#145).
 - **`server/`** — read-only Express API over the DB. `index.js` is the single ~1300-line
