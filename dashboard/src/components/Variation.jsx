@@ -1,4 +1,4 @@
-import { variationDisplay, variationPercent } from '../utils/variation.js';
+import { comparedVariation } from '../utils/variation.js';
 
 // The sizes of a variation: in a table cell, or the headline one between the totals of the
 // months compared
@@ -14,19 +14,16 @@ const TONES = {
   neutral: 'bg-gray-100 text-gray-700',
 };
 
-// The variation from one amount to another, as every table and the headline of the Compare
-// tab show it: in percent, in the number format of the language, red when it grows, green
-// when it shrinks, and grey when it rounds to 0 (#87). From 0 € or less, it cannot be computed
-// (#65): "—", with a tooltip that says why. Nor when either amount is of the month in progress
-// (monthInProgress), which it would compare, partial, with a complete month (#216).
-const Variation = ({ from, to, language, t, size = 'cell', monthInProgress = false }) => {
-  const variation = monthInProgress
-    ? null
-    : variationDisplay(variationPercent(from, to), language);
-  if (variation === null) {
-    const why = monthInProgress ? 'variationMonthInProgress' : 'variationNotComputable';
+// The variation from one amount to another between the months compared (comparedMonths, see
+// comparedMonthsOf()), as every table and the headline of the Compare tab show it: in percent, in
+// the number format of the language, red when it grows, green when it shrinks, and grey when it
+// rounds to 0 (#87). When none is computed, from 0 € or less (#65) or with the month in progress
+// (#216), "—", with a tooltip that says why (comparedVariation()).
+const Variation = ({ from, to, comparedMonths, language, t, size = 'cell' }) => {
+  const variation = comparedVariation(comparedMonths, from, to, language);
+  if (variation.why) {
     return (
-      <span className={`${SIZES[size]} text-gray-400`} title={t(why)}>
+      <span className={`${SIZES[size]} text-gray-400`} title={t(variation.why)}>
         —
       </span>
     );

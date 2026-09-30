@@ -8,8 +8,8 @@ import { UnfoldedRowServices } from '../components/UnfoldedRowServices.jsx';
 import { UnfoldingRow } from '../components/UnfoldingRow.jsx';
 import { Variation } from '../components/Variation.jsx';
 import { formatMonthLabel } from '../utils/format.js';
-import { comparisonValues, whileInProgress } from '../utils/monthComparison.js';
-import { isMonthInProgress, monthLabel } from '../utils/months.js';
+import { comparedMonthsOf, comparisonValues, valuesAsShown } from '../utils/monthComparison.js';
+import { monthLabel } from '../utils/months.js';
 import { firstRowOfEachProject, projectComparisonRows } from '../utils/projectComparison.js';
 import { variationPercent } from '../utils/variation.js';
 
@@ -76,17 +76,17 @@ const CompareTab = ({
   // Months A and B as the page names them, in its language (#33)
   const monthALabel = formatMonthLabel(compareMonthA?.value, language);
   const monthBLabel = formatMonthLabel(compareMonthB?.value, language);
-  // Whether either is the month in progress, as the months list marks it: no variation from one
-  // to the other is computed then, as it would compare a partial month with a complete one (#216)
-  const monthInProgress = isMonthInProgress(months, compareMonthA)
-    || isMonthInProgress(months, compareMonthB);
+  // What the comparison knows of months A and B, which its variations and the sort of its tables
+  // read: whether either is the month in progress, which leaves no variation to compute, as it
+  // would compare a partial month with a complete one (#216)
+  const comparedMonths = comparedMonthsOf(months, compareMonthA, compareMonthB);
 
   // The projects of months A and B, paired by id (#55), and by account in the Account column
   // (#119), in the order the user sorts them, by month A until then (#146)
   const projectSorting = sortingOf('projects');
   const compareProjects = sortRows(
     projectComparisonRows(byProjectA, byProjectB), projectSorting.sort,
-    whileInProgress(projectComparisonValues(accountColumn), monthInProgress), language,
+    valuesAsShown(comparedMonths, projectComparisonValues(accountColumn)), language,
   );
   // The projects whose products the tab compares (#181), once each, in the order of their
   // first rows: in the Account column, a project billed to several accounts has a row for each
@@ -126,8 +126,8 @@ const CompareTab = ({
     { key: 'ip_service', label: language === 'en' ? 'IP Addresses' : 'Adresses IP' },
     { key: 'domain', label: language === 'en' ? 'Domains' : 'Noms de domaine' },
     ...privateCloudTypes,
-  ], infrastructureSorting.sort, whileInProgress(
-    resourceTypeValues(byResourceTypeA, byResourceTypeB), monthInProgress,
+  ], infrastructureSorting.sort, valuesAsShown(
+    comparedMonths, resourceTypeValues(byResourceTypeA, byResourceTypeB),
   ), language);
 
   // Draws a row of the infrastructure, backup or Private Cloud comparison, by the comparison's
@@ -147,10 +147,8 @@ const CompareTab = ({
       detail={(
         <UnfoldedRowServices
           servicesQueryOf={servicesQueryOf}
-          monthA={compareMonthA} monthB={compareMonthB} monthInProgress={monthInProgress}
-          sort={sortingOf(comparison).sort}
-          values={whileInProgress(SERVICE_VALUES, monthInProgress)}
-          columnCount={COMPARISON_COLUMNS}
+          monthA={compareMonthA} monthB={compareMonthB} comparedMonths={comparedMonths}
+          sort={sortingOf(comparison).sort} values={SERVICE_VALUES} columnCount={COMPARISON_COLUMNS}
           accountColumn={accountColumn} fmt={fmt} language={language} t={t}
         />
       )}
@@ -159,7 +157,7 @@ const CompareTab = ({
       <td className="p-3 text-right text-gray-500">{shownB}</td>
       <td className="p-3 text-right">
         <Variation
-          from={valA} to={valB} language={language} t={t} monthInProgress={monthInProgress}
+          from={valA} to={valB} comparedMonths={comparedMonths} language={language} t={t}
         />
       </td>
     </UnfoldingRow>
@@ -229,7 +227,7 @@ const CompareTab = ({
             {compareDataA && compareDataB && (
               <Variation
                 from={compareDataA.total} to={compareDataB.total} language={language} t={t}
-                size="headline" monthInProgress={monthInProgress}
+                size="headline" comparedMonths={comparedMonths}
               />
             )}
           </div>
@@ -312,8 +310,8 @@ const CompareTab = ({
                 <td className="p-3 text-right text-gray-500">{fmt(p.totalB)}€</td>
                 <td className="p-3 text-right">
                   <Variation
-                    from={p.totalA} to={p.totalB} language={language} t={t}
-                    monthInProgress={monthInProgress}
+                    from={p.totalA} to={p.totalB} comparedMonths={comparedMonths}
+                    language={language} t={t}
                   />
                 </td>
               </tr>
@@ -433,7 +431,7 @@ const CompareTab = ({
           <Accordion key={proj.projectId} title={`${proj.projectName} (${t('project')})`}>
             <ProjectProductComparison
               productsQueryOf={(month) => projectProductsQuery(proj.projectId, month)}
-              monthA={compareMonthA} monthB={compareMonthB} monthInProgress={monthInProgress}
+              monthA={compareMonthA} monthB={compareMonthB} comparedMonths={comparedMonths}
               sorting={sortingOf(productsComparison)}
               unfoldingOf={(product) => unfoldingOf(productsComparison, product)}
               fmt={fmt} language={language} t={t}

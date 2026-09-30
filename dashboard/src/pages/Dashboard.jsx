@@ -24,7 +24,8 @@ import { parseSqliteDate } from '../utils/sqliteDate.js';
 import { generateMarkdownReport, reportFileName } from '../utils/markdownReport.js';
 import { holdsMonth, isMonthInProgress } from '../utils/months.js';
 import { shiftMonths } from '../utils/monthWindow.js';
-import { variationDisplay, variationPercent } from '../utils/variation.js';
+import { comparedMonthsOf } from '../utils/monthComparison.js';
+import { comparedVariation } from '../utils/variation.js';
 import { useWebCloudTab } from '../tabs/useWebCloudTab.js';
 import { WebCloudTab, WebCloudTabModals } from '../tabs/WebCloudTab.jsx';
 import { useBackupTab } from '../tabs/useBackupTab.js';
@@ -358,12 +359,13 @@ export default function Dashboard() {
   // with the accounts once an import is over.
   const budget = budgetOf(accounts, selectedAccount, dashboardBudget);
   // The "vs previous month" variation, from the month before (#50), as the page shows it: its
-  // text and its tone, as in the Compare and Trends tabs (#87). Null when it cannot be
-  // computed, as there (#65): from a month before at 0 € or less, or without a bill, so at
-  // 0 €; and for the month in progress, which it would compare, partial, with a complete
-  // month (#216).
-  const variation = selectedMonthInProgress ? null : variationDisplay(
-    variationPercent(previousSummary?.total ?? 0, total), language,
+  // text and its tone, as in the Compare and Trends tabs (#87), or, as there, the key of the
+  // tooltip that says why it shows none: the month in progress, which it would compare, partial,
+  // with a complete month (#216), or a month before at 0 € or less, or without a bill, so at
+  // 0 € (#65)
+  const variation = comparedVariation(
+    comparedMonthsOf(months, previousMonth, selectedMonth), previousSummary?.total ?? 0, total,
+    language, { notComputable: 'vsPreviousMonthNotComputable' },
   );
 
   // Nothing billed yet, as on a new account or before its first import (#51): with no month
@@ -608,7 +610,7 @@ export default function Dashboard() {
               )}
             </div>
             <div className="text-2xl font-bold text-gray-900">{fmt(total)}€</div>
-            {variation !== null ? (
+            {!variation.why ? (
               <div className={`flex items-center mt-2 text-sm ${VARIATION_TONES[variation.tone]}`}>
                 {variation.text} {t('vsPreviousMonth')}
               </div>
@@ -617,13 +619,9 @@ export default function Dashboard() {
                 {t('noPreviousData')}
               </div>
             ) : (
-              // "—", with a tooltip that says why, as in the Compare and Trends tabs (#65): the
-              // month before at 0 € or less, or the month in progress (#216)
+              // "—", with a tooltip that says why, as in the Compare and Trends tabs (#65, #216)
               <div
-                className="flex items-center mt-2 text-sm text-gray-400"
-                title={t(selectedMonthInProgress
-                  ? 'variationMonthInProgress'
-                  : 'vsPreviousMonthNotComputable')}
+                className="flex items-center mt-2 text-sm text-gray-400" title={t(variation.why)}
               >
                 — {t('vsPreviousMonth')}
               </div>

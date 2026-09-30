@@ -72,23 +72,21 @@ const UnfoldingRow = ({ unfolding, chevronLabel, label, detail, children }) => (
  * @param {object} props
  * @param {number} props.valA - Its amount in month A
  * @param {number} props.valB - Its amount in month B
- * @param {boolean} [props.monthInProgress] - Whether month A or B is the month in progress,
- *   which leaves no variation to compute (#216)
+ * @param {{ monthInProgress: boolean }} props.comparedMonths - What the comparison knows of
+ *   months A and B (comparedMonthsOf()), which its variation reads (#216)
  * @param {React.ReactNode} props.children - What names it, in its first cell, which asks the
  *   table for no width of its own (max-w-0): what names it wraps or is cut to the column of the
  *   rows' labels, whatever the page's width, rather than widen the table
  * @returns {JSX.Element}
  */
-const DetailRow = ({
-  valA, valB, monthInProgress = false, fmt, language, t, children,
-}) => (
+const DetailRow = ({ valA, valB, comparedMonths, fmt, language, t, children }) => (
   <tr className="border-b text-gray-600">
     <td className={`max-w-0 ${DETAIL_PADDING}`}>{children}</td>
     <td className="py-2 px-3 text-right">{fmt(valA)}€</td>
     <td className="py-2 px-3 text-right">{fmt(valB)}€</td>
     <td className="py-2 px-3 text-right">
       <Variation
-        from={valA} to={valB} language={language} t={t} monthInProgress={monthInProgress}
+        from={valA} to={valB} comparedMonths={comparedMonths} language={language} t={t}
       />
     </td>
   </tr>

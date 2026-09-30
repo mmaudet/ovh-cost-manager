@@ -26,4 +26,26 @@ const variationDisplay = (percent, language = 'fr') => {
   };
 };
 
-export { variationPercent, variationDisplay };
+/**
+ * The variation between the months compared (comparedMonthsOf() in monthComparison.js), as
+ * the Compare tab's tables and the "vs previous month" KPI show it, or why they show "—": the
+ * month in progress, which it would compare, partial, with a complete month (#216), or an amount
+ * to compare with at 0 € or less (#65), which each place words its own way.
+ * @param {{ monthInProgress: boolean }} comparedMonths
+ * @param {number} from - The amount of the first month
+ * @param {number} to - The amount of the second
+ * @param {string} language - The page's, 'fr' or 'en'
+ * @param {object} [options]
+ * @param {string} [options.notComputable] - The translation key of the tooltip that says why no
+ *   variation from 0 € or less is computed: that of the Compare tab's, from month A, by default
+ * @returns {{ text: string, tone: string } | { why: string }} Its text and tone
+ *   (variationDisplay()), or the translation key of the tooltip that says why there are none
+ */
+const comparedVariation = (
+  comparedMonths, from, to, language, { notComputable = 'variationNotComputable' } = {},
+) => {
+  if (comparedMonths.monthInProgress) return { why: 'variationMonthInProgress' };
+  return variationDisplay(variationPercent(from, to), language) ?? { why: notComputable };
+};
+
+export { variationPercent, variationDisplay, comparedVariation };

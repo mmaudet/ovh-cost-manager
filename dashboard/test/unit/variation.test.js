@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { variationDisplay, variationPercent } from '../../src/utils/variation.js';
+import {
+  comparedVariation, variationDisplay, variationPercent,
+} from '../../src/utils/variation.js';
 import { NBSP } from '../support/amounts.js';
 
 // The variation from one amount to another, in percent: from month A to month B in the
@@ -78,5 +80,36 @@ describe('variationDisplay', () => {
   // Each place shows it its own way: "—" in the Compare tab, for instance (#65)
   it('shows nothing of a variation that cannot be computed', () => {
     expect(variationDisplay(variationPercent(0, 120), 'fr')).toBeNull();
+  });
+});
+
+// A variation between the months compared (comparedMonthsOf()) as the Compare tab's tables
+// and the "vs previous month" KPI show it: its text and its tone, or the key of the tooltip that
+// says why they show "—" (#65, #216)
+describe('comparedVariation', () => {
+  const complete = { monthInProgress: false };
+  const inProgress = { monthInProgress: true };
+
+  it('shows the variation between two complete months, as variationDisplay() writes it', () => {
+    expect(comparedVariation(complete, 1042, 1250.4, 'fr'))
+      .toEqual({ text: `+20,0${NBSP}%`, tone: 'increase' });
+    expect(comparedVariation(complete, 200, 150, 'en'))
+      .toEqual({ text: '-25.0%', tone: 'decrease' });
+  });
+
+  // Rather than compare a partial month with a complete one
+  it('shows none with the month in progress, which is why, even from 0 €', () => {
+    expect(comparedVariation(inProgress, 1042, 1250.4, 'fr'))
+      .toEqual({ why: 'variationMonthInProgress' });
+    expect(comparedVariation(inProgress, 0, 120, 'en'))
+      .toEqual({ why: 'variationMonthInProgress' });
+  });
+
+  // The Compare tab says month A, the KPI the month before
+  it('shows none from 0 € or less, which each place says its own way', () => {
+    expect(comparedVariation(complete, 0, 120, 'fr')).toEqual({ why: 'variationNotComputable' });
+    expect(comparedVariation(complete, -15, 100, 'fr', {
+      notComputable: 'vsPreviousMonthNotComputable',
+    })).toEqual({ why: 'vsPreviousMonthNotComputable' });
   });
 });
