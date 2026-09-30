@@ -138,13 +138,13 @@ describe('GET /api/months: the month in progress (#216)', () => {
       await ocm?.stop();
     });
 
-    test('keeps nothing in progress for a yearly service, a one-off or a service billed for less '
-      + 'than three months', async () => {
-      const answer = await ocm.get('/api/months');
+    test('keeps nothing in progress for a yearly service, a one-off or a service ordered since',
+      async () => {
+        const answer = await ocm.get('/api/months');
 
-      expect(monthsOf(answer)[0]).toBe(MONTH_OF_TODAY);
-      expect(marksOf(answer)).toEqual([]);
-    });
+        expect(monthsOf(answer)[0]).toBe(MONTH_OF_TODAY);
+        expect(marksOf(answer)).toEqual([]);
+      });
   });
 
   // As the months list does (#115), the mark follows the account parameter: the recurring
@@ -184,7 +184,7 @@ describe('GET /api/months: the month in progress (#216)', () => {
       await ocm?.stop();
     });
 
-    test('marks it for the account asked while one of its recurring services has no bill line in it',
+    test('marks it for the account asked while one of its recurring services lacks a bill line',
       async () => {
         expect(marksOf(await ocm.get(`/api/months?account=${LYON}`)))
           .toEqual([[MONTH_OF_TODAY, true]]);
