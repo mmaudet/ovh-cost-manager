@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { screen, within } from '@testing-library/react';
+import { account } from './fixtures/account.js';
 import {
   cloudProjectRow,
   costsByResourceType,
@@ -47,9 +48,10 @@ const productionDetail = [
 
 // Opens a project on the Public Cloud tab, Production unless told otherwise, then the bill
 // lines of the dedicated servers on the Infrastructure tab, where the user stays. Every test
-// starts there, so the helper checks that both opened.
-const openProjectAndResourceType = async (project = 'Production') => {
-  const { user } = await renderDashboard();
+// starts there, so the helper checks that both opened. On the page of the account's data,
+// unless told otherwise.
+const openProjectAndResourceType = async (project = 'Production', data = account) => {
+  const { user } = await renderDashboard(data);
   await openTab(user, 'Public Cloud');
   await openProject(user, project);
   expect(texts(cloudProjectRow(project))).toContain('▲');
@@ -74,6 +76,32 @@ describe('navigation', () => {
     expect(texts(cloudProjectRow('Production'))).toContain('▲');
     expect(projectDetailHeadings().slice(0, 2)).toEqual(productionDetail);
   });
+
+  // #225: as the tab bar does, the header's badge of the services about to expire, which leads
+  // to their list in the Overview
+  it('through the badge of the services about to expire keeps the open project and resource type',
+    async () => {
+      const { user } = await openProjectAndResourceType('Production', {
+        ...account,
+        expiringServices: [{
+          id: 'ns3000001.ip-203-0-113.eu', display_name: 'backup-server',
+          type: 'dedicated_server', expiration_date: '2026-09-20',
+        }],
+      });
+
+      await user.click(screen.getByRole('button', { name: /Expirations proches/ }));
+
+      expect(screen.getByText('Répartition par service')).toBeInTheDocument();
+
+      await openTab(user, 'Infrastructure');
+
+      expect(texts(costsByResourceType())).toEqual(withServerBillLines);
+
+      await openTab(user, 'Public Cloud');
+
+      expect(texts(cloudProjectRow('Production'))).toContain('▲');
+      expect(projectDetailHeadings().slice(0, 2)).toEqual(productionDetail);
+    });
 
   it('through the logo closes the open project and resource type', async () => {
     const { user } = await openProjectAndResourceType();

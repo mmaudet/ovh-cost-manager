@@ -11,6 +11,7 @@
 // projects of the Public Cloud tab reads too, through the shell (#180). Everything else lists
 // each project once, as before.
 
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useTableSorts } from '../components/SortableHeader.jsx';
 import { gpuProjectsByAccountQuery, projectsByAccountQuery } from './projectsByAccountQueries.js';
@@ -25,6 +26,8 @@ const BY_AMOUNT = { column: 'total', kind: 'number', direction: 'desc' };
 const useOverviewTab = ({ selectedMonth, holdsSelectedMonth, accountColumn }) => {
   // The sort order of its tables, by table (#146)
   const sortingOf = useTableSorts({ projects: BY_AMOUNT });
+  // Whether the "show all" modal of the services about to expire is open (#225)
+  const [showAllExpiring, setShowAllExpiring] = useState(false);
 
   // The projects of the month by account, for all accounts, which run only while the lists
   // name the account of each: the breakdown by project, which the Public Cloud tab's list of
@@ -39,6 +42,8 @@ const useOverviewTab = ({ selectedMonth, holdsSelectedMonth, accountColumn }) =>
 
   return {
     sortingOf,
+    showAllExpiring,
+    setShowAllExpiring,
     projectsByAccount: projectsByAccountOfMonth ?? [],
     // Whether those of the month have loaded, which the Public Cloud tab's list waits for,
     // rather than show that nothing was billed (#180)

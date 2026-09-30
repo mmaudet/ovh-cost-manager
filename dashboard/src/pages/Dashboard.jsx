@@ -8,6 +8,7 @@ import {
   fetchByResourceType, fetchGpuSummary,
 } from '../services/api';
 import { useActiveTabInView } from '../hooks/useActiveTabInView.js';
+import { useExpirationsInView } from '../hooks/useExpirationsInView.js';
 import { useLanguage } from '../hooks/useLanguage.jsx';
 import { useMonthInProgressProjection } from '../hooks/useMonthInProgressProjection.js';
 import { useSelectedAccount } from '../hooks/useSelectedAccount.js';
@@ -44,7 +45,7 @@ import { PublicCloudTab, PublicCloudTabModals } from '../tabs/PublicCloudTab.jsx
 import { useCompareTab } from '../tabs/useCompareTab.js';
 import { CompareTab } from '../tabs/CompareTab.jsx';
 import { useOverviewTab } from '../tabs/useOverviewTab.js';
-import { OverviewTab } from '../tabs/OverviewTab.jsx';
+import { OverviewTab, OverviewTabModals } from '../tabs/OverviewTab.jsx';
 
 // Translation keys for the import_log type values
 const IMPORT_TYPE_KEYS = {
@@ -98,6 +99,9 @@ export default function Dashboard() {
   // The refs of the tab bar's buttons, whose bar scrolls to the active tab whenever it
   // changes, where the bar scrolls sideways (#226)
   const tabRef = useActiveTabInView(activeTab);
+  // What the header's badge of the services about to expire leads to: their list, in the
+  // Overview (#225)
+  const { showExpirations, expirationsRef } = useExpirationsInView(activeTab, setActiveTab);
   // The dashboard budget, which the page compares the figures of all accounts with: that of
   // config.json once the configuration loads, which the user may change for the visit
   const [dashboardBudget, setDashboardBudget] = useState(50000); // Default budget
@@ -524,12 +528,20 @@ export default function Dashboard() {
           <div className="flex flex-wrap items-center md:justify-end gap-2">
             {/* Manual resync */}
             {importsEnabled && <ResyncButton t={t} />}
-            {/* Expiration badge */}
+            {/* The services about to expire, whose list in the Overview the badge leads to
+                (#225), on one line, as the other controls. It prints, as it did before it led
+                anywhere (index.css) */}
             {expiringServices.length > 0 && (
-              <div className="flex items-center gap-1 px-3 py-1.5 bg-orange-100 text-orange-700 rounded-lg text-sm font-medium">
+              <button
+                type="button"
+                onClick={showExpirations}
+                className={'expirations-badge flex items-center gap-1 px-3 py-1.5 bg-orange-100'
+                  + ' text-orange-700 hover:bg-orange-200 rounded-lg text-sm font-medium'
+                  + ' whitespace-nowrap'}
+              >
                 <span>{expiringServices.length}</span>
                 <span>{t('expiringSoon')}</span>
-              </div>
+              </button>
             )}
             {/* User info */}
             {userData?.id && (
@@ -793,7 +805,8 @@ export default function Dashboard() {
             accountColumn={accountColumn}
             summary={summary} total={total} byService={byService} byProject={byProject}
             byResourceType={byResourceType} gpuSummary={gpuSummary}
-            expiringServices={expiringServices} budget={budget} setBudget={setDashboardBudget}
+            expiringServices={expiringServices} expirationsRef={expirationsRef}
+            budget={budget} setBudget={setDashboardBudget}
             setActiveTab={setActiveTab} setSelectedProject={setSelectedProject}
             setSelectedResourceType={setSelectedResourceType}
           />
@@ -970,6 +983,11 @@ export default function Dashboard() {
           </details>
         </div>
       </div>
+      <OverviewTabModals
+        {...overviewTab} expiringServices={expiringServices} language={language} t={t}
+        accountColumn={accountColumn}
+      />
+
       <WebCloudTabModals
         {...webCloudTab} language={language} t={t} fmt={fmt} accountColumn={accountColumn}
       />
