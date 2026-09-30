@@ -90,7 +90,9 @@ const projectionParams = (projected) => (projected ? { projected: true } : {});
 // Trends over `months` months that end on the `end` month, 'YYYY-MM', of the account. With
 // `projected`, the month in progress at its projected cost, and each month's projected part
 // (#217).
-export const fetchMonthlyTrend = async (months, end, account = null, { projected = false } = {}) => {
+export const fetchMonthlyTrend = async (
+  months, end, account = null, { projected = false } = {},
+) => {
   const { data } = await api.get('/analysis/monthly-trend', {
     params: { months, end, ...accountParams(account), ...projectionParams(projected) },
   });

@@ -1,8 +1,8 @@
 /**
- * The checkbox « Projeter le mois en cours » (#214): whether the page counts the month in progress
- * at its projected cost, each recurring service that it has not billed yet at its cost of the
- * month before. One setting for the whole page (useMonthInProgressProjection()), which the Trends
- * tab shows next to its period selector (#217).
+ * The checkbox « Projeter le mois en cours » (#214): whether the page counts the month in
+ * progress at its projected cost, each recurring service that it has not billed yet at its cost
+ * of the month before. One setting for the whole page (useMonthInProgressProjection()), which the
+ * Trends tab shows next to its period selector (#217).
  * @param {object} props
  * @param {boolean} props.projectsMonthInProgress - Whether the page projects it
  * @param {function(boolean): void} props.setProjectsMonthInProgress - Turns the projection on or

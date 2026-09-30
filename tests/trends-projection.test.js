@@ -262,7 +262,9 @@ describe('GET /api/analysis/monthly-trend?projected=true with several accounts',
     project(db, 'project-lyon', 'Lyon', LYON);
     project(db, 'project-paris', 'Paris', PARIS);
     [...MONTHS_BEFORE, MONTH_OF_TODAY].forEach((yearMonth, index) => {
-      billOf(db, `FR1${index}01`, LYON, `${yearMonth}-01`, [['project-lyon', 'cloud_project', 600]]);
+      billOf(db, `FR1${index}01`, LYON, `${yearMonth}-01`, [
+        ['project-lyon', 'cloud_project', 600],
+      ]);
       billOf(db, `FR2${index}01`, PARIS, `${yearMonth}-01`, [
         ['project-paris', 'cloud_project', 400],
       ]);
