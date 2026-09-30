@@ -13,18 +13,18 @@ import { useEffect, useRef, useState } from 'react';
 export function useExpirationsInView(activeTab, setActiveTab) {
   // The list's card, while the Overview shows it
   const expirationsRef = useRef(null);
-  // Whether the badge asked for the list, until the Overview shows it
-  const [asked, setAsked] = useState(false);
+  // Whether the list waits for the focus that the badge asked for, until the Overview shows it
+  const [focusPending, setFocusPending] = useState(false);
 
   useEffect(() => {
-    if (!asked || activeTab !== 'overview') return;
+    if (!focusPending || activeTab !== 'overview') return;
     expirationsRef.current?.focus();
-    setAsked(false);
-  }, [asked, activeTab]);
+    setFocusPending(false);
+  }, [focusPending, activeTab]);
 
   const showExpirations = () => {
     setActiveTab('overview');
-    setAsked(true);
+    setFocusPending(true);
   };
 
   return { showExpirations, expirationsRef };

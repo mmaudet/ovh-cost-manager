@@ -1,4 +1,5 @@
 import { accountCsvColumns } from '../utils/accounts.js';
+import { downloadCSV } from '../utils/csv.js';
 import { takesSingular } from '../utils/format.js';
 import { SortableHeader, sortRows } from './SortableHeader.jsx';
 
@@ -6,14 +7,14 @@ import { SortableHeader, sortRows } from './SortableHeader.jsx';
 // (#225): the inventory's dedicated servers, VPS and storage services that expire within 30 days
 // or already have, as /api/inventory/expiring lists them.
 
-// The label of each type of service, and the colours of its badge: those of storage for any
-// other type, as the card showed them
-const TYPES = {
+// The badge of each resource type of the services about to expire (CONTEXT.md), its label and
+// its colours: those of storage for any other, as the card showed them
+const TYPE_BADGES = {
   dedicated_server: { labelKey: 'dedicatedServers', tone: 'bg-red-100 text-red-700' },
   vps: { labelKey: 'vpsInstances', tone: 'bg-amber-100 text-amber-700' },
   storage: { labelKey: 'storageServices', tone: 'bg-green-100 text-green-700' },
 };
-const typeOf = (service) => TYPES[service.type] ?? TYPES.storage;
+const badgeOf = (service) => TYPE_BADGES[service.type] ?? TYPE_BADGES.storage;
 
 // The days until a service expires, from today: negative once it has (#74)
 const daysLeftOf = (service) => Math.ceil(
@@ -21,8 +22,8 @@ const daysLeftOf = (service) => Math.ceil(
 );
 
 /**
- * The badge of the type of a service about to expire, on one line, as a phone would otherwise
- * break « Serveurs dédiés » inside it.
+ * The badge of the resource type of a service about to expire, on one line, as a phone would
+ * otherwise break « Serveurs dédiés » inside it.
  * @param {object} props
  * @param {{ type: string }} props.service
  * @param {function(string): string} props.t
@@ -30,9 +31,9 @@ const daysLeftOf = (service) => Math.ceil(
  */
 const ExpiringTypeBadge = ({ service, t }) => (
   <span
-    className={`px-2 py-0.5 rounded text-xs font-medium whitespace-nowrap ${typeOf(service).tone}`}
+    className={`px-2 py-0.5 rounded text-xs font-medium whitespace-nowrap ${badgeOf(service).tone}`}
   >
-    {t(typeOf(service).labelKey)}
+    {t(badgeOf(service).labelKey)}
   </span>
 );
 
@@ -60,10 +61,10 @@ const ExpirationDelay = ({ service, language, t }) => {
   );
 };
 
-// The value of a service in each column, which the table sorts by (#146): its type by the label
-// it shows, its expiration by its date
+// The value of a service in each column, which the table sorts by (#146): its resource type by
+// the label its badge shows, its expiration by its date
 const expiringValues = (t) => ({
-  type: (s) => t(typeOf(s).labelKey),
+  type: (s) => t(badgeOf(s).labelKey),
   service: (s) => s.display_name || s.id,
   account: (s) => s.accountName,
   expiration: (s) => s.expiration_date,
@@ -130,7 +131,7 @@ const ExpiringServicesTable = ({ services, sorting, accountColumn, language, t }
 /**
  * The columns of the CSV file of the services about to expire, for downloadCSV(): the account's
  * after the service's id when the table shows it, as the other lists' (#123, see
- * accountCsvColumns()), and the type and the expiration date as the API gives them.
+ * accountCsvColumns()), and the resource type and the expiration date as the API gives them.
  * @param {string} language - The page's, 'fr' or 'en'
  * @param {?{ label: string }} [accountColumn] - The Account column of the lists
  *   (accountColumnOf()), null when they show none
@@ -144,6 +145,16 @@ const expiringServiceCsvColumns = (language, accountColumn = null) => [
   { key: 'expiration_date', label: language === 'en' ? 'Expiration date' : 'Date d\'expiration' },
 ];
 
+/**
+ * Downloads the services about to expire as CSV, from the card and from its modal alike.
+ * @param {object[]} services - With their account's name, accountName, when the lists name it
+ * @param {string} language - The page's, 'fr' or 'en'
+ * @param {?{ label: string }} accountColumn - The Account column of the lists, null without one
+ */
+const downloadExpiringServices = (services, language, accountColumn) => downloadCSV(
+  services, expiringServiceCsvColumns(language, accountColumn), 'ovh-expiring-services',
+);
+
 export {
-  ExpiringTypeBadge, ExpirationDelay, ExpiringServicesTable, expiringServiceCsvColumns,
+  ExpiringTypeBadge, ExpirationDelay, ExpiringServicesTable, downloadExpiringServices,
 };

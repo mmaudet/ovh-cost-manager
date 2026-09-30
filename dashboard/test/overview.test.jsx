@@ -5,7 +5,9 @@ import {
   lyonAccount, removedAccount, severalAccounts, unknownAccount, unnamedAccount,
 } from './fixtures/accounts.js';
 import { api } from './support/api.js';
-import { BOM, captureFileDownloads, csvFile } from './support/downloads.js';
+import {
+  BOM, captureFileDownloads, csvFile, downloadFromPanelAndModal,
+} from './support/downloads.js';
 import {
   cardOf,
   cardRowOf,
@@ -14,6 +16,7 @@ import {
   firstColumnOf,
   headerBadge,
   headerOf,
+  layOutForPrint,
   openTab,
   renderDashboard,
   rowTextsOf,
@@ -85,8 +88,9 @@ const oneOrTwoDaysAway = [
   { id: 'vps-0a1b2c3d.vps.ovh.net', display_name: 'vps-0a1b2c3d.vps.ovh.net',
     type: 'vps', expiration_date: '2026-09-17' },
 ];
+// The card of the services about to expire, found by its title, which counts them (#225)
 const expirationCard = (heading = 'Expirations proches') =>
-  cardOf(screen.getByRole('heading', { name: heading }));
+  cardOf(screen.getByRole('heading', { name: new RegExp(`^${heading} \\(`) }));
 
 describe('Overview tab', () => {
   it('loads everything it shows with the page', async () => {
@@ -473,16 +477,15 @@ describe('Overview tab', () => {
   it('lists the five services that expire soonest, those already expired first', async () => {
     await renderDashboard({ ...account, expiringServices: expiringSoon });
 
-    // A service without a display name shows its id
-    expect(texts(cardOf(screen.getByRole('heading', { name: 'Expirations proches' })))).toEqual([
-      'Expirations proches',
+    // A service without a display name shows its id. The title counts all seven, which a
+    // modal lists, as the other lists do (#225)
+    expect(texts(expirationCard())).toEqual([
+      'Expirations proches (7)', 'Tout afficher', 'CSV',
       'VPS', 'legacy-vps', 'Expiré depuis 5 jours',
       'Serveurs dédiés', 'ns3000003.ip-203-0-113.eu', 'Expire dans 2 jours',
       'Serveurs dédiés', 'backup-server', 'Expire dans 5 jours',
       'Stockage', 'archives-nas', 'Expire dans 17 jours',
       'VPS', 'vps-0a1b2c3d.vps.ovh.net', 'Expire dans 25 jours',
-      // The seven, in a modal (#225)
-      'Tout afficher (7)',
     ]);
     // All seven in the header, the expired one included, as in the card
     expect(texts(headerBadge('Expirations proches'))).toEqual(['7', 'Expirations proches']);
@@ -491,13 +494,32 @@ describe('Overview tab', () => {
   // #225: the header's badge leads to the list, from whichever tab is open
   it('opens the list from the header\'s badge, whatever the tab open', async () => {
     const { user } = await renderDashboard({ ...account, expiringServices: expiringSoon });
-    await openTab(user, 'Web Cloud');
+    const badge = screen.getByRole('button', { name: /Expirations proches/ });
 
-    await user.click(screen.getByRole('button', { name: /Expirations proches/ }));
+    // From the Overview itself
+    await user.click(badge);
+
+    expect(expirationCard()).toHaveFocus();
+
+    await openTab(user, 'Web Cloud');
+    await user.click(badge);
 
     // The Overview, focused on the list, which the browser scrolls into view, and which a
-    // screen reader reads from its heading
+    // screen reader names by its title
     expect(expirationCard()).toHaveFocus();
+    expect(screen.getByRole('region', { name: 'Expirations proches (7)' }))
+      .toBe(expirationCard());
+  });
+
+  // #225: the badge is a button now, and the page prints no button, but it, as before
+  it('prints the header\'s badge, and the card\'s count', async () => {
+    await renderDashboard({ ...account, expiringServices: expiringSoon });
+
+    layOutForPrint();
+
+    expect(headerBadge('Expirations proches')).toBeVisible();
+    expect(within(expirationCard()).getByText('Expirations proches (7)')).toBeVisible();
+    expect(within(expirationCard()).getByText('Tout afficher')).not.toBeVisible();
   });
 
   // #225: the header counts every service about to expire, of which the card lists five
@@ -514,7 +536,7 @@ describe('Overview tab', () => {
       ['Stockage', 'shared-files', 'Expire dans 29 jours'],
     ];
     const showAll = async (user) => {
-      await user.click(within(expirationCard()).getByRole('button', { name: 'Tout afficher (7)' }));
+      await user.click(within(expirationCard()).getByRole('button', { name: 'Tout afficher' }));
       return screen.getByRole('dialog');
     };
 
@@ -541,7 +563,28 @@ describe('Overview tab', () => {
     });
 
     // In the order the server lists them, whatever the order shown, as the other lists (#146)
-    it('downloads every service about to expire as CSV', async () => {
+    it('downloads every service about to expire as CSV, from the card and from the modal',
+      async () => {
+        const { user } = await renderDashboard({ ...account, expiringServices: expiringSoon });
+
+        const [fromCard, fromModal] = await downloadFromPanelAndModal(user, expirationCard());
+
+        expect(fromModal).toEqual(fromCard);
+        expect(fromCard).toEqual(csvFile('ovh-expiring-services.csv', [
+          '"Nom";"ID";"Type";"Date d\'expiration"',
+          '"legacy-vps";"vps-2c3d4e5f.vps.ovh.net";"vps";"2026-09-10"',
+          // No display name: an empty cell
+          ';"ns3000003.ip-203-0-113.eu";"dedicated_server";"2026-09-17"',
+          '"backup-server";"ns3000001.ip-203-0-113.eu";"dedicated_server";"2026-09-20"',
+          '"archives-nas";"netapp-8c9d0e1f";"storage";"2026-10-02"',
+          '"vps-0a1b2c3d.vps.ovh.net";"vps-0a1b2c3d.vps.ovh.net";"vps";"2026-10-10"',
+          '"staging-vps";"vps-4e5f6a7b.vps.ovh.net";"vps";"2026-10-12"',
+          '"shared-files";"netapp-5f2c9a1e";"storage";"2026-10-14"',
+        ]));
+      });
+
+    // In the order the server lists them, whatever the order shown, as the other lists (#146)
+    it('downloads them in the order of the server, whatever the order shown', async () => {
       const { user } = await renderDashboard({ ...account, expiringServices: expiringSoon });
       const dialog = await showAll(user);
       await sortTable(user, within(dialog).getByRole('table'), 'Service');
@@ -549,17 +592,10 @@ describe('Overview tab', () => {
 
       await user.click(within(dialog).getByRole('button', { name: 'CSV' }));
 
-      expect(await downloadedFiles()).toEqual([csvFile('ovh-expiring-services.csv', [
-        '"Nom";"ID";"Type";"Date d\'expiration"',
+      expect((await downloadedFiles())[0].content.split('\n').slice(1, 3)).toEqual([
         '"legacy-vps";"vps-2c3d4e5f.vps.ovh.net";"vps";"2026-09-10"',
-        // No display name: an empty cell
         ';"ns3000003.ip-203-0-113.eu";"dedicated_server";"2026-09-17"',
-        '"backup-server";"ns3000001.ip-203-0-113.eu";"dedicated_server";"2026-09-20"',
-        '"archives-nas";"netapp-8c9d0e1f";"storage";"2026-10-02"',
-        '"vps-0a1b2c3d.vps.ovh.net";"vps-0a1b2c3d.vps.ovh.net";"vps";"2026-10-10"',
-        '"staging-vps";"vps-4e5f6a7b.vps.ovh.net";"vps";"2026-10-12"',
-        '"shared-files";"netapp-5f2c9a1e";"storage";"2026-10-14"',
-      ])]);
+      ]);
     });
 
     it('speaks English when the page does', async () => {
@@ -567,7 +603,7 @@ describe('Overview tab', () => {
       await selectLanguage(user, 'en');
 
       await user.click(
-        within(expirationCard('Expiring soon')).getByRole('button', { name: 'Show all (7)' }),
+        within(expirationCard('Expiring soon')).getByRole('button', { name: 'Show all' }),
       );
       const dialog = screen.getByRole('dialog');
 
@@ -588,8 +624,7 @@ describe('Overview tab', () => {
     it('is offered only when the card cannot list every service', async () => {
       await renderDashboard({ ...account, expiringServices: expiringSoon.slice(0, 5) });
 
-      expect(within(expirationCard()).queryByRole('button', { name: /Tout afficher/ }))
-        .not.toBeInTheDocument();
+      expect(texts(expirationCard()).slice(0, 2)).toEqual(['Expirations proches (5)', 'CSV']);
     });
   });
 
@@ -598,7 +633,7 @@ describe('Overview tab', () => {
     const { user } = await renderDashboard({ ...account, expiringServices: oneOrTwoDaysAway });
 
     expect(texts(expirationCard())).toEqual([
-      'Expirations proches',
+      'Expirations proches (4)', 'CSV',
       'VPS', 'legacy-vps', 'Expiré depuis 2 jours',
       'Stockage', 'shared-files', 'Expiré depuis 1 jour',
       'Serveurs dédiés', 'backup-server', 'Expire dans 1 jour',
@@ -608,7 +643,7 @@ describe('Overview tab', () => {
     await selectLanguage(user, 'en');
 
     expect(texts(expirationCard('Expiring soon'))).toEqual([
-      'Expiring soon',
+      'Expiring soon (4)', 'CSV',
       'VPS', 'legacy-vps', 'Expired 2 days ago',
       'Storage', 'shared-files', 'Expired 1 day ago',
       'Dedicated Servers', 'backup-server', 'Expires in 1 day',
@@ -643,9 +678,9 @@ describe('Overview tab', () => {
     expect(texts(budget('Budget consumption')))
       .toEqual(['Budget consumption', '3% used', 'Consumed: 1,250.40€', 'Budget:', '€']);
     // A service already expired, then one about to (#74)
-    expect(texts(cardOf(screen.getByRole('heading', { name: 'Expiring soon' }))).slice(0, 7))
+    expect(texts(expirationCard('Expiring soon')).slice(0, 9))
       .toEqual([
-        'Expiring soon',
+        'Expiring soon (7)', 'Show all', 'CSV',
         'VPS', 'legacy-vps', 'Expired 5 days ago',
         'Dedicated Servers', 'ns3000003.ip-203-0-113.eu', 'Expires in 2 days',
       ]);
@@ -1026,7 +1061,7 @@ describe('Overview tab', () => {
       // out those of the Unknown account and of the account no longer configured, which no
       // import refreshes.
       const everyAccountsExpiring = [
-        'Expirations proches',
+        'Expirations proches (3)', 'CSV',
         'Serveurs dédiés', 'backup-server', '(Lyon subsidiary)', 'Expire dans 5 jours',
         'VPS', 'vps-0a1b2c3d.vps.ovh.net', '(Lyon subsidiary)', 'Expire dans 25 jours',
         'VPS', 'staging-vps', '(yy2222-ovh)', 'Expire dans 27 jours',
@@ -1040,7 +1075,7 @@ describe('Overview tab', () => {
 
         expect(api.fetchExpiringServices).toHaveBeenCalledWith(30, lyonAccount.id);
         expect(texts(expirationCard())).toEqual([
-          'Expirations proches',
+          'Expirations proches (2)', 'CSV',
           'Serveurs dédiés', 'backup-server', 'Expire dans 5 jours',
           'VPS', 'vps-0a1b2c3d.vps.ovh.net', 'Expire dans 25 jours',
         ]);
@@ -1051,14 +1086,15 @@ describe('Overview tab', () => {
         await selectAccount(user, 'Compte inconnu');
 
         expect(texts(expirationCard())).toEqual([
-          'Expirations proches', 'Stockage', 'old-nas', 'Expiré depuis 5 jours',
+          'Expirations proches (1)', 'CSV', 'Stockage', 'old-nas', 'Expiré depuis 5 jours',
         ]);
         expect(texts(headerBadge('Expirations proches'))).toEqual(['1', 'Expirations proches']);
 
         await selectAccount(user, 'zz3333-ovh (non configuré)');
 
         expect(texts(expirationCard())).toEqual([
-          'Expirations proches', 'Serveurs dédiés', 'db-server', 'Expire dans 2 jours',
+          'Expirations proches (1)', 'CSV', 'Serveurs dédiés', 'db-server',
+          'Expire dans 2 jours',
         ]);
 
         await selectAccount(user, 'Tous les comptes');
@@ -1074,8 +1110,8 @@ describe('Overview tab', () => {
 
         await selectLanguage(user, 'en');
 
-        expect(texts(expirationCard('Expiring soon')).slice(0, 5)).toEqual([
-          'Expiring soon', 'Dedicated Servers', 'backup-server', '(Lyon subsidiary)',
+        expect(texts(expirationCard('Expiring soon')).slice(0, 6)).toEqual([
+          'Expiring soon (3)', 'CSV', 'Dedicated Servers', 'backup-server', '(Lyon subsidiary)',
           'Expires in 5 days',
         ]);
       });
@@ -1091,7 +1127,7 @@ describe('Overview tab', () => {
         });
 
         await user.click(
-          within(expirationCard()).getByRole('button', { name: 'Tout afficher (6)' }),
+          within(expirationCard()).getByRole('button', { name: 'Tout afficher' }),
         );
         const dialog = screen.getByRole('dialog');
 
@@ -1145,7 +1181,7 @@ describe('Overview tab', () => {
         });
 
         expect(texts(expirationCard())).toEqual([
-          'Expirations proches',
+          'Expirations proches (1)', 'CSV',
           'Serveurs dédiés', 'backup-server', '(Lyon subsidiary)', 'Expire dans 2 jours',
         ]);
         expect(texts(headerBadge('Expirations proches'))).toEqual(['1', 'Expirations proches']);

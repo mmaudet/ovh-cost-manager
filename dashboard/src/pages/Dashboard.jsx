@@ -529,13 +529,15 @@ export default function Dashboard() {
             {/* Manual resync */}
             {importsEnabled && <ResyncButton t={t} />}
             {/* The services about to expire, whose list in the Overview the badge leads to
-                (#225), on one line, as the other controls */}
+                (#225), on one line, as the other controls. It prints, as it did before it led
+                anywhere (index.css) */}
             {expiringServices.length > 0 && (
               <button
                 type="button"
                 onClick={showExpirations}
-                className={'flex items-center gap-1 px-3 py-1.5 bg-orange-100 text-orange-700'
-                  + ' hover:bg-orange-200 rounded-lg text-sm font-medium whitespace-nowrap'}
+                className={'expirations-badge flex items-center gap-1 px-3 py-1.5 bg-orange-100'
+                  + ' text-orange-700 hover:bg-orange-200 rounded-lg text-sm font-medium'
+                  + ' whitespace-nowrap'}
               >
                 <span>{expiringServices.length}</span>
                 <span>{t('expiringSoon')}</span>

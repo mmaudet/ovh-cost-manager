@@ -14,6 +14,7 @@ const TABLES = [
   ['Public Cloud snapshots', /^ovh-snapshots-/],
   ['Public Cloud savings plans', /^ovh-savings-plans-/],
   ['dedicated servers', /^ovh-dedicated-servers/],
+  ['services about to expire', /^ovh-expiring-services/],
 ];
 
 const CONTEXT_LINES = 2;

@@ -5,17 +5,16 @@ import {
 import { pieLabel } from '../components/PieLabels.jsx';
 import { PieLegend } from '../components/PieLegend.jsx';
 import {
-  ExpirationDelay, ExpiringServicesTable, ExpiringTypeBadge, expiringServiceCsvColumns,
+  ExpirationDelay, ExpiringServicesTable, ExpiringTypeBadge, downloadExpiringServices,
 } from '../components/ExpiringServicesTable.jsx';
 import Modal from '../components/Modal.jsx';
 import TableActions from '../components/TableActions.jsx';
 import { SortableHeader, sortRows } from '../components/SortableHeader.jsx';
 import { accountInBrackets, withAccountNames } from '../utils/accounts.js';
-import { downloadCSV } from '../utils/csv.js';
 import { formatPercent } from '../utils/format.js';
 
-// The services about to expire that the card lists, the soonest: the header's badge counts
-// them all, which a modal lists (#225)
+// The services about to expire that the card lists, the soonest: its title and the header's
+// badge count them all, which a modal lists (#225)
 const EXPIRING_IN_CARD = 5;
 
 // The share of the Cloud total of the month that a project's amount is: 0 of a Cloud total of
@@ -454,15 +453,35 @@ const OverviewTab = ({
         </div>
       )}
 
-      {/* Expiration Alerts, which the header's badge leads to, focusing the card (#225) */}
+      {/* Expiration Alerts, which the header's badge leads to, focusing the card, a region that
+          a screen reader names by its title (#225). As the other lists, its title counts them
+          all, and offers them in full in a modal, when the card cannot list them all, and as
+          CSV */}
       {expiringServices.length > 0 && (
         <div
           ref={expirationsRef}
           tabIndex={-1}
+          role="region"
+          aria-labelledby="expiring-services-title"
           className={'bg-white rounded-xl p-5 shadow-sm border border-orange-200 lg:col-span-2'
             + ' focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300'}
         >
-          <h3 className="font-semibold text-orange-700 mb-4">{t('expiringSoon')}</h3>
+          {/* Its buttons go under its title where they lack room, as on a phone, rather than
+              break their labels (#226) */}
+          <h3 className="font-semibold text-orange-700 mb-4 flex flex-wrap items-center gap-2">
+            <span id="expiring-services-title" className="whitespace-nowrap">
+              {t('expiringSoon')} ({expiringServices.length})
+            </span>
+            <TableActions
+              language={language}
+              onShowAll={expiringServices.length > EXPIRING_IN_CARD
+                ? () => setShowAllExpiring(true)
+                : undefined}
+              onExport={() => downloadExpiringServices(
+                withAccountNames(expiringServices, accountColumn), language, accountColumn,
+              )}
+            />
+          </h3>
           <div className="space-y-2">
             {expiringServices.slice(0, EXPIRING_IN_CARD).map(s => (
               <div
@@ -484,16 +503,6 @@ const OverviewTab = ({
               </div>
             ))}
           </div>
-          {/* Every one of them, which the header's badge counts, in a modal (#225) */}
-          {expiringServices.length > EXPIRING_IN_CARD && (
-            <button
-              type="button"
-              onClick={() => setShowAllExpiring(true)}
-              className="mt-3 text-sm font-medium text-orange-700 hover:underline"
-            >
-              {t('showAll')} ({expiringServices.length})
-            </button>
-          )}
         </div>
       )}
 
@@ -517,9 +526,7 @@ const OverviewTabModals = ({
       actions={
         <TableActions
           language={language}
-          onExport={() => downloadCSV(
-            services, expiringServiceCsvColumns(language, accountColumn), 'ovh-expiring-services',
-          )}
+          onExport={() => downloadExpiringServices(services, language, accountColumn)}
         />
       }
     >
