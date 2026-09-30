@@ -4,7 +4,7 @@
 // sort them, and what a comparison knows of its months (#216).
 
 import { isMonthInProgress } from './months.js';
-import { variationPercent } from './variation.js';
+import { comparesPartialMonth, variationPercent } from './variation.js';
 
 // The sort by month A, the most expensive first, as the comparisons order their rows until the
 // user sorts them; by month B, for rows of the same cost in month A
@@ -54,17 +54,24 @@ const comparisonValues = (nameColumn, nameOf) => ({
 /**
  * What a comparison of two months of the months list knows of them, which every variation
  * between them (comparedVariation()) and the sort of their tables (valuesAsShown()) read: in the
- * Compare tab, months A and B, and in the "vs previous month" KPI, the month before the one
- * selected and that month.
+ * Compare tab, months A and B, in the "vs previous month" KPI, the month before the one
+ * selected and that month, and in the Trends tab's growth, the first and last months of its
+ * period.
  * @param {{ value: string, inProgress?: boolean }[]} months - The months list
  * @param {?{ value: string }} monthA - The first month, none before it is known
  * @param {?{ value: string }} monthB - The second
- * @returns {{ monthInProgress: boolean }} Whether either is the month in progress, as the months
- *   list marks it, whose cost lacks bills to come (#216)
+ * @param {object} [options]
+ * @param {boolean} [options.projected] - Whether the amounts compared count the month in progress
+ *   at its projected cost (#217), as the trends do while the page projects it; the header's KPI
+ *   never does
+ * @returns {{ monthInProgress: boolean, projected: boolean }} Whether either is the month in
+ *   progress, as the months list marks it, whose cost lacks bills to come (#216), and whether its
+ *   amounts are its projected cost: never between complete months
  */
-const comparedMonthsOf = (months, monthA, monthB) => ({
-  monthInProgress: isMonthInProgress(months, monthA) || isMonthInProgress(months, monthB),
-});
+const comparedMonthsOf = (months, monthA, monthB, { projected = false } = {}) => {
+  const monthInProgress = isMonthInProgress(months, monthA) || isMonthInProgress(months, monthB);
+  return { monthInProgress, projected: monthInProgress && projected };
+};
 
 /**
  * The values of a comparison's rows in the columns that sort it, without their variation: every
@@ -78,17 +85,17 @@ const withoutVariation = (values) => ({ ...values, variation: () => null });
 
 /**
  * The values that sort a comparison's rows, as it shows them between the months compared
- * (comparedMonthsOf()): without their variation while month A or B is the month in progress,
- * which the rows write "—" then (#216), so that a sort by the variation leaves them in their
- * order rather than follow values that the table does not show.
- * @param {{ monthInProgress: boolean }} comparedMonths
+ * (comparedMonthsOf()): without their variation while month A or B is the month in progress at
+ * what it billed so far, which the rows write "—" then (#216), so that a sort by the variation
+ * leaves them in their order rather than follow values that the table does not show.
+ * @param {{ monthInProgress: boolean, projected?: boolean }} comparedMonths
  * @param {Object<string, function(object): *>} values - The value of a row in each column, as
  *   sortRows() takes them
  * @returns {Object<string, function(object): *>} Those values themselves between two complete
- *   months
+ *   months, or with the month in progress at its projected cost (#217)
  */
 const valuesAsShown = (comparedMonths, values) => (
-  comparedMonths.monthInProgress ? withoutVariation(values) : values
+  comparesPartialMonth(comparedMonths) ? withoutVariation(values) : values
 );
 
 /**

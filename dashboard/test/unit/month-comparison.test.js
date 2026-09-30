@@ -118,21 +118,35 @@ describe('byNameAndAccount', () => {
 });
 
 // What a comparison of two months knows of them, which its variations and the sort of its
-// tables read (#216): whether either is the month in progress, as the months list marks it
+// tables read (#216): whether either is the month in progress, as the months list marks it, and
+// whether its amounts are its projected cost (#217)
 describe('comparedMonthsOf', () => {
   const [september, august, july] = months;
   const inProgress = [{ ...september, inProgress: true }, august, july];
+  // A comparison of the month in progress at what it billed so far, and of complete months
+  const partial = { monthInProgress: true, projected: false };
+  const complete = { monthInProgress: false, projected: false };
 
   it('knows whether month A or B is the month in progress', () => {
-    expect(comparedMonthsOf(inProgress, august, september)).toEqual({ monthInProgress: true });
-    expect(comparedMonthsOf(inProgress, september, july)).toEqual({ monthInProgress: true });
-    expect(comparedMonthsOf(inProgress, july, august)).toEqual({ monthInProgress: false });
-    expect(comparedMonthsOf(months, august, september)).toEqual({ monthInProgress: false });
+    expect(comparedMonthsOf(inProgress, august, september)).toEqual(partial);
+    expect(comparedMonthsOf(inProgress, september, july)).toEqual(partial);
+    expect(comparedMonthsOf(inProgress, july, august)).toEqual(complete);
+    expect(comparedMonthsOf(months, august, september)).toEqual(complete);
   });
 
   // Before months A and B have their defaults, and for the header, before a month with no bill
   it('knows of no month in progress without a month', () => {
-    expect(comparedMonthsOf(inProgress, null, undefined)).toEqual({ monthInProgress: false });
+    expect(comparedMonthsOf(inProgress, null, undefined)).toEqual(complete);
+  });
+
+  it('knows that the month in progress is at its projected cost when its amounts are', () => {
+    expect(comparedMonthsOf(inProgress, august, september, { projected: true }))
+      .toEqual({ monthInProgress: true, projected: true });
+  });
+
+  // Complete months have no projected cost
+  it('knows of no projected cost between complete months', () => {
+    expect(comparedMonthsOf(inProgress, july, august, { projected: true })).toEqual(complete);
   });
 });
 
@@ -166,5 +180,12 @@ describe('valuesAsShown', () => {
 
   it('keeps the values of two complete months', () => {
     expect(valuesAsShown({ monthInProgress: false }, productValues)).toBe(productValues);
+  });
+
+  // Whose variations are computed then (#217)
+  it('keeps the values of the month in progress at its projected cost', () => {
+    const projected = { monthInProgress: true, projected: true };
+
+    expect(valuesAsShown(projected, productValues)).toBe(productValues);
   });
 });

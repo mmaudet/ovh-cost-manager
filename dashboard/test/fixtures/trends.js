@@ -289,12 +289,14 @@ export function projectedTrendsOf(first, last, costs, projected) {
 }
 
 // What each resource type cost the account in each month, as its trend by resource type up to
-// September gives it
-const costsOfAccount = Object.fromEntries(
+// September gives it, as trendsOf() takes such costs
+export const costsOfAccount = Object.fromEntries(
   costByResourceType.data.map(({ yearMonth, ...costs }) => [yearMonth, costs]),
 );
 // Its dedicated servers in September, and its other resource types
-const { dedicated_server: serversInSeptember, ...septemberWithoutServers } = costsOfAccount['2026-09'];
+const {
+  dedicated_server: serversInSeptember, ...septemberWithoutServers
+} = costsOfAccount['2026-09'];
 // Its trends while its dedicated servers have not been billed in September yet
 const billedLate = trendsOf('2026-07', '2026-09', {
   ...costsOfAccount, '2026-09': septemberWithoutServers,

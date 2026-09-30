@@ -4,9 +4,10 @@ import {
 import { AiEndpointsTrend } from '../components/AiEndpointsTrend.jsx';
 import { ProjectionCheckbox } from '../components/ProjectionCheckbox.jsx';
 import { formatYearMonth } from '../utils/format.js';
-import { growthOverPeriod } from '../utils/periodGrowth.js';
+import { comparedMonthsOf } from '../utils/monthComparison.js';
+import { isMonthInProgress } from '../utils/months.js';
 import { PERIOD_OPTIONS } from '../utils/trendPeriods.js';
-import { variationDisplay } from '../utils/variation.js';
+import { comparedVariation, comparesPartialMonth } from '../utils/variation.js';
 
 // The colours of each tone of the growth over the period: red when it grows, green when it
 // shrinks, grey when it rounds to 0 (#87)
@@ -17,25 +18,36 @@ const GROWTH_TONES = {
 };
 
 // The Trends tab, which the shell renders while it is active: what useTrendsTab() returns,
-// with the shell's language, translations (t) and amount format (fmt).
+// with the shell's months list, language, translations (t) and amount format (fmt).
 const TrendsTab = ({
   trendPeriod, monthlyTrend, trendByCategory, hiddenCategories, toggleCategory, gpuTrend,
-  aiEndpointsTrend, language, t, fmt,
+  aiEndpointsTrend, projected, months, language, t, fmt,
 }) => {
   const currentPeriodLabel = (PERIOD_OPTIONS.find(o => o.months === trendPeriod) || {}).key;
+  // The first and the last months of the period, as the months list names them
+  const firstMonth = monthlyTrend[0];
+  const lastMonth = monthlyTrend[monthlyTrend.length - 1];
   // The growth over the period, in percent, from its first month to its last, as the page
-  // shows it: its text and its tone (#87). Two states show none (#65):
+  // shows it: its text and its tone (#87), or why it shows none. Three states show none:
   // - N/A, without two months to compare: with no months at all, as when nothing was billed
-  //   over the period, since the trend routes give every month of a period with a bill;
-  // - "—", with a tooltip, when the first month, at 0 € or less, leaves none to compute.
+  //   over the period, since the trend routes give every month of a period with a bill (#65);
+  // - "—", with a tooltip, when the first month, at 0 € or less, leaves none to compute (#65);
+  // - "—", with a tooltip, when the last month is the month in progress at what it billed so
+  //   far (#216). At its projected cost, while the trends project it, it has one (#217).
   const spansTwoMonths = monthlyTrend.length > 1;
   const growth = spansTwoMonths
-    ? variationDisplay(
-      growthOverPeriod(monthlyTrend[0].cost, monthlyTrend[monthlyTrend.length - 1].cost),
-      language,
+    ? comparedVariation(
+      comparedMonthsOf(
+        months, { value: firstMonth.yearMonth }, { value: lastMonth.yearMonth }, { projected },
+      ),
+      firstMonth.cost, lastMonth.cost, language, { notComputable: 'periodGrowthNotComputable' },
     )
     : null;
-  const growthNotComputable = spansTwoMonths && growth === null;
+  // The annual projection, 12 times the cost of the last month: none, "—" with a tooltip, while
+  // that month is the month in progress at what it billed so far (#216, #217)
+  const lastMonthPartial = lastMonth !== undefined && comparesPartialMonth({
+    monthInProgress: isMonthInProgress(months, { value: lastMonth.yearMonth }), projected,
+  });
 
   return (
     <div className="space-y-6">
@@ -165,13 +177,13 @@ const TrendsTab = ({
         <div className={`bg-white rounded-xl p-5 shadow-sm border border-gray-100 ${monthlyTrend.length === 0 ? 'opacity-50' : ''}`}>
           <span className="text-gray-500 text-sm">{t('periodGrowth')}</span>
           <div
-            className={`text-3xl font-bold mt-2 ${growth === null
+            className={`text-3xl font-bold mt-2 ${growth === null || growth.why
               ? 'text-gray-400'
               : GROWTH_TONES[growth.tone]}`}
-            title={growthNotComputable ? t('periodGrowthNotComputable') : undefined}
+            title={growth?.why ? t(growth.why) : undefined}
           >
             {!spansTwoMonths && 'N/A'}
-            {growthNotComputable && '—'}
+            {growth?.why && '—'}
             {growth?.text}
           </div>
           <p className="text-sm text-gray-500 mt-1">{t('overPeriod')} {t(currentPeriodLabel)}</p>
@@ -191,10 +203,16 @@ const TrendsTab = ({
         </div>
         <div className={`bg-white rounded-xl p-5 shadow-sm border border-gray-100 ${monthlyTrend.length === 0 ? 'opacity-50' : ''}`}>
           <span className="text-gray-500 text-sm">{t('annualProjection')}</span>
-          <div className={`text-3xl font-bold mt-2 ${monthlyTrend.length > 0 ? 'text-blue-600' : 'text-gray-400'}`}>
-            {monthlyTrend.length > 0
-              ? `~${fmt((monthlyTrend[monthlyTrend.length - 1]?.cost || 0) * 12)}€`
-              : 'N/A'}
+          <div
+            className={`text-3xl font-bold mt-2 ${monthlyTrend.length > 0 && !lastMonthPartial
+              ? 'text-blue-600'
+              : 'text-gray-400'}`}
+            title={lastMonthPartial ? t('annualProjectionMonthInProgress') : undefined}
+          >
+            {monthlyTrend.length === 0 && 'N/A'}
+            {lastMonthPartial && '—'}
+            {monthlyTrend.length > 0 && !lastMonthPartial
+              && `~${fmt((lastMonth.cost || 0) * 12)}€`}
           </div>
           <p className="text-sm text-gray-500 mt-1">{t('basedOnLastMonth')}</p>
         </div>

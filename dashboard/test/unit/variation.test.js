@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  comparedVariation, variationDisplay, variationPercent,
+  comparedVariation, comparesPartialMonth, variationDisplay, variationPercent,
 } from '../../src/utils/variation.js';
 import { NBSP } from '../support/amounts.js';
 
@@ -83,6 +83,20 @@ describe('variationDisplay', () => {
   });
 });
 
+// Whether the months compared hold the month in progress at what it billed so far (#216), rather
+// than at its projected cost (#217)
+describe('comparesPartialMonth', () => {
+  it('tells the month in progress at what it billed so far', () => {
+    expect(comparesPartialMonth({ monthInProgress: true, projected: false })).toBe(true);
+    expect(comparesPartialMonth({ monthInProgress: true })).toBe(true);
+  });
+
+  it('tells neither the month in progress at its projected cost, nor complete months', () => {
+    expect(comparesPartialMonth({ monthInProgress: true, projected: true })).toBe(false);
+    expect(comparesPartialMonth({ monthInProgress: false, projected: false })).toBe(false);
+  });
+});
+
 // A variation between the months compared (comparedMonthsOf()) as the Compare tab's tables
 // and the "vs previous month" KPI show it: its text and its tone, or the key of the tooltip that
 // says why they show "—" (#65, #216)
@@ -103,6 +117,17 @@ describe('comparedVariation', () => {
       .toEqual({ why: 'variationMonthInProgress' });
     expect(comparedVariation(inProgress, 0, 120, 'en'))
       .toEqual({ why: 'variationMonthInProgress' });
+  });
+
+  // Its projected cost compares with a complete month (#217)
+  it('shows the variation with the month in progress at its projected cost', () => {
+    const projected = { monthInProgress: true, projected: true };
+
+    expect(comparedVariation(projected, 1042, 1250.4, 'fr'))
+      .toEqual({ text: `+20,0${NBSP}%`, tone: 'increase' });
+    expect(comparedVariation(projected, 0, 120, 'en', {
+      notComputable: 'periodGrowthNotComputable',
+    })).toEqual({ why: 'periodGrowthNotComputable' });
   });
 
   // The Compare tab says month A, the KPI the month before

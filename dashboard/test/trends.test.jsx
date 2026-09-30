@@ -684,6 +684,69 @@ describe('Trends tab', () => {
           .toHaveBeenCalledWith(3, '2026-09', allAccounts, { projected: true });
       });
 
+    // Rather than compare September, partial, with a complete month, or project a year from it
+    it('says that the month is in progress in the growth and the annual projection', async () => {
+      const { user } = await renderDashboard(billedLate);
+
+      await openTab(user, 'Tendances');
+
+      expect(texts(cardOf('Croissance sur la période')))
+        .toEqual(['Croissance sur la période', '—', 'Sur 3 mois']);
+      expect(within(cardOf('Croissance sur la période'))
+        .getByTitle('non calculable : mois en cours')).toHaveTextContent('—');
+      expect(texts(cardOf('Projection annuelle')))
+        .toEqual(['Projection annuelle', '—', 'Basé sur le dernier mois']);
+      expect(within(cardOf('Projection annuelle'))
+        .getByTitle('non calculable : dernier mois en cours')).toHaveTextContent('—');
+      // September as billed so far, without its dedicated servers
+      expect(texts(cardOf('Mois le plus coûteux')))
+        .toEqual(['Mois le plus coûteux', 'août 2026', '1 042,00€']);
+
+      await selectLanguage(user, 'en');
+
+      expect(within(cardOf('Growth over period'))
+        .getByTitle('cannot be computed: month in progress')).toHaveTextContent('—');
+      expect(within(cardOf('Annual projection'))
+        .getByTitle('cannot be computed: last month in progress')).toHaveTextContent('—');
+    });
+
+    it('computes the growth and the annual projection on the projected cost once ticked',
+      async () => {
+        const { user } = await renderDashboard(billedLate);
+        await openTab(user, 'Tendances');
+
+        await toggleProjection(user);
+
+        // (1 250.40 - 980) / 980, and 12 times September's projected cost
+        expect(texts(cardOf('Croissance sur la période')))
+          .toEqual(['Croissance sur la période', '+27,6 %', 'Sur 3 mois']);
+        expect(texts(cardOf('Projection annuelle')))
+          .toEqual(['Projection annuelle', '~15 004,80€', 'Basé sur le dernier mois']);
+        expect(texts(cardOf('Mois le plus coûteux')))
+          .toEqual(['Mois le plus coûteux', 'sept. 2026', '1 250,40€']);
+
+        await selectLanguage(user, 'en');
+
+        expect(texts(cardOf('Growth over period')))
+          .toEqual(['Growth over period', '+27.6%', 'Over 3 months']);
+        expect(texts(cardOf('Annual projection')))
+          .toEqual(['Annual projection', '~15,004.80€', 'Based on last month']);
+      });
+
+    // June to August, complete: June, not billed, at 0 € leaves no growth to compute (#65)
+    it('computes the cards as before over a period that ends before it', async () => {
+      const { user } = await renderDashboard(billedLate);
+      await openTab(user, 'Tendances');
+      await toggleProjection(user);
+
+      await selectMonth(user, 'Août 2026');
+
+      expect(within(cardOf('Croissance sur la période'))
+        .getByTitle('non calculable : premier mois à 0 € ou moins')).toHaveTextContent('—');
+      expect(texts(cardOf('Projection annuelle')))
+        .toEqual(['Projection annuelle', '~12 504,00€', 'Basé sur le dernier mois']);
+    });
+
     // As the months list of the account shown marks it (#216): see fixtures/accounts.js
     it('asks for the trends projected of the account shown while its month is in progress',
       async () => {
@@ -707,6 +770,33 @@ describe('Trends tab', () => {
         expect(api.fetchMonthlyTrend).toHaveBeenLastCalledWith(3, '2026-09', unnamedAccount.id);
         expect(api.fetchMonthlyTrendByCategory)
           .toHaveBeenLastCalledWith(3, '2026-09', unnamedAccount.id);
+      });
+
+    it('shows the cards of the account selected, projected while its month is in progress',
+      async () => {
+        const { user } = await renderDashboard(lyonBilledLate);
+        await openTab(user, 'Tendances');
+        const cards = () => [
+          texts(cardOf('Croissance sur la période'))[1], texts(cardOf('Projection annuelle'))[1],
+        ];
+        expect(cards()).toEqual(['—', '—']);
+
+        await toggleProjection(user);
+
+        // Lyon's dedicated servers at their cost of August, 70 €: (1 050.40 - 980) / 980
+        expect(cards()).toEqual(['+7,2 %', '~12 604,80€']);
+
+        await selectAccount(user, 'Lyon subsidiary');
+
+        // (690.40 - 680) / 680
+        expect(cards()).toEqual(['+1,5 %', '~8 284,80€']);
+
+        // Whose bills of September came in: July, before its first bill, at 0 € (#65)
+        await selectAccount(user, 'yy2222-ovh');
+
+        expect(cards()).toEqual(['—', '~4 320,00€']);
+        expect(within(cardOf('Croissance sur la période'))
+          .getByTitle('non calculable : premier mois à 0 € ou moins')).toHaveTextContent('—');
       });
 
     it('asks for the trends as before while no month is in progress', async () => {
