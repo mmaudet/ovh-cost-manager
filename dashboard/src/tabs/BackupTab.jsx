@@ -1,3 +1,4 @@
+import { FIGURE_CARD, TAB_FIGURE } from '../components/figureCards.js';
 import { backupFigures } from '../utils/backupFigures.js';
 import { formatMonthLabel, formatPercent } from '../utils/format.js';
 
@@ -32,43 +33,43 @@ const BackupTab = ({
         </div>
       )}
 
-      {/* Backup Summary Cards */}
+      {/* Backup Summary Cards, two a row on a phone (see figureCards.js) */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
+        <div className={`${FIGURE_CARD} border border-gray-100`}>
           <span className="text-gray-500 text-sm">
             {language === 'en' ? 'Total Backup Cost' : 'Coût total backup'}
           </span>
-          <div className="text-3xl font-bold text-emerald-600 mt-2">
+          <div className={`${TAB_FIGURE} text-emerald-600 mt-2`}>
             {fmt(figures.total.cost)}€
           </div>
         </div>
-        <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
+        <div className={`${FIGURE_CARD} border border-gray-100`}>
           <span className="text-gray-500 text-sm">
             {language === 'en' ? 'Veeam VMs' : 'VMs Veeam'}
           </span>
-          <div className="text-3xl font-bold text-green-600 mt-2">
+          <div className={`${TAB_FIGURE} text-green-600 mt-2`}>
             {figures.vms.count}
           </div>
           {figures.vms.cost > 0 && (
             <p className="text-xs text-gray-400">{fmt(figures.vms.cost)}€</p>
           )}
         </div>
-        <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
+        <div className={`${FIGURE_CARD} border border-gray-100`}>
           <span className="text-gray-500 text-sm">
             {language === 'en' ? 'Veeam Enterprise Licenses' : 'Licences Veeam Enterprise'}
           </span>
-          <div className="text-3xl font-bold text-teal-600 mt-2">
+          <div className={`${TAB_FIGURE} text-teal-600 mt-2`}>
             {figures.enterprise.count}
           </div>
           {figures.enterprise.cost > 0 && (
             <p className="text-xs text-gray-400">{fmt(figures.enterprise.cost)}€</p>
           )}
         </div>
-        <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
+        <div className={`${FIGURE_CARD} border border-gray-100`}>
           <span className="text-gray-500 text-sm">
             {language === 'en' ? '% of Total Cost' : '% du coût total'}
           </span>
-          <div className="text-3xl font-bold text-gray-600 mt-2">
+          <div className={`${TAB_FIGURE} text-gray-600 mt-2`}>
             {/* In the number format of the language, and 0,0 % of a month without cost (#64) */}
             {formatPercent(
               (summary?.total || 0) > 0 ? figures.total.cost / summary.total : 0,

@@ -2,6 +2,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell,
 } from 'recharts';
+import { pieLabel } from '../components/pieLabels.jsx';
 import { SortableHeader, sortRows } from '../components/SortableHeader.jsx';
 import { accountInBrackets } from '../utils/accounts.js';
 import { formatPercent, takesSingular } from '../utils/format.js';
@@ -79,9 +80,9 @@ const OverviewTab = ({
                 innerRadius={50}
                 outerRadius={80}
                 dataKey="value"
-                label={({ name, percent }) => (
+                label={pieLabel(({ name, percent }) => (
                   `${name} ${formatPercent(percent, language, { decimals: 0 })}`
-                )}
+                ))}
                 labelLine={false}
               >
                 {byService.map((entry, i) => (
@@ -145,9 +146,9 @@ const OverviewTab = ({
                     innerRadius={50}
                     outerRadius={80}
                     dataKey="value"
-                    label={({ name, percent }) => (
+                    label={pieLabel(({ name, percent }) => (
                       `${name} ${formatPercent(percent, language, { decimals: 0 })}`
-                    )}
+                    ))}
                     labelLine={false}
                   >
                     {byResourceType.map((entry, i) => (
@@ -215,7 +216,7 @@ const OverviewTab = ({
                       outerRadius={70}
                       dataKey="total"
                       nameKey="gpu_model"
-                      label={({ gpu_model, total }) => `${gpu_model}: ${fmt(total)}€`}
+                      label={pieLabel(({ gpu_model, total }) => `${gpu_model}: ${fmt(total)}€`)}
                       labelLine={false}
                     >
                       {gpuSummary.byModel.map((entry, i) => (

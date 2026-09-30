@@ -2,6 +2,15 @@
 @tailwind components;
 @tailwind utilities;
 
+/* The labels around a pie, and their lines, hide below sm (640 px), as Tailwind's max-sm: on a
+   phone they would run out of the chart, and the legend next to each pie names every slice
+   (#226) */
+@media not all and (min-width: 640px) {
+  .recharts-pie-labels {
+    display: none;
+  }
+}
+
 /* Print styles for PDF export */
 @media print {
   body {

@@ -1,6 +1,8 @@
 import { Fragment } from 'react';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
+import { FIGURE_CARD, TAB_FIGURE } from '../components/figureCards.js';
 import Modal from '../components/Modal.jsx';
+import { pieLabel, pieLabelLine } from '../components/pieLabels.jsx';
 import TableActions from '../components/TableActions.jsx';
 import { SortableHeader, sortRows } from '../components/SortableHeader.jsx';
 import { AiEndpointsByModel } from '../components/AiEndpointsByModel.jsx';
@@ -128,71 +130,89 @@ const PublicCloudTab = ({
         </p>
       )}
 
-      {/* Cloud Summary Cards */}
+      {/* Cloud Summary Cards, two a row on a phone (see figureCards.js) */}
       <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
-        <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
+        <div className={`${FIGURE_CARD} border border-gray-100`}>
           <span className="text-gray-500 text-sm">{t('cloudProjects')}</span>
-          <div className="text-3xl font-bold text-blue-600 mt-2">{byResourceType.find(r => r.resource_type === 'cloud_project')?.serviceCount || 0}</div>
+          <div className={`${TAB_FIGURE} text-blue-600 mt-2`}>
+            {byResourceType.find(r => r.resource_type === 'cloud_project')?.serviceCount || 0}
+          </div>
         </div>
-        <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
+        <div className={`${FIGURE_CARD} border border-gray-100`}>
           <span className="text-gray-500 text-sm">{t('instances')}</span>
-          <div className="text-3xl font-bold text-indigo-600 mt-2">
+          <div className={`${TAB_FIGURE} text-indigo-600 mt-2`}>
             {projectsEnriched.reduce((sum, p) => sum + (p.instance_count || 0), 0)}
           </div>
           {publicCloudStats?.instances?.total > 0 && (
             <p className="text-xs text-gray-400">{fmt(publicCloudStats.instances.total)}€</p>
           )}
         </div>
-        <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
+        <div className={`${FIGURE_CARD} border border-gray-100`}>
           <span className="text-gray-500 text-sm">{language === 'en' ? 'GPU Instances' : 'Instances GPU'}</span>
-          <div className="text-3xl font-bold text-purple-600 mt-2">{gpuSummary?.instances?.length || 0}</div>
+          <div className={`${TAB_FIGURE} text-purple-600 mt-2`}>
+            {gpuSummary?.instances?.length || 0}
+          </div>
         </div>
-        <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
+        <div className={`${FIGURE_CARD} border border-gray-100`}>
           <span className="text-gray-500 text-sm">Kubernetes</span>
-          <div className="text-3xl font-bold text-cyan-600 mt-2">{publicCloudStats?.kubernetes?.count || 0}</div>
+          <div className={`${TAB_FIGURE} text-cyan-600 mt-2`}>
+            {publicCloudStats?.kubernetes?.count || 0}
+          </div>
           {publicCloudStats?.kubernetes?.total > 0 && (
             <p className="text-xs text-gray-400">{fmt(publicCloudStats.kubernetes.total)}€</p>
           )}
         </div>
-        <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
+        <div className={`${FIGURE_CARD} border border-gray-100`}>
           <span className="text-gray-500 text-sm">{language === 'en' ? 'Object Storage' : 'Stockage Objet'}</span>
-          <div className="text-3xl font-bold text-green-600 mt-2">{publicCloudStats?.objectStorage?.count || 0}</div>
+          <div className={`${TAB_FIGURE} text-green-600 mt-2`}>
+            {publicCloudStats?.objectStorage?.count || 0}
+          </div>
           {publicCloudStats?.objectStorage?.total > 0 && (
             <p className="text-xs text-gray-400">{fmt(publicCloudStats.objectStorage.total)}€</p>
           )}
         </div>
-        <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
+        <div className={`${FIGURE_CARD} border border-gray-100`}>
           <span className="text-gray-500 text-sm">{language === 'en' ? 'Volumes' : 'Volumes'}</span>
-          <div className="text-3xl font-bold text-teal-600 mt-2">{publicCloudStats?.volumes?.count || 0}</div>
+          <div className={`${TAB_FIGURE} text-teal-600 mt-2`}>
+            {publicCloudStats?.volumes?.count || 0}
+          </div>
           {publicCloudStats?.volumes?.total > 0 && (
             <p className="text-xs text-gray-400">{fmt(publicCloudStats.volumes.total)}€</p>
           )}
         </div>
-        <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
+        <div className={`${FIGURE_CARD} border border-gray-100`}>
           <span className="text-gray-500 text-sm">Snapshots</span>
-          <div className="text-3xl font-bold text-amber-600 mt-2">{publicCloudStats?.snapshots?.count || 0}</div>
+          <div className={`${TAB_FIGURE} text-amber-600 mt-2`}>
+            {publicCloudStats?.snapshots?.count || 0}
+          </div>
           {publicCloudStats?.snapshots?.total > 0 && (
             <p className="text-xs text-gray-400">{fmt(publicCloudStats.snapshots.total)}€</p>
           )}
         </div>
-        <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
+        <div className={`${FIGURE_CARD} border border-gray-100`}>
           <span className="text-gray-500 text-sm">{language === 'en' ? 'Savings plans' : 'Savings plans'}</span>
-          <div className="text-3xl font-bold text-rose-600 mt-2">{publicCloudStats?.savingsPlans?.count || 0}</div>
+          <div className={`${TAB_FIGURE} text-rose-600 mt-2`}>
+            {publicCloudStats?.savingsPlans?.count || 0}
+          </div>
           {publicCloudStats?.savingsPlans?.total > 0 && (
             <p className="text-xs text-gray-400">{fmt(publicCloudStats.savingsPlans.total)}€</p>
           )}
         </div>
-        <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
+        <div className={`${FIGURE_CARD} border border-gray-100`}>
           <span className="text-gray-500 text-sm">{language === 'en' ? 'Container Registry' : 'Registre'}</span>
-          <div className="text-3xl font-bold text-orange-600 mt-2">{publicCloudStats?.registry?.count || 0}</div>
+          <div className={`${TAB_FIGURE} text-orange-600 mt-2`}>
+            {publicCloudStats?.registry?.count || 0}
+          </div>
           {publicCloudStats?.registry?.total > 0 && (
             <p className="text-xs text-gray-400">{fmt(publicCloudStats.registry.total)}€</p>
           )}
         </div>
         {/* What no card of its own counts: its products, and their cost (#145) */}
-        <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
+        <div className={`${FIGURE_CARD} border border-gray-100`}>
           <span className="text-gray-500 text-sm">{t('otherServices')}</span>
-          <div className="text-3xl font-bold text-slate-600 mt-2">{publicCloudStats?.other?.products?.length || 0}</div>
+          <div className={`${TAB_FIGURE} text-slate-600 mt-2`}>
+            {publicCloudStats?.other?.products?.length || 0}
+          </div>
           {publicCloudStats?.other?.products?.length > 0 && (
             <p className="text-xs text-gray-400">{fmt(publicCloudStats.other.total)}€</p>
           )}
@@ -313,7 +333,15 @@ const PublicCloudTab = ({
                     {openProject?.id === p.id && (
                       <tr>
                         <td colSpan={accountColumn ? 7 : 6} className="p-0">
-                          <div className="bg-blue-50 border-l-4 border-blue-400 p-5">
+                          {/* Below md, where the list scrolls sideways, the detail keeps to
+                              the part of the list on the screen, held at its left edge,
+                              rather than span the whole table: as wide as the page, less
+                              its padding (2 × 1rem), the card's (2 × 1.25rem) and the
+                              card's border (2 × 1px) (#226) */}
+                          <div
+                            className={'bg-blue-50 border-l-4 border-blue-400 p-5 sticky left-0'
+                              + ' max-w-[calc(100vw-4.5rem-2px)] md:max-w-none'}
+                          >
                             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                               {/* Consumption by resource type */}
                               {(() => {
@@ -324,17 +352,20 @@ const PublicCloudTab = ({
                                 });
                                 const chartData = Object.entries(byType)
                                   .map(([kind, value]) => ({
+                                    kind,
                                     name: cloudKindLabel(kind, t),
                                     value: Math.round(value * 100) / 100,
                                   }))
                                   .sort((a, b) => b.value - a.value);
                                 const typeColors = ['#3b82f6', '#ef4444', '#f59e0b', '#10b981', '#8b5cf6', '#ec4899', '#6b7280'];
+                                const colorOf = (i) => typeColors[i % typeColors.length];
+                                const heading = language === 'en'
+                                  ? 'Consumption by resource'
+                                  : 'Consommation par ressource';
 
                                 return chartData.length > 0 ? (
                                   <div>
-                                    <h4 className="font-medium text-gray-700 mb-3">
-                                      {language === 'en' ? 'Consumption by resource' : 'Consommation par ressource'}
-                                    </h4>
+                                    <h4 className="font-medium text-gray-700 mb-3">{heading}</h4>
                                     <ResponsiveContainer width="100%" height={220}>
                                       <PieChart>
                                         <Pie
@@ -345,15 +376,38 @@ const PublicCloudTab = ({
                                           innerRadius={35}
                                           dataKey="value"
                                           nameKey="name"
-                                          label={({ name, value }) => `${name}: ${fmt(value)}€`}
+                                          label={pieLabel(
+                                            ({ name, value }) => `${name}: ${fmt(value)}€`,
+                                          )}
+                                          labelLine={pieLabelLine}
                                         >
                                           {chartData.map((_, i) => (
-                                            <Cell key={i} fill={typeColors[i % typeColors.length]} />
+                                            <Cell key={i} fill={colorOf(i)} />
                                           ))}
                                         </Pie>
                                         <Tooltip formatter={(v) => `${fmt(v)}€`} />
                                       </PieChart>
                                     </ResponsiveContainer>
+                                    {/* Its legend, each resource with its amount, as those of
+                                        the Overview: the pie leaves out the labels of its
+                                        thinnest slices, and all of them on a phone (#226) */}
+                                    <ul aria-label={heading} className="space-y-1 mt-2">
+                                      {chartData.map((entry, i) => (
+                                        <li
+                                          key={entry.kind}
+                                          className="flex items-center gap-2 text-sm"
+                                        >
+                                          <span
+                                            className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                                            style={{ backgroundColor: colorOf(i) }}
+                                          />
+                                          <span className="text-gray-600">{entry.name}</span>
+                                          <span className="ml-auto font-medium">
+                                            {fmt(entry.value)}€
+                                          </span>
+                                        </li>
+                                      ))}
+                                    </ul>
                                   </div>
                                 ) : (
                                   <div className="flex items-center justify-center h-32 text-gray-400 text-sm">

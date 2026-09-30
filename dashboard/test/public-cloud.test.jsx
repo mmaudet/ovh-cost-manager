@@ -734,6 +734,22 @@ describe('Public Cloud tab', () => {
       expect(rowTextsOf(within(panel).getByRole('table'))).toEqual([['Registre', '40,00€']]);
     });
 
+    // Around the pie, no label shows on a phone, nor on its thinnest slices (#226): its legend
+    // names every resource
+    it('gives the legend of its consumption by resource, the most expensive first', async () => {
+      await openProduction();
+
+      const legend = within(cloudProjects())
+        .getByRole('list', { name: 'Consommation par ressource' });
+      expect(within(legend).getAllByRole('listitem').map((item) => texts(item))).toEqual([
+        ['Instances', '234,25€'],
+        ['Instances (forfait mensuel)', '64,00€'],
+        ['Stockage objet', '41,00€'],
+        ['Volumes', '7,50€'],
+        ['Snapshots', '3,25€'],
+      ]);
+    });
+
     it('loads the resources of the project, for the selected month', async () => {
       await openProduction();
 

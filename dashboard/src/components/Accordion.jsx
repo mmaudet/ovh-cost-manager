@@ -12,8 +12,10 @@ export default function Accordion({ title, children, defaultOpen = false }) {
         <span>{title}</span>
         <span className="ml-2 text-gray-400">{open ? '▲' : '▼'}</span>
       </button>
+      {/* What shows once open scrolls sideways within the accordion when wider than the page,
+          as a comparison's table on a phone (#226) */}
       {open && (
-        <div className="px-4 pb-4 pt-2 border-t">{children}</div>
+        <div className="px-4 pb-4 pt-2 border-t overflow-x-auto">{children}</div>
       )}
     </div>
   );
