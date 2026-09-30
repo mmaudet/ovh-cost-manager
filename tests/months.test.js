@@ -9,7 +9,7 @@
 const path = require('path');
 const { execFileSync } = require('child_process');
 const { trendWindowFromQuery } = require('../server/months');
-const { monthsOfWindow, trendWindow } = require('../data/months');
+const { monthOfDate, monthsOfWindow, trendWindow } = require('../data/months');
 
 // Calls a function of data/months.js in a Node process of its own, run in a
 // timezone
@@ -197,5 +197,36 @@ describe('monthsOfWindow', () => {
 
     expect(listed).toHaveLength(months);
     expect(listed[listed.length - 1]).toBe(end);
+  });
+});
+
+// The month of today, which tells the month in progress (#216), is the server's: the month of
+// the date of today in its local time
+describe('monthOfDate', () => {
+  // The month that monthOfDate() gives of an instant, in a Node process run in a timezone
+  function monthOfInstantInTimezone(instant, timezone) {
+    const monthsModule = path.join(__dirname, '..', 'data', 'months.js');
+    const script = `process.stdout.write(require(${JSON.stringify(monthsModule)})`
+      + `.monthOfDate(new Date(${JSON.stringify(instant)})))`;
+    return execFileSync(process.execPath, ['-e', script], {
+      env: { ...process.env, TZ: timezone },
+      encoding: 'utf8',
+    });
+  }
+
+  test('gives the month of a date, up to its last minute and from the first of the next', () => {
+    expect(monthOfDate(new Date(2026, 8, 30, 23, 59))).toBe('2026-09');
+    expect(monthOfDate(new Date(2026, 9, 1, 0, 1))).toBe('2026-10');
+    expect(monthOfDate(new Date(2026, 11, 31, 23, 59))).toBe('2026-12');
+    expect(monthOfDate(new Date(2027, 0, 1, 0, 1))).toBe('2027-01');
+  });
+
+  // 23:30 UTC on 30 September is 1 October in Paris, and still 30 September in New York
+  test.each([
+    ['UTC', '2026-09'],
+    ['Europe/Paris', '2026-10'],
+    ['America/New_York', '2026-09'],
+  ])('gives the month of the local date in %s', (timezone, month) => {
+    expect(monthOfInstantInTimezone('2026-09-30T23:30:00Z', timezone)).toBe(month);
   });
 });

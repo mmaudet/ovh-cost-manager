@@ -8,8 +8,8 @@ const { tieFootprint } = require('./carbon-ties');
 const { MONTHLY_KINDS } = require('./cloud-usage');
 const { productFigures } = require('./public-cloud-products');
 const { storageClassLabel } = require('./storage-classes');
-const { monthBounds, monthsOfWindow, shiftMonth } = require('./months');
-const { isInProgress, monthOfDate, monthsRead } = require('./month-in-progress');
+const { monthOfDate, monthsOfWindow, shiftMonth } = require('./months');
+const { recurrenceWindow, recurringServicesNotBilled } = require('./month-in-progress');
 const ownership = require('./ownership');
 // The conditions of the queries that keep one account's rows (#115), a list of ids, or the
 // bill lines of the Veeam backups (#197)
@@ -399,26 +399,17 @@ const billOps = {
   },
 
   /**
-   * The month in progress (CONTEXT.md, #216): the month of today, while a recurring service has
-   * no bill line in it (data/month-in-progress.js), read from the bills as they are.
-   * @param {?string} [account] - The account whose bills count (see accountCondition()): every
-   *   account's by default, where any account's recurring service keeps the month in progress
-   * @param {Date} [today] - The date of today, the server's by default
+   * The month in progress (CONTEXT.md, #216): the month of today, as the server's local date
+   * gives it, while a recurring service has no bill line in it (data/month-in-progress.js), read
+   * from the bills as they are.
+   * @param {?string} [account] - The account whose recurring services count (see
+   *   accountCondition()): every account's by default, any of which keeps the month in progress
    * @returns {?string} The month of today, YYYY-MM, while it is in progress; null otherwise
    */
-  getMonthInProgress: (account = null, today = new Date()) => {
-    const monthOfToday = monthOfDate(today);
-    const months = monthsRead(monthOfToday);
-    const ofAccount = accountCondition(account, 'b.account');
-    // Each service that a bill line of those months names, by the account and the month of its
-    // bill
-    const billed = getDb().prepare(`
-      SELECT DISTINCT d.domain AS service, b.account AS account, strftime('%Y-%m', b.date) AS month
-      FROM bill_details d
-      JOIN bills b ON d.bill_id = b.id
-      WHERE b.date >= ? AND b.date <= ? AND d.domain IS NOT NULL AND ${ofAccount.sql}
-    `).all(monthBounds(months[0]).from, monthBounds(monthOfToday).to, ...ofAccount.params);
-    return isInProgress(billed, monthOfToday) ? monthOfToday : null;
+  getMonthInProgress: (account = null) => {
+    const monthOfToday = monthOfDate(new Date());
+    const billed = detailOps.getBilledServices(monthOfToday, account);
+    return recurringServicesNotBilled(billed, monthOfToday).length > 0 ? monthOfToday : null;
   },
 
   exists: (id) => {
@@ -460,6 +451,33 @@ const detailOps = {
   getByBillId: (billId) => {
     const db = getDb();
     return db.prepare('SELECT * FROM bill_details WHERE bill_id = ?').all(billId);
+  },
+
+  /**
+   * The services that the bills of the month of today and of the three months before charged
+   * (recurrenceWindow()), which data/month-in-progress.js tells the recurring services not billed
+   * yet from (#216): each service that bill lines name, once for each account and month of their
+   * bills, with the ids of those lines, which a projection of the month in progress repeats
+   * (#214).
+   * @param {string} monthOfToday - YYYY-MM
+   * @param {?string} [account] - The account whose bills count (see accountCondition()): every
+   *   account's by default
+   * @returns {Array<{ service: string, account: ?string, month: string, lines: string[] }>} Each
+   *   with the NIC handle of its bills' account, null for the Unknown account, and their month,
+   *   YYYY-MM
+   */
+  getBilledServices: (monthOfToday, account = null) => {
+    const { from, to } = recurrenceWindow(monthOfToday);
+    const ofAccount = accountCondition(account, 'b.account');
+    return getDb().prepare(`
+      SELECT d.domain AS service, b.account AS account, strftime('%Y-%m', b.date) AS month,
+        json_group_array(d.id) AS lines
+      FROM bill_details d
+      JOIN bills b ON d.bill_id = b.id
+      WHERE b.date >= ? AND b.date <= ? AND d.domain IS NOT NULL AND ${ofAccount.sql}
+      GROUP BY d.domain, b.account, month
+    `).all(from, to, ...ofAccount.params)
+      .map((row) => ({ ...row, lines: JSON.parse(row.lines) }));
   },
 
   /**
