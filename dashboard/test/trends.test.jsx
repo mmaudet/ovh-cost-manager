@@ -11,6 +11,7 @@ import { api } from './support/api.js';
 import {
   cardOf,
   dropdown,
+  inItalics,
   openTab,
   optionsOf,
   projectionCheckbox,
@@ -727,8 +728,6 @@ describe('Trends tab', () => {
           .toEqual(['Croissance sur la période', '+27,6 %', 'Sur 3 mois']);
         expect(texts(cardOf('Projection annuelle')))
           .toEqual(['Projection annuelle', '~15 004,80€', 'Basé sur le dernier mois']);
-        expect(texts(cardOf('Mois le plus coûteux')))
-          .toEqual(['Mois le plus coûteux', 'sept. 2026', '1 250,40€']);
 
         await selectLanguage(user, 'en');
 
@@ -736,6 +735,31 @@ describe('Trends tab', () => {
           .toEqual(['Growth over period', '+27.6%', 'Over 3 months']);
         expect(texts(cardOf('Annual projection')))
           .toEqual(['Annual projection', '~15,004.80€', 'Based on last month']);
+      });
+
+    // Its cost is partly projected: in italics, and marked so, as the Compare tab marks such
+    // amounts, with what September billed so far and its projected cost in a tooltip
+    it('marks the most expensive month projected when it is the month in progress, once ticked',
+      async () => {
+        const { user } = await renderDashboard(billedLate);
+        await openTab(user, 'Tendances');
+
+        await toggleProjection(user);
+
+        const card = cardOf('Mois le plus coûteux');
+        expect(texts(card))
+          .toEqual(['Mois le plus coûteux', 'sept. 2026', '1 250,40€', 'projeté']);
+        expect(inItalics(within(card).getByText('1 250,40€'))).toBe(true);
+        expect(within(card).getByTitle('facturé 980,40€, projeté 1 250,40€'))
+          .toHaveTextContent('1 250,40€ projeté');
+
+        await selectLanguage(user, 'en');
+
+        const englishCard = cardOf('Most expensive month');
+        expect(texts(englishCard))
+          .toEqual(['Most expensive month', 'Sep 2026', '1,250.40€', 'projected']);
+        expect(within(englishCard).getByTitle('billed 980.40€, projected 1,250.40€'))
+          .toHaveTextContent('1,250.40€ projected');
       });
 
     // June to August, complete: June, not billed, at 0 € leaves no growth to compute (#65)

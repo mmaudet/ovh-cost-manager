@@ -2,6 +2,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, Dot,
 } from 'recharts';
 import { AiEndpointsTrend } from '../components/AiEndpointsTrend.jsx';
+import { ProjectedAmount } from '../components/ProjectedAmount.jsx';
 import { ProjectionCheckbox } from '../components/ProjectionCheckbox.jsx';
 import { formatMonthLabel, formatYearMonth } from '../utils/format.js';
 import { lineParts, trendAmount } from '../utils/trendLines.js';
@@ -118,6 +119,13 @@ const TrendsTab = ({
       { notComputable: 'periodGrowthNotComputable' },
     )
     : null;
+  // The most expensive month of the period, the first of those that cost the same, and whether
+  // its cost is the month in progress's projected cost, partly projected, which the card marks
+  // so (#217)
+  const mostExpensive = monthlyTrend.reduce(
+    (max, month) => (month.cost > max.cost ? month : max), monthlyTrend[0],
+  );
+  const mostExpensiveProjected = projected && mostExpensive?.yearMonth === monthInProgress;
   // The annual projection, 12 times the cost of the last month: none, "—" with a tooltip, while
   // that month is the month in progress at what it billed so far (#216, #217), the only month in
   // progress that the period may hold, since it is always the latest
@@ -253,14 +261,20 @@ const TrendsTab = ({
         <div className={`bg-white rounded-xl p-5 shadow-sm border border-gray-100 ${monthlyTrend.length === 0 ? 'opacity-50' : ''}`}>
           <span className="text-gray-500 text-sm">{t('mostExpensiveMonth')}</span>
           <div className={`text-3xl font-bold mt-2 ${monthlyTrend.length > 0 ? 'text-red-600' : 'text-gray-400'}`}>
-            {monthlyTrend.length > 0
-              ? formatYearMonth(monthlyTrend.reduce((max, m) => m.cost > max.cost ? m : max, monthlyTrend[0]).yearMonth, language)
-              : 'N/A'}
+            {mostExpensive ? formatYearMonth(mostExpensive.yearMonth, language) : 'N/A'}
           </div>
           <p className="text-sm text-gray-500 mt-1">
-            {monthlyTrend.length > 0
-              ? `${fmt(Math.max(...monthlyTrend.map(m => m.cost)))}€`
-              : ''}
+            {mostExpensive && !mostExpensiveProjected && `${fmt(mostExpensive.cost)}€`}
+            {mostExpensiveProjected && (
+              <ProjectedAmount
+                detail={trendAmount(mostExpensive.cost, mostExpensive.projected ?? 0, {
+                  inProgress: true, projected: true,
+                }, fmt, t)}
+                t={t}
+              >
+                {`${fmt(mostExpensive.cost)}€`}
+              </ProjectedAmount>
+            )}
           </p>
         </div>
         <div className={`bg-white rounded-xl p-5 shadow-sm border border-gray-100 ${monthlyTrend.length === 0 ? 'opacity-50' : ''}`}>

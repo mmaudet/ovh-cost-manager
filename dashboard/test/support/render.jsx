@@ -418,6 +418,11 @@ export function importStatusesOf(table) {
   });
 }
 
+// Whether an amount shows in italics, as an amount that includes a projected part does (#217)
+export function inItalics(amount) {
+  return amount.classList.contains('italic');
+}
+
 // The tone of a variation, as the colour of its text shows it: an increase in red, a
 // decrease in green, and neither in grey (#87)
 export function toneOf(variation) {
