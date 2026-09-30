@@ -24,7 +24,9 @@ import {
   openTab,
   optionsOf,
   passTime,
+  projectionCheckbox,
   renderDashboard,
+  reopenDashboard,
   resync,
   rowsOf,
   selectAccount,
@@ -33,6 +35,7 @@ import {
   settle,
   sortTable,
   texts,
+  toggleProjection,
   toneOf,
 } from './support/render.jsx';
 
@@ -1603,6 +1606,48 @@ describe('dashboard shell', () => {
       // The months back in French (#33)
       expect(optionsOf(monthSelector())).toEqual(['Septembre 2026', 'Août 2026', 'Juillet 2026']);
       expect(monthSelector()).toHaveDisplayValue('Septembre 2026');
+    });
+  });
+
+  // One setting for the whole page, which the shell holds (ADR 0001): the Trends tab shows it
+  // (#217), and the browser remembers it, as it does the language and the account selected
+  describe('projection of the month in progress (#214)', () => {
+    const withSeptemberInProgress = { ...account, ...septemberInProgress };
+
+    it('is off by default', async () => {
+      const { user } = await renderDashboard(withSeptemberInProgress);
+
+      await openTab(user, 'Tendances');
+
+      expect(projectionCheckbox()).not.toBeChecked();
+    });
+
+    it('stays as the user sets it from one tab to another', async () => {
+      const { user } = await renderDashboard(withSeptemberInProgress);
+      await openTab(user, 'Tendances');
+      await toggleProjection(user);
+
+      await openTab(user, "Vue d'ensemble");
+      await openTab(user, 'Tendances');
+
+      expect(projectionCheckbox()).toBeChecked();
+    });
+
+    it('opens as it was set on an earlier visit', async () => {
+      const { user } = await renderDashboard(withSeptemberInProgress);
+      await openTab(user, 'Tendances');
+      await toggleProjection(user);
+
+      const { user: laterUser } = await reopenDashboard(withSeptemberInProgress);
+      await openTab(laterUser, 'Tendances');
+
+      expect(projectionCheckbox()).toBeChecked();
+
+      await toggleProjection(laterUser);
+      const { user: lastUser } = await reopenDashboard(withSeptemberInProgress);
+      await openTab(lastUser, 'Tendances');
+
+      expect(projectionCheckbox()).not.toBeChecked();
     });
   });
 });

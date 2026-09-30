@@ -12,6 +12,7 @@ import {
   dropdown,
   openTab,
   optionsOf,
+  projectionCheckbox,
   renderDashboard,
   selectAccount,
   selectLanguage,
@@ -623,6 +624,24 @@ describe('Trends tab', () => {
       expect(api.fetchGpuSummary)
         .not.toHaveBeenCalledWith('2026-07-01', '2026-09-30', removedAccount.id);
       expect(api.fetchMonthlyTrend).toHaveBeenCalledWith(3, '2026-08', removedAccount.id);
+    });
+  });
+
+  // The month in progress (#216), which the page may project (#217): see fixtures/trends.js
+  describe('month in progress', () => {
+    // Next to the period selector
+    it('offers to project it on the Trends tab only, off by default', async () => {
+      const { user } = await renderDashboard();
+      expect(projectionCheckbox()).not.toBeInTheDocument();
+
+      await openTab(user, 'Tendances');
+
+      expect(projectionCheckbox()).toHaveAccessibleName('Projeter le mois en cours');
+      expect(projectionCheckbox()).not.toBeChecked();
+
+      await selectLanguage(user, 'en');
+
+      expect(projectionCheckbox()).toHaveAccessibleName('Project the month in progress');
     });
   });
 

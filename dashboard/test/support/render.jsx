@@ -163,6 +163,20 @@ export async function selectAccount(user, label) {
   await settle();
 }
 
+// The checkbox that projects the month in progress (#217), by its name in either language: null
+// when the page does not show it, as outside the Trends tab
+export function projectionCheckbox() {
+  return screen.queryByRole('checkbox', {
+    name: /^(Projeter le mois en cours|Project the month in progress)$/,
+  });
+}
+
+// Ticks or unticks it, as the user does, with a click
+export async function toggleProjection(user) {
+  await user.click(projectionCheckbox());
+  await settle();
+}
+
 const normalize = (text) => text.replace(/\s+/g, ' ').trim();
 
 // The text of an element as one reads it in a sentence, with the code and the links within it,

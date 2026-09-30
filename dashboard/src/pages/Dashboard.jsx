@@ -8,6 +8,7 @@ import {
   fetchByResourceType, fetchGpuSummary,
 } from '../services/api';
 import { useLanguage } from '../hooks/useLanguage.jsx';
+import { useMonthInProgressProjection } from '../hooks/useMonthInProgressProjection.js';
 import { useSelectedAccount } from '../hooks/useSelectedAccount.js';
 import Logo from '../components/Logo';
 import { AccountSelector } from '../components/AccountSelector.jsx';
@@ -137,6 +138,9 @@ export default function Dashboard() {
   // What the page shows, all accounts or the account selected, as the report's title names
   // it when the page offers several (#124): null when it names none
   const scope = scopeLabel(accounts, selectedAccount, t);
+  // Whether the page projects the month in progress (#214), page-wide, and what turns it on or
+  // off: the Trends tab shows it next to its period selector, and its trends follow it (#217)
+  const projection = useMonthInProgressProjection();
 
   // The months billed to the account shown
   const { data: months = [], isSuccess: monthsLoaded } = useQuery(accountQuery(selectedAccount, {
@@ -755,7 +759,7 @@ export default function Dashboard() {
             ))}
           </div>
           {activeTab === 'trends' && (
-            <TrendsPeriodSelector {...trendsTab} t={t} />
+            <TrendsPeriodSelector {...trendsTab} {...projection} t={t} />
           )}
         </div>
 

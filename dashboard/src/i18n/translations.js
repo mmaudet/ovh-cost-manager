@@ -28,6 +28,9 @@ export const translations = {
     // why no variation of it is computed
     monthInProgress: 'en cours',
     variationMonthInProgress: 'non calculable : mois en cours',
+    // The setting that counts it at its projected cost (#214), next to the Trends tab's period
+    // selector (#217)
+    projectMonthInProgress: 'Projeter le mois en cours',
 
     // KPI Cards
     totalCost: 'Coût total du mois',
@@ -341,6 +344,9 @@ export const translations = {
     // why no variation of it is computed
     monthInProgress: 'in progress',
     variationMonthInProgress: 'cannot be computed: month in progress',
+    // The setting that counts it at its projected cost (#214), next to the Trends tab's period
+    // selector (#217)
+    projectMonthInProgress: 'Project the month in progress',
 
     // KPI Cards
     totalCost: 'Total monthly cost',

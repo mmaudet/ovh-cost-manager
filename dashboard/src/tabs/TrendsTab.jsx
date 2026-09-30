@@ -2,6 +2,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line,
 } from 'recharts';
 import { AiEndpointsTrend } from '../components/AiEndpointsTrend.jsx';
+import { ProjectionCheckbox } from '../components/ProjectionCheckbox.jsx';
 import { formatYearMonth } from '../utils/format.js';
 import { growthOverPeriod } from '../utils/periodGrowth.js';
 import { PERIOD_OPTIONS } from '../utils/trendPeriods.js';
@@ -204,8 +205,12 @@ const TrendsTab = ({
 
 // The period selector of the Trends tab, which the shell renders in its tab bar while the
 // tab is active, so that the tab bar keeps its markup: see
-// docs/adr/0001-tab-state-lives-in-the-dashboard-shell.md
-const TrendsPeriodSelector = ({ trendPeriod, setTrendPeriod, availablePeriods, t }) => (
+// docs/adr/0001-tab-state-lives-in-the-dashboard-shell.md. The checkbox that projects the month
+// in progress follows it (#217): the shell holds that setting, and passes it with its setter.
+const TrendsPeriodSelector = ({
+  trendPeriod, setTrendPeriod, availablePeriods, projectsMonthInProgress,
+  setProjectsMonthInProgress, t,
+}) => (
   <div className="flex items-center gap-2">
     <span className="text-sm text-gray-600">{t('period')}:</span>
     <select
@@ -217,6 +222,10 @@ const TrendsPeriodSelector = ({ trendPeriod, setTrendPeriod, availablePeriods, t
         <option key={opt.months} value={opt.months}>{t(opt.key)}</option>
       ))}
     </select>
+    <ProjectionCheckbox
+      projectsMonthInProgress={projectsMonthInProgress}
+      setProjectsMonthInProgress={setProjectsMonthInProgress} t={t}
+    />
   </div>
 );
 
