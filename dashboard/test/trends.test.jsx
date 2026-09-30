@@ -685,17 +685,18 @@ describe('Trends tab', () => {
       });
 
     // Rather than compare September, partial, with a complete month, or project a year from it
+    // Visibly, as a tooltip shows on no touch screen, and in the tooltip, why
     it('says that the month is in progress in the growth and the annual projection', async () => {
       const { user } = await renderDashboard(billedLate);
 
       await openTab(user, 'Tendances');
 
       expect(texts(cardOf('Croissance sur la période')))
-        .toEqual(['Croissance sur la période', '—', 'Sur 3 mois']);
+        .toEqual(['Croissance sur la période', '—', 'mois en cours', 'Sur 3 mois']);
       expect(within(cardOf('Croissance sur la période'))
         .getByTitle('non calculable : mois en cours')).toHaveTextContent('—');
       expect(texts(cardOf('Projection annuelle')))
-        .toEqual(['Projection annuelle', '—', 'Basé sur le dernier mois']);
+        .toEqual(['Projection annuelle', '—', 'mois en cours', 'Basé sur le dernier mois']);
       expect(within(cardOf('Projection annuelle'))
         .getByTitle('non calculable : dernier mois en cours')).toHaveTextContent('—');
       // September as billed so far, without its dedicated servers
@@ -704,8 +705,12 @@ describe('Trends tab', () => {
 
       await selectLanguage(user, 'en');
 
+      expect(texts(cardOf('Growth over period')))
+        .toEqual(['Growth over period', '—', 'month in progress', 'Over 3 months']);
       expect(within(cardOf('Growth over period'))
         .getByTitle('cannot be computed: month in progress')).toHaveTextContent('—');
+      expect(texts(cardOf('Annual projection')))
+        .toEqual(['Annual projection', '—', 'month in progress', 'Based on last month']);
       expect(within(cardOf('Annual projection'))
         .getByTitle('cannot be computed: last month in progress')).toHaveTextContent('—');
     });

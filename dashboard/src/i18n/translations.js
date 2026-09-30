@@ -93,8 +93,10 @@ export const translations = {
     mostExpensiveMonth: 'Mois le plus coûteux',
     annualProjection: 'Projection annuelle',
     basedOnLastMonth: 'Basé sur le dernier mois',
-    // Why it gives none from the month in progress at what it billed so far (#217)
+    // Why it gives none from the month in progress at what it billed so far (#217), and what the
+    // cards that give none so say visibly
     annualProjectionMonthInProgress: 'non calculable : dernier mois en cours',
+    monthInProgressNote: 'mois en cours',
 
     // Footer
     syncedVia: 'Données synchronisées via l\'API OVHcloud',
@@ -414,8 +416,10 @@ export const translations = {
     mostExpensiveMonth: 'Most expensive month',
     annualProjection: 'Annual projection',
     basedOnLastMonth: 'Based on last month',
-    // Why it gives none from the month in progress at what it billed so far (#217)
+    // Why it gives none from the month in progress at what it billed so far (#217), and what the
+    // cards that give none so say visibly
     annualProjectionMonthInProgress: 'cannot be computed: last month in progress',
+    monthInProgressNote: 'month in progress',
 
     // Footer
     syncedVia: 'Data synchronized via OVHcloud API',

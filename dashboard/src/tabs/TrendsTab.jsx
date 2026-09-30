@@ -70,6 +70,18 @@ const seriesLines = (
   ];
 };
 
+// What a card of the tab shows under its « — » while the month in progress, at what it billed so
+// far, leaves it no figure (#217): « mois en cours », visibly, since a tooltip shows on no touch
+// screen, in the look of the header's « en cours »
+const MonthInProgressNote = ({ t }) => (
+  <span
+    className={'inline-block mt-1 px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 text-xs'
+      + ' font-medium'}
+  >
+    {t('monthInProgressNote')}
+  </span>
+);
+
 // The Trends tab, which the shell renders while it is active: what useTrendsTab() returns,
 // with the shell's language, translations (t) and amount format (fmt).
 const TrendsTab = ({
@@ -235,6 +247,7 @@ const TrendsTab = ({
             {growth?.why && '—'}
             {growth?.text}
           </div>
+          {spansTwoMonths && lastMonthPartial && <MonthInProgressNote t={t} />}
           <p className="text-sm text-gray-500 mt-1">{t('overPeriod')} {t(currentPeriodLabel)}</p>
         </div>
         <div className={`bg-white rounded-xl p-5 shadow-sm border border-gray-100 ${monthlyTrend.length === 0 ? 'opacity-50' : ''}`}>
@@ -263,6 +276,7 @@ const TrendsTab = ({
             {monthlyTrend.length > 0 && !lastMonthPartial
               && `~${fmt((lastMonth.cost || 0) * 12)}€`}
           </div>
+          {lastMonthPartial && <MonthInProgressNote t={t} />}
           <p className="text-sm text-gray-500 mt-1">{t('basedOnLastMonth')}</p>
         </div>
       </div>
