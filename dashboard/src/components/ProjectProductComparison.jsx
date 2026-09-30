@@ -41,9 +41,9 @@ const productRows = (billedA, billedB) => pairMonths(
  * @param {{ charge: string, total: number }[]} props.chargesB - Those of month B
  * @param {?object} props.sort - The sort of the comparison, by its columns (see
  *   SortableHeader.jsx): null until the user sorts it
- * @param {{ monthInProgress: boolean }} props.comparedMonths - What the comparison knows of
- *   months A and B (comparedMonthsOf()), which the variations of the charges and their sort
- *   read (#216)
+ * @param {{ includesMonthInProgress: boolean, projected: boolean }} props.comparedMonths - What
+ *   the comparison knows of months A and B (comparedMonthsOf()), which the variations of the
+ *   charges and their sort read (#216)
  * @returns {JSX.Element[]} A row for each charge
  */
 const ProductCharges = ({
@@ -78,9 +78,9 @@ const ProductCharges = ({
  *   project's products in a month, for useQuery (useCompareTab()'s projectProductsQuery())
  * @param {?object} props.monthA
  * @param {?object} props.monthB
- * @param {{ monthInProgress: boolean }} props.comparedMonths - What the comparison knows of
- *   months A and B (comparedMonthsOf()), which the variations of the products and charges and
- *   their sort read (#216)
+ * @param {{ includesMonthInProgress: boolean, projected: boolean }} props.comparedMonths - What
+ *   the comparison knows of months A and B (comparedMonthsOf()), which the variations of the
+ *   products and charges and their sort read (#216)
  * @param {{ sort: ?object, onSort: function(object) }} props.sorting
  * @param {function(string): { unfolded: boolean, onToggle: function() }} props.unfoldingOf -
  *   Whether a product is unfolded, by its name, and what folds or unfolds it, which the Compare

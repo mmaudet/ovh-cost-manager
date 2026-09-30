@@ -28,6 +28,12 @@ export const translations = {
     // why no variation of it is computed
     monthInProgress: 'en cours',
     variationMonthInProgress: 'non calculable : mois en cours',
+    // The setting that counts it at its projected cost (#214), next to the Trends tab's period
+    // selector (#217), and what the tooltips of its charts give: what the month billed so far,
+    // and its projected cost
+    projectMonthInProgress: 'Projeter le mois en cours',
+    billed: 'facturé',
+    projected: 'projeté',
 
     // KPI Cards
     totalCost: 'Coût total du mois',
@@ -87,6 +93,10 @@ export const translations = {
     mostExpensiveMonth: 'Mois le plus coûteux',
     annualProjection: 'Projection annuelle',
     basedOnLastMonth: 'Basé sur le dernier mois',
+    // Why it gives none from the month in progress at what it billed so far (#217), and what the
+    // cards that give none so say visibly
+    annualProjectionMonthInProgress: 'non calculable : dernier mois en cours',
+    monthInProgressNote: 'mois en cours',
 
     // Footer
     syncedVia: 'Données synchronisées via l\'API OVHcloud',
@@ -341,6 +351,12 @@ export const translations = {
     // why no variation of it is computed
     monthInProgress: 'in progress',
     variationMonthInProgress: 'cannot be computed: month in progress',
+    // The setting that counts it at its projected cost (#214), next to the Trends tab's period
+    // selector (#217), and what the tooltips of its charts give: what the month billed so far,
+    // and its projected cost
+    projectMonthInProgress: 'Project the month in progress',
+    billed: 'billed',
+    projected: 'projected',
 
     // KPI Cards
     totalCost: 'Total monthly cost',
@@ -400,6 +416,10 @@ export const translations = {
     mostExpensiveMonth: 'Most expensive month',
     annualProjection: 'Annual projection',
     basedOnLastMonth: 'Based on last month',
+    // Why it gives none from the month in progress at what it billed so far (#217), and what the
+    // cards that give none so say visibly
+    annualProjectionMonthInProgress: 'cannot be computed: last month in progress',
+    monthInProgressNote: 'month in progress',
 
     // Footer
     syncedVia: 'Data synchronized via OVHcloud API',

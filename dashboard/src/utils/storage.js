@@ -1,6 +1,7 @@
-// What the browser keeps of the page from one visit to the next: the language and the account
-// selected. A browser can refuse it, as some private windows do, or one that blocks the data
-// of sites: the page then keeps nothing, and opens on its defaults.
+// What the browser keeps of the page from one visit to the next: the language, the account
+// selected, and whether the page projects the month in progress (#217). A browser can refuse
+// it, as some private windows do, or one that blocks the data of sites: the page then keeps
+// nothing, and opens on its defaults.
 
 // The value kept under a key: null when there is none, or when the browser refuses storage
 export function readStored(key) {

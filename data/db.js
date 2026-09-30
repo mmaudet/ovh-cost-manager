@@ -8,7 +8,9 @@ const { tieFootprint } = require('./carbon-ties');
 const { MONTHLY_KINDS } = require('./cloud-usage');
 const { productFigures } = require('./public-cloud-products');
 const { storageClassLabel } = require('./storage-classes');
-const { monthOfDate, monthsOfWindow, shiftMonth } = require('./months');
+const {
+  monthBounds, monthOfDate, monthsOfWindow, shiftMonth,
+} = require('./months');
 const { recurrenceWindow, recurringServicesNotBilled } = require('./month-in-progress');
 const ownership = require('./ownership');
 // The conditions of the queries that keep one account's rows (#115), a list of ids, or the
@@ -156,6 +158,66 @@ function servicesOfLines(linesOf, fromDate, toDate, account, byAccount) {
     ...ofServiceLines.params, fromDate, toDate, ...ofLineAccount.params,
     ...ofLines.params, fromDate, toDate, ...ofAccount.params,
   );
+}
+
+/**
+ * The recurring services (CONTEXT.md) that the month of today has not billed yet, as
+ * data/month-in-progress.js tells them from the bills as they are, each with its projected lines:
+ * the month of today is in progress while there are any (#216), and its projection counts those
+ * lines (#217).
+ * @param {string} monthOfToday - YYYY-MM, as the server's local date gives it (monthOfDate())
+ * @param {?string} account - The account whose recurring services count (see
+ *   accountCondition()): null for every account
+ * @returns {Array<{ service: string, account: ?string, lines: string[] }>}
+ */
+function servicesNotBilledYet(monthOfToday, account) {
+  return recurringServicesNotBilled(
+    detailOps.getBilledServices(monthOfToday, account), monthOfToday,
+  );
+}
+
+/**
+ * The bill lines that a query of the costs between two dates, both included, adds up, as a table
+ * for its FROM clause, with its parameters: the lines of the bills of the account (see
+ * accountCondition()), every account's by default. With the projected option, when the dates
+ * cover the month in progress (CONTEXT.md), its projected lines too (#217): the bill lines of the
+ * month before of each recurring service that the month of today has not billed yet
+ * (data/month-in-progress.js), counted as they were, their classification included, and dated on
+ * its first day. Each line has the columns of bill_details, the date and the account of its bill,
+ * `date` and `account`, and its projected part, `projected`: its whole cost for a projected line,
+ * 0 for a bill line.
+ * @param {?string} fromDate - The first day, YYYY-MM-DD; null, as the last, for no period
+ * @param {?string} toDate - The last day
+ * @param {?string} [account] - The account whose lines count, as its recurring services
+ * @param {object} [options]
+ * @param {boolean} [options.projected] - Whether to add the projected lines of the month in
+ *   progress
+ * @returns {{ sql: string, params: Array }}
+ */
+function linesOfPeriod(fromDate, toDate, account = null, { projected = false } = {}) {
+  const ofAccount = accountCondition(account, 'b.account');
+  const billLines = {
+    sql: `SELECT d.*, b.date AS date, b.account AS account, 0 AS projected
+      FROM bill_details d
+      JOIN bills b ON d.bill_id = b.id
+      WHERE b.date >= ? AND b.date <= ? AND ${ofAccount.sql}`,
+    params: [fromDate, toDate, ...ofAccount.params],
+  };
+  const monthOfToday = monthOfDate(new Date());
+  if (!projected || !monthsOfWindow(fromDate, toDate).includes(monthOfToday)) return billLines;
+  const projectedLines = servicesNotBilledYet(monthOfToday, account)
+    .flatMap(({ lines }) => lines);
+  if (projectedLines.length === 0) return billLines;
+  const ofProjectedLines = idInList('d.id', projectedLines);
+  return {
+    sql: `${billLines.sql}
+      UNION ALL
+      SELECT d.*, ? AS date, b.account AS account, d.total_price AS projected
+      FROM bill_details d
+      JOIN bills b ON d.bill_id = b.id
+      WHERE ${ofProjectedLines.sql}`,
+    params: [...billLines.params, monthBounds(monthOfToday).from, ...ofProjectedLines.params],
+  };
 }
 
 let db = null;
@@ -408,8 +470,7 @@ const billOps = {
    */
   getMonthInProgress: (account = null) => {
     const monthOfToday = monthOfDate(new Date());
-    const billed = detailOps.getBilledServices(monthOfToday, account);
-    return recurringServicesNotBilled(billed, monthOfToday).length > 0 ? monthOfToday : null;
+    return servicesNotBilledYet(monthOfToday, account).length > 0 ? monthOfToday : null;
   },
 
   exists: (id) => {
@@ -810,56 +871,58 @@ const analysisOps = {
   // The cost of every month between two dates, both included, 0 for a month without any
   // bill: a trend over N months gives N months (#65). Nothing when none of them has a bill,
   // for the Trends tab to say it has no data. On the bills of the account (see
-  // accountCondition()), every account's by default (#120).
-  monthlyTrend: (fromDate, toDate, account = null) => {
+  // accountCondition()), every account's by default (#120). With the projected option, the month
+  // in progress counts its projected lines too, and each month gives its projected part, 0 when
+  // it has none (linesOfPeriod(), #217).
+  monthlyTrend: (fromDate, toDate, account = null, { projected = false } = {}) => {
     const db = getDb();
-    const ofAccount = accountCondition(account, 'b.account');
+    const lines = linesOfPeriod(fromDate, toDate, account, { projected });
     const billed = db.prepare(`
       SELECT
-        strftime('%Y-%m', b.date) as month,
-        SUM(d.total_price) as total
-      FROM bill_details d
-      JOIN bills b ON d.bill_id = b.id
-      WHERE b.date >= ? AND b.date <= ?
-        AND ${ofAccount.sql}
-      GROUP BY strftime('%Y-%m', b.date)
+        strftime('%Y-%m', l.date) as month,
+        SUM(l.total_price) as total,
+        SUM(l.projected) as projected
+      FROM (${lines.sql}) l
+      GROUP BY strftime('%Y-%m', l.date)
       ORDER BY month
-    `).all(fromDate, toDate, ...ofAccount.params);
+    `).all(...lines.params);
     if (billed.length === 0) return [];
-    const totals = new Map(billed.map(({ month, total }) => [month, total]));
-    return monthsOfWindow(fromDate, toDate)
-      .map((month) => ({ month, total: totals.get(month) ?? 0 }));
+    const ofMonth = new Map(billed.map((row) => [row.month, row]));
+    return monthsOfWindow(fromDate, toDate).map((month) => {
+      const cost = { month, total: ofMonth.get(month)?.total ?? 0 };
+      return projected ? { ...cost, projected: ofMonth.get(month)?.projected ?? 0 } : cost;
+    });
   },
 
   // The cost of each resource type billed between two dates, both included, in every month
   // between them, 0 for a month it was not billed in: each resource type's trend gives
   // every month, as the monthly trend does (#65). Nothing when none of them has a bill,
   // since no resource type was billed. On the bills of the account (see accountCondition()),
-  // every account's by default: the resource types billed to it alone (#120).
-  monthlyTrendByResourceType: (fromDate, toDate, account = null) => {
+  // every account's by default: the resource types billed to it alone (#120). With the projected
+  // option, the month in progress counts its projected lines too, each under its own resource
+  // type, and each row gives its projected part, 0 when it has none (linesOfPeriod(), #217).
+  monthlyTrendByResourceType: (fromDate, toDate, account = null, { projected = false } = {}) => {
     const db = getDb();
-    const ofAccount = accountCondition(account, 'b.account');
+    const lines = linesOfPeriod(fromDate, toDate, account, { projected });
     const billed = db.prepare(`
       SELECT
-        strftime('%Y-%m', b.date) as month,
-        COALESCE(d.resource_type, 'other') as resource_type,
-        SUM(d.total_price) as total
-      FROM bill_details d
-      JOIN bills b ON d.bill_id = b.id
-      WHERE b.date >= ? AND b.date <= ?
-        AND ${ofAccount.sql}
-      GROUP BY strftime('%Y-%m', b.date), COALESCE(d.resource_type, 'other')
+        strftime('%Y-%m', l.date) as month,
+        COALESCE(l.resource_type, 'other') as resource_type,
+        SUM(l.total_price) as total,
+        SUM(l.projected) as projected
+      FROM (${lines.sql}) l
+      GROUP BY strftime('%Y-%m', l.date), COALESCE(l.resource_type, 'other')
       ORDER BY month
-    `).all(fromDate, toDate, ...ofAccount.params);
-    const totals = new Map(billed.map((row) => [`${row.month} ${row.resource_type}`, row.total]));
+    `).all(...lines.params);
+    const ofMonthAndType = new Map(billed.map((row) => [`${row.month} ${row.resource_type}`, row]));
     // In the order the query first gives them, which orders the resource types of equal cost
     // on the chart
     const resourceTypes = [...new Set(billed.map((row) => row.resource_type))];
-    return monthsOfWindow(fromDate, toDate).flatMap((month) => resourceTypes.map((type) => ({
-      month,
-      resource_type: type,
-      total: totals.get(`${month} ${type}`) ?? 0,
-    })));
+    return monthsOfWindow(fromDate, toDate).flatMap((month) => resourceTypes.map((type) => {
+      const row = ofMonthAndType.get(`${month} ${type}`);
+      const cost = { month, resource_type: type, total: row?.total ?? 0 };
+      return projected ? { ...cost, projected: row?.projected ?? 0 } : cost;
+    }));
   },
 
   // The totals of the bills between two dates of the account (see accountCondition()), every

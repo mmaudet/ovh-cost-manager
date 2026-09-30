@@ -1,24 +1,29 @@
 import { describe, it, expect } from 'vitest';
 import { screen, within } from '@testing-library/react';
-import { account } from './fixtures/account.js';
+import { account, septemberInProgress } from './fixtures/account.js';
 import {
-  lyonAccount, removedAccount, severalAccounts, severalAccountsWithAiEndpoints,
+  lyonAccount, lyonBilledLate, removedAccount, severalAccounts, severalAccountsWithAiEndpoints,
+  unnamedAccount,
 } from './fixtures/accounts.js';
 import { aiEndpoints } from './fixtures/public-cloud.js';
-import { sinceJuly2025 } from './fixtures/trends.js';
+import { septemberBilledLate, sinceJuly2025 } from './fixtures/trends.js';
 import { api } from './support/api.js';
 import {
   cardOf,
   dropdown,
+  inItalics,
   openTab,
   optionsOf,
+  projectionCheckbox,
   renderDashboard,
+  reopenDashboard,
   selectAccount,
   selectLanguage,
   selectMonth,
   settle,
   swatchOf,
   texts,
+  toggleProjection,
   toneOf,
 } from './support/render.jsx';
 
@@ -623,6 +628,216 @@ describe('Trends tab', () => {
       expect(api.fetchGpuSummary)
         .not.toHaveBeenCalledWith('2026-07-01', '2026-09-30', removedAccount.id);
       expect(api.fetchMonthlyTrend).toHaveBeenCalledWith(3, '2026-08', removedAccount.id);
+    });
+  });
+
+  // The month in progress (#216), which the page may project (#217): see fixtures/trends.js,
+  // where September has not billed the dedicated servers yet
+  describe('month in progress', () => {
+    const billedLate = { ...account, ...septemberInProgress, ...septemberBilledLate };
+
+    // Next to the period selector
+    it('offers to project it on the Trends tab only, off by default', async () => {
+      const { user } = await renderDashboard();
+      expect(projectionCheckbox()).not.toBeInTheDocument();
+
+      await openTab(user, 'Tendances');
+
+      expect(projectionCheckbox()).toHaveAccessibleName('Projeter le mois en cours');
+      expect(projectionCheckbox()).not.toBeChecked();
+
+      await selectLanguage(user, 'en');
+
+      expect(projectionCheckbox()).toHaveAccessibleName('Project the month in progress');
+    });
+
+    it('asks for the trends projected once ticked, over a period that covers it only',
+      async () => {
+        const { user } = await renderDashboard(billedLate);
+        await openTab(user, 'Tendances');
+
+        await toggleProjection(user);
+
+        expect(api.fetchMonthlyTrend)
+          .toHaveBeenCalledWith(3, '2026-09', allAccounts, { projected: true });
+        expect(api.fetchMonthlyTrendByCategory)
+          .toHaveBeenCalledWith(3, '2026-09', allAccounts, { projected: true });
+
+        // June to August, complete months
+        await selectMonth(user, 'Août 2026');
+
+        expect(api.fetchMonthlyTrend).toHaveBeenLastCalledWith(3, '2026-08', allAccounts);
+        expect(api.fetchMonthlyTrendByCategory).toHaveBeenLastCalledWith(3, '2026-08', allAccounts);
+      });
+
+    // The trends load when the page opens, whatever the tab
+    it('asks for the trends projected from the start when ticked on an earlier visit',
+      async () => {
+        const { user } = await renderDashboard(billedLate);
+        await openTab(user, 'Tendances');
+        await toggleProjection(user);
+        api.fetchMonthlyTrend.mockClear();
+
+        await reopenDashboard(billedLate);
+
+        expect(api.fetchMonthlyTrend).toHaveBeenCalledOnce();
+        expect(api.fetchMonthlyTrend)
+          .toHaveBeenCalledWith(3, '2026-09', allAccounts, { projected: true });
+      });
+
+    // Rather than compare September, partial, with a complete month, or project a year from it
+    // Visibly, as a tooltip shows on no touch screen, and in the tooltip, why
+    it('says that the month is in progress in the growth and the annual projection', async () => {
+      const { user } = await renderDashboard(billedLate);
+
+      await openTab(user, 'Tendances');
+
+      expect(texts(cardOf('Croissance sur la période')))
+        .toEqual(['Croissance sur la période', '—', 'mois en cours', 'Sur 3 mois']);
+      expect(within(cardOf('Croissance sur la période'))
+        .getByTitle('non calculable : mois en cours')).toHaveTextContent('—');
+      expect(texts(cardOf('Projection annuelle')))
+        .toEqual(['Projection annuelle', '—', 'mois en cours', 'Basé sur le dernier mois']);
+      expect(within(cardOf('Projection annuelle'))
+        .getByTitle('non calculable : dernier mois en cours')).toHaveTextContent('—');
+      // September as billed so far, without its dedicated servers
+      expect(texts(cardOf('Mois le plus coûteux')))
+        .toEqual(['Mois le plus coûteux', 'août 2026', '1 042,00€']);
+
+      await selectLanguage(user, 'en');
+
+      expect(texts(cardOf('Growth over period')))
+        .toEqual(['Growth over period', '—', 'month in progress', 'Over 3 months']);
+      expect(within(cardOf('Growth over period'))
+        .getByTitle('cannot be computed: month in progress')).toHaveTextContent('—');
+      expect(texts(cardOf('Annual projection')))
+        .toEqual(['Annual projection', '—', 'month in progress', 'Based on last month']);
+      expect(within(cardOf('Annual projection'))
+        .getByTitle('cannot be computed: last month in progress')).toHaveTextContent('—');
+    });
+
+    it('computes the growth and the annual projection on the projected cost once ticked',
+      async () => {
+        const { user } = await renderDashboard(billedLate);
+        await openTab(user, 'Tendances');
+
+        await toggleProjection(user);
+
+        // (1 250.40 - 980) / 980, and 12 times September's projected cost
+        expect(texts(cardOf('Croissance sur la période')))
+          .toEqual(['Croissance sur la période', '+27,6 %', 'Sur 3 mois']);
+        expect(texts(cardOf('Projection annuelle')))
+          .toEqual(['Projection annuelle', '~15 004,80€', 'Basé sur le dernier mois']);
+
+        await selectLanguage(user, 'en');
+
+        expect(texts(cardOf('Growth over period')))
+          .toEqual(['Growth over period', '+27.6%', 'Over 3 months']);
+        expect(texts(cardOf('Annual projection')))
+          .toEqual(['Annual projection', '~15,004.80€', 'Based on last month']);
+      });
+
+    // Its cost is partly projected: in italics, and marked so, as the Compare tab marks such
+    // amounts, with what September billed so far and its projected cost in a tooltip
+    it('marks the most expensive month projected when it is the month in progress, once ticked',
+      async () => {
+        const { user } = await renderDashboard(billedLate);
+        await openTab(user, 'Tendances');
+
+        await toggleProjection(user);
+
+        const card = cardOf('Mois le plus coûteux');
+        expect(texts(card))
+          .toEqual(['Mois le plus coûteux', 'sept. 2026', '1 250,40€', 'projeté']);
+        expect(inItalics(within(card).getByText('1 250,40€'))).toBe(true);
+        expect(within(card).getByTitle('facturé 980,40€, projeté 1 250,40€'))
+          .toHaveTextContent('1 250,40€ projeté');
+
+        await selectLanguage(user, 'en');
+
+        const englishCard = cardOf('Most expensive month');
+        expect(texts(englishCard))
+          .toEqual(['Most expensive month', 'Sep 2026', '1,250.40€', 'projected']);
+        expect(within(englishCard).getByTitle('billed 980.40€, projected 1,250.40€'))
+          .toHaveTextContent('1,250.40€ projected');
+      });
+
+    // June to August, complete: June, not billed, at 0 € leaves no growth to compute (#65)
+    it('computes the cards as before over a period that ends before it', async () => {
+      const { user } = await renderDashboard(billedLate);
+      await openTab(user, 'Tendances');
+      await toggleProjection(user);
+
+      await selectMonth(user, 'Août 2026');
+
+      expect(within(cardOf('Croissance sur la période'))
+        .getByTitle('non calculable : premier mois à 0 € ou moins')).toHaveTextContent('—');
+      expect(texts(cardOf('Projection annuelle')))
+        .toEqual(['Projection annuelle', '~12 504,00€', 'Basé sur le dernier mois']);
+    });
+
+    // As the months list of the account shown marks it (#216): see fixtures/accounts.js
+    it('asks for the trends projected of the account shown while its month is in progress',
+      async () => {
+        const { user } = await renderDashboard(lyonBilledLate);
+        await openTab(user, 'Tendances');
+        await toggleProjection(user);
+
+        expect(api.fetchMonthlyTrend)
+          .toHaveBeenCalledWith(3, '2026-09', allAccounts, { projected: true });
+
+        await selectAccount(user, 'Lyon subsidiary');
+
+        expect(api.fetchMonthlyTrend)
+          .toHaveBeenCalledWith(3, '2026-09', lyonAccount.id, { projected: true });
+        expect(api.fetchMonthlyTrendByCategory)
+          .toHaveBeenCalledWith(3, '2026-09', lyonAccount.id, { projected: true });
+
+        // Whose bills of September came in
+        await selectAccount(user, 'yy2222-ovh');
+
+        expect(api.fetchMonthlyTrend).toHaveBeenLastCalledWith(3, '2026-09', unnamedAccount.id);
+        expect(api.fetchMonthlyTrendByCategory)
+          .toHaveBeenLastCalledWith(3, '2026-09', unnamedAccount.id);
+      });
+
+    it('shows the cards of the account selected, projected while its month is in progress',
+      async () => {
+        const { user } = await renderDashboard(lyonBilledLate);
+        await openTab(user, 'Tendances');
+        const cards = () => [
+          texts(cardOf('Croissance sur la période'))[1], texts(cardOf('Projection annuelle'))[1],
+        ];
+        expect(cards()).toEqual(['—', '—']);
+
+        await toggleProjection(user);
+
+        // Lyon's dedicated servers at their cost of August, 70 €: (1 050.40 - 980) / 980
+        expect(cards()).toEqual(['+7,2 %', '~12 604,80€']);
+
+        await selectAccount(user, 'Lyon subsidiary');
+
+        // (690.40 - 680) / 680
+        expect(cards()).toEqual(['+1,5 %', '~8 284,80€']);
+
+        // Whose bills of September came in: July, before its first bill, at 0 € (#65)
+        await selectAccount(user, 'yy2222-ovh');
+
+        expect(cards()).toEqual(['—', '~4 320,00€']);
+        expect(within(cardOf('Croissance sur la période'))
+          .getByTitle('non calculable : premier mois à 0 € ou moins')).toHaveTextContent('—');
+      });
+
+    it('asks for the trends as before while no month is in progress', async () => {
+      const { user } = await renderDashboard();
+      await openTab(user, 'Tendances');
+
+      await toggleProjection(user);
+
+      expect(api.fetchMonthlyTrend)
+        .not.toHaveBeenCalledWith(expect.anything(), expect.anything(), expect.anything(), {
+          projected: true,
+        });
     });
   });
 

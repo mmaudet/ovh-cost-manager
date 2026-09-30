@@ -7,7 +7,7 @@ import {
 } from '../fixtures/accounts.js';
 import { months } from '../fixtures/calendar.js';
 import { aiEndpoints } from '../fixtures/public-cloud.js';
-import { sinceJuly2025 } from '../fixtures/trends.js';
+import { septemberBilledLate, sinceJuly2025 } from '../fixtures/trends.js';
 import { api } from '../support/api.js';
 import { renderTabHook, TAB_IDS, WAITING } from '../support/hooks.jsx';
 import { settle } from '../support/query-client.js';
@@ -481,6 +481,120 @@ describe('useTrendsTab', () => {
 
       expect(periods(result.current.availablePeriods)).toEqual([[3, 'period3m']]);
       expect(result.current.trendPeriod).toBe(3);
+    });
+  });
+
+  // The month in progress (#216), as the months list marks it, which the page may project (#217):
+  // see fixtures/trends.js, where September has not billed the dedicated servers yet
+  describe('month in progress', () => {
+    const inProgress = [{ ...september, inProgress: true }, august, july];
+    const billedLate = { ...account, ...septemberBilledLate };
+    // What the shell passes while the page projects the month in progress
+    const projecting = (props) => shellProps({ ...props, projectsMonthInProgress: true });
+
+    it('asks for the trends projected while the page projects it, over a period that covers it',
+      async () => {
+        const { result, keysOf } = await renderTabHook(useTrendsTab,
+          projecting({ months: inProgress, selectedMonth: september, activeTab: 'trends' }),
+          billedLate);
+
+        expect(api.fetchMonthlyTrend)
+          .toHaveBeenCalledWith(3, '2026-09', allAccounts, { projected: true });
+        expect(api.fetchMonthlyTrendByCategory)
+          .toHaveBeenCalledWith(3, '2026-09', allAccounts, { projected: true });
+        // September at its projected cost
+        expect(costs(result.current.monthlyTrend))
+          .toEqual([['2026-07', 980], ['2026-08', 1042], ['2026-09', 1250.4]]);
+        expect(result.current.monthInProgress).toBe('2026-09');
+        expect(result.current.projected).toBe(true);
+        // What the cards compare: September at its projected cost
+        expect(result.current.periodMonths)
+          .toEqual({ includesMonthInProgress: true, projected: true });
+        // Under keys that name the flag, after the other parts
+        expect(keysOf('monthlyTrend')).toEqual([['monthlyTrend', 3, '2026-09', 'projected']]);
+        expect(keysOf('monthlyTrendByCategory'))
+          .toEqual([['monthlyTrendByCategory', 3, '2026-09', 'projected']]);
+      });
+
+    it('asks for them as before while the page does not project it', async () => {
+      const { result, keysOf } = await renderTabHook(useTrendsTab,
+        shellProps({ months: inProgress, selectedMonth: september, activeTab: 'trends' }),
+        billedLate);
+
+      expect(api.fetchMonthlyTrend).toHaveBeenCalledWith(3, '2026-09', allAccounts);
+      expect(api.fetchMonthlyTrend)
+        .not.toHaveBeenCalledWith(3, '2026-09', allAccounts, { projected: true });
+      // September as billed so far
+      expect(costs(result.current.monthlyTrend))
+        .toEqual([['2026-07', 980], ['2026-08', 1042], ['2026-09', 980.4]]);
+      expect(result.current.monthInProgress).toBe('2026-09');
+      expect(result.current.projected).toBe(false);
+      // What the cards compare: September at what it billed so far
+      expect(result.current.periodMonths)
+        .toEqual({ includesMonthInProgress: true, projected: false });
+      expect(keysOf('monthlyTrend')).toEqual([['monthlyTrend', 3, '2026-09']]);
+    });
+
+    // Complete months are never projected
+    it('asks for them as before over a period that ends before it', async () => {
+      const { result, keysOf } = await renderTabHook(useTrendsTab,
+        projecting({ months: inProgress, selectedMonth: august, activeTab: 'trends' }),
+        billedLate);
+
+      expect(api.fetchMonthlyTrend).toHaveBeenCalledWith(3, '2026-08', allAccounts);
+      expect(api.fetchMonthlyTrendByCategory).toHaveBeenCalledWith(3, '2026-08', allAccounts);
+      expect(result.current.monthInProgress).toBeNull();
+      expect(result.current.projected).toBe(false);
+      expect(result.current.periodMonths)
+        .toEqual({ includesMonthInProgress: false, projected: false });
+      expect(keysOf('monthlyTrend')).toEqual([['monthlyTrend', 3, '2026-08']]);
+    });
+
+    it('asks for them as before when no month is in progress', async () => {
+      const { result } = await renderTabHook(useTrendsTab,
+        projecting({ months, selectedMonth: september, activeTab: 'trends' }));
+
+      expect(api.fetchMonthlyTrend).toHaveBeenCalledWith(3, '2026-09', allAccounts);
+      expect(result.current.monthInProgress).toBeNull();
+      expect(result.current.projected).toBe(false);
+    });
+
+    it('asks for them projected once the page projects it, and as before once it stops',
+      async () => {
+        const props = { months: inProgress, selectedMonth: september, activeTab: 'trends' };
+        const { result, rerender } = await renderTabHook(useTrendsTab, shellProps(props),
+          billedLate);
+
+        await rerender(projecting(props));
+
+        expect(api.fetchMonthlyTrend)
+          .toHaveBeenLastCalledWith(3, '2026-09', allAccounts, { projected: true });
+        expect(result.current.monthlyTrend.at(-1).cost).toBe(1250.4);
+
+        await rerender(shellProps(props));
+
+        // Its answers kept in the cache, under their own key
+        expect(result.current.monthlyTrend.at(-1).cost).toBe(980.4);
+        expect(result.current.projected).toBe(false);
+      });
+
+    // The flag before the account (ADR 0001)
+    it('names the flag before the account shown in the keys', async () => {
+      const lyonMonths = severalAccounts.ofAccount[lyonAccount.id].months
+        .map((month) => (month.value === '2026-09' ? { ...month, inProgress: true } : month));
+      const { keysOf } = await renderTabHook(useTrendsTab,
+        projecting({
+          months: lyonMonths, selectedMonth: september, activeTab: 'trends',
+          selectedAccount: lyonAccount.id,
+        }),
+        severalAccounts);
+
+      expect(api.fetchMonthlyTrend)
+        .toHaveBeenCalledWith(3, '2026-09', lyonAccount.id, { projected: true });
+      expect(keysOf('monthlyTrend'))
+        .toEqual([['monthlyTrend', 3, '2026-09', 'projected', lyonAccount.id]]);
+      expect(keysOf('monthlyTrendByCategory'))
+        .toEqual([['monthlyTrendByCategory', 3, '2026-09', 'projected', lyonAccount.id]]);
     });
   });
 

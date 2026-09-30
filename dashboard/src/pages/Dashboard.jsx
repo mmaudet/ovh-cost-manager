@@ -9,6 +9,7 @@ import {
 } from '../services/api';
 import { useActiveTabInView } from '../hooks/useActiveTabInView.js';
 import { useLanguage } from '../hooks/useLanguage.jsx';
+import { useMonthInProgressProjection } from '../hooks/useMonthInProgressProjection.js';
 import { useSelectedAccount } from '../hooks/useSelectedAccount.js';
 import Logo from '../components/Logo';
 import { AccountSelector } from '../components/AccountSelector.jsx';
@@ -149,6 +150,9 @@ export default function Dashboard() {
   // What the page shows, all accounts or the account selected, as the report's title names
   // it when the page offers several (#124): null when it names none
   const scope = scopeLabel(accounts, selectedAccount, t);
+  // Whether the page projects the month in progress (#214), page-wide, and what turns it on or
+  // off: the Trends tab shows it next to its period selector, and its trends follow it (#217)
+  const projectionSetting = useMonthInProgressProjection();
 
   // The months billed to the account shown
   const { data: months = [], isSuccess: monthsLoaded } = useQuery(accountQuery(selectedAccount, {
@@ -267,6 +271,7 @@ export default function Dashboard() {
 
   const trendsTab = useTrendsTab({
     months, selectedMonth, holdsSelectedMonth, selectedAccount, activeTab,
+    projectsMonthInProgress: projectionSetting.projectsMonthInProgress,
   });
 
   const publicCloudTab = usePublicCloudTab({
@@ -746,7 +751,8 @@ export default function Dashboard() {
 
         {/* Tabs. Where the bar lacks room, as on a phone, it scrolls sideways within the page
             rather than widen it, each label on one line, and the Trends period selector goes to
-            a line of its own rather than squeeze the bar (#226) */}
+            a line of its own rather than squeeze the bar (#226), whole, with the checkbox that
+            projects the month in progress (#217) */}
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
           <div className="flex gap-1 bg-white p-1 rounded-xl shadow-sm max-w-full overflow-x-auto">
             {[
@@ -776,7 +782,7 @@ export default function Dashboard() {
             ))}
           </div>
           {activeTab === 'trends' && (
-            <TrendsPeriodSelector {...trendsTab} t={t} />
+            <TrendsPeriodSelector {...trendsTab} {...projectionSetting} t={t} />
           )}
         </div>
 

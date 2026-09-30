@@ -27,11 +27,24 @@ const variationDisplay = (percent, language = 'fr') => {
 };
 
 /**
+ * Whether the months compared (comparedMonthsOf() in monthComparison.js) hold the month in
+ * progress at what it billed so far: no variation of it is computed then, rather than compare a
+ * partial month with a complete one (#216). At its projected cost, they are (#217).
+ * @param {{ includesMonthInProgress: boolean, projected?: boolean }} comparedMonths
+ * @returns {boolean}
+ */
+const comparesPartialMonth = ({ includesMonthInProgress, projected = false }) => (
+  includesMonthInProgress && !projected
+);
+
+/**
  * The variation between the months compared (comparedMonthsOf() in monthComparison.js), as
- * the Compare tab's tables and the "vs previous month" KPI show it, or why they show "—": the
- * month in progress, which it would compare, partial, with a complete month (#216), or an amount
- * to compare with at 0 € or less (#65), which each place words its own way.
- * @param {{ monthInProgress: boolean }} comparedMonths
+ * the Compare tab's tables, the "vs previous month" KPI and the Trends tab's growth over the
+ * period show it, or why they show "—": the month in progress at what it billed so far, which it
+ * would compare, partial, with a complete month (#216), or an amount to compare with at 0 € or
+ * less (#65), which each place words its own way. The month in progress at its projected cost
+ * compares as a complete month (#217).
+ * @param {{ includesMonthInProgress: boolean, projected?: boolean }} comparedMonths
  * @param {number} from - The amount of the first month
  * @param {number} to - The amount of the second
  * @param {string} language - The page's, 'fr' or 'en'
@@ -44,8 +57,8 @@ const variationDisplay = (percent, language = 'fr') => {
 const comparedVariation = (
   comparedMonths, from, to, language, { notComputable = 'variationNotComputable' } = {},
 ) => {
-  if (comparedMonths.monthInProgress) return { why: 'variationMonthInProgress' };
+  if (comparesPartialMonth(comparedMonths)) return { why: 'variationMonthInProgress' };
   return variationDisplay(variationPercent(from, to), language) ?? { why: notComputable };
 };
 
-export { variationPercent, variationDisplay, comparedVariation };
+export { variationPercent, variationDisplay, comparesPartialMonth, comparedVariation };

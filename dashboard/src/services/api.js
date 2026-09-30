@@ -83,17 +83,27 @@ export const fetchByService = async (from, to, account = null) => {
   return data;
 };
 
-// Trends over `months` months that end on the `end` month, 'YYYY-MM', of the account
-export const fetchMonthlyTrend = async (months, end, account = null) => {
+// The parameter that asks a route for the projected cost of the month in progress (#217): none
+// unless asked, so that a request without it names nothing
+const projectionParams = (projected) => (projected ? { projected: true } : {});
+
+// Trends over `months` months that end on the `end` month, 'YYYY-MM', of the account. With
+// `projected`, the month in progress at its projected cost, and each month's projected part
+// (#217).
+export const fetchMonthlyTrend = async (
+  months, end, account = null, { projected = false } = {},
+) => {
   const { data } = await api.get('/analysis/monthly-trend', {
-    params: { months, end, ...accountParams(account) },
+    params: { months, end, ...accountParams(account), ...projectionParams(projected) },
   });
   return data;
 };
 
-export const fetchMonthlyTrendByCategory = async (months, end, account = null) => {
+export const fetchMonthlyTrendByCategory = async (
+  months, end, account = null, { projected = false } = {},
+) => {
   const { data } = await api.get('/analysis/monthly-trend-by-category', {
-    params: { months, end, ...accountParams(account) },
+    params: { months, end, ...accountParams(account), ...projectionParams(projected) },
   });
   return data;
 };

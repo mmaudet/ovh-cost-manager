@@ -1,11 +1,14 @@
 import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line,
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, Dot,
 } from 'recharts';
 import { AiEndpointsTrend } from '../components/AiEndpointsTrend.jsx';
-import { formatYearMonth } from '../utils/format.js';
-import { growthOverPeriod } from '../utils/periodGrowth.js';
+import { ProjectedAmount } from '../components/ProjectedAmount.jsx';
+import { ProjectionCheckbox } from '../components/ProjectionCheckbox.jsx';
+import { FIGURE_CARD, SUMMARY_FIGURE } from '../utils/figureCards.js';
+import { formatMonthLabel, formatYearMonth } from '../utils/format.js';
+import { lineParts, trendAmount } from '../utils/trendLines.js';
 import { PERIOD_OPTIONS } from '../utils/trendPeriods.js';
-import { variationDisplay } from '../utils/variation.js';
+import { comparedVariation, comparesPartialMonth } from '../utils/variation.js';
 
 // The colours of each tone of the growth over the period: red when it grows, green when it
 // shrinks, grey when it rounds to 0 (#87)
@@ -15,26 +18,123 @@ const GROWTH_TONES = {
   neutral: 'text-gray-600',
 };
 
+/**
+ * The lines that draw a series of the tab's line charts (#217): solid through the complete
+ * months, and dashed from the month before the month in progress to it, whose point is hollow,
+ * whether the trends project it or not (lineParts()). Both bear the series' name, under which
+ * the tooltip gives its amount once (payloadUniqBy), as trendAmount() writes it.
+ * @param {object} series
+ * @param {string} series.key - Its key in the chart's rows
+ * @param {string} series.name - What the tooltip names it
+ * @param {string} series.color
+ * @param {number} series.width - The width of its lines
+ * @param {object|boolean} series.dot - The points of its complete months, as a Line takes them
+ * @param {number} series.dotRadius - The radius of its hollow point in the month in progress
+ * @param {number} series.activeRadius - The radius of its point under the pointer
+ * @param {function(object): number} series.projectedPartOf - The part of its amount in a row
+ *   that projected lines make, 0 for none
+ * @param {object} chart
+ * @param {object} chart.parts - The parts of the chart's series (lineParts())
+ * @param {?string} chart.monthInProgress - The month in progress, YYYY-MM, when it covers it
+ * @param {boolean} chart.projected - Whether the trends project it
+ * @param {function(number): string} chart.fmt
+ * @param {function(string): string} chart.t
+ * @returns {JSX.Element[]}
+ */
+const seriesLines = (
+  { key, name, color, width, dot, dotRadius, activeRadius, projectedPartOf },
+  { parts, monthInProgress, projected, fmt, t },
+) => {
+  // Its amount in a month, as the tooltip gives it
+  const formatter = (value, seriesName, { payload }) => [
+    trendAmount(value, projectedPartOf(payload), {
+      inProgress: payload.yearMonth === monthInProgress, projected,
+    }, fmt, t),
+    seriesName,
+  ];
+  // Its point in the month in progress, hollow, and none in the other months
+  const hollowPoint = (radius) => ({ key: pointKey, cx, cy, payload }) => (
+    payload.yearMonth === monthInProgress
+      ? <Dot key={pointKey} cx={cx} cy={cy} r={radius} fill="#fff" stroke={color} strokeWidth={2} />
+      : null
+  );
+  return [
+    <Line
+      key={`${key}-complete`} type="monotone" dataKey={parts.solid(key)} name={name}
+      stroke={color} strokeWidth={width} dot={dot} activeDot={{ r: activeRadius }}
+      formatter={formatter}
+    />,
+    <Line
+      key={`${key}-in-progress`} type="monotone" dataKey={parts.dashed(key)} name={name}
+      stroke={color} strokeWidth={width} strokeDasharray="6 4" dot={hollowPoint(dotRadius)}
+      activeDot={hollowPoint(activeRadius)} formatter={formatter}
+    />,
+  ];
+};
+
+// What a card of the tab shows under its « — » while the month in progress, at what it billed so
+// far, leaves it no figure (#217): « mois en cours », visibly, since a tooltip shows on no touch
+// screen, in the look of the header's « en cours »
+const MonthInProgressNote = ({ t }) => (
+  <span
+    className={'inline-block mt-1 px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 text-xs'
+      + ' font-medium'}
+  >
+    {t('monthInProgressNote')}
+  </span>
+);
+
 // The Trends tab, which the shell renders while it is active: what useTrendsTab() returns,
 // with the shell's language, translations (t) and amount format (fmt).
 const TrendsTab = ({
   trendPeriod, monthlyTrend, trendByCategory, hiddenCategories, toggleCategory, gpuTrend,
-  aiEndpointsTrend, language, t, fmt,
+  aiEndpointsTrend, monthInProgress, projected, periodMonths, language, t, fmt,
 }) => {
   const currentPeriodLabel = (PERIOD_OPTIONS.find(o => o.months === trendPeriod) || {}).key;
+  // What each line chart draws of the month in progress that the period covers (#217): the
+  // parts of its series, and whether the trends project it
+  const chartOf = (rows) => ({
+    parts: lineParts(rows, monthInProgress), monthInProgress, projected, fmt, t,
+  });
+  const totalChart = chartOf(monthlyTrend);
+  const resourceTypeChart = chartOf(trendByCategory.data);
+  // The months as the tooltips name them: the month in progress « Septembre 2026 (en cours) »,
+  // as the month selectors of the Compare tab do
+  const monthLabel = (yearMonth) => formatMonthLabel(yearMonth, language, {
+    inProgressLabel: yearMonth === monthInProgress ? t('monthInProgress') : null,
+  });
+  // The first and the last months of the period, as the trend gives them
+  const firstMonth = monthlyTrend[0];
+  const lastMonth = monthlyTrend[monthlyTrend.length - 1];
   // The growth over the period, in percent, from its first month to its last, as the page
-  // shows it: its text and its tone (#87). Two states show none (#65):
+  // shows it: its text and its tone (#87), or why it shows none. Three states show none:
   // - N/A, without two months to compare: with no months at all, as when nothing was billed
-  //   over the period, since the trend routes give every month of a period with a bill;
-  // - "—", with a tooltip, when the first month, at 0 € or less, leaves none to compute.
+  //   over the period, since the trend routes give every month of a period with a bill (#65);
+  // - "—", with a tooltip, when the first month, at 0 € or less, leaves none to compute (#65);
+  // - "—", with a tooltip, when the last month is the month in progress at what it billed so
+  //   far (#216). At its projected cost, while the trends project it, it has one (#217).
   const spansTwoMonths = monthlyTrend.length > 1;
   const growth = spansTwoMonths
-    ? variationDisplay(
-      growthOverPeriod(monthlyTrend[0].cost, monthlyTrend[monthlyTrend.length - 1].cost),
-      language,
+    ? comparedVariation(
+      periodMonths, firstMonth.cost, lastMonth.cost, language,
+      { notComputable: 'periodGrowthNotComputable' },
     )
     : null;
-  const growthNotComputable = spansTwoMonths && growth === null;
+  // A card of the period, faded while no month of it has a bill
+  const periodCard = `${FIGURE_CARD} border border-gray-100${monthlyTrend.length === 0
+    ? ' opacity-50'
+    : ''}`;
+  // The most expensive month of the period, the first of those that cost the same, and whether
+  // its cost is the month in progress's projected cost, partly projected, which the card marks
+  // so (#217)
+  const mostExpensive = monthlyTrend.reduce(
+    (max, month) => (month.cost > max.cost ? month : max), monthlyTrend[0],
+  );
+  const mostExpensiveProjected = projected && mostExpensive?.yearMonth === monthInProgress;
+  // The annual projection, 12 times the cost of the last month: none, "—" with a tooltip, while
+  // that month is the month in progress at what it billed so far (#216, #217), the only month in
+  // progress that the period may hold, since it is always the latest
+  const lastMonthPartial = monthlyTrend.length > 0 && comparesPartialMonth(periodMonths);
 
   return (
     <div className="space-y-6">
@@ -47,15 +147,12 @@ const TrendsTab = ({
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="yearMonth" tickFormatter={(ym) => formatYearMonth(ym, language)} />
                 <YAxis tickFormatter={(v) => `${v}€`} />
-                <Tooltip labelFormatter={(ym) => formatYearMonth(ym, language)} formatter={(v) => `${fmt(v)}€`} />
-                <Line
-                  type="monotone"
-                  dataKey="cost"
-                  stroke="#3b82f6"
-                  strokeWidth={3}
-                  dot={{ fill: '#3b82f6', r: 6, strokeWidth: 2, stroke: '#fff' }}
-                  activeDot={{ r: 8 }}
-                />
+                <Tooltip labelFormatter={monthLabel} payloadUniqBy={(entry) => entry.name} />
+                {seriesLines({
+                  key: 'cost', name: t('cost'), color: '#3b82f6', width: 3,
+                  dot: { fill: '#3b82f6', r: 6, strokeWidth: 2, stroke: '#fff' },
+                  dotRadius: 6, activeRadius: 8, projectedPartOf: (row) => row.projected ?? 0,
+                }, totalChart)}
               </LineChart>
             </ResponsiveContainer>
           </div>
@@ -98,24 +195,14 @@ const TrendsTab = ({
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="yearMonth" tickFormatter={(ym) => formatYearMonth(ym, language)} />
                   <YAxis tickFormatter={(v) => `${v}€`} />
-                  <Tooltip
-                    labelFormatter={(ym) => formatYearMonth(ym, language)}
-                    formatter={(v, name) => [`${fmt(v)}€`, name]}
-                  />
+                  <Tooltip labelFormatter={monthLabel} payloadUniqBy={(entry) => entry.name} />
                   {trendByCategory.categories
                     .filter((c) => !hiddenCategories.has(c.key))
-                    .map((c) => (
-                      <Line
-                        key={c.key}
-                        type="monotone"
-                        dataKey={c.key}
-                        name={c.label}
-                        stroke={c.color}
-                        strokeWidth={2}
-                        dot={false}
-                        activeDot={{ r: 5 }}
-                      />
-                    ))}
+                    .flatMap((c) => seriesLines({
+                      key: c.key, name: c.label, color: c.color, width: 2, dot: false,
+                      dotRadius: 4, activeRadius: 5,
+                      projectedPartOf: (row) => row.projected?.[c.key] ?? 0,
+                    }, resourceTypeChart))}
                 </LineChart>
               </ResponsiveContainer>
             </div>
@@ -160,41 +247,61 @@ const TrendsTab = ({
         />
       )}
 
+      {/* The cards of the period, which give a figure each (see figureCards.js): one a row on a
+          phone, where their amounts need the room, three a row from md */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className={`bg-white rounded-xl p-5 shadow-sm border border-gray-100 ${monthlyTrend.length === 0 ? 'opacity-50' : ''}`}>
+        <div className={periodCard}>
           <span className="text-gray-500 text-sm">{t('periodGrowth')}</span>
           <div
-            className={`text-3xl font-bold mt-2 ${growth === null
+            className={`${SUMMARY_FIGURE} mt-2 ${growth === null || growth.why
               ? 'text-gray-400'
               : GROWTH_TONES[growth.tone]}`}
-            title={growthNotComputable ? t('periodGrowthNotComputable') : undefined}
+            title={growth?.why ? t(growth.why) : undefined}
           >
             {!spansTwoMonths && 'N/A'}
-            {growthNotComputable && '—'}
+            {growth?.why && '—'}
             {growth?.text}
           </div>
+          {spansTwoMonths && lastMonthPartial && <MonthInProgressNote t={t} />}
           <p className="text-sm text-gray-500 mt-1">{t('overPeriod')} {t(currentPeriodLabel)}</p>
         </div>
-        <div className={`bg-white rounded-xl p-5 shadow-sm border border-gray-100 ${monthlyTrend.length === 0 ? 'opacity-50' : ''}`}>
+        <div className={periodCard}>
           <span className="text-gray-500 text-sm">{t('mostExpensiveMonth')}</span>
-          <div className={`text-3xl font-bold mt-2 ${monthlyTrend.length > 0 ? 'text-red-600' : 'text-gray-400'}`}>
-            {monthlyTrend.length > 0
-              ? formatYearMonth(monthlyTrend.reduce((max, m) => m.cost > max.cost ? m : max, monthlyTrend[0]).yearMonth, language)
-              : 'N/A'}
+          <div
+            className={`${SUMMARY_FIGURE} mt-2 ${monthlyTrend.length > 0
+              ? 'text-red-600'
+              : 'text-gray-400'}`}
+          >
+            {mostExpensive ? formatYearMonth(mostExpensive.yearMonth, language) : 'N/A'}
           </div>
           <p className="text-sm text-gray-500 mt-1">
-            {monthlyTrend.length > 0
-              ? `${fmt(Math.max(...monthlyTrend.map(m => m.cost)))}€`
-              : ''}
+            {mostExpensive && !mostExpensiveProjected && `${fmt(mostExpensive.cost)}€`}
+            {mostExpensiveProjected && (
+              <ProjectedAmount
+                detail={trendAmount(mostExpensive.cost, mostExpensive.projected ?? 0, {
+                  inProgress: true, projected: true,
+                }, fmt, t)}
+                t={t}
+              >
+                {`${fmt(mostExpensive.cost)}€`}
+              </ProjectedAmount>
+            )}
           </p>
         </div>
-        <div className={`bg-white rounded-xl p-5 shadow-sm border border-gray-100 ${monthlyTrend.length === 0 ? 'opacity-50' : ''}`}>
+        <div className={periodCard}>
           <span className="text-gray-500 text-sm">{t('annualProjection')}</span>
-          <div className={`text-3xl font-bold mt-2 ${monthlyTrend.length > 0 ? 'text-blue-600' : 'text-gray-400'}`}>
-            {monthlyTrend.length > 0
-              ? `~${fmt((monthlyTrend[monthlyTrend.length - 1]?.cost || 0) * 12)}€`
-              : 'N/A'}
+          <div
+            className={`${SUMMARY_FIGURE} mt-2 ${monthlyTrend.length > 0 && !lastMonthPartial
+              ? 'text-blue-600'
+              : 'text-gray-400'}`}
+            title={lastMonthPartial ? t('annualProjectionMonthInProgress') : undefined}
+          >
+            {monthlyTrend.length === 0 && 'N/A'}
+            {lastMonthPartial && '—'}
+            {monthlyTrend.length > 0 && !lastMonthPartial
+              && `~${fmt((lastMonth.cost || 0) * 12)}€`}
           </div>
+          {lastMonthPartial && <MonthInProgressNote t={t} />}
           <p className="text-sm text-gray-500 mt-1">{t('basedOnLastMonth')}</p>
         </div>
       </div>
@@ -204,9 +311,15 @@ const TrendsTab = ({
 
 // The period selector of the Trends tab, which the shell renders in its tab bar while the
 // tab is active, so that the tab bar keeps its markup: see
-// docs/adr/0001-tab-state-lives-in-the-dashboard-shell.md
-const TrendsPeriodSelector = ({ trendPeriod, setTrendPeriod, availablePeriods, t }) => (
-  <div className="flex items-center gap-2">
+// docs/adr/0001-tab-state-lives-in-the-dashboard-shell.md. The checkbox that projects the month
+// in progress follows it on its line (#217): the shell holds that setting, and passes it with its
+// setter. The line wraps as the tab bar's does (#226): where it lacks room, as on a phone, the
+// checkbox goes whole to a line of its own under the period, rather than wrap its label.
+const TrendsPeriodSelector = ({
+  trendPeriod, setTrendPeriod, availablePeriods, projectsMonthInProgress,
+  setProjectsMonthInProgress, t,
+}) => (
+  <div className="flex flex-wrap items-center gap-2">
     <span className="text-sm text-gray-600">{t('period')}:</span>
     <select
       value={trendPeriod}
@@ -217,6 +330,10 @@ const TrendsPeriodSelector = ({ trendPeriod, setTrendPeriod, availablePeriods, t
         <option key={opt.months} value={opt.months}>{t(opt.key)}</option>
       ))}
     </select>
+    <ProjectionCheckbox
+      projectsMonthInProgress={projectsMonthInProgress}
+      setProjectsMonthInProgress={setProjectsMonthInProgress} t={t}
+    />
   </div>
 );
 

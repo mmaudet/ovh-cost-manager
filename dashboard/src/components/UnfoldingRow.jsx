@@ -72,8 +72,8 @@ const UnfoldingRow = ({ unfolding, chevronLabel, label, detail, children }) => (
  * @param {object} props
  * @param {number} props.valA - Its amount in month A
  * @param {number} props.valB - Its amount in month B
- * @param {{ monthInProgress: boolean }} props.comparedMonths - What the comparison knows of
- *   months A and B (comparedMonthsOf()), which its variation reads (#216)
+ * @param {{ includesMonthInProgress: boolean, projected: boolean }} props.comparedMonths - What
+ *   the comparison knows of months A and B (comparedMonthsOf()), which its variation reads (#216)
  * @param {React.ReactNode} props.children - What names it, in its first cell, which asks the
  *   table for no width of its own (max-w-0): what names it wraps or is cut to the column of the
  *   rows' labels, whatever the page's width, rather than widen the table

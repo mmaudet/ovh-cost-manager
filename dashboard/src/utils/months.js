@@ -30,6 +30,22 @@ export const isMonthInProgress = (months, month) => months.some(
 );
 
 /**
+ * The month in progress (#216) that a period covers, as the months list marks it: the Trends
+ * tab's trends project it, while the page projects the month in progress (#217). It is always
+ * the latest month of the list, which a period of the list's months covers when it ends on it.
+ * @param {{ value: string, inProgress?: boolean }[]} months - The months list
+ * @param {?{ from: string, to: string }} period - Its first and last days, YYYY-MM-DD, as
+ *   monthWindowEndingOn() gives them for a month of the list; null before a month is selected
+ * @returns {?string} The month in progress, YYYY-MM, when the period ends on it; null otherwise,
+ *   as while no month is in progress
+ */
+export const monthInProgressWithin = (months, period) => {
+  const month = months.find(({ inProgress }) => inProgress === true)?.value;
+  if (!month || !period) return null;
+  return period.to.slice(0, 7) === month ? month : null;
+};
+
+/**
  * The name of a month of the months list in the Compare tab's months A and B (#216): its long
  * name and its year in the language, which formatMonthLabel() follows with « (en cours) » for the
  * month in progress, so that no one compares it as a complete month.

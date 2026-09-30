@@ -360,6 +360,38 @@ function validateDateRange(from, to) {
   return { valid: true };
 }
 
+/**
+ * The middleware of a boolean parameter of the data routes, such as byAccount or projected: it
+ * puts its value in req[name], true or false, false without it, and answers 400 to any other
+ * value, naming the parameter.
+ * @param {string} name - The parameter, as the query names it
+ * @returns {function} An Express middleware
+ */
+function booleanParameter(name) {
+  return (req, res, next) => {
+    const value = req.query[name];
+    if (value !== undefined && value !== 'true' && value !== 'false') {
+      return res.status(400).json({ error: `Invalid '${name}' parameter: expected true or false` });
+    }
+    req[name] = value === 'true';
+    return next();
+  };
+}
+
+/**
+ * What a row of the answer of a route that takes the projected parameter gives of its projected
+ * part (#217): `projected`, which partOf() reads, while the request asks for the projected cost
+ * of the month in progress; nothing otherwise, so that the route answers as before without the
+ * parameter.
+ * @param {object} req - The request, whose req.projected projectedParameter sets
+ * @param {function(): *} partOf - Reads the row's projected part, only while the request asks
+ *   for it
+ * @returns {{ projected: * } | {}} What to spread into the row
+ */
+function projectedPartOf(req, partOf) {
+  return req.projected ? { projected: partOf() } : {};
+}
+
 // ========================
 // Route registration function
 // ========================
@@ -375,18 +407,13 @@ function registerRoutes() {
   // The byAccount parameter of the lists of the costs of projects (#118), and of the bill lines
   // of a resource type or of the Veeam backups by service (#123, #197): req.byAccount, whether a
   // request asks for each project or service once for each account that billed it, with that
-  // account, as the lists that name the account of each row do, rather than once. true or
-  // false, false without it; any other value is refused.
-  const byAccountParameter = (req, res, next) => {
-    const { byAccount } = req.query;
-    if (byAccount !== undefined && byAccount !== 'true' && byAccount !== 'false') {
-      return res.status(400).json({
-        error: "Invalid 'byAccount' parameter: expected true or false",
-      });
-    }
-    req.byAccount = byAccount === 'true';
-    return next();
-  };
+  // account, as the lists that name the account of each row do, rather than once
+  const byAccountParameter = booleanParameter('byAccount');
+
+  // The projected parameter of the routes of the Trends tab (#217): req.projected, whether a
+  // request asks for the projected cost of the month in progress (CONTEXT.md), when its period
+  // covers it, with each row's projected part (projectedPartOf())
+  const projectedParameter = booleanParameter('projected');
 
   // ========================
   // Projects Endpoints
@@ -593,15 +620,16 @@ function registerRoutes() {
   // for a month without any bill, or none when none of them has a bill (#65). That of the
   // account the request asks for, or of every account without one (#120). By default, it
   // ends on the latest bill of any account for one account too: the trends of the accounts
-  // then cover the same months, and add up to that of every account.
-  app.get('/api/analysis/monthly-trend', accountParameter, (req, res) => {
+  // then cover the same months, and add up to that of every account. With projected=true, the
+  // month in progress costs its projected cost, and each month gives its projected part (#217).
+  app.get('/api/analysis/monthly-trend', accountParameter, projectedParameter, (req, res) => {
     try {
       const { valid, error, from, to } = trendWindowFromQuery(req.query, latestBilledMonth());
       if (!valid) {
         return res.status(400).json({ error });
       }
 
-      const data = db.analysis.monthlyTrend(from, to, req.account);
+      const data = db.analysis.monthlyTrend(from, to, req.account, { projected: req.projected });
 
       // Month names in French
       const monthNames = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Jun', 'Jul', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc'];
@@ -611,7 +639,8 @@ function registerRoutes() {
         return {
           month: monthNames[parseInt(month) - 1],
           yearMonth: row.month,
-          cost: Math.round(row.total * 100) / 100
+          cost: Math.round(row.total * 100) / 100,
+          ...projectedPartOf(req, () => Math.round(row.projected * 100) / 100),
         };
       });
 
@@ -624,50 +653,64 @@ function registerRoutes() {
   // Monthly trend broken down by resource type, shaped for a multi-line chart:
   // { categories: [{key, label, color}], data: [{ yearMonth, <key>: total, ... }] }
   // Over the same months as /api/analysis/monthly-trend, from the same parameters, the
-  // account included (#120).
-  app.get('/api/analysis/monthly-trend-by-category', accountParameter, (req, res) => {
-    try {
-      const { valid, error, from, to } = trendWindowFromQuery(req.query, latestBilledMonth());
-      if (!valid) {
-        return res.status(400).json({ error });
+  // account and the projection of the month in progress included (#120, #217). With
+  // projected=true, each month gives the projected part of each resource type, as
+  // `projected: { <key>: part, ... }`.
+  app.get('/api/analysis/monthly-trend-by-category', accountParameter, projectedParameter,
+    (req, res) => {
+      try {
+        const { valid, error, from, to } = trendWindowFromQuery(req.query, latestBilledMonth());
+        if (!valid) {
+          return res.status(400).json({ error });
+        }
+
+        const rows = db.analysis.monthlyTrendByResourceType(
+          from, to, req.account, { projected: req.projected },
+        );
+
+        // Total per resource_type to order categories by spend.
+        const totals = {};
+        for (const r of rows) {
+          totals[r.resource_type] = (totals[r.resource_type] || 0) + r.total;
+        }
+
+        const categories = Object.keys(totals)
+          .sort((a, b) => totals[b] - totals[a])
+          .map(key => ({
+            key,
+            label: RESOURCE_TYPE_LABELS[key] || key,
+            color: RESOURCE_TYPE_COLORS[key] || RESOURCE_TYPE_COLORS['other']
+          }));
+
+        // One row per month with every category, in their order, so lines stay continuous: the
+        // query gives every resource type in every month, at 0 when it was not billed (#65).
+        // And, with projected=true, the projected part of each (#217).
+        const byMonth = {};
+        for (const r of rows) {
+          byMonth[r.month] = byMonth[r.month] || {};
+          byMonth[r.month][r.resource_type] = r;
+        }
+        // What a value of each resource type's row of a month is, in the order of the
+        // categories, to the cent
+        const ofResourceTypes = (rowsOfMonth, valueOf) => Object.fromEntries(categories.map(
+          ({ key }) => [key, Math.round(valueOf(rowsOfMonth[key]) * 100) / 100],
+        ));
+
+        const data = Object.keys(byMonth)
+          .sort((a, b) => a.localeCompare(b))
+          .map((yearMonth) => ({
+            yearMonth,
+            ...ofResourceTypes(byMonth[yearMonth], (row) => row.total),
+            ...projectedPartOf(req, () => ofResourceTypes(
+              byMonth[yearMonth], (row) => row.projected,
+            )),
+          }));
+
+        res.json({ categories, data });
+      } catch (err) {
+        res.status(500).json({ error: err.message });
       }
-
-      const rows = db.analysis.monthlyTrendByResourceType(from, to, req.account);
-
-      // Total per resource_type to order categories by spend.
-      const totals = {};
-      for (const r of rows) {
-        totals[r.resource_type] = (totals[r.resource_type] || 0) + r.total;
-      }
-
-      const categories = Object.keys(totals)
-        .sort((a, b) => totals[b] - totals[a])
-        .map(key => ({
-          key,
-          label: RESOURCE_TYPE_LABELS[key] || key,
-          color: RESOURCE_TYPE_COLORS[key] || RESOURCE_TYPE_COLORS['other']
-        }));
-
-      // One row per month with every category, in their order, so lines stay continuous: the
-      // query gives every resource type in every month, at 0 when it was not billed (#65)
-      const byMonth = {};
-      for (const r of rows) {
-        byMonth[r.month] = byMonth[r.month] || {};
-        byMonth[r.month][r.resource_type] = Math.round(r.total * 100) / 100;
-      }
-
-      const data = Object.keys(byMonth)
-        .sort((a, b) => a.localeCompare(b))
-        .map((yearMonth) => ({
-          yearMonth,
-          ...Object.fromEntries(categories.map(({ key }) => [key, byMonth[yearMonth][key]])),
-        }));
-
-      res.json({ categories, data });
-    } catch (err) {
-      res.status(500).json({ error: err.message });
-    }
-  });
+    });
 
   // ========================
   // Summary Endpoint

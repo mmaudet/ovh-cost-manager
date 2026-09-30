@@ -4,7 +4,9 @@ import { infrastructureOfSeveralAccounts } from './infrastructure.js';
 import {
   aiEndpoints, aiEndpointsFigures, aiEndpointsOfMonth, publicCloudFigures,
 } from './public-cloud.js';
-import { trendsOf } from './trends.js';
+import {
+  costsOfAccount, projectedTrendsOf, septemberBilledLate, trendsOf,
+} from './trends.js';
 import { webCloudOfSeveralAccounts } from './web-cloud.js';
 
 // Several OVHcloud accounts in one instance (#110): the synthetic account of account.js, as
@@ -120,6 +122,14 @@ const domains = (value) => resourceType('Domains', 'domain', '#8b5cf6', value, 2
 const dedicatedServers = (value) =>
   resourceType('Dedicated Servers', 'dedicated_server', '#ef4444', value, 1, 1);
 
+// What each resource type cost the Lyon subsidiary in each month up to September, as trendsOf()
+// takes such costs: its trends (#120)
+const lyonCosts = {
+  '2026-07': { cloud_project: 680 },
+  '2026-08': { cloud_project: 512, dedicated_server: 70, domain: 30 },
+  '2026-09': { cloud_project: 610.4, dedicated_server: 270, license: 10 },
+};
+
 // The current month's consumption and month-end forecast of an account that one Public Cloud
 // project consumed in, as the consumption routes answer (#116): up to the 15th of September,
 // as account.js, whose own add up those of its accounts, which cover the same 14 days
@@ -218,11 +228,7 @@ export const severalAccounts = {
         }),
       },
       // The Trends tab's, over the 3 months up to September that its months allow (#120)
-      ...trendsOf('2026-07', '2026-09', {
-        '2026-07': { cloud_project: 680 },
-        '2026-08': { cloud_project: 512, dedicated_server: 70, domain: 30 },
-        '2026-09': { cloud_project: 610.4, dedicated_server: 270, license: 10 },
-      }),
+      ...trendsOf('2026-07', '2026-09', lyonCosts),
       projectsEnriched: [lyonProduction],
       // What its bills charged its Production project, product by product (#181)
       projectProducts: { [production.id]: account.projectProducts[production.id] },
@@ -432,14 +438,44 @@ export const severalAccountsWithAiEndpoints = {
   },
 };
 
+// Lyon's costs of September without its dedicated servers, a recurring service whose bill has not
+// come yet (#216); and what the projection of the month in progress counts them at, their bill
+// lines of August (#217)
+const lyonBilledInSeptember = Object.fromEntries(Object.entries(lyonCosts['2026-09'])
+  .filter(([resourceType]) => resourceType !== 'dedicated_server'));
+const lyonProjectedParts = {
+  '2026-09': { dedicated_server: lyonCosts['2026-08'].dedicated_server },
+};
+// The costs of each resource type in September at its projected cost: the other resource types
+// as billed, and the dedicated servers at their cost of August
+const withProjectedServers = (september) => ({
+  ...september, ...lyonProjectedParts['2026-09'],
+});
+
 // The accounts while Lyon, billed late, has not been billed yet in September for a recurring
-// service (#216): September is in progress for Lyon, and so for all accounts, and complete for
-// the others, whose bills of the month came in
+// service, its dedicated servers (#216): September is in progress for Lyon, and so for all
+// accounts, and complete for the others, whose bills of the month came in. The trends of Lyon
+// and of all accounts lack Lyon's dedicated servers in September, the only ones that month, as
+// those of septemberBilledLate do; with the projection of the month in progress (#217), they
+// count them at their cost of August.
 export const lyonBilledLate = {
   ...severalAccounts,
   ...septemberInProgress,
+  monthlyTrend: septemberBilledLate.monthlyTrend,
+  monthlyTrendByCategory: septemberBilledLate.monthlyTrendByCategory,
+  ...projectedTrendsOf('2026-07', '2026-09', {
+    ...costsOfAccount,
+    '2026-09': withProjectedServers(costsOfAccount['2026-09']),
+  }, lyonProjectedParts),
   ofAccount: {
     ...severalAccounts.ofAccount,
-    [lyonAccount.id]: { ...severalAccounts.ofAccount[lyonAccount.id], ...septemberInProgress },
+    [lyonAccount.id]: {
+      ...severalAccounts.ofAccount[lyonAccount.id],
+      ...septemberInProgress,
+      ...trendsOf('2026-07', '2026-09', { ...lyonCosts, '2026-09': lyonBilledInSeptember }),
+      ...projectedTrendsOf('2026-07', '2026-09', {
+        ...lyonCosts, '2026-09': withProjectedServers(lyonBilledInSeptember),
+      }, lyonProjectedParts),
+    },
   },
 };
