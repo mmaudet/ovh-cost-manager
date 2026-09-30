@@ -1488,10 +1488,12 @@ function printUsage() {
   console.error('  node import.js --diff --since 2025-06-01');
   console.error('');
   console.error('Additional data flags:');
-  console.error('  --include-consumption   Import consumption data (current/forecast/history)');
+  console.error('  --include-consumption   Import the account\'s /me/consumption and its history,');
+  console.error('                          which the cards read when no cloud project consumed');
   console.error('  --include-account       Import account balance, debts, credits');
   console.error('  --include-inventory     Import service inventory (servers, VPS, storage)');
-  console.error('  --include-cloud-details Import cloud project instances, quotas, consumption');
+  console.error('  --include-cloud-details Import each cloud project\'s consumption and month-end');
+  console.error('                          forecast, which the cards read, instances and quotas');
   console.error('  --include-carbon        Import the carbon footprint of the last 24 months');
   console.error('  --all                   Import all additional data');
   console.error('  --account <NIC handle>  Import the configured account of this NIC handle only');
