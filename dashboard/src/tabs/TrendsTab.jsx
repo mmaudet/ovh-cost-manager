@@ -110,7 +110,7 @@ const TrendsTab = ({
   // The annual projection, 12 times the cost of the last month: none, "—" with a tooltip, while
   // that month is the month in progress at what it billed so far (#216, #217)
   const lastMonthPartial = lastMonth !== undefined && comparesPartialMonth({
-    monthInProgress: isMonthInProgress(months, { value: lastMonth.yearMonth }), projected,
+    includesMonthInProgress: isMonthInProgress(months, { value: lastMonth.yearMonth }), projected,
   });
 
   return (

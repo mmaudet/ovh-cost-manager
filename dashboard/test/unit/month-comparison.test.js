@@ -124,8 +124,8 @@ describe('comparedMonthsOf', () => {
   const [september, august, july] = months;
   const inProgress = [{ ...september, inProgress: true }, august, july];
   // A comparison of the month in progress at what it billed so far, and of complete months
-  const partial = { monthInProgress: true, projected: false };
-  const complete = { monthInProgress: false, projected: false };
+  const partial = { includesMonthInProgress: true, projected: false };
+  const complete = { includesMonthInProgress: false, projected: false };
 
   it('knows whether month A or B is the month in progress', () => {
     expect(comparedMonthsOf(inProgress, august, september)).toEqual(partial);
@@ -141,7 +141,7 @@ describe('comparedMonthsOf', () => {
 
   it('knows that the month in progress is at its projected cost when its amounts are', () => {
     expect(comparedMonthsOf(inProgress, august, september, { projected: true }))
-      .toEqual({ monthInProgress: true, projected: true });
+      .toEqual({ includesMonthInProgress: true, projected: true });
   });
 
   // Complete months have no projected cost
@@ -174,17 +174,17 @@ describe('withoutVariation', () => {
 // The values that sort a comparison's rows, as the comparison shows them (#146, #216)
 describe('valuesAsShown', () => {
   it('drops the variation while month A or B is the month in progress', () => {
-    expect(columnsOf(valuesAsShown({ monthInProgress: true }, productValues), instances))
+    expect(columnsOf(valuesAsShown({ includesMonthInProgress: true }, productValues), instances))
       .toEqual(['instances', 100, 150, null]);
   });
 
   it('keeps the values of two complete months', () => {
-    expect(valuesAsShown({ monthInProgress: false }, productValues)).toBe(productValues);
+    expect(valuesAsShown({ includesMonthInProgress: false }, productValues)).toBe(productValues);
   });
 
   // Whose variations are computed then (#217)
   it('keeps the values of the month in progress at its projected cost', () => {
-    const projected = { monthInProgress: true, projected: true };
+    const projected = { includesMonthInProgress: true, projected: true };
 
     expect(valuesAsShown(projected, productValues)).toBe(productValues);
   });

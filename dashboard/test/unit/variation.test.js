@@ -87,13 +87,13 @@ describe('variationDisplay', () => {
 // than at its projected cost (#217)
 describe('comparesPartialMonth', () => {
   it('tells the month in progress at what it billed so far', () => {
-    expect(comparesPartialMonth({ monthInProgress: true, projected: false })).toBe(true);
-    expect(comparesPartialMonth({ monthInProgress: true })).toBe(true);
+    expect(comparesPartialMonth({ includesMonthInProgress: true, projected: false })).toBe(true);
+    expect(comparesPartialMonth({ includesMonthInProgress: true })).toBe(true);
   });
 
   it('tells neither the month in progress at its projected cost, nor complete months', () => {
-    expect(comparesPartialMonth({ monthInProgress: true, projected: true })).toBe(false);
-    expect(comparesPartialMonth({ monthInProgress: false, projected: false })).toBe(false);
+    expect(comparesPartialMonth({ includesMonthInProgress: true, projected: true })).toBe(false);
+    expect(comparesPartialMonth({ includesMonthInProgress: false, projected: false })).toBe(false);
   });
 });
 
@@ -101,8 +101,8 @@ describe('comparesPartialMonth', () => {
 // and the "vs previous month" KPI show it: its text and its tone, or the key of the tooltip that
 // says why they show "—" (#65, #216)
 describe('comparedVariation', () => {
-  const complete = { monthInProgress: false };
-  const inProgress = { monthInProgress: true };
+  const complete = { includesMonthInProgress: false };
+  const inProgress = { includesMonthInProgress: true };
 
   it('shows the variation between two complete months, as variationDisplay() writes it', () => {
     expect(comparedVariation(complete, 1042, 1250.4, 'fr'))
@@ -121,7 +121,7 @@ describe('comparedVariation', () => {
 
   // Its projected cost compares with a complete month (#217)
   it('shows the variation with the month in progress at its projected cost', () => {
-    const projected = { monthInProgress: true, projected: true };
+    const projected = { includesMonthInProgress: true, projected: true };
 
     expect(comparedVariation(projected, 1042, 1250.4, 'fr'))
       .toEqual({ text: `+20,0${NBSP}%`, tone: 'increase' });

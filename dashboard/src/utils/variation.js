@@ -30,11 +30,11 @@ const variationDisplay = (percent, language = 'fr') => {
  * Whether the months compared (comparedMonthsOf() in monthComparison.js) hold the month in
  * progress at what it billed so far: no variation of it is computed then, rather than compare a
  * partial month with a complete one (#216). At its projected cost, they are (#217).
- * @param {{ monthInProgress: boolean, projected?: boolean }} comparedMonths
+ * @param {{ includesMonthInProgress: boolean, projected?: boolean }} comparedMonths
  * @returns {boolean}
  */
-const comparesPartialMonth = ({ monthInProgress, projected = false }) => (
-  monthInProgress && !projected
+const comparesPartialMonth = ({ includesMonthInProgress, projected = false }) => (
+  includesMonthInProgress && !projected
 );
 
 /**
@@ -44,7 +44,7 @@ const comparesPartialMonth = ({ monthInProgress, projected = false }) => (
  * would compare, partial, with a complete month (#216), or an amount to compare with at 0 € or
  * less (#65), which each place words its own way. The month in progress at its projected cost
  * compares as a complete month (#217).
- * @param {{ monthInProgress: boolean, projected?: boolean }} comparedMonths
+ * @param {{ includesMonthInProgress: boolean, projected?: boolean }} comparedMonths
  * @param {number} from - The amount of the first month
  * @param {number} to - The amount of the second
  * @param {string} language - The page's, 'fr' or 'en'

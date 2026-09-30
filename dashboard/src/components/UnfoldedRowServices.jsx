@@ -31,9 +31,9 @@ const serviceRows = (servicesA, servicesB) => pairMonths(
  *   backupServicesQuery(), for the row
  * @param {?object} props.monthA
  * @param {?object} props.monthB
- * @param {{ monthInProgress: boolean }} props.comparedMonths - What the comparison knows of
- *   months A and B (comparedMonthsOf()), which the variations of the services and their sort
- *   read (#216)
+ * @param {{ includesMonthInProgress: boolean, projected: boolean }} props.comparedMonths - What
+ *   the comparison knows of months A and B (comparedMonthsOf()), which the variations of the
+ *   services and their sort read (#216)
  * @param {?object} props.sort - The sort of the comparison, by its columns (see
  *   SortableHeader.jsx): null until the user sorts it, as for a comparison that does not sort
  * @param {Object<string, function(object): *>} props.values - The value of a service in each

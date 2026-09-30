@@ -64,13 +64,14 @@ const comparisonValues = (nameColumn, nameOf) => ({
  * @param {boolean} [options.projected] - Whether the amounts compared count the month in progress
  *   at its projected cost (#217), as the trends do while the page projects it; the header's KPI
  *   never does
- * @returns {{ monthInProgress: boolean, projected: boolean }} Whether either is the month in
- *   progress, as the months list marks it, whose cost lacks bills to come (#216), and whether its
- *   amounts are its projected cost: never between complete months
+ * @returns {{ includesMonthInProgress: boolean, projected: boolean }} Whether either is the month
+ *   in progress, as the months list marks it, whose cost lacks bills to come (#216), and whether
+ *   its amounts are its projected cost: never between complete months
  */
 const comparedMonthsOf = (months, monthA, monthB, { projected = false } = {}) => {
-  const monthInProgress = isMonthInProgress(months, monthA) || isMonthInProgress(months, monthB);
-  return { monthInProgress, projected: monthInProgress && projected };
+  const includesMonthInProgress = isMonthInProgress(months, monthA)
+    || isMonthInProgress(months, monthB);
+  return { includesMonthInProgress, projected: includesMonthInProgress && projected };
 };
 
 /**
@@ -88,7 +89,7 @@ const withoutVariation = (values) => ({ ...values, variation: () => null });
  * (comparedMonthsOf()): without their variation while month A or B is the month in progress at
  * what it billed so far, which the rows write "—" then (#216), so that a sort by the variation
  * leaves them in their order rather than follow values that the table does not show.
- * @param {{ monthInProgress: boolean, projected?: boolean }} comparedMonths
+ * @param {{ includesMonthInProgress: boolean, projected?: boolean }} comparedMonths
  * @param {Object<string, function(object): *>} values - The value of a row in each column, as
  *   sortRows() takes them
  * @returns {Object<string, function(object): *>} Those values themselves between two complete
