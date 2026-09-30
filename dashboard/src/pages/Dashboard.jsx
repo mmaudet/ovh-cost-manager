@@ -7,6 +7,7 @@ import {
   fetchExpiringServices,
   fetchByResourceType, fetchGpuSummary,
 } from '../services/api';
+import { useActiveTabInView } from '../hooks/useActiveTabInView.js';
 import { useLanguage } from '../hooks/useLanguage.jsx';
 import { useSelectedAccount } from '../hooks/useSelectedAccount.js';
 import Logo from '../components/Logo';
@@ -90,6 +91,9 @@ export default function Dashboard() {
   const { language, setLanguage, t } = useLanguage();
   const [selectedMonth, setSelectedMonth] = useState(null);
   const [activeTab, setActiveTab] = useState('overview');
+  // The refs of the tab bar's buttons, whose bar scrolls to the active tab whenever it
+  // changes, where the bar scrolls sideways (#226)
+  const tabRef = useActiveTabInView(activeTab);
   // The dashboard budget, which the page compares the figures of all accounts with: that of
   // config.json once the configuration loads, which the user may change for the visit
   const [dashboardBudget, setDashboardBudget] = useState(50000); // Default budget
@@ -754,6 +758,7 @@ export default function Dashboard() {
             ].map(tab => (
               <button
                 key={tab.id}
+                ref={tabRef(tab.id)}
                 onClick={() => setActiveTab(tab.id)}
                 className={[
                   'px-3 sm:px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap shrink-0',
