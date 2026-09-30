@@ -1,11 +1,12 @@
 import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line,
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, Dot,
 } from 'recharts';
 import { AiEndpointsTrend } from '../components/AiEndpointsTrend.jsx';
 import { ProjectionCheckbox } from '../components/ProjectionCheckbox.jsx';
 import { formatYearMonth } from '../utils/format.js';
 import { comparedMonthsOf } from '../utils/monthComparison.js';
 import { isMonthInProgress } from '../utils/months.js';
+import { lineParts, trendAmount, trendMonthLabel } from '../utils/trendLines.js';
 import { PERIOD_OPTIONS } from '../utils/trendPeriods.js';
 import { comparedVariation, comparesPartialMonth } from '../utils/variation.js';
 
@@ -17,13 +18,74 @@ const GROWTH_TONES = {
   neutral: 'text-gray-600',
 };
 
+/**
+ * The lines that draw a series of the tab's line charts (#217): solid through the complete
+ * months, and dashed from the month before the month in progress to it, whose point is hollow,
+ * whether the trends project it or not (lineParts()). Both bear the series' name, under which
+ * the tooltip gives its amount once (payloadUniqBy), as trendAmount() writes it.
+ * @param {object} series
+ * @param {string} series.key - Its key in the chart's rows
+ * @param {string} series.name - What the tooltip names it
+ * @param {string} series.color
+ * @param {number} series.width - The width of its lines
+ * @param {object|boolean} series.dot - The points of its complete months, as a Line takes them
+ * @param {number} series.dotRadius - The radius of its hollow point in the month in progress
+ * @param {number} series.activeRadius - The radius of its point under the pointer
+ * @param {function(object): number} series.projectedPartOf - The part of its amount in a row
+ *   that projected lines make, 0 for none
+ * @param {object} chart
+ * @param {object} chart.parts - The parts of the chart's series (lineParts())
+ * @param {?string} chart.monthInProgress - The month in progress, YYYY-MM, when it covers it
+ * @param {boolean} chart.projected - Whether the trends project it
+ * @param {function(number): string} chart.fmt
+ * @param {function(string): string} chart.t
+ * @returns {JSX.Element[]}
+ */
+const seriesLines = (
+  { key, name, color, width, dot, dotRadius, activeRadius, projectedPartOf },
+  { parts, monthInProgress, projected, fmt, t },
+) => {
+  // Its amount in a month, as the tooltip gives it
+  const formatter = (value, seriesName, { payload }) => [
+    trendAmount(value, projectedPartOf(payload), {
+      inProgress: payload.yearMonth === monthInProgress, projected,
+    }, fmt, t),
+    seriesName,
+  ];
+  // Its point in the month in progress, hollow, and none in the other months
+  const hollowPoint = (radius) => ({ key: pointKey, cx, cy, payload }) => (
+    payload.yearMonth === monthInProgress
+      ? <Dot key={pointKey} cx={cx} cy={cy} r={radius} fill="#fff" stroke={color} strokeWidth={2} />
+      : null
+  );
+  return [
+    <Line
+      key={`${key}-complete`} type="monotone" dataKey={parts.solid(key)} name={name}
+      stroke={color} strokeWidth={width} dot={dot} activeDot={{ r: activeRadius }}
+      formatter={formatter}
+    />,
+    <Line
+      key={`${key}-in-progress`} type="monotone" dataKey={parts.dashed(key)} name={name}
+      stroke={color} strokeWidth={width} strokeDasharray="6 4" dot={hollowPoint(dotRadius)}
+      activeDot={hollowPoint(activeRadius)} formatter={formatter}
+    />,
+  ];
+};
+
 // The Trends tab, which the shell renders while it is active: what useTrendsTab() returns,
 // with the shell's months list, language, translations (t) and amount format (fmt).
 const TrendsTab = ({
   trendPeriod, monthlyTrend, trendByCategory, hiddenCategories, toggleCategory, gpuTrend,
-  aiEndpointsTrend, projected, months, language, t, fmt,
+  aiEndpointsTrend, monthInProgress, projected, months, language, t, fmt,
 }) => {
   const currentPeriodLabel = (PERIOD_OPTIONS.find(o => o.months === trendPeriod) || {}).key;
+  // What each line chart draws of the month in progress that the period covers (#217): the
+  // parts of its series, and whether the trends project it
+  const chartOf = (rows) => ({
+    parts: lineParts(rows, monthInProgress), monthInProgress, projected, fmt, t,
+  });
+  // The months as the tooltips name them
+  const monthLabel = (yearMonth) => trendMonthLabel(yearMonth, monthInProgress, language, t);
   // The first and the last months of the period, as the months list names them
   const firstMonth = monthlyTrend[0];
   const lastMonth = monthlyTrend[monthlyTrend.length - 1];
@@ -60,15 +122,12 @@ const TrendsTab = ({
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="yearMonth" tickFormatter={(ym) => formatYearMonth(ym, language)} />
                 <YAxis tickFormatter={(v) => `${v}€`} />
-                <Tooltip labelFormatter={(ym) => formatYearMonth(ym, language)} formatter={(v) => `${fmt(v)}€`} />
-                <Line
-                  type="monotone"
-                  dataKey="cost"
-                  stroke="#3b82f6"
-                  strokeWidth={3}
-                  dot={{ fill: '#3b82f6', r: 6, strokeWidth: 2, stroke: '#fff' }}
-                  activeDot={{ r: 8 }}
-                />
+                <Tooltip labelFormatter={monthLabel} payloadUniqBy={(entry) => entry.name} />
+                {seriesLines({
+                  key: 'cost', name: t('cost'), color: '#3b82f6', width: 3,
+                  dot: { fill: '#3b82f6', r: 6, strokeWidth: 2, stroke: '#fff' },
+                  dotRadius: 6, activeRadius: 8, projectedPartOf: (row) => row.projected ?? 0,
+                }, chartOf(monthlyTrend))}
               </LineChart>
             </ResponsiveContainer>
           </div>
@@ -111,24 +170,14 @@ const TrendsTab = ({
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="yearMonth" tickFormatter={(ym) => formatYearMonth(ym, language)} />
                   <YAxis tickFormatter={(v) => `${v}€`} />
-                  <Tooltip
-                    labelFormatter={(ym) => formatYearMonth(ym, language)}
-                    formatter={(v, name) => [`${fmt(v)}€`, name]}
-                  />
+                  <Tooltip labelFormatter={monthLabel} payloadUniqBy={(entry) => entry.name} />
                   {trendByCategory.categories
                     .filter((c) => !hiddenCategories.has(c.key))
-                    .map((c) => (
-                      <Line
-                        key={c.key}
-                        type="monotone"
-                        dataKey={c.key}
-                        name={c.label}
-                        stroke={c.color}
-                        strokeWidth={2}
-                        dot={false}
-                        activeDot={{ r: 5 }}
-                      />
-                    ))}
+                    .flatMap((c) => seriesLines({
+                      key: c.key, name: c.label, color: c.color, width: 2, dot: false,
+                      dotRadius: 4, activeRadius: 5,
+                      projectedPartOf: (row) => row.projected?.[c.key] ?? 0,
+                    }, chartOf(trendByCategory.data)))}
                 </LineChart>
               </ResponsiveContainer>
             </div>
