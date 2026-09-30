@@ -434,7 +434,7 @@ export default function Dashboard() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 p-4 md:p-6">
-      <div className="max-w-6xl mx-auto space-y-6">
+      <div className="max-w-7xl mx-auto space-y-6">
 
         {/* Sync Warning Banner */}
         {showSyncWarning && (
@@ -475,7 +475,7 @@ export default function Dashboard() {
 
         {/* Header */}
         <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 shrink-0">
             {/* What the logo and the tab bar keep open: ADR 0001 (#56) */}
             <button
               onClick={() => {
@@ -487,22 +487,15 @@ export default function Dashboard() {
             >
               <Logo className="h-14" />
             </button>
-            <div>
-              <div className="flex items-center gap-3">
-                <h1 className="text-2xl font-bold text-gray-900">{t('appTitle')}</h1>
-                <select
-                  value={language}
-                  onChange={(e) => setLanguage(e.target.value)}
-                  className="px-2 py-1 text-xs bg-gray-100 border border-gray-200 rounded cursor-pointer"
-                >
-                  <option value="fr">FR</option>
-                  <option value="en">EN</option>
-                </select>
-              </div>
+            {/* The title on one line, and the subtitle under it, as wide as the title */}
+            <div className="w-min">
+              <h1 className="text-2xl font-bold text-gray-900 whitespace-nowrap">{t('appTitle')}</h1>
               <p className="text-gray-500 text-sm">{t('appSubtitle')}</p>
             </div>
           </div>
-          <div className="flex items-center gap-3">
+          {/* The controls, on the header's line, each whole: when they lack room, the last ones
+              go to a line of their own, rather than squeeze the title or wrap a name */}
+          <div className="flex flex-wrap items-center justify-end gap-3">
             {/* Manual resync */}
             {importsEnabled && <ResyncButton t={t} />}
             {/* Expiration badge */}
@@ -514,7 +507,7 @@ export default function Dashboard() {
             )}
             {/* User info */}
             {userData?.id && (
-              <div className="flex items-center gap-2 px-3 py-1.5 bg-gray-100 rounded-lg">
+              <div className="flex items-center gap-2 px-3 py-1.5 bg-gray-100 rounded-lg whitespace-nowrap">
                 <span className="text-sm text-gray-700">{userData.name}</span>
                 {userData.authEnabled && (
                   <a
@@ -580,6 +573,15 @@ export default function Dashboard() {
                 </div>
               </>
             )}
+            {/* The page's language, last of the controls and in line with them */}
+            <select
+              value={language}
+              onChange={(e) => setLanguage(e.target.value)}
+              className="px-2 py-2 text-sm bg-gray-100 border border-gray-200 rounded-lg cursor-pointer"
+            >
+              <option value="fr">FR</option>
+              <option value="en">EN</option>
+            </select>
           </div>
         </div>
 
