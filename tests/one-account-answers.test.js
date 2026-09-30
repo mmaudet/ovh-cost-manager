@@ -243,9 +243,9 @@ describe.each([
       });
     }, 30000);
 
-  // Two projects whose usage OVH reports up to different days: the account's consumption
-  // runs from the earliest start to the latest end
-  test('the forecast extrapolates the projects over the days that they cover together',
+  // Two projects whose usage OVH reports up to different days: each is extrapolated over its
+  // own (#224), and the account's consumption runs from the earliest start to the latest end
+  test('the forecast extrapolates each project over the days that its consumption covers',
     async () => {
       const answers = await answersOf((db) => {
         storeProjectConsumption(db);
@@ -264,15 +264,15 @@ describe.each([
           project_count: 2,
           currency: 'EUR',
         },
-        // 20 € over 14 days, for the 30 days of September
+        // 12.25 € over 14 days, and 7.75 € over 11 days, each for the 30 days of September
         '/api/consumption/forecast': {
           snapshot_date: expect.any(String),
           period_start: '2026-09-01',
           period_end: '2026-09-15',
-          forecast_total: 42.86,
+          forecast_total: 47.39,
           current_total: 20,
           currency: 'EUR',
-          progress: 47,
+          progress: 42,
           source: 'cloud_projects',
           days_elapsed: 14,
           days_in_month: 30,

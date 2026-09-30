@@ -112,10 +112,12 @@ OVH API ──> data/import.js ──> SQLite (ovh-bills.db) ──> server/inde
   The consumption and forecast cards read `/api/consumption/current` and `/forecast`, which
   `consumption.js` answers from an account's Public Cloud projects whenever they consumed in
   the month of its current consumption, as OVH's Public Cloud page does (#224): their
-  consumption, and the sum of the month-end forecasts that OVH gives them, or else their
-  consumption extrapolated to the month's end, what OVH gives for the whole month counted
-  once (#145). Otherwise from the account's `/me/consumption` snapshot, which can stay on one
-  transaction for days while the projects consume.
+  consumption, and the sum of each project's forecast (`getProjectFigures()` in `db.js`),
+  the month-end forecast that OVH gives it, or else its consumption extrapolated over its own
+  days, what OVH gives for the whole month counted once (#145); never below what it consumed,
+  as OVH's forecast estimates the next bill, which can fall below it as the month ends.
+  Otherwise from the account's `/me/consumption` snapshot, which can stay on one transaction
+  for days while the projects consume.
 - **`dashboard/`** — Vite + React SPA (Recharts, TanStack Query, Tailwind, axios). In dev,
   Vite proxies `/api` to `:3001` (see `dashboard/vite.config.js`). i18n is FR/EN
   (`src/i18n/translations.js`). The page, `src/pages/Dashboard.jsx`, is a shell: each tab

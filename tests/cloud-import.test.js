@@ -255,7 +255,7 @@ describe('project consumption import', () => {
 
     expect(db.cloudDetails.getConsumptionSummary(ACCOUNT.nic)).toEqual({
       period_start: '2026-09-01', period_end: '2026-09-15', total: 12.25, monthly_total: 0,
-      project_count: 1, forecast_total: null,
+      project_count: 1,
     });
   });
 
@@ -419,9 +419,10 @@ describe('project consumption import', () => {
       .prepare('SELECT * FROM project_forecasts ORDER BY project_id').all()
       .map(({ project_id: id, period_start: month, total_price: total }) => [id, month, total]);
 
-    // What OVH forecasts the account's projects to cost in the month of its current
-    // consumption, as the forecast card reads it
-    const forecast = () => db.cloudDetails.getConsumptionSummary(ACCOUNT.nic).forecast_total;
+    // The account's projects in the month of its current consumption, as the forecast card
+    // reads them: [project, what it consumed, OVH's forecast of it]
+    const projectFigures = () => db.cloudDetails.getProjectFigures(ACCOUNT.nic)
+      .map(({ project_id: id, total, forecast_total: forecast }) => [id, total, forecast]);
 
     // A second project of the account, which used one instance in September up to the 15th
     function serveSecondProject(forecastAnswer) {
@@ -457,6 +458,22 @@ describe('project consumption import', () => {
       expect(storedForecasts()).toEqual([
         [PROJECT, '2026-09-01', 30], ['proj-2', '2026-09-01', 45.5],
       ]);
+      expect(projectFigures()).toEqual([[PROJECT, 12.25, 30], ['proj-2', 7, 45.5]]);
+    });
+
+    // Its forecast counts, as that of the others: a project that did not consume yet, or
+    // whose usage OVH gives none of
+    test('reads the forecast of a project that consumed nothing yet in the month', async () => {
+      serveForecast(PROJECT, fail(404, 'Not found'));
+      serveSecondProject(ok(forecastOf(45.5)));
+      routes.set('/cloud/project/proj-2/usage/current', ok({
+        period: { from: '2026-09-01T00:00:00+02:00', to: '2026-09-15T12:00:00+02:00' },
+        hourlyUsage: {},
+      }));
+
+      await importBothProjects();
+
+      expect(projectFigures()).toEqual([[PROJECT, 12.25, null], ['proj-2', 0, 45.5]]);
     });
 
     // The cards read the latest only
@@ -481,7 +498,7 @@ describe('project consumption import', () => {
 
       expect(storedForecasts()).toEqual([[PROJECT, '2026-09-01', 30]]);
       // August, the month of the current consumption, has none
-      expect(forecast()).toBeNull();
+      expect(projectFigures()).toEqual([[PROJECT, 30.5, null]]);
     });
 
     // As a failed call keeps a project's stored volumes
@@ -531,7 +548,7 @@ describe('project consumption import', () => {
 
       await importUsageOn('2026-09-02', 'b2-7', 2);
 
-      expect(forecast()).toBeNull();
+      expect(projectFigures()).toEqual([[PROJECT, 2, null]]);
     });
 
     // Its own period dates it
@@ -567,7 +584,6 @@ describe('project consumption import', () => {
     test('sums no consumption in the consumption summary', () => {
       expect(db.cloudDetails.getConsumptionSummary(ACCOUNT.nic)).toEqual({
         period_start: null, period_end: null, total: null, monthly_total: null, project_count: 0,
-        forecast_total: null,
       });
     });
 

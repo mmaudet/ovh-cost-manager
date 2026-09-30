@@ -969,8 +969,9 @@ const consumptionOps = {
    * @param {?string} [account]
    * @returns {{ account: ?string, snapshot: (object|undefined), cloud: object }[]} For each
    *   account, by NIC handle, the Unknown account's last: its NIC handle, null for the
-   *   Unknown account; its latest snapshot, if any; and what its projects consumed and OVH
-   *   forecasts them (see cloudDetails.getConsumptionSummary())
+   *   Unknown account; its latest snapshot, if any; and what its projects consumed (see
+   *   cloudDetails.getConsumptionSummary()), with `projects`, each project's consumption and
+   *   OVH's forecast of it (see cloudDetails.getProjectFigures())
    */
   getCurrentByAccount: (account = null) => {
     const db = getDb();
@@ -995,7 +996,10 @@ const consumptionOps = {
     return accounts.map((nic) => ({
       account: nic,
       snapshot: snapshots.find((snapshot) => snapshot.account === nic),
-      cloud: cloudDetailOps.getConsumptionSummary(nic ?? UNKNOWN_ACCOUNT),
+      cloud: {
+        ...cloudDetailOps.getConsumptionSummary(nic ?? UNKNOWN_ACCOUNT),
+        projects: cloudDetailOps.getProjectFigures(nic ?? UNKNOWN_ACCOUNT),
+      },
     }));
   },
 
@@ -2350,23 +2354,18 @@ const cloudDetailOps = {
 
   /**
    * What the Public Cloud projects of an account consumed in the month of its current
-   * consumption (#116; see getCurrentConsumptionMonth()), and what OVH forecasts them to cost
-   * in that month (#224)
+   * consumption (#116; see getCurrentConsumptionMonth())
    * @param {string} account - The account (see accountCondition()): a NIC handle, or
    *   UNKNOWN_ACCOUNT
    * @returns {{ period_start: ?string, period_end: ?string, total: ?number,
-   *   monthly_total: ?number, project_count: number, forecast_total: ?number }} The period
-   *   from the earliest start to the latest end of their consumption, its total, the part of
-   *   it that OVH gives for the whole month (#145), the number of projects that it covers, and
-   *   the sum of the month-end forecasts that the imports stored for the month, those of the
-   *   projects that have one: null when none has
+   *   monthly_total: ?number, project_count: number }} The period from the earliest start to
+   *   the latest end of their consumption, its total, the part of it that OVH gives for the
+   *   whole month (#145), and the number of projects that it covers
    */
   getConsumptionSummary: (account) => {
-    const database = getDb();
     const ofAccount = accountCondition(account, 'p.account');
-    const month = cloudDetailOps.getCurrentConsumptionMonth(account);
     const monthly = MONTHLY_KINDS.map(() => '?').join(', ');
-    const consumed = database.prepare(`
+    return getDb().prepare(`
       SELECT
         MIN(c.period_start) as period_start,
         MAX(c.period_end) as period_end,
@@ -2376,13 +2375,49 @@ const cloudDetailOps = {
         COUNT(DISTINCT c.project_id) as project_count
       FROM project_consumption c LEFT JOIN projects p ON p.id = c.project_id
       WHERE c.period_start = ? AND ${ofAccount.sql}
-    `).get(...MONTHLY_KINDS, month, ...ofAccount.params);
-    const forecast = database.prepare(`
-      SELECT SUM(f.total_price) as forecast_total
-      FROM project_forecasts f LEFT JOIN projects p ON p.id = f.project_id
-      WHERE f.period_start = ? AND ${ofAccount.sql}
-    `).get(month, ...ofAccount.params);
-    return { ...consumed, ...forecast };
+    `).get(...MONTHLY_KINDS, cloudDetailOps.getCurrentConsumptionMonth(account),
+      ...ofAccount.params);
+  },
+
+  /**
+   * Each Public Cloud project of an account in the month of its current consumption (see
+   * getCurrentConsumptionMonth()), for its month-end forecast (#224): what it consumed, and
+   * what OVH forecasts it to cost in that month. The projects that consumed in the month, and
+   * those that OVH forecasts for it.
+   * @param {string} account - The account (see accountCondition()): a NIC handle, or
+   *   UNKNOWN_ACCOUNT
+   * @returns {{ project_id: string, period_start: ?string, period_end: ?string, total: number,
+   *   monthly_total: number, forecast_total: ?number }[]} Each project, by id: the period of
+   *   its consumption, null without any, its total and the part of it that OVH gives for the
+   *   whole month (#145), 0 without any, and the forecast that an import stored of the month,
+   *   null without one
+   */
+  getProjectFigures: (account) => {
+    const ofAccount = accountCondition(account, 'p.account');
+    const month = cloudDetailOps.getCurrentConsumptionMonth(account);
+    const monthly = MONTHLY_KINDS.map(() => '?').join(', ');
+    return getDb().prepare(`
+      SELECT project_id,
+        MIN(period_start) as period_start,
+        MAX(period_end) as period_end,
+        SUM(total) as total,
+        SUM(monthly_total) as monthly_total,
+        MAX(forecast_total) as forecast_total
+      FROM (
+        SELECT c.project_id, c.period_start, c.period_end, c.total_price as total,
+          CASE WHEN c.resource_type IN (${monthly}) THEN c.total_price ELSE 0 END
+            as monthly_total,
+          NULL as forecast_total
+        FROM project_consumption c LEFT JOIN projects p ON p.id = c.project_id
+        WHERE c.period_start = ? AND ${ofAccount.sql}
+        UNION ALL
+        SELECT f.project_id, NULL, NULL, 0, 0, f.total_price
+        FROM project_forecasts f LEFT JOIN projects p ON p.id = f.project_id
+        WHERE f.period_start = ? AND ${ofAccount.sql}
+      )
+      GROUP BY project_id
+      ORDER BY project_id
+    `).all(...MONTHLY_KINDS, month, ...ofAccount.params, month, ...ofAccount.params);
   },
 
   // GPU cost summary from bill_details (covers full history) + project_consumption (current
