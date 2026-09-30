@@ -206,6 +206,45 @@ describe('GET /api/months: the month in progress (#216)', () => {
       });
   });
 
+  // The Unknown account's rows, stored before the accounts, have recurring services of their own
+  // (ADR 0002)
+  describe('with the Unknown account billed late', () => {
+    let ocm;
+
+    // Lyon, whose bills of the month of today charged each of its services, and the Unknown
+    // account, whose bill of the month of today charged its domain, and not yet its dedicated
+    // server, which the three months before billed
+    function seedUnknownAccountLate(db) {
+      db.accounts.upsert({ nic: LYON, currency: 'EUR', name: 'Lyon subsidiary' });
+      project(db, 'project-lyon', 'Lyon', LYON);
+      [...MONTHS_BEFORE, MONTH_OF_TODAY].forEach((month, index) => {
+        billOf(db, `FR1${index}01`, LYON, `${month}-01`, [['project-lyon', 'cloud_project', 600]]);
+        billOf(db, `FR0${index}01`, null, `${month}-01`, [['example.com', 'domain', 15]]);
+      });
+      MONTHS_BEFORE.forEach((month, index) => {
+        billOf(db, `FR0${index}02`, null, `${month}-25`, [
+          ['ns3000004.ip-203-0-113.eu', 'dedicated_server', 80],
+        ]);
+      });
+    }
+
+    beforeAll(async () => {
+      ocm = await startOcm(() => ({}), { seed: seedUnknownAccountLate });
+    }, 30000);
+
+    afterAll(async () => {
+      await ocm?.stop();
+    });
+
+    test('marks it for the Unknown account, and with all accounts shown, not for another account',
+      async () => {
+        expect(marksOf(await ocm.get(`/api/months?account=${UNKNOWN_ACCOUNT}`)))
+          .toEqual([[MONTH_OF_TODAY, true]]);
+        expect(marksOf(await ocm.get('/api/months'))).toEqual([[MONTH_OF_TODAY, true]]);
+        expect(marksOf(await ocm.get(`/api/months?account=${LYON}`))).toEqual([]);
+      });
+  });
+
   // A recurring service is a service by its identifier and its account, as a bill line belongs
   // to the account of its bill (ADR 0002); but it lacks no bill once any account's bill of the
   // month of today charges its identifier (#214)
