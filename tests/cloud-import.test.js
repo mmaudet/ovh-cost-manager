@@ -4,10 +4,9 @@
  * consumption of each month is kept.
  */
 
-const {
-  client, routes, calls, ok, fail, useThrowawayImport,
-} = require('./support/simulated-ovh');
+const { client, routes, ok, fail, useThrowawayImport } = require('./support/simulated-ovh');
 const { ACCOUNT } = require('./support/accounts');
+const { shiftMonth } = require('../data/months');
 
 jest.mock('ovh', () => require('./support/simulated-ovh').ovh);
 jest.mock('jsonfile', () => require('./support/simulated-ovh').jsonfile);
@@ -397,13 +396,15 @@ describe('project consumption import', () => {
   });
 
   // What usage/forecast gives a project (#224), shaped as OVH's schema gives it
-  // (cloud.usage.UsageForecast): the usage of the month to its end, and its total, an
-  // order.Price, which the forecast card adds up
+  // (cloud.usage.UsageForecast): the usage of a month to its end, over the period of that
+  // month, and its total, an order.Price
   describe('with the forecast that OVH gives the project', () => {
-    // The answer that forecasts `total` for September
-    const forecastOf = (total) => ({
-      lastUpdate: '2026-09-15T12:00:00+02:00',
-      period: { from: '2026-09-01T00:00:00+02:00', to: '2026-10-01T00:00:00+02:00' },
+    // The answer that forecasts `total` for the month `month`, YYYY-MM: September by default
+    const forecastOf = (total, month = '2026-09') => ({
+      lastUpdate: `${month}-15T12:00:00+02:00`,
+      period: {
+        from: `${month}-01T00:00:00+02:00`, to: `${shiftMonth(month, 1)}-01T00:00:00+02:00`,
+      },
       hourlyUsage: oneInstance('b2-15', total),
       totalPrice: price(total),
       usableCredits: { details: [], totalCredit: 0 },
@@ -413,7 +414,12 @@ describe('project consumption import', () => {
     const serveForecast = (projectId, answer) =>
       routes.set(`/cloud/project/${projectId}/usage/forecast`, answer);
 
-    // What OVH forecasts the account's projects to cost by the end of the month of its current
+    // The forecasts stored, as [project, first day of the month forecast, total]
+    const storedForecasts = () => db.getDb()
+      .prepare('SELECT * FROM project_forecasts ORDER BY project_id').all()
+      .map(({ project_id: id, period_start: month, total_price: total }) => [id, month, total]);
+
+    // What OVH forecasts the account's projects to cost in the month of its current
     // consumption, as the forecast card reads it
     const forecast = () => db.cloudDetails.getConsumptionSummary(ACCOUNT.nic).forecast_total;
 
@@ -442,31 +448,40 @@ describe('project consumption import', () => {
       await done;
     }
 
-    test('stores it as the forecast of the month of the project\'s usage', async () => {
-      serveForecast(PROJECT, ok(forecastOf(30)));
-
-      await importUsageOn('2026-09-15', 'b2-15', 12.25);
-
-      expect(forecast()).toBe(30);
-    });
-
-    test('replaces the forecast of the month at each import', async () => {
-      serveForecast(PROJECT, ok(forecastOf(20)));
-      await importUsageOn('2026-09-10', 'b2-15', 6);
-      serveForecast(PROJECT, ok(forecastOf(30)));
-
-      await importUsageOn('2026-09-15', 'b2-15', 12.25);
-
-      expect(forecast()).toBe(30);
-    });
-
-    test('adds up the forecasts of the projects of the month', async () => {
+    test('stores the forecast of each project, of the month that its period gives', async () => {
       serveForecast(PROJECT, ok(forecastOf(30)));
       serveSecondProject(ok(forecastOf(45.5)));
 
       await importBothProjects();
 
-      expect(forecast()).toBe(75.5);
+      expect(storedForecasts()).toEqual([
+        [PROJECT, '2026-09-01', 30], ['proj-2', '2026-09-01', 45.5],
+      ]);
+    });
+
+    // The cards read the latest only
+    test('keeps the latest forecast of each project, which the next import replaces', async () => {
+      serveForecast(PROJECT, ok(forecastOf(60, '2026-08')));
+      await importUsageOn('2026-08-28', 'b2-7', 30.5);
+      serveForecast(PROJECT, ok(forecastOf(30)));
+
+      await importUsageOn('2026-09-15', 'b2-15', 12.25);
+
+      expect(storedForecasts()).toEqual([[PROJECT, '2026-09-01', 30]]);
+    });
+
+    // The usage is read at 23:59:59 on the 31st of August in Paris, and the forecast after
+    // midnight, of September
+    test('dates it by its own period when the month turns after the usage is read', async () => {
+      serveForecast(PROJECT, ok(forecastOf(30)));
+
+      await importUsageAt('2026-08-31T21:59:59Z', {
+        from: '2026-08-01T00:00:00+02:00', to: '2026-08-31T23:59:59+02:00',
+      }, oneInstance('b2-7', 30.5));
+
+      expect(storedForecasts()).toEqual([[PROJECT, '2026-09-01', 30]]);
+      // August, the month of the current consumption, has none
+      expect(forecast()).toBeNull();
     });
 
     // As a failed call keeps a project's stored volumes
@@ -484,29 +499,33 @@ describe('project consumption import', () => {
       expect(console.warn).toHaveBeenCalledWith('    Forecast fetch failed, keeping the stored '
         + 'forecast: 503 Service unavailable');
       // Its own, of the 10th, and that of the next project
-      expect(forecast()).toBe(75.5);
+      expect(storedForecasts()).toEqual([
+        [PROJECT, '2026-09-01', 30], ['proj-2', '2026-09-01', 45.5],
+      ]);
       expect(consumption()).toEqual([['instance', 'b2-15', 12.25]]);
       expect(db.cloudDetails.getInstancesByProject(PROJECT).map(i => i.id)).toEqual(['inst-1']);
     });
 
-    test('stores none from an answer without a total, and keeps the stored one', async () => {
-      serveForecast(PROJECT, ok(forecastOf(30)));
-      await importUsageOn('2026-09-10', 'b2-15', 6);
-      const withoutTotal = forecastOf(45.5);
-      delete withoutTotal.totalPrice;
-      serveForecast(PROJECT, ok(withoutTotal));
+    // Without either, it could not be dated or added up
+    test.each(['period', 'totalPrice'])(
+      'stores none from an answer without its %s, and keeps the stored one', async (field) => {
+        serveForecast(PROJECT, ok(forecastOf(30)));
+        await importUsageOn('2026-09-10', 'b2-15', 6);
+        const answer = forecastOf(45.5);
+        delete answer[field];
+        serveForecast(PROJECT, ok(answer));
 
-      await importUsageOn('2026-09-15', 'b2-15', 12.25);
+        await importUsageOn('2026-09-15', 'b2-15', 12.25);
 
-      expect(forecast()).toBe(30);
-      expect(console.warn).toHaveBeenCalledWith(
-        expect.stringContaining('keeping the stored forecast'),
-      );
-    });
+        expect(storedForecasts()).toEqual([[PROJECT, '2026-09-01', 30]]);
+        expect(console.warn).toHaveBeenCalledWith('    Forecast fetch failed, keeping the stored '
+          + 'forecast: its answer gives no period or no total');
+      },
+    );
 
     // Once a month starts, its forecast is none until an import stores one
     test('reads no forecast of an earlier month', async () => {
-      serveForecast(PROJECT, ok(forecastOf(60)));
+      serveForecast(PROJECT, ok(forecastOf(60, '2026-08')));
       await importUsageOn('2026-08-28', 'b2-7', 30.5);
       serveForecast(PROJECT, fail(404, 'Not found'));
 
@@ -515,14 +534,14 @@ describe('project consumption import', () => {
       expect(forecast()).toBeNull();
     });
 
-    // Without it, the month of the forecast is unknown
-    test('asks for none when the usage of the project cannot be read', async () => {
+    // Its own period dates it
+    test('stores it even when the usage of the project cannot be read', async () => {
       serveForecast(PROJECT, ok(forecastOf(30)));
       routes.set(`${BASE}/usage/current`, fail(500, 'Internal server error'));
 
       await importProject();
 
-      expect(calls.map(call => call.route)).not.toContain(`${BASE}/usage/forecast`);
+      expect(storedForecasts()).toEqual([[PROJECT, '2026-09-01', 30]]);
     });
   });
 

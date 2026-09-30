@@ -2,8 +2,8 @@
  * The current consumption of a Public Cloud project, as OVH's
  * GET /cloud/project/{id}/usage/current answers it (cloud.usage.UsageCurrent), in the rows
  * that the import stores in project_consumption: one per resource and cloud resource kind.
- * And its month-end forecast, the total that usage/forecast answers
- * (cloud.usage.UsageForecast), which the import stores in project_forecasts (#224).
+ * And its month-end forecast, as usage/forecast answers it (cloud.usage.UsageForecast),
+ * which the import stores in project_forecasts (#224).
  *
  * Every part of the answer counts, so that the rows of a project add up to the total that
  * OVH gives it (#145): the hourly and monthly resources, and the typed resources of the
@@ -122,16 +122,21 @@ function beyondTotal(usage, rows) {
 }
 
 /**
- * What OVH forecasts a project to cost in the month, from what
- * GET /cloud/project/{id}/usage/forecast answers (cloud.usage.UsageForecast, #224): its
- * totalPrice, an order.Price. The answer has the parts of the current usage, run to the end of
- * the month; OVH's Public Cloud page estimates the next bill from them, the month's use with
- * the renewal of the monthly plans.
- * @param {?object} forecast - The answer, cloud.usage.UsageForecast
- * @returns {?number} The amount, null when the answer gives none
+ * The month-end forecast that OVH gives a project, from what
+ * GET /cloud/project/{id}/usage/forecast answers (cloud.usage.UsageForecast, #224): its total,
+ * totalPrice, an order.Price, and the month that it forecasts, that of the start of its
+ * period, period.from. OVH gives that datetime with its own UTC offset: its date is read from
+ * its digits, as that of the current usage is (#54). The answer has the parts of the current
+ * usage, run to the end of the month; OVH's Public Cloud page estimates the next bill from
+ * them, the month's use with the renewal of the monthly plans.
+ * @param {?object} answer - The answer, cloud.usage.UsageForecast
+ * @returns {?{ month: string, total: number }} The first day of the month, YYYY-MM-01, and
+ *   the amount; null when the answer gives no period or no total
  */
-function forecastTotal(forecast) {
-  return forecast?.totalPrice == null ? null : amountOf(forecast.totalPrice);
+function readForecast(answer) {
+  const from = answer?.period?.from?.split('T')[0];
+  if (!from || answer.totalPrice == null) return null;
+  return { month: `${from.slice(0, 7)}-01`, total: amountOf(answer.totalPrice) };
 }
 
-module.exports = { MONTHLY_KINDS, beyondTotal, forecastTotal, usageRows };
+module.exports = { MONTHLY_KINDS, beyondTotal, readForecast, usageRows };

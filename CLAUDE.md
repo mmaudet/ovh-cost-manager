@@ -62,8 +62,9 @@ OVH API ──> data/import.js ──> SQLite (ovh-bills.db) ──> server/inde
     what OVH's `usage/current` answers, one per resource and cloud resource kind. Every part
     counts, the typed resources such as the registry included, and `other` holds what no
     part names, so that a project's rows add up to the total OVH gives it (#145). And its
-    month-end forecast, the `totalPrice` that `usage/forecast` answers (`forecastTotal()`),
-    which the import stores in `project_forecasts`, by project and month (#224).
+    month-end forecast, the `totalPrice` that `usage/forecast` answers, of the month that its
+    own `period` gives (`readForecast()`): the import keeps each project's latest in
+    `project_forecasts` (#224).
   - `public-cloud-products.js` — pure: the Public Cloud product of a bill line (`CONTEXT.md`),
     and what lines add up to by product (`productFigures()`), for the Public Cloud cards, a
     project's other services, and the products of a project that the Compare tab compares
@@ -247,11 +248,10 @@ datasets, off by default: `--include-consumption`, `--include-account`,
 everything.
 
 `--include-cloud-details` imports each Public Cloud project's inventory, its consumption of
-the month (`usage/current`), and its month-end forecast (`usage/forecast`, #224), as that of
-the month of its usage: a project whose usage cannot be read gets none. A forecast call that
-fails keeps the forecast stored, as a failed call keeps a project's stored volumes, and the
-import goes on. `--full` clears the forecasts with the projects' resources, and keeps their
-consumption.
+the month (`usage/current`), and its month-end forecast (`usage/forecast`, #224), dated by
+its own period: the month can turn between the two calls. A forecast call that fails keeps
+the forecast stored, as a failed call keeps a project's stored volumes, and the import goes
+on. `--full` clears the forecasts with the projects' resources, and keeps their consumption.
 
 `--include-carbon` asks OVHcloud's carbon calculator for each account's footprint of the
 last 24 months: it calls `POST /me/carbonCalculator/csv`, which the key needs a rule for,

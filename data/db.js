@@ -1860,18 +1860,18 @@ const cloudDetailOps = {
   },
 
   /**
-   * Records the month-end forecast that OVH gives a project for a month (#224), in place of
-   * the one that an earlier import of that month recorded
+   * Records the month-end forecast that OVH gives a project (#224), in place of the one that
+   * an earlier import recorded: the cards read the latest only
    * @param {{ project_id: string, period_start: string, total_price: number }} forecast - The
-   *   project, the first day of the month, YYYY-MM-01, and what OVH forecasts the project to
-   *   cost in it
+   *   project, the first day of the month that the forecast is of, YYYY-MM-01, and what OVH
+   *   forecasts the project to cost in it
    */
   upsertForecast: (forecast) => {
     getDb().prepare(`
-      INSERT INTO project_forecasts (project_id, period_start, total_price, imported_at)
-      VALUES (@project_id, @period_start, @total_price, CURRENT_TIMESTAMP)
-      ON CONFLICT(project_id, period_start) DO UPDATE SET
-        total_price = excluded.total_price, imported_at = CURRENT_TIMESTAMP
+      INSERT INTO project_forecasts (project_id, period_start, total_price)
+      VALUES (@project_id, @period_start, @total_price)
+      ON CONFLICT(project_id) DO UPDATE SET
+        period_start = excluded.period_start, total_price = excluded.total_price
     `).run(forecast);
   },
 
