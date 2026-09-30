@@ -259,6 +259,7 @@ export default function Dashboard() {
 
   const trendsTab = useTrendsTab({
     months, selectedMonth, holdsSelectedMonth, selectedAccount, activeTab,
+    projectsMonthInProgress: projection.projectsMonthInProgress,
   });
 
   const publicCloudTab = usePublicCloudTab({

@@ -1,11 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import { screen, within } from '@testing-library/react';
-import { account } from './fixtures/account.js';
+import { account, septemberInProgress } from './fixtures/account.js';
 import {
-  lyonAccount, removedAccount, severalAccounts, severalAccountsWithAiEndpoints,
+  lyonAccount, lyonBilledLate, removedAccount, severalAccounts, severalAccountsWithAiEndpoints,
+  unnamedAccount,
 } from './fixtures/accounts.js';
 import { aiEndpoints } from './fixtures/public-cloud.js';
-import { sinceJuly2025 } from './fixtures/trends.js';
+import { septemberBilledLate, sinceJuly2025 } from './fixtures/trends.js';
 import { api } from './support/api.js';
 import {
   cardOf,
@@ -14,12 +15,14 @@ import {
   optionsOf,
   projectionCheckbox,
   renderDashboard,
+  reopenDashboard,
   selectAccount,
   selectLanguage,
   selectMonth,
   settle,
   swatchOf,
   texts,
+  toggleProjection,
   toneOf,
 } from './support/render.jsx';
 
@@ -627,8 +630,11 @@ describe('Trends tab', () => {
     });
   });
 
-  // The month in progress (#216), which the page may project (#217): see fixtures/trends.js
+  // The month in progress (#216), which the page may project (#217): see fixtures/trends.js,
+  // where September has not billed the dedicated servers yet
   describe('month in progress', () => {
+    const billedLate = { ...account, ...septemberInProgress, ...septemberBilledLate };
+
     // Next to the period selector
     it('offers to project it on the Trends tab only, off by default', async () => {
       const { user } = await renderDashboard();
@@ -642,6 +648,77 @@ describe('Trends tab', () => {
       await selectLanguage(user, 'en');
 
       expect(projectionCheckbox()).toHaveAccessibleName('Project the month in progress');
+    });
+
+    it('asks for the trends projected once ticked, over a period that covers it only',
+      async () => {
+        const { user } = await renderDashboard(billedLate);
+        await openTab(user, 'Tendances');
+
+        await toggleProjection(user);
+
+        expect(api.fetchMonthlyTrend)
+          .toHaveBeenCalledWith(3, '2026-09', allAccounts, { projected: true });
+        expect(api.fetchMonthlyTrendByCategory)
+          .toHaveBeenCalledWith(3, '2026-09', allAccounts, { projected: true });
+
+        // June to August, complete months
+        await selectMonth(user, 'Août 2026');
+
+        expect(api.fetchMonthlyTrend).toHaveBeenLastCalledWith(3, '2026-08', allAccounts);
+        expect(api.fetchMonthlyTrendByCategory).toHaveBeenLastCalledWith(3, '2026-08', allAccounts);
+      });
+
+    // The trends load when the page opens, whatever the tab
+    it('asks for the trends projected from the start when ticked on an earlier visit',
+      async () => {
+        const { user } = await renderDashboard(billedLate);
+        await openTab(user, 'Tendances');
+        await toggleProjection(user);
+        api.fetchMonthlyTrend.mockClear();
+
+        await reopenDashboard(billedLate);
+
+        expect(api.fetchMonthlyTrend).toHaveBeenCalledOnce();
+        expect(api.fetchMonthlyTrend)
+          .toHaveBeenCalledWith(3, '2026-09', allAccounts, { projected: true });
+      });
+
+    // As the months list of the account shown marks it (#216): see fixtures/accounts.js
+    it('asks for the trends projected of the account shown while its month is in progress',
+      async () => {
+        const { user } = await renderDashboard(lyonBilledLate);
+        await openTab(user, 'Tendances');
+        await toggleProjection(user);
+
+        expect(api.fetchMonthlyTrend)
+          .toHaveBeenCalledWith(3, '2026-09', allAccounts, { projected: true });
+
+        await selectAccount(user, 'Lyon subsidiary');
+
+        expect(api.fetchMonthlyTrend)
+          .toHaveBeenCalledWith(3, '2026-09', lyonAccount.id, { projected: true });
+        expect(api.fetchMonthlyTrendByCategory)
+          .toHaveBeenCalledWith(3, '2026-09', lyonAccount.id, { projected: true });
+
+        // Whose bills of September came in
+        await selectAccount(user, 'yy2222-ovh');
+
+        expect(api.fetchMonthlyTrend).toHaveBeenLastCalledWith(3, '2026-09', unnamedAccount.id);
+        expect(api.fetchMonthlyTrendByCategory)
+          .toHaveBeenLastCalledWith(3, '2026-09', unnamedAccount.id);
+      });
+
+    it('asks for the trends as before while no month is in progress', async () => {
+      const { user } = await renderDashboard();
+      await openTab(user, 'Tendances');
+
+      await toggleProjection(user);
+
+      expect(api.fetchMonthlyTrend)
+        .not.toHaveBeenCalledWith(expect.anything(), expect.anything(), expect.anything(), {
+          projected: true,
+        });
     });
   });
 

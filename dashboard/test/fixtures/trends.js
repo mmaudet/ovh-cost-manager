@@ -244,3 +244,76 @@ export function trendsOf(first, last, billed) {
     },
   };
 }
+
+/**
+ * The cost trends that the routes answer with the projection of the month in progress (#217),
+ * keyed as those of trendsOf() are, under the entries that the API stand-in reads for such a
+ * request: every month with its projected part, and in the trend by resource type, that of each
+ * resource type, 0 when it has none.
+ * @param {string} first - The first month of the period, YYYY-MM
+ * @param {string} last - The month it ends on, YYYY-MM
+ * @param {object} costs - What each resource type cost in each month, projected lines included,
+ *   as trendsOf() takes them
+ * @param {object} projected - What the projected lines of the month in progress add to each
+ *   resource type, such as { '2026-09': { dedicated_server: 270 } }
+ * @returns {{ projectedMonthlyTrend: object, projectedMonthlyTrendByCategory: object }}
+ */
+export function projectedTrendsOf(first, last, costs, projected) {
+  const { monthlyTrend, monthlyTrendByCategory } = trendsOf(first, last, costs);
+  const count = monthsFrom(first, last).length;
+  const partsIn = (yearMonth) => projected[yearMonth] ?? {};
+  const { categories, data } = monthlyTrendByCategory[last][count];
+  return {
+    projectedMonthlyTrend: {
+      [last]: {
+        [count]: monthlyTrend[last][count].map((month) => ({
+          ...month,
+          projected: Object.values(partsIn(month.yearMonth)).reduce((sum, part) => sum + part, 0),
+        })),
+      },
+    },
+    projectedMonthlyTrendByCategory: {
+      [last]: {
+        [count]: {
+          categories,
+          data: data.map((row) => ({
+            ...row,
+            projected: Object.fromEntries(
+              categories.map(({ key }) => [key, partsIn(row.yearMonth)[key] ?? 0]),
+            ),
+          })),
+        },
+      },
+    },
+  };
+}
+
+// What each resource type cost the account in each month, as its trend by resource type up to
+// September gives it
+const costsOfAccount = Object.fromEntries(
+  costByResourceType.data.map(({ yearMonth, ...costs }) => [yearMonth, costs]),
+);
+// Its dedicated servers in September, and its other resource types
+const { dedicated_server: serversInSeptember, ...septemberWithoutServers } = costsOfAccount['2026-09'];
+// Its trends while its dedicated servers have not been billed in September yet
+const billedLate = trendsOf('2026-07', '2026-09', {
+  ...costsOfAccount, '2026-09': septemberWithoutServers,
+});
+
+/**
+ * The account while September, the month of today, is in progress (#216): the bill that charges
+ * its dedicated servers each month has not come yet in September. Its trends up to September lack
+ * them, and those with the projection of the month in progress (#217) count them at their bill
+ * lines of August, 270 €: September then costs what it costs in the trends above, once billed.
+ * The trends up to August are those above.
+ */
+export const septemberBilledLate = {
+  monthlyTrend: { ...trends.monthlyTrend, '2026-09': billedLate.monthlyTrend['2026-09'] },
+  monthlyTrendByCategory: {
+    ...trends.monthlyTrendByCategory,
+    '2026-09': billedLate.monthlyTrendByCategory['2026-09'],
+  },
+  ...projectedTrendsOf('2026-07', '2026-09', costsOfAccount, {
+    '2026-09': { dedicated_server: serversInSeptember },
+  }),
+};

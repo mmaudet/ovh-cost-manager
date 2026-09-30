@@ -7,15 +7,18 @@ import {
   fetchMonthlyTrend, fetchMonthlyTrendByCategory, fetchGpuSummary, fetchAiEndpoints,
 } from '../services/api.js';
 import { accountQuery } from '../utils/accounts.js';
+import { monthInProgressWithin } from '../utils/months.js';
 import { monthsBetween, availablePeriodsFor } from '../utils/trendPeriods.js';
 import { monthWindowEndingOn } from '../utils/monthWindow.js';
 
 // The tab shows the trends of the account that the header shows, selectedAccount: null for
 // all accounts, undefined while the page does not know it yet (#120). The months list and
 // the month selected are that account's, and holdsSelectedMonth whether the list holds that
-// month, as the shell checks it.
+// month, as the shell checks it. projectsMonthInProgress is the page's setting that projects the
+// month in progress (#217), off by default.
 const useTrendsTab = ({
   months, selectedMonth, holdsSelectedMonth, selectedAccount, activeTab,
+  projectsMonthInProgress = false,
 }) => {
   // The period the user picks, in months: 6 by default
   const [chosenPeriod, setChosenPeriod] = useState(6);
@@ -32,20 +35,36 @@ const useTrendsTab = ({
   const longestPeriod = availablePeriods[availablePeriods.length - 1].months;
   const trendPeriod = Math.min(chosenPeriod, longestPeriod);
 
+  // The months of the period as dates, from the first day of the first to the last day of the
+  // month selected: those of the GPU and AI Endpoints trends
+  const trendWindow = monthWindowEndingOn(selectedMonth, trendPeriod);
+
+  // The month in progress that the period covers (#216), null when it covers none, and whether
+  // the trends project it: while the page projects the month in progress (#217). Their requests
+  // and their keys name the flag only then, so that a single-account installation keeps its keys
+  // while the setting is off; before the account, which comes last (ADR 0001).
+  const monthInProgress = monthInProgressWithin(months, trendWindow);
+  const projected = projectsMonthInProgress && monthInProgress !== null;
+  const projection = projected
+    ? { key: ['projected'], options: [{ projected: true }] }
+    : { key: [], options: [] };
+
   // The trends wait until the months list holds the month selected. It does not while the
   // months of the account just selected load, nor when that account lacks the month, until
   // the shell selects its latest month (#115): the period would then count no month, or end
   // on a month the account lacks, and the tab would ask for trends it never shows (#120).
   const { data: monthlyTrend = [] } = useQuery(accountQuery(selectedAccount, {
-    key: ['monthlyTrend', trendPeriod, endMonth],
-    fetch: (account) => fetchMonthlyTrend(trendPeriod, endMonth, account),
+    key: ['monthlyTrend', trendPeriod, endMonth, ...projection.key],
+    fetch: (account) => fetchMonthlyTrend(trendPeriod, endMonth, account, ...projection.options),
     enabled: holdsSelectedMonth,
   }));
 
   const { data: trendByCategory = { categories: [], data: [] } } = useQuery(
     accountQuery(selectedAccount, {
-      key: ['monthlyTrendByCategory', trendPeriod, endMonth],
-      fetch: (account) => fetchMonthlyTrendByCategory(trendPeriod, endMonth, account),
+      key: ['monthlyTrendByCategory', trendPeriod, endMonth, ...projection.key],
+      fetch: (account) => fetchMonthlyTrendByCategory(
+        trendPeriod, endMonth, account, ...projection.options,
+      ),
       enabled: holdsSelectedMonth,
     }),
   );
@@ -56,10 +75,6 @@ const useTrendsTab = ({
     next.has(key) ? next.delete(key) : next.add(key);
     return next;
   });
-
-  // The months of the period as dates, from the first day of the first to the last day of the
-  // month selected: those of the GPU and AI Endpoints trends
-  const trendWindow = monthWindowEndingOn(selectedMonth, trendPeriod);
 
   // GPU cost trend, over the same months (for trends tab)
   const { data: gpuTrend } = useQuery(accountQuery(selectedAccount, {
@@ -86,6 +101,8 @@ const useTrendsTab = ({
     toggleCategory,
     gpuTrend,
     aiEndpointsTrend,
+    monthInProgress,
+    projected,
   };
 };
 

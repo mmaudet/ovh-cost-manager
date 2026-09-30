@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { translations } from '../../src/i18n/translations.js';
-import { holdsMonth, isMonthInProgress, monthLabel } from '../../src/utils/months.js';
+import {
+  holdsMonth, isMonthInProgress, monthInProgressWithin, monthLabel,
+} from '../../src/utils/months.js';
 import { months } from '../fixtures/calendar.js';
 
 // Whether a months list, as /api/months lists them for the account shown, holds a month: the
@@ -58,6 +60,33 @@ describe('isMonthInProgress', () => {
     expect(isMonthInProgress([], septemberInProgress)).toBe(false);
     expect(isMonthInProgress([septemberInProgress], null)).toBe(false);
     expect(isMonthInProgress([septemberInProgress], undefined)).toBe(false);
+  });
+});
+
+// The month in progress that a period covers, as the Trends tab's period covers it (#217)
+describe('monthInProgressWithin', () => {
+  const inProgress = [septemberInProgress, august, july];
+
+  it('gives the month in progress that the period covers', () => {
+    expect(monthInProgressWithin(inProgress, { from: '2026-07-01', to: '2026-09-30' }))
+      .toBe('2026-09');
+    // Whatever its place in the period
+    expect(monthInProgressWithin(inProgress, { from: '2026-09-01', to: '2026-11-30' }))
+      .toBe('2026-09');
+  });
+
+  it('gives none for a period that does not cover it', () => {
+    expect(monthInProgressWithin(inProgress, { from: '2026-06-01', to: '2026-08-31' })).toBeNull();
+    expect(monthInProgressWithin(inProgress, { from: '2026-10-01', to: '2026-12-31' })).toBeNull();
+  });
+
+  it('gives none while no month is in progress', () => {
+    expect(monthInProgressWithin(months, { from: '2026-07-01', to: '2026-09-30' })).toBeNull();
+  });
+
+  // Before a month is selected, the period is none
+  it('gives none without a period', () => {
+    expect(monthInProgressWithin(inProgress, null)).toBeNull();
   });
 });
 

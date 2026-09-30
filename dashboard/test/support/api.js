@@ -145,12 +145,15 @@ const answers = {
   fetchProjectsByAccount: entryForPeriod('projectsByAccount', emptyAnswers.list),
   fetchGpuProjectsByAccount: entryForPeriod('gpuProjectsByAccount', emptyAnswers.list),
   // Trends: by the month they end on, then by their number of months, and those of the
-  // account the page selects (#120)
-  fetchMonthlyTrend: (data, months, end, account) =>
-    ofAccount(data, account).monthlyTrend?.[end]?.[months] ?? emptyAnswers.list(),
-  fetchMonthlyTrendByCategory: (data, months, end, account) =>
-    ofAccount(data, account).monthlyTrendByCategory?.[end]?.[months]
-      ?? emptyAnswers.trendByCategory(),
+  // account the page selects (#120). Asked with the projection of the month in progress, those of
+  // its own entries (#217): projectedMonthlyTrend and projectedMonthlyTrendByCategory.
+  fetchMonthlyTrend: (data, months, end, account, { projected = false } = {}) =>
+    ofAccount(data, account)[projected ? 'projectedMonthlyTrend' : 'monthlyTrend']
+      ?.[end]?.[months] ?? emptyAnswers.list(),
+  fetchMonthlyTrendByCategory: (data, months, end, account, { projected = false } = {}) =>
+    ofAccount(data, account)[
+      projected ? 'projectedMonthlyTrendByCategory' : 'monthlyTrendByCategory'
+    ]?.[end]?.[months] ?? emptyAnswers.trendByCategory(),
   fetchImportStatus: entry('importStatus', emptyAnswers.importStatus),
   triggerImport: () => ({ started: true }),
   fetchConfig: entry('config', emptyAnswers.config),
