@@ -215,7 +215,10 @@ const CompareTab = ({
           </div>
         </div>
 
-        <div className="flex items-center justify-center gap-6 md:gap-8 mt-8">
+        {/* The totals of months A and B, and the variation between them: one under the other on
+            a phone, which cannot hold them side by side, rather than run off its left edge
+            (#226) */}
+        <div className="flex flex-col sm:flex-row items-center justify-center gap-6 md:gap-8 mt-8">
           <div className="text-center">
             <div className="text-3xl md:text-4xl font-bold text-blue-600">
               {fmt(compareDataA?.total || 0)}€
