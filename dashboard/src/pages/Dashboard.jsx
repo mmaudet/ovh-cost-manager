@@ -434,7 +434,7 @@ export default function Dashboard() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 p-4 md:p-6">
-      <div className="max-w-6xl mx-auto space-y-6">
+      <div className="max-w-7xl mx-auto space-y-6">
 
         {/* Sync Warning Banner */}
         {showSyncWarning && (
@@ -475,7 +475,7 @@ export default function Dashboard() {
 
         {/* Header */}
         <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 shrink-0">
             {/* What the logo and the tab bar keep open: ADR 0001 (#56) */}
             <button
               onClick={() => {
@@ -487,22 +487,16 @@ export default function Dashboard() {
             >
               <Logo className="h-14" />
             </button>
-            <div>
-              <div className="flex items-center gap-3">
-                <h1 className="text-2xl font-bold text-gray-900">{t('appTitle')}</h1>
-                <select
-                  value={language}
-                  onChange={(e) => setLanguage(e.target.value)}
-                  className="px-2 py-1 text-xs bg-gray-100 border border-gray-200 rounded cursor-pointer"
-                >
-                  <option value="fr">FR</option>
-                  <option value="en">EN</option>
-                </select>
-              </div>
+            {/* The title, and the subtitle under it, each on one line */}
+            <div className="whitespace-nowrap">
+              <h1 className="text-2xl font-bold text-gray-900">{t('appTitle')}</h1>
               <p className="text-gray-500 text-sm">{t('appSubtitle')}</p>
             </div>
           </div>
-          <div className="flex items-center gap-3">
+          {/* The controls, 8 px apart so as to share the title's line from a 1280 px screen up.
+              When they lack room, the last ones go whole to a line of their own, rather than
+              squeeze the title or wrap a name. Below md, under the title, they align left */}
+          <div className="flex flex-wrap items-center md:justify-end gap-2">
             {/* Manual resync */}
             {importsEnabled && <ResyncButton t={t} />}
             {/* Expiration badge */}
@@ -514,7 +508,10 @@ export default function Dashboard() {
             )}
             {/* User info */}
             {userData?.id && (
-              <div className="flex items-center gap-2 px-3 py-1.5 bg-gray-100 rounded-lg">
+              <div
+                className={'flex items-center gap-2 px-3 py-1.5 bg-gray-100 rounded-lg'
+                  + ' whitespace-nowrap'}
+              >
                 <span className="text-sm text-gray-700">{userData.name}</span>
                 {userData.authEnabled && (
                   <a
@@ -547,39 +544,43 @@ export default function Dashboard() {
                     </option>
                   ))}
                 </HeaderSelect>
-                <div className="flex items-center gap-2">
-                  <span className="text-sm text-gray-600">{t('export')}:</span>
-                  <select
-                    onChange={(e) => {
-                      const format = e.target.value;
-                      if (format === 'md') {
-                        // The figures of the account shown, which the shell holds (#115, #118)
-                        const md = generateMarkdownReport(
-                          summary, byService, byProject, selectedMonth, language, { scope },
-                        );
-                        const blob = new Blob([md], { type: 'text/markdown' });
-                        const url = URL.createObjectURL(blob);
-                        const a = document.createElement('a');
-                        a.href = url;
-                        a.download = reportFileName(selectedMonth.value, selectedAccount);
-                        a.click();
-                        URL.revokeObjectURL(url);
-                      } else if (format === 'pdf') {
-                        // Under a title that names what the page shows (see above, #124)
-                        window.print();
-                      }
-                      e.target.value = '';
-                    }}
-                    className="px-3 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium cursor-pointer"
-                    defaultValue=""
-                  >
-                    <option value="" disabled>{t('choose')}</option>
-                    <option value="md">{t('markdown')}</option>
-                    <option value="pdf">{t('pdf')}</option>
-                  </select>
-                </div>
+                {/* The export, named by its placeholder */}
+                <select
+                  onChange={(e) => {
+                    const format = e.target.value;
+                    if (format === 'md') {
+                      // The figures of the account shown, which the shell holds (#115, #118)
+                      const md = generateMarkdownReport(
+                        summary, byService, byProject, selectedMonth, language, { scope },
+                      );
+                      const blob = new Blob([md], { type: 'text/markdown' });
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement('a');
+                      a.href = url;
+                      a.download = reportFileName(selectedMonth.value, selectedAccount);
+                      a.click();
+                      URL.revokeObjectURL(url);
+                    } else if (format === 'pdf') {
+                      // Under a title that names what the page shows (see above, #124)
+                      window.print();
+                    }
+                    e.target.value = '';
+                  }}
+                  className={'px-3 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium'
+                    + ' cursor-pointer'}
+                  defaultValue=""
+                >
+                  <option value="" disabled>{t('export')}</option>
+                  <option value="md">{t('markdown')}</option>
+                  <option value="pdf">{t('pdf')}</option>
+                </select>
               </>
             )}
+            {/* The page's language, last of the controls, with the look of the other selectors */}
+            <HeaderSelect value={language} onChange={(e) => setLanguage(e.target.value)}>
+              <option value="fr">FR</option>
+              <option value="en">EN</option>
+            </HeaderSelect>
           </div>
         </div>
 

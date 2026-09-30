@@ -75,8 +75,8 @@ describe('account selector', () => {
       await renderDashboard({ ...severalAccounts, accounts });
 
       expect(accountSelector()).not.toBeInTheDocument();
-      // The language, the month and the export
-      expect(dropdownsShown()).toEqual(['FR', 'Septembre 2026', 'Choisir...']);
+      // The month, the export and the language, last of the header's controls
+      expect(dropdownsShown()).toEqual(['Septembre 2026', 'Exporter…', 'FR']);
       expect(monthCost()).toEqual(allAccountsCost);
     });
 
@@ -89,7 +89,7 @@ describe('account selector', () => {
       await renderDashboard({ ...severalAccounts, accounts });
 
       expect(accountSelector()).toBeInTheDocument();
-      expect(dropdownsShown()).toEqual(['FR', 'Tous les comptes', 'Septembre 2026', 'Choisir...']);
+      expect(dropdownsShown()).toEqual(['Tous les comptes', 'Septembre 2026', 'Exporter…', 'FR']);
     });
 
     // The Compare tab will compare two months of the account selected (#119)
@@ -98,7 +98,8 @@ describe('account selector', () => {
 
       await openTab(user, 'Comparaison');
 
-      expect(dropdownsShown()).toEqual(['FR', 'Tous les comptes', 'Août 2026', 'Septembre 2026']);
+      // The header's, then months A and B of the tab
+      expect(dropdownsShown()).toEqual(['Tous les comptes', 'FR', 'Août 2026', 'Septembre 2026']);
     });
   });
 

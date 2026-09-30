@@ -386,7 +386,7 @@ describe('dashboard shell', () => {
 
       await openTab(user, 'Comparaison');
 
-      expect(screen.queryByText('Export:')).not.toBeInTheDocument();
+      expect(screen.queryByDisplayValue('Exporter…')).not.toBeInTheDocument();
       // What is left: the language, then the months A and B of the comparison
       const dropdowns = screen.getAllByRole('combobox');
       expect(dropdowns).toHaveLength(3);
@@ -1166,7 +1166,7 @@ describe('dashboard shell', () => {
       const { user } = await renderDashboard();
       const downloadedFiles = captureFileDownloads();
 
-      await user.selectOptions(screen.getByDisplayValue('Choisir...'), 'Markdown');
+      await user.selectOptions(screen.getByDisplayValue('Exporter…'), 'Markdown');
 
       const files = await downloadedFiles();
       expect(files).toHaveLength(1);
@@ -1174,7 +1174,7 @@ describe('dashboard shell', () => {
       expect(files[0].type).toBe('text/markdown');
       expect(files[0].content).toBe(septemberReport.join('\n'));
       // Ready for another export
-      expect(screen.getByDisplayValue('Choisir...')).toBeInTheDocument();
+      expect(screen.getByDisplayValue('Exporter…')).toBeInTheDocument();
     });
 
     // A single-account installation, whose accounts route lists its account, or none until
@@ -1187,7 +1187,7 @@ describe('dashboard shell', () => {
       const { user } = await renderDashboard({ ...severalAccounts, accounts });
       const downloadedFiles = captureFileDownloads();
 
-      await user.selectOptions(screen.getByDisplayValue('Choisir...'), 'Markdown');
+      await user.selectOptions(screen.getByDisplayValue('Exporter…'), 'Markdown');
 
       expect(await downloadedFiles()).toEqual([{
         name: 'ovh-report-2026-09.md', type: 'text/markdown', content: septemberReport.join('\n'),
@@ -1199,7 +1199,7 @@ describe('dashboard shell', () => {
       await selectLanguage(user, 'en');
       const downloadedFiles = captureFileDownloads();
 
-      await user.selectOptions(screen.getByDisplayValue('Choose...'), 'Markdown');
+      await user.selectOptions(screen.getByDisplayValue('Export…'), 'Markdown');
 
       const [{ content: report }] = await downloadedFiles();
       // The month in English too (#33)
@@ -1217,7 +1217,7 @@ describe('dashboard shell', () => {
       // Exports the report as Markdown, in the language of the page: the file downloaded
       const exportReport = async (user) => {
         const downloadedFiles = captureFileDownloads();
-        await user.selectOptions(screen.getByDisplayValue(/^(Choisir|Choose)\.\.\.$/), 'Markdown');
+        await user.selectOptions(screen.getByDisplayValue(/^(Exporter|Export)…$/), 'Markdown');
         const [file] = await downloadedFiles();
         return file;
       };
@@ -1346,7 +1346,7 @@ describe('dashboard shell', () => {
         const { user } = await renderDashboard();
         const print = vi.spyOn(window, 'print');
 
-        await user.selectOptions(screen.getByDisplayValue('Choisir...'), 'PDF');
+        await user.selectOptions(screen.getByDisplayValue('Exporter…'), 'PDF');
 
         expect(print).toHaveBeenCalledOnce();
       });
@@ -1359,7 +1359,7 @@ describe('dashboard shell', () => {
         const { user } = await renderDashboard({ ...severalAccounts, accounts });
         const titles = printedTitles();
 
-        await user.selectOptions(screen.getByDisplayValue('Choisir...'), 'PDF');
+        await user.selectOptions(screen.getByDisplayValue('Exporter…'), 'PDF');
 
         expect(titles).toEqual([PAGE_TITLE]);
         expect(document.title).toBe(PAGE_TITLE);
@@ -1371,7 +1371,7 @@ describe('dashboard shell', () => {
         const { user } = await renderDashboard(severalAccounts);
         const titles = printedTitles();
         const exportPdf = () =>
-          user.selectOptions(screen.getByDisplayValue(/^(Choisir|Choose)\.\.\.$/), 'PDF');
+          user.selectOptions(screen.getByDisplayValue(/^(Exporter|Export)…$/), 'PDF');
 
         await exportPdf();
         await selectAccount(user, 'Lyon subsidiary');

@@ -702,7 +702,7 @@ describe('Overview tab', () => {
       const { user } = await renderDashboard(stagingMoved);
       const downloadedFiles = captureFileDownloads();
 
-      await user.selectOptions(screen.getByDisplayValue('Choisir...'), 'Markdown');
+      await user.selectOptions(screen.getByDisplayValue('Exporter…'), 'Markdown');
 
       const [report] = await downloadedFiles();
       expect(report.content.split('\n').filter((line) => line.startsWith('| Staging')))

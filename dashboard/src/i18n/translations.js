@@ -3,8 +3,7 @@ export const translations = {
     // Header
     appTitle: 'OVH Cost Manager',
     appSubtitle: 'Tableau de bord de suivi des coûts OVHcloud',
-    export: 'Export',
-    choose: 'Choisir...',
+    export: 'Exporter…',
     markdown: 'Markdown',
     pdf: 'PDF',
     logout: 'Se déconnecter',
@@ -312,8 +311,7 @@ export const translations = {
     // Header
     appTitle: 'OVH Cost Manager',
     appSubtitle: 'OVHcloud cost tracking dashboard',
-    export: 'Export',
-    choose: 'Choose...',
+    export: 'Export…',
     markdown: 'Markdown',
     pdf: 'PDF',
     logout: 'Log out',
