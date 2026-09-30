@@ -4,8 +4,9 @@
 
 /**
  * The two parts that draw each series of a line chart of the Trends tab: a solid line through
- * the complete months, and a dashed one through the month in progress and the months next to it,
- * as the values of the chart's rows for a line, null where the part does not go.
+ * the complete months, and a dashed one from the month before the month in progress to it, as
+ * the values of the chart's rows for a line, null where the part does not go. The month in
+ * progress is always the latest month, which ends the chart when it covers it.
  * @param {{ yearMonth: string }[]} rows - The chart's months, in order
  * @param {?string} monthInProgress - The month in progress, YYYY-MM, when the chart covers it;
  *   null otherwise, when every month is solid
@@ -15,10 +16,10 @@
  */
 export function lineParts(rows, monthInProgress) {
   const index = rows.findIndex(({ yearMonth }) => yearMonth === monthInProgress);
-  // The month in progress and the months next to it, which the dashed part joins
-  const dashedMonths = new Set(index < 0
-    ? []
-    : rows.slice(Math.max(index - 1, 0), index + 2).map(({ yearMonth }) => yearMonth));
+  // The month before the month in progress and the month in progress, which the dashed part
+  // joins: none without it
+  const dashedMonths = new Set(rows.slice(Math.max(index - 1, 0), index + 1)
+    .map(({ yearMonth }) => yearMonth));
   return {
     solid: (key) => (row) => (row.yearMonth === monthInProgress ? null : row[key]),
     dashed: (key) => (row) => (dashedMonths.has(row.yearMonth) ? row[key] : null),

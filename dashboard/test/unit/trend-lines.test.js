@@ -46,14 +46,6 @@ describe('lineParts', () => {
     expect(valuesOf(parts.dashed('cost'), september)).toEqual([980.4]);
   });
 
-  // Whatever its place: the months next to it on both sides
-  it('joins the month in progress to the months next to it', () => {
-    const parts = lineParts(threeMonths, '2026-08');
-
-    expect(valuesOf(parts.solid('cost'), threeMonths)).toEqual([980, null, 980.4]);
-    expect(valuesOf(parts.dashed('cost'), threeMonths)).toEqual([980, 1042, 980.4]);
-  });
-
   it('reads the key of the series it is given', () => {
     const byResourceType = [
       { yearMonth: '2026-08', dedicated_server: 270 },

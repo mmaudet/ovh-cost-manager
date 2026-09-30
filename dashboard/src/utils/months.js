@@ -31,18 +31,18 @@ export const isMonthInProgress = (months, month) => months.some(
 
 /**
  * The month in progress (#216) that a period covers, as the months list marks it: the Trends
- * tab's trends project it, while the page projects the month in progress (#217).
+ * tab's trends project it, while the page projects the month in progress (#217). It is always
+ * the latest month of the list, which a period of the list's months covers when it ends on it.
  * @param {{ value: string, inProgress?: boolean }[]} months - The months list
- * @param {?{ from: string, to: string }} period - Its first and last days, YYYY-MM-DD; null
- *   before a month is selected
- * @returns {?string} The month in progress, YYYY-MM, when the period covers it; null otherwise,
+ * @param {?{ from: string, to: string }} period - Its first and last days, YYYY-MM-DD, as
+ *   monthWindowEndingOn() gives them for a month of the list; null before a month is selected
+ * @returns {?string} The month in progress, YYYY-MM, when the period ends on it; null otherwise,
  *   as while no month is in progress
  */
 export const monthInProgressWithin = (months, period) => {
   const month = months.find(({ inProgress }) => inProgress === true)?.value;
   if (!month || !period) return null;
-  // YYYY-MM months compare as their text does
-  return period.from.slice(0, 7) <= month && month <= period.to.slice(0, 7) ? month : null;
+  return period.to.slice(0, 7) === month ? month : null;
 };
 
 /**

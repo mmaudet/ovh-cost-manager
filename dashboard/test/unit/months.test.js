@@ -63,21 +63,19 @@ describe('isMonthInProgress', () => {
   });
 });
 
-// The month in progress that a period covers, as the Trends tab's period covers it (#217)
+// The month in progress that a period covers, as the Trends tab's period covers it (#217): the
+// month in progress is always the latest month of the list, which a period covers when it ends on
+// it
 describe('monthInProgressWithin', () => {
   const inProgress = [septemberInProgress, august, july];
 
-  it('gives the month in progress that the period covers', () => {
+  it('gives the month in progress when the period ends on it', () => {
     expect(monthInProgressWithin(inProgress, { from: '2026-07-01', to: '2026-09-30' }))
-      .toBe('2026-09');
-    // Whatever its place in the period
-    expect(monthInProgressWithin(inProgress, { from: '2026-09-01', to: '2026-11-30' }))
       .toBe('2026-09');
   });
 
-  it('gives none for a period that does not cover it', () => {
+  it('gives none for a period that ends before it', () => {
     expect(monthInProgressWithin(inProgress, { from: '2026-06-01', to: '2026-08-31' })).toBeNull();
-    expect(monthInProgressWithin(inProgress, { from: '2026-10-01', to: '2026-12-31' })).toBeNull();
   });
 
   it('gives none while no month is in progress', () => {
