@@ -107,6 +107,21 @@ The month a bill line pays for: the month before its bill's for the lines of a P
 Cloud project, which OVHcloud bills after use, and the month of its bill for the others.
 _Avoid_: usage month, billing month
 
+**Month in progress**:
+The calendar month of today, while it has not billed each recurring service yet: its cost so
+far lacks theirs. OVHcloud bills some accounts early in the month, others late.
+_Avoid_: current month (the Public Cloud's current consumption is another thing), open month
+
+**Recurring service**:
+A service that the bills of each of the three months before the month of today charged.
+_Avoid_: regular service, subscription
+
+**Projected cost**:
+The cost of the month in progress with each recurring service that it has not billed yet
+counted at its cost of the month before, assuming it stays the same.
+_Avoid_: forecast (the Public Cloud's end-of-month consumption), estimate (an estimated cost is
+a resource's share of a bill line)
+
 **Carbon intensity**:
 The carbon footprint of a line of OVHcloud's file per unit of the currency that the bill
 lines that it ties to cost in its month of use.
