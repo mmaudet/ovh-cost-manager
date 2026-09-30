@@ -1,5 +1,5 @@
 import { formatMonthLabel } from '../utils/format.js';
-import { comparisonValues, pairMonths } from '../utils/monthComparison.js';
+import { comparisonValues, pairMonths, whileInProgress } from '../utils/monthComparison.js';
 import { publicCloudProductLabel } from '../utils/publicCloudProducts.js';
 import { MonthAnswersMessage, useMonthAnswers } from './MonthAnswers.jsx';
 import { SortableHeader, sortRows } from './SortableHeader.jsx';
@@ -41,14 +41,21 @@ const productRows = (billedA, billedB) => pairMonths(
  * @param {{ charge: string, total: number }[]} props.chargesB - Those of month B
  * @param {?object} props.sort - The sort of the comparison, by its columns (see
  *   SortableHeader.jsx): null until the user sorts it
+ * @param {boolean} props.monthInProgress - Whether month A or B is the month in progress: no
+ *   variation of a charge is computed then (#216)
  * @returns {JSX.Element[]} A row for each charge
  */
-const ProductCharges = ({ chargesA, chargesB, sort, fmt, language, t }) => sortUnfolded(
+const ProductCharges = ({
+  chargesA, chargesB, sort, monthInProgress, fmt, language, t,
+}) => sortUnfolded(
   pairMonths(chargesA, chargesB, ({ charge }) => charge)
     .map(({ key, valA, valB }) => ({ charge: key, valA, valB })),
-  sort, CHARGE_VALUES, language,
+  sort, whileInProgress(CHARGE_VALUES, monthInProgress), language,
 ).map(({ charge, valA, valB }) => (
-  <DetailRow key={charge} valA={valA} valB={valB} fmt={fmt} language={language} t={t}>
+  <DetailRow
+    key={charge} valA={valA} valB={valB} monthInProgress={monthInProgress}
+    fmt={fmt} language={language} t={t}
+  >
     {/* A long charge, such as an instance's monthly plan, which names the instance, wraps to the
         column of the products */}
     <div className="text-xs break-words">{charge}</div>
@@ -70,6 +77,8 @@ const ProductCharges = ({ chargesA, chargesB, sort, fmt, language, t }) => sortU
  *   project's products in a month, for useQuery (useCompareTab()'s projectProductsQuery())
  * @param {?object} props.monthA
  * @param {?object} props.monthB
+ * @param {boolean} [props.monthInProgress] - Whether month A or B is the month in progress, as
+ *   the months list marks it: no variation of a product or a charge is computed then (#216)
  * @param {{ sort: ?object, onSort: function(object) }} props.sorting
  * @param {function(string): { unfolded: boolean, onToggle: function() }} props.unfoldingOf -
  *   Whether a product is unfolded, by its name, and what folds or unfolds it, which the Compare
@@ -77,7 +86,8 @@ const ProductCharges = ({ chargesA, chargesB, sort, fmt, language, t }) => sortU
  * @returns {JSX.Element}
  */
 export default function ProjectProductComparison({
-  productsQueryOf, monthA, monthB, sorting, unfoldingOf, fmt, language, t,
+  productsQueryOf, monthA, monthB, monthInProgress = false, sorting, unfoldingOf, fmt, language,
+  t,
 }) {
   const { status, dataA, dataB } = useMonthAnswers(productsQueryOf, monthA, monthB);
   // Until both months' answers arrive, rather than a month at 0 € or no product at all, or
@@ -130,7 +140,9 @@ export default function ProjectProductComparison({
         </tr>
       </thead>
       <tbody>
-        {sortRows(rows, sorting.sort, productValues(t), language).map(({
+        {sortRows(
+          rows, sorting.sort, whileInProgress(productValues(t), monthInProgress), language,
+        ).map(({
           product, chargesA, chargesB, valA, valB,
         }) => {
           const label = publicCloudProductLabel(product, t);
@@ -145,14 +157,17 @@ export default function ProjectProductComparison({
               detail={(
                 <ProductCharges
                   chargesA={chargesA} chargesB={chargesB} sort={sorting.sort}
-                  fmt={fmt} language={language} t={t}
+                  monthInProgress={monthInProgress} fmt={fmt} language={language} t={t}
                 />
               )}
             >
               <td className="p-3 text-right font-medium">{fmt(valA)}€</td>
               <td className="p-3 text-right text-gray-500">{fmt(valB)}€</td>
               <td className="p-3 text-right">
-                <Variation from={valA} to={valB} language={language} t={t} />
+                <Variation
+                  from={valA} to={valB} language={language} t={t}
+                  monthInProgress={monthInProgress}
+                />
               </td>
             </UnfoldingRow>
           );

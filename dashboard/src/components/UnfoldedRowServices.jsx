@@ -31,6 +31,8 @@ const serviceRows = (servicesA, servicesB) => pairMonths(
  *   backupServicesQuery(), for the row
  * @param {?object} props.monthA
  * @param {?object} props.monthB
+ * @param {boolean} [props.monthInProgress] - Whether month A or B is the month in progress, as
+ *   the months list marks it: no variation of a service is computed then (#216)
  * @param {?object} props.sort - The sort of the comparison, by its columns (see
  *   SortableHeader.jsx): null until the user sorts it, as for a comparison that does not sort
  * @param {Object<string, function(object): *>} props.values - The value of a service in each
@@ -46,7 +48,8 @@ const serviceRows = (servicesA, servicesB) => pairMonths(
  *   failed; else a row for each service
  */
 const UnfoldedRowServices = ({
-  servicesQueryOf, monthA, monthB, sort, values, columnCount, accountColumn, fmt, language, t,
+  servicesQueryOf, monthA, monthB, monthInProgress = false, sort, values, columnCount,
+  accountColumn, fmt, language, t,
 }) => {
   const { status, dataA, dataB } = useMonthAnswers(servicesQueryOf, monthA, monthB);
   // Until both months' answers arrive, or when one failed, rather than a month at 0 €, in line
@@ -65,7 +68,10 @@ const UnfoldedRowServices = ({
   ).map(({
     key, identifier, account, description, valA, valB,
   }) => (
-    <DetailRow key={key} valA={valA} valB={valB} fmt={fmt} language={language} t={t}>
+    <DetailRow
+      key={key} valA={valA} valB={valB} monthInProgress={monthInProgress}
+      fmt={fmt} language={language} t={t}
+    >
       {/* The description is cut to the column of the rows' labels, and the identifier wraps to
           it, at its hyphens first */}
       <div className="text-xs break-words">

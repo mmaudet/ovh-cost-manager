@@ -222,6 +222,15 @@ export const account = {
 
 // Variants of the account, to spread over it: { ...account, ...variant }
 
+// The account while September, the month of today, is in progress (#216): a recurring service,
+// which each of the three months before billed, has no bill line in it yet, and the months list
+// marks it, as the server does
+export const septemberInProgress = {
+  months: months.map((month) => (
+    month.value === '2026-09' ? { ...month, inProgress: true } : month
+  )),
+};
+
 // The other resource types of the variant below, most expensive first. Public
 // Cloud and the Web Cloud services (domain, web_cloud) have tabs of their own,
 // the others show on the Infrastructure tab.

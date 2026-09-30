@@ -51,6 +51,20 @@ const comparisonValues = (nameColumn, nameOf) => ({
 });
 
 /**
+ * The values of a comparison's rows in the columns that sort it, as the rows show them while
+ * month A or B is the month in progress (#216): without a variation, which they write "—" then,
+ * so that a sort by the variation leaves them in their order, as it leaves the rows whose
+ * variation cannot be computed (#146), rather than follow values that the table does not show.
+ * @param {Object<string, function(object): *>} values - The value of a row in each column, by
+ *   the column's name, as sortRows() takes them
+ * @param {boolean} monthInProgress - Whether month A or B is the month in progress
+ * @returns {Object<string, function(object): *>}
+ */
+const whileInProgress = (values, monthInProgress) => (
+  monthInProgress ? { ...values, variation: () => null } : values
+);
+
+/**
  * What makes a row of month A and one of month B the same, for pairMonths(): what it names, a
  * project or a service, and its account. The rows that the lists ask for by account, while
  * they name the account of each row, give the NIC handle of theirs, null for the Unknown
@@ -61,4 +75,6 @@ const comparisonValues = (nameColumn, nameOf) => ({
  */
 const byNameAndAccount = (nameOf) => (row) => JSON.stringify([nameOf(row), row.account ?? null]);
 
-export { BY_MONTH_A, BY_MONTH_B, byNameAndAccount, comparisonValues, pairMonths };
+export {
+  BY_MONTH_A, BY_MONTH_B, byNameAndAccount, comparisonValues, pairMonths, whileInProgress,
+};

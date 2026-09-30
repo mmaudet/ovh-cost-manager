@@ -17,12 +17,16 @@ const TONES = {
 // The variation from one amount to another, as every table and the headline of the Compare
 // tab show it: in percent, in the number format of the language, red when it grows, green
 // when it shrinks, and grey when it rounds to 0 (#87). From 0 € or less, it cannot be computed
-// (#65): "—", with a tooltip that says why.
-const Variation = ({ from, to, language, t, size = 'cell' }) => {
-  const variation = variationDisplay(variationPercent(from, to), language);
+// (#65): "—", with a tooltip that says why. Nor when either amount is of the month in progress
+// (monthInProgress), which it would compare, partial, with a complete month (#216).
+const Variation = ({ from, to, language, t, size = 'cell', monthInProgress = false }) => {
+  const variation = monthInProgress
+    ? null
+    : variationDisplay(variationPercent(from, to), language);
   if (variation === null) {
+    const why = monthInProgress ? 'variationMonthInProgress' : 'variationNotComputable';
     return (
-      <span className={`${SIZES[size]} text-gray-400`} title={t('variationNotComputable')}>
+      <span className={`${SIZES[size]} text-gray-400`} title={t(why)}>
         —
       </span>
     );

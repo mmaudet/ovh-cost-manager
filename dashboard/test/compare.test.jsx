@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { screen, within } from '@testing-library/react';
-import { account, everyResourceType, threeBilledProjects } from './fixtures/account.js';
+import {
+  account, everyResourceType, septemberInProgress, threeBilledProjects,
+} from './fixtures/account.js';
 import {
   COLD_ARCHIVE, DB_1_PLAN, billedProducts, bucketStorage, hourlyUse,
 } from './fixtures/public-cloud.js';
@@ -166,6 +168,26 @@ describe('Compare tab', () => {
         'Mois A :', 'Septembre 2026', 'VS', 'Mois B :', 'Septembre 2026',
         '1 250,40€', 'Septembre 2026', '0,0 %', '1 250,40€', 'Septembre 2026',
       ]);
+    });
+
+    // As the month selector of the header does, so that no one compares a partial month
+    // unawares
+    it('name the month in progress so, in the language of the page (#216)', async () => {
+      const { user } = await renderDashboard({ ...account, ...septemberInProgress });
+      await openTab(user, 'Comparaison');
+
+      // Month B is still the latest month, the one the page opens on
+      const monthA = dropdown('Juillet 2026', 'Août 2026');
+      const monthB = dropdown('Juillet 2026', 'Septembre 2026 (en cours)');
+      for (const select of [monthA, monthB]) {
+        expect(optionsOf(select))
+          .toEqual(['Septembre 2026 (en cours)', 'Août 2026', 'Juillet 2026']);
+      }
+
+      await selectLanguage(user, 'en');
+
+      expect(optionsOf(dropdown('July 2026', 'September 2026 (in progress)')))
+        .toEqual(['September 2026 (in progress)', 'August 2026', 'July 2026']);
     });
 
     it('are the same month when a single month was billed', async () => {
@@ -1910,6 +1932,166 @@ describe('Compare tab', () => {
         ['Type', 'Juillet 2026', 'Septembre 2026', 'Variation'],
         ['Hôtes Private Cloud', '0,00€', '0,00€', '—'],
         ['Datastores Private Cloud', '0,00€', '0,00€', '—'],
+      ]);
+    });
+  });
+
+  // Rather than compare a partial month with a complete one (#216): "—", with a tooltip that
+  // says why, as for a variation from month A at 0 € or less (#65)
+  describe('variations with the month in progress (#216)', () => {
+    const whyNotComputed = 'non calculable : mois en cours';
+
+    it('are not computed for the totals, saying why', async () => {
+      const { user } = await renderDashboard({ ...account, ...septemberInProgress });
+
+      await openTab(user, 'Comparaison');
+
+      expect(texts(comparedTotals())).toEqual([
+        'Mois A :', 'Août 2026', 'VS', 'Mois B :', 'Septembre 2026 (en cours)',
+        '1 042,00€', 'Août 2026', '—', '1 250,40€', 'Septembre 2026',
+      ]);
+      expect(within(comparedTotals()).getByTitle(whyNotComputed)).toHaveTextContent('—');
+
+      await selectLanguage(user, 'en');
+
+      expect(within(comparedTotals()).getByTitle('cannot be computed: month in progress'))
+        .toHaveTextContent('—');
+    });
+
+    it('are computed between two complete months, and not from the month in progress',
+      async () => {
+        const { user } = await renderDashboard({ ...account, ...septemberInProgress });
+        await openTab(user, 'Comparaison');
+
+        await pickMonth(user, 'Août 2026', 'Juillet 2026');
+        await pickMonth(user, 'Septembre 2026 (en cours)', 'Août 2026');
+
+        // (1 042 - 980) / 980
+        expect(texts(comparedTotals()).slice(5)).toEqual([
+          '980,00€', 'Juillet 2026', '+6,3 %', '1 042,00€', 'Août 2026',
+        ]);
+        expect(rowsOf(comparisonTable(PROJECTS))[1]).toEqual([
+          'Production', '680,00€', '512,00€', '-24,7 %',
+        ]);
+
+        // Month A in progress
+        await pickMonth(user, 'Juillet 2026', 'Septembre 2026 (en cours)');
+
+        expect(texts(comparedTotals()).slice(5)).toEqual([
+          '1 250,40€', 'Septembre 2026', '—', '1 042,00€', 'Août 2026',
+        ]);
+        expect(within(comparedTotals()).getByTitle(whyNotComputed)).toHaveTextContent('—');
+      });
+
+    it('are not computed in any comparison, saying why', async () => {
+      const { user } = await renderDashboard({ ...account, ...septemberInProgress });
+      await openTab(user, 'Comparaison');
+
+      await openComparison(user, INFRASTRUCTURE);
+      await openComparison(user, BACKUP);
+      await openComparison(user, PRIVATE_CLOUD);
+
+      // Neither +19,2 % for Production nor +15,8 % for Staging
+      expect(rowsOf(comparisonTable(PROJECTS))).toEqual([
+        ['Projet○', 'Août 2026▼', 'Septembre 2026○', 'Variation○'],
+        ['Production', '512,00€', '610,40€', '—'],
+        ['Staging', '190,00€', '220,00€', '—'],
+      ]);
+      expect(infrastructureRows().map((row) => row.slice(-3))).toEqual([
+        // The dedicated servers: not 0,0 %
+        ['270,00€', '270,00€', '—'],
+        ['0,00€', '0,00€', '—'],
+        ['0,00€', '0,00€', '—'],
+        ['0,00€', '0,00€', '—'],
+        ['0,00€', '0,00€', '—'],
+        // The domains: not +16,7 %
+        ['30,00€', '35,00€', '—'],
+        ['0,00€', '0,00€', '—'],
+        ['0,00€', '0,00€', '—'],
+      ]);
+      // The VMs backed up: not +125,0 %
+      expect(rowsOf(comparisonTable(BACKUP))).toEqual([
+        ['Catégorie', 'Août 2026', 'Septembre 2026', 'Variation'],
+        ['VMs Veeam Backup', '2 / 40,00€', '3 / 90,00€', '—'],
+        ['Licence Veeam Enterprise', '0 / 0,00€', '1 / 25,00€', '—'],
+      ]);
+      expect(rowsOf(comparisonTable(PRIVATE_CLOUD))).toEqual([
+        ['Type', 'Août 2026', 'Septembre 2026', 'Variation'],
+        ['Hôtes Private Cloud', '0,00€', '0,00€', '—'],
+        ['Datastores Private Cloud', '0,00€', '0,00€', '—'],
+      ]);
+      // The month in progress is why, even from month A at 0 €
+      for (const title of [PROJECTS, INFRASTRUCTURE, BACKUP, PRIVATE_CLOUD]) {
+        for (const variation of within(comparisonTable(title)).getAllByText('—')) {
+          expect(variation).toHaveAttribute('title', whyNotComputed);
+        }
+      }
+    });
+
+    it('are not computed for the services, products and charges that rows unfold into',
+      async () => {
+        const { user } = await renderDashboard({ ...account, ...septemberInProgress });
+        await openTab(user, 'Comparaison');
+        await openComparison(user, INFRASTRUCTURE);
+        await openComparison(user, PRODUCTION_PRODUCTS);
+
+        await toggleRow(user, INFRASTRUCTURE, 'Serveurs dédiés');
+        await user.click(within(comparisonTable(PRODUCTION_PRODUCTS))
+          .getByRole('button', { name: 'Charges : Stockage objet' }));
+        await settle();
+
+        // The server billed in August and September: not 0,0 %
+        expect(infrastructureRows()[1]).toEqual([
+          'ns3000001.ip-203-0-113.eu',
+          'Location du serveur RISE-1 ns3000001.ip-203-0-113.eu - 1 mois',
+          '270,00€', '270,00€', '—',
+        ]);
+        // Production's products, and the charges of its object storage: not +22,3 % for its
+        // instances, nor +0,7 % for a bucket
+        expect(rowsOf(comparisonTable(PRODUCTION_PRODUCTS)).slice(1)).toEqual([
+          ['Instances', '440,60€', '538,90€', '—'],
+          ['Savings plans', '28,00€', '28,00€', '—'],
+          ['Stockage objet', '24,90€', '25,00€', '—'],
+          ['Stockage Standard - Bucket assets-example-com sur la région gra',
+            '13,90€', '14,00€', '—'],
+          ['Stockage Cold Archive', '9,00€', '9,00€', '—'],
+          ['Stockage Standard - Bucket old-exports sur la région sbg',
+            '2,00€', '2,00€', '—'],
+          ['Volumes', '12,50€', '12,50€', '—'],
+          ['Snapshots', '6,00€', '6,00€', '—'],
+        ]);
+        for (const title of [INFRASTRUCTURE, PRODUCTION_PRODUCTS]) {
+          for (const variation of within(comparisonTable(title)).getAllByText('—')) {
+            expect(variation).toHaveAttribute('title', whyNotComputed);
+          }
+        }
+      });
+
+    // As rows whose variation cannot be computed do (#146): a table keeps its own order, rather
+    // than follow values that it does not show
+    it('leave the rows in their order when the user sorts them by variation', async () => {
+      const { user } = await renderDashboard({
+        ...account, ...threeBilledProjects, ...septemberInProgress,
+      });
+      await openTab(user, 'Comparaison');
+      await openComparison(user, INFRASTRUCTURE);
+      await openComparison(user, PRODUCTION_PRODUCTS);
+
+      await sortTable(user, comparisonTable(PROJECTS), /^Variation/);
+      await sortTable(user, comparisonTable(INFRASTRUCTURE), /^Variation/);
+      await sortTable(user, comparisonTable(PRODUCTION_PRODUCTS), /^Variation/);
+
+      // Not Staging first, whose cost grows the most
+      expect(firstColumnOf(comparisonTable(PROJECTS)))
+        .toEqual(['Production', 'Sandbox', 'Staging']);
+      // Not the domains first, which cost more in September
+      expect(firstColumnOf(comparisonTable(INFRASTRUCTURE))).toEqual([
+        'Serveurs dédiés', 'VPS', 'Stockage', 'Load Balancer', 'Adresses IP', 'Noms de domaine',
+        'Hôtes Private Cloud', 'Datastores Private Cloud',
+      ]);
+      // Nor the object storage before the savings plans
+      expect(firstColumnOf(comparisonTable(PRODUCTION_PRODUCTS))).toEqual([
+        'Instances', 'Savings plans', 'Stockage objet', 'Volumes', 'Snapshots',
       ]);
     });
   });

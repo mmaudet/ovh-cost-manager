@@ -142,10 +142,11 @@ export async function selectLanguage(user, code) {
 
 // The month selector of the header, found by what it offers rather than by one month, since
 // the months it lists are those of the account selected (#115): the only dropdown whose
-// options are all months. The Compare tab has two such dropdowns, and no month selector.
+// options are all months, the month in progress named so (#216). The Compare tab has two such
+// dropdowns, and no month selector.
 export function monthSelector() {
-  const found = screen.getAllByRole('combobox').filter((select) =>
-    optionsOf(select).every((option) => /^\p{L}+ \d{4}$/u.test(option)));
+  const found = screen.getAllByRole('combobox').filter((select) => optionsOf(select)
+    .every((option) => /^\p{L}+ \d{4}( \((en cours|in progress)\))?$/u.test(option)));
   if (found.length !== 1) {
     throw new Error(`${found.length} dropdowns offer months only`);
   }

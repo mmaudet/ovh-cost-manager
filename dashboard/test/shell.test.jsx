@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
 import { screen, within } from '@testing-library/react';
-import { account } from './fixtures/account.js';
+import { account, septemberInProgress } from './fixtures/account.js';
 import {
-  lyonAccount, removedAccount, severalAccounts, unknownAccount, unnamedAccount,
+  lyonAccount, lyonBilledLate, removedAccount, severalAccounts, unknownAccount, unnamedAccount,
 } from './fixtures/accounts.js';
 import { api, holdBack, serve } from './support/api.js';
 import { captureFileDownloads } from './support/downloads.js';
@@ -137,6 +137,20 @@ describe('dashboard shell', () => {
 
       expect(optionsOf(monthSelector())).toEqual(['Septembre 2026', 'Août 2026', 'Juillet 2026']);
       expect(monthSelector()).toHaveDisplayValue('Septembre 2026');
+    });
+
+    // So that no one reads a partial month as a complete one; the page still opens on it
+    it('names the month in progress so, in the language of the page (#216)', async () => {
+      const { user } = await renderDashboard({ ...account, ...septemberInProgress });
+
+      expect(optionsOf(monthSelector()))
+        .toEqual(['Septembre 2026 (en cours)', 'Août 2026', 'Juillet 2026']);
+      expect(monthSelector()).toHaveDisplayValue('Septembre 2026 (en cours)');
+
+      await selectLanguage(user, 'en');
+
+      expect(optionsOf(dropdown('July 2026')))
+        .toEqual(['September 2026 (in progress)', 'August 2026', 'July 2026']);
     });
 
     it('shows the figures of the month the user selects', async () => {
@@ -295,6 +309,56 @@ describe('dashboard shell', () => {
       expect(within(totalCostCard()).getByTitle(whyNotComputable))
         .toHaveTextContent(notComputable);
     });
+
+    // Rather than compare a partial month with a complete one
+    it('says that the month in progress is, and shows no variation of it, saying why (#216)',
+      async () => {
+        const { user } = await renderDashboard({ ...account, ...septemberInProgress });
+
+        expect(texts(totalCostCard()))
+          .toEqual(['Coût total du mois', 'en cours', '1 250,40€', notComputable]);
+        expect(within(totalCostCard()).getByTitle('non calculable : mois en cours'))
+          .toHaveTextContent(notComputable);
+
+        await selectLanguage(user, 'en');
+
+        const card = cardOf('Total monthly cost');
+        expect(texts(card))
+          .toEqual(['Total monthly cost', 'in progress', '1,250.40€', '— vs previous month']);
+        expect(within(card).getByTitle('cannot be computed: month in progress'))
+          .toHaveTextContent('— vs previous month');
+      });
+
+    // As the months list of the account shown marks the month: with all accounts shown, while
+    // any account's is in progress
+    it('follows the account selected (#216)', async () => {
+      const { user } = await renderDashboard(lyonBilledLate);
+
+      expect(texts(totalCostCard()))
+        .toEqual(['Coût total du mois', 'en cours', '1 250,40€', notComputable]);
+
+      await selectAccount(user, 'yy2222-ovh');
+
+      // (360 - 230) / 230
+      expect(texts(totalCostCard()))
+        .toEqual(['Coût total du mois', '360,00€', '+56,5 % vs mois précédent']);
+      expect(optionsOf(dropdown('Août 2026'))).toEqual(['Septembre 2026', 'Août 2026']);
+
+      await selectAccount(user, 'Lyon subsidiary');
+
+      expect(texts(totalCostCard()))
+        .toEqual(['Coût total du mois', 'en cours', '890,40€', notComputable]);
+    });
+
+    it('compares a complete month with the month before it while another is in progress (#216)',
+      async () => {
+        const { user } = await renderDashboard({ ...account, ...septemberInProgress });
+
+        await selectMonth(user, 'Août 2026');
+
+        expect(texts(totalCostCard()))
+          .toEqual(['Coût total du mois', '1 042,00€', '+6,3 % vs mois précédent']);
+      });
 
     it('shows no previous data for the first billed month', async () => {
       const { user } = await renderDashboard();
@@ -989,6 +1053,28 @@ describe('dashboard shell', () => {
       expect(texts(cardOf('Prévision fin de mois'))).toContain('14/30 jours');
     });
 
+    // The months list no longer marks September once the import stored the bill of each
+    // recurring service (#216): the month selected, which the page keeps, is no longer in
+    // progress
+    it('no longer says that the month is in progress once an import bills it (#216)', async () => {
+      fakeTimers();
+      await renderDashboard({
+        ...signedIn, ...septemberInProgress, importStatus: importStatus(running),
+      });
+
+      expect(texts(cardOf('Coût total du mois')))
+        .toEqual(['Coût total du mois', 'en cours', '1 250,40€', '— vs mois précédent']);
+
+      serve(afterImport);
+      await passTime(30000);
+
+      // (1 300.40 - 1 042) / 1 042
+      expect(texts(cardOf('Coût total du mois')))
+        .toEqual(['Coût total du mois', '1 300,40€', '+24,8 % vs mois précédent']);
+      expect(optionsOf(dropdown('Juillet 2026')))
+        .toEqual(['Septembre 2026', 'Août 2026', 'Juillet 2026']);
+    });
+
     it('shows the figures of an import already over at the refresh after a resync', async () => {
       fakeTimers();
       const { user } = await renderDashboard(signedIn);
@@ -1209,6 +1295,31 @@ describe('dashboard shell', () => {
       expect(report).toContain('## By Service Type');
       expect(report).toContain('## Top Projects');
     });
+
+    // So that a report sent on the fifth of the month says that its figures are partial: the
+    // rest of the report is the same
+    it('names the month in progress so in its title, in the language of the page (#216)',
+      async () => {
+        const { user } = await renderDashboard({ ...account, ...septemberInProgress });
+        const exportReport = async (placeholder) => {
+          const downloadedFiles = captureFileDownloads();
+          await user.selectOptions(screen.getByDisplayValue(placeholder), 'Markdown');
+          const [{ name, content }] = await downloadedFiles();
+          return { name, content };
+        };
+
+        expect(await exportReport('Exporter…')).toEqual({
+          name: 'ovh-report-2026-09.md',
+          content: [
+            '# Rapport de coûts OVH - Septembre 2026 (en cours)', ...septemberReport.slice(1),
+          ].join('\n'),
+        });
+
+        await selectLanguage(user, 'en');
+
+        const { content: report } = await exportReport('Export…');
+        expect(report.split('\n')[0]).toBe('# OVH Cost Report - September 2026 (in progress)');
+      });
 
     // An instance of several accounts (#124): the report covers what the page shows, all
     // accounts by default or the account selected in the header, and its title says which,

@@ -1,4 +1,4 @@
-import { account } from './account.js';
+import { account, septemberInProgress } from './account.js';
 import { months } from './calendar.js';
 import { infrastructureOfSeveralAccounts } from './infrastructure.js';
 import {
@@ -429,5 +429,17 @@ export const severalAccountsWithAiEndpoints = {
         '2026-07/2026-09': unnamedModelsInSeptember,
       },
     },
+  },
+};
+
+// The accounts while Lyon, billed late, has not been billed yet in September for a recurring
+// service (#216): September is in progress for Lyon, and so for all accounts, and complete for
+// the others, whose bills of the month came in
+export const lyonBilledLate = {
+  ...severalAccounts,
+  ...septemberInProgress,
+  ofAccount: {
+    ...severalAccounts.ofAccount,
+    [lyonAccount.id]: { ...severalAccounts.ofAccount[lyonAccount.id], ...septemberInProgress },
   },
 };
