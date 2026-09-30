@@ -884,31 +884,31 @@ const analysisOps = {
   // between them, 0 for a month it was not billed in: each resource type's trend gives
   // every month, as the monthly trend does (#65). Nothing when none of them has a bill,
   // since no resource type was billed. On the bills of the account (see accountCondition()),
-  // every account's by default: the resource types billed to it alone (#120).
-  monthlyTrendByResourceType: (fromDate, toDate, account = null) => {
+  // every account's by default: the resource types billed to it alone (#120). With the projected
+  // option, the month in progress counts its projected lines too, each under its own resource
+  // type, and each row gives its projected part, 0 when it has none (linesOfPeriod(), #217).
+  monthlyTrendByResourceType: (fromDate, toDate, account = null, { projected = false } = {}) => {
     const db = getDb();
-    const ofAccount = accountCondition(account, 'b.account');
+    const lines = linesOfPeriod(fromDate, toDate, account, { projected });
     const billed = db.prepare(`
       SELECT
-        strftime('%Y-%m', b.date) as month,
-        COALESCE(d.resource_type, 'other') as resource_type,
-        SUM(d.total_price) as total
-      FROM bill_details d
-      JOIN bills b ON d.bill_id = b.id
-      WHERE b.date >= ? AND b.date <= ?
-        AND ${ofAccount.sql}
-      GROUP BY strftime('%Y-%m', b.date), COALESCE(d.resource_type, 'other')
+        strftime('%Y-%m', l.date) as month,
+        COALESCE(l.resource_type, 'other') as resource_type,
+        SUM(l.total_price) as total,
+        SUM(l.projected) as projected
+      FROM (${lines.sql}) l
+      GROUP BY strftime('%Y-%m', l.date), COALESCE(l.resource_type, 'other')
       ORDER BY month
-    `).all(fromDate, toDate, ...ofAccount.params);
-    const totals = new Map(billed.map((row) => [`${row.month} ${row.resource_type}`, row.total]));
+    `).all(...lines.params);
+    const ofMonthAndType = new Map(billed.map((row) => [`${row.month} ${row.resource_type}`, row]));
     // In the order the query first gives them, which orders the resource types of equal cost
     // on the chart
     const resourceTypes = [...new Set(billed.map((row) => row.resource_type))];
-    return monthsOfWindow(fromDate, toDate).flatMap((month) => resourceTypes.map((type) => ({
-      month,
-      resource_type: type,
-      total: totals.get(`${month} ${type}`) ?? 0,
-    })));
+    return monthsOfWindow(fromDate, toDate).flatMap((month) => resourceTypes.map((type) => {
+      const row = ofMonthAndType.get(`${month} ${type}`);
+      const cost = { month, resource_type: type, total: row?.total ?? 0 };
+      return projected ? { ...cost, projected: row?.projected ?? 0 } : cost;
+    }));
   },
 
   // The totals of the bills between two dates of the account (see accountCondition()), every

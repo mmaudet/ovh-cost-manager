@@ -116,6 +116,105 @@ describe('GET /api/analysis/monthly-trend?projected=true (#217)', () => {
   });
 });
 
+// The resource types of the trend by resource type, as the route presents them
+const PUBLIC_CLOUD = { key: 'cloud_project', label: 'Public Cloud', color: '#3b82f6' };
+const DEDICATED_SERVERS = { key: 'dedicated_server', label: 'Dedicated Servers', color: '#ef4444' };
+const LICENSES = { key: 'license', label: 'Licenses', color: '#0891b2' };
+const DOMAINS = { key: 'domain', label: 'Domains', color: '#8b5cf6' };
+
+describe('GET /api/analysis/monthly-trend-by-category?projected=true (#217)', () => {
+  const trend = (parameters) => ocm.get(`/api/analysis/monthly-trend-by-category?${parameters}`);
+  let ocm;
+
+  beforeAll(async () => {
+    ocm = await startOcm(() => ({}), { seed: seedLateBill });
+  }, 30000);
+
+  afterAll(async () => {
+    await ocm?.stop();
+  });
+
+  // Each projected line under its own resource type, as its bill line was: the server's under
+  // the dedicated servers, the licence's under the licences
+  test('counts the projected lines under their resource types, with their projected parts',
+    async () => {
+      const nothingProjected = { cloud_project: 0, dedicated_server: 0, license: 0, domain: 0 };
+
+      expect(await trend(`${UP_TO_TODAY}&projected=true`)).toEqual({
+        status: 200,
+        body: {
+          // By their costs over the months, projected lines included
+          categories: [PUBLIC_CLOUD, DEDICATED_SERVERS, LICENSES, DOMAINS],
+          data: [
+            {
+              yearMonth: TWO_MONTHS_BEFORE,
+              cloud_project: 600, dedicated_server: 200, license: 30, domain: 0,
+              projected: nothingProjected,
+            },
+            {
+              yearMonth: MONTH_BEFORE,
+              cloud_project: 600, dedicated_server: 210, license: 30, domain: 15,
+              projected: nothingProjected,
+            },
+            {
+              yearMonth: MONTH_OF_TODAY,
+              cloud_project: 610, dedicated_server: 210, license: 30, domain: 0,
+              projected: { ...nothingProjected, dedicated_server: 210, license: 30 },
+            },
+          ],
+        },
+      });
+    });
+
+  test('answers as before without the parameter: the billed costs, and no projected part',
+    async () => {
+      expect(await trend(UP_TO_TODAY)).toEqual({
+        status: 200,
+        body: {
+          categories: [PUBLIC_CLOUD, DEDICATED_SERVERS, LICENSES, DOMAINS],
+          data: [
+            {
+              yearMonth: TWO_MONTHS_BEFORE,
+              cloud_project: 600, dedicated_server: 200, license: 30, domain: 0,
+            },
+            {
+              yearMonth: MONTH_BEFORE,
+              cloud_project: 600, dedicated_server: 210, license: 30, domain: 15,
+            },
+            {
+              yearMonth: MONTH_OF_TODAY,
+              cloud_project: 610, dedicated_server: 0, license: 0, domain: 0,
+            },
+          ],
+        },
+      });
+    });
+
+  // Over the month of today alone, which has billed its project only
+  test('lists a resource type that projected lines alone make', async () => {
+    const monthOfToday = `months=1&end=${MONTH_OF_TODAY}`;
+
+    expect((await trend(monthOfToday)).body.categories).toEqual([PUBLIC_CLOUD]);
+    expect(await trend(`${monthOfToday}&projected=true`)).toEqual({
+      status: 200,
+      body: {
+        categories: [PUBLIC_CLOUD, DEDICATED_SERVERS, LICENSES],
+        data: [{
+          yearMonth: MONTH_OF_TODAY,
+          cloud_project: 610, dedicated_server: 210, license: 30,
+          projected: { cloud_project: 0, dedicated_server: 210, license: 30 },
+        }],
+      },
+    });
+  });
+
+  test('refuses a projected parameter that is neither true nor false', async () => {
+    expect(await trend(`${UP_TO_TODAY}&projected=1`)).toEqual({
+      status: 400, body: { error: "Invalid 'projected' parameter: expected true or false" },
+    });
+  });
+});
+
 // Read when the server reads the bills: no re-import, nor any restart
 describe('GET /api/analysis/monthly-trend?projected=true once the late bill comes', () => {
   let ocm;
@@ -211,6 +310,19 @@ describe('GET /api/analysis/monthly-trend?projected=true with several accounts',
     expect(ofEachAccount.reduce((sum, { cost }) => sum + cost, 0)).toBe(ofAllAccounts.cost);
     expect(ofEachAccount.reduce((sum, { projected }) => sum + projected, 0))
       .toBe(ofAllAccounts.projected);
+  });
+
+  // Lyon's server and the Unknown account's, under the dedicated servers
+  test('projects the resource types of all accounts in the trend by resource type', async () => {
+    const { body } = await ocm.get(
+      `/api/analysis/monthly-trend-by-category?${UP_TO_TODAY}&projected=true`,
+    );
+
+    expect(body.data[2]).toEqual({
+      yearMonth: MONTH_OF_TODAY,
+      cloud_project: 1000, dedicated_server: 280, domain: 15,
+      projected: { cloud_project: 0, dedicated_server: 280, domain: 0 },
+    });
   });
 });
 

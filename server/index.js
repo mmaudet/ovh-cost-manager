@@ -641,50 +641,64 @@ function registerRoutes() {
   // Monthly trend broken down by resource type, shaped for a multi-line chart:
   // { categories: [{key, label, color}], data: [{ yearMonth, <key>: total, ... }] }
   // Over the same months as /api/analysis/monthly-trend, from the same parameters, the
-  // account included (#120).
-  app.get('/api/analysis/monthly-trend-by-category', accountParameter, (req, res) => {
-    try {
-      const { valid, error, from, to } = trendWindowFromQuery(req.query, latestBilledMonth());
-      if (!valid) {
-        return res.status(400).json({ error });
+  // account and the projection of the month in progress included (#120, #217). With
+  // projected=true, each month gives the projected part of each resource type, as
+  // `projected: { <key>: part, ... }`.
+  app.get('/api/analysis/monthly-trend-by-category', accountParameter, projectedParameter,
+    (req, res) => {
+      try {
+        const { valid, error, from, to } = trendWindowFromQuery(req.query, latestBilledMonth());
+        if (!valid) {
+          return res.status(400).json({ error });
+        }
+
+        const rows = db.analysis.monthlyTrendByResourceType(
+          from, to, req.account, { projected: req.projected },
+        );
+
+        // Total per resource_type to order categories by spend.
+        const totals = {};
+        for (const r of rows) {
+          totals[r.resource_type] = (totals[r.resource_type] || 0) + r.total;
+        }
+
+        const categories = Object.keys(totals)
+          .sort((a, b) => totals[b] - totals[a])
+          .map(key => ({
+            key,
+            label: RESOURCE_TYPE_LABELS[key] || key,
+            color: RESOURCE_TYPE_COLORS[key] || RESOURCE_TYPE_COLORS['other']
+          }));
+
+        // One row per month with every category, in their order, so lines stay continuous: the
+        // query gives every resource type in every month, at 0 when it was not billed (#65).
+        // And, with projected=true, the projected part of each (#217).
+        const byMonth = {};
+        const projectedByMonth = {};
+        for (const r of rows) {
+          byMonth[r.month] = byMonth[r.month] || {};
+          byMonth[r.month][r.resource_type] = Math.round(r.total * 100) / 100;
+          projectedByMonth[r.month] = projectedByMonth[r.month] || {};
+          projectedByMonth[r.month][r.resource_type] = Math.round(r.projected * 100) / 100;
+        }
+        // The values of the categories in a month, in their order
+        const ofCategories = (values) => Object.fromEntries(
+          categories.map(({ key }) => [key, values[key]]),
+        );
+
+        const data = Object.keys(byMonth)
+          .sort((a, b) => a.localeCompare(b))
+          .map((yearMonth) => ({
+            yearMonth,
+            ...ofCategories(byMonth[yearMonth]),
+            ...(req.projected ? { projected: ofCategories(projectedByMonth[yearMonth]) } : {}),
+          }));
+
+        res.json({ categories, data });
+      } catch (err) {
+        res.status(500).json({ error: err.message });
       }
-
-      const rows = db.analysis.monthlyTrendByResourceType(from, to, req.account);
-
-      // Total per resource_type to order categories by spend.
-      const totals = {};
-      for (const r of rows) {
-        totals[r.resource_type] = (totals[r.resource_type] || 0) + r.total;
-      }
-
-      const categories = Object.keys(totals)
-        .sort((a, b) => totals[b] - totals[a])
-        .map(key => ({
-          key,
-          label: RESOURCE_TYPE_LABELS[key] || key,
-          color: RESOURCE_TYPE_COLORS[key] || RESOURCE_TYPE_COLORS['other']
-        }));
-
-      // One row per month with every category, in their order, so lines stay continuous: the
-      // query gives every resource type in every month, at 0 when it was not billed (#65)
-      const byMonth = {};
-      for (const r of rows) {
-        byMonth[r.month] = byMonth[r.month] || {};
-        byMonth[r.month][r.resource_type] = Math.round(r.total * 100) / 100;
-      }
-
-      const data = Object.keys(byMonth)
-        .sort((a, b) => a.localeCompare(b))
-        .map((yearMonth) => ({
-          yearMonth,
-          ...Object.fromEntries(categories.map(({ key }) => [key, byMonth[yearMonth][key]])),
-        }));
-
-      res.json({ categories, data });
-    } catch (err) {
-      res.status(500).json({ error: err.message });
-    }
-  });
+    });
 
   // ========================
   // Summary Endpoint
