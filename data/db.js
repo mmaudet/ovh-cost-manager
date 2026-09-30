@@ -811,7 +811,9 @@ const analysisOps = {
   // project and account, with its account (see costGrouping(), #118). With the projected
   // option, the month in progress counts its projected lines too, each under its own project,
   // and each row gives its projected part, 0 when it has none (linesOfPeriod()): the summary's
-  // top projects follow it (#218).
+  // top projects follow it (#218), and the Compare tab's comparison by project (#219). A project
+  // is a service whose lines name it, its credit's included: one that the month in progress has
+  // not billed yet counts all its lines of the month before, and so its credit.
   byProject: (fromDate, toDate, account = null, { byAccount = false, projected = false } = {}) => {
     const db = getDb();
     const lines = linesOfPeriod(fromDate, toDate, account, { projected });
