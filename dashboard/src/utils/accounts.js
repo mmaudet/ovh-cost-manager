@@ -248,9 +248,11 @@ export function listQuery(accountColumn, {
     const { account, key, fetch } = ofAccountShown;
     return projectedQuery(account, { key, fetch, projected, enabled });
   }
-  return {
-    queryKey: projected ? [...byAccount.key, 'projected'] : byAccount.key,
-    queryFn: projected ? () => byAccount.fetch({ projected: true }) : () => byAccount.fetch(),
+  // The rows of all accounts, which the request by account asks for without naming any
+  return projectedQuery(null, {
+    key: byAccount.key,
+    fetch: (_allAccounts, ...options) => byAccount.fetch(...options),
+    projected,
     enabled: Boolean(accountColumn) && enabled,
-  };
+  });
 }

@@ -10,7 +10,7 @@ import {
   fetchBackupServices, fetchBackupServicesByAccount, fetchProjectProducts,
 } from '../services/api.js';
 import { accountQuery, listQuery, projectedQuery } from '../utils/accounts.js';
-import { BY_MONTH_A } from '../utils/monthComparison.js';
+import { BY_MONTH_A, comparedMonthsOf } from '../utils/monthComparison.js';
 import { holdsMonth, isMonthInProgress } from '../utils/months.js';
 import { projectsQuery } from './projectsByAccountQueries.js';
 // Under the module's name: the hook gives the same name to its own query of a resource type's
@@ -38,7 +38,9 @@ import * as servicesQueries from './resourceTypeServicesQueries.js';
  *   in progress (useMonthInProgressProjection()), off by default: while it is on, the figures of
  *   the month in progress, as the months list marks it, are its projected cost (#218), those of
  *   the projects and of their products excepted, until #219 projects them
- * @returns {object} Months A and B and their setters, the sort order of the tab's tables
+ * @returns {object} Months A and B and their setters, what the comparison knows of them, which
+ *   decides the tab's variations (comparedMonths, and billedMonths for the projects: see
+ *   comparedMonthsOf()), the sort order of the tab's tables
  *   (sortingOf(), see useTableSorts()), the rows unfolded into what they add up (unfoldingOf(),
  *   see useUnfoldedRows()), the figures of both months, which the tab shows, the query of a
  *   project's products in a month (projectProductsQuery(projectId, month)), which the
@@ -95,7 +97,18 @@ const useCompareTab = ({
   // keys name the flag only then (projectedQuery()), so that the page keeps its keys while the
   // setting is off, and never shares the answer of a month at its projected cost with the shell,
   // whose figures are never projected.
-  const projects = (month) => projectsMonthInProgress && isMonthInProgress(months, month);
+  const isProjected = (month) => projectsMonthInProgress && isMonthInProgress(months, month);
+
+  // What the comparison knows of months A and B, which the tab's variations and the sort of its
+  // tables read (comparedMonthsOf()): whether either is the month in progress, which leaves no
+  // variation to compute, as it would compare a partial month with a complete one (#216), unless
+  // its figures are its projected cost, while the page projects it (#218). And the same at what
+  // the month in progress billed so far, which the projects and their products compare until
+  // #219 projects them too.
+  const comparedMonths = comparedMonthsOf(months, compareMonthA, compareMonthB, {
+    projected: projectsMonthInProgress,
+  });
+  const billedMonths = comparedMonthsOf(months, compareMonthA, compareMonthB);
 
   // A figure of month A or B, for the account shown (#119), which fetchFigure(from, to,
   // account) requests, under the key of the same figure that the shell loads for its selected
@@ -105,7 +118,7 @@ const useCompareTab = ({
   const figureOf = (name, month, fetchFigure) => projectedQuery(selectedAccount, {
     key: [name, month?.from, month?.to],
     fetch: (account, ...options) => fetchFigure(month.from, month.to, account, ...options),
-    projected: projects(month),
+    projected: isProjected(month),
     enabled: asksFor(month),
   });
 
@@ -169,7 +182,7 @@ const useCompareTab = ({
   const resourceTypeServicesQuery = (resourceType, month) => servicesQueries
     .resourceTypeServicesQuery(
       selectedAccount, accountColumn, resourceType, month, asksFor(month),
-      { projected: projects(month) },
+      { projected: isProjected(month) },
     );
 
   // The options of the query of the services of the Veeam backups of month A or B, for
@@ -188,7 +201,7 @@ const useCompareTab = ({
         month.from, month.to, account, ...options,
       ),
     },
-    projected: projects(month),
+    projected: isProjected(month),
     enabled: asksFor(month),
   });
 
@@ -210,6 +223,8 @@ const useCompareTab = ({
     setCompareMonthA,
     compareMonthB,
     setCompareMonthB,
+    comparedMonths,
+    billedMonths,
     sortingOf,
     unfoldingOf,
     compareDataA,

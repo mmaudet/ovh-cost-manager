@@ -206,6 +206,10 @@ describe('useCompareTab', () => {
       setCompareMonthA: expect.any(Function),
       compareMonthB: expect.any(Object),
       setCompareMonthB: expect.any(Function),
+      // What the comparison knows of them, which decides its variations (#216, #218): two
+      // complete months here
+      comparedMonths: { includesMonthInProgress: false, projected: false },
+      billedMonths: { includesMonthInProgress: false, projected: false },
       sortingOf: expect.any(Function),
       // The rows unfolded into their services, by comparison (#192)
       unfoldingOf: expect.any(Function),
@@ -765,6 +769,11 @@ describe('useCompareTab', () => {
         expect(api.fetchByProject).not.toHaveBeenCalledWith(...SEPTEMBER, null, PROJECTED);
         // September at its projected cost, and what projected lines make of it
         expect(result.current.compareDataB).toMatchObject({ total: 1220.4, projected: 310 });
+        // Which the variations compare, but the projects', at what September billed (#219)
+        expect(result.current.comparedMonths)
+          .toEqual({ includesMonthInProgress: true, projected: true });
+        expect(result.current.billedMonths)
+          .toEqual({ includesMonthInProgress: true, projected: false });
         expect(resourceTypes(result.current.byResourceTypeB)).toEqual([
           ['cloud_project', 830.4], ['dedicated_server', 270], ['backup', 60], ['domain', 35],
           ['license', 25],
@@ -788,19 +797,24 @@ describe('useCompareTab', () => {
         expect(api[name], name).toHaveBeenCalledWith(...SEPTEMBER, null);
         expect(api[name], name).not.toHaveBeenCalledWith(...SEPTEMBER, null, PROJECTED);
       }
-      // What September billed so far
+      // What September billed so far, which leaves no variation to compute
       expect(result.current.compareDataB.total).toBe(910.4);
+      expect(result.current.comparedMonths)
+        .toEqual({ includesMonthInProgress: true, projected: false });
       expect(keysOf('summary')).toEqual([
         ['summary', undefined, undefined], ['summary', ...AUGUST], ['summary', ...SEPTEMBER],
       ]);
     });
 
     it('asks for them as before when no month is in progress', async () => {
-      await renderTabHook(useCompareTab, { ...projecting, months }, billedLate);
+      const { result } = await renderTabHook(useCompareTab, { ...projecting, months }, billedLate);
 
       for (const name of FIGURES) {
         expect(api[name].mock.calls.some((call) => call.length > 3), name).toBe(false);
       }
+      // Two complete months, whatever the setting
+      expect(result.current.comparedMonths)
+        .toEqual({ includesMonthInProgress: false, projected: false });
     });
 
     it('asks for them projected once the page projects it, and as before once it stops',
