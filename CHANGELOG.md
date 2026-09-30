@@ -14,7 +14,24 @@ sections were written afterwards from the git history.
 
 ## 3.4.0 - 2026-10-01
 
-<!-- Upgrade notes and highlights of this release, if any. -->
+The month in progress, projected. OVHcloud bills some accounts late in the month, so the month of today may still lack services that every month bills. 3.3.3 marked that month as in progress; 3.4.0 can also count its projected cost:
+
+- **« Projeter le mois en cours »** (#212, #214). A checkbox in the Trends and Compare tabs counts each recurring service that the month in progress has not billed yet at its cost of the month before.
+  - It changes the Trends tab's line charts and cards.
+  - In the Compare tab, it changes the totals, the service type chart, the infrastructure, Private Cloud, backup and project comparisons, and their services, products and charges.
+  - They then show the month at its projected cost, in italics and marked « projeté ».
+  - It is off by default, one setting for the whole page, which the browser remembers. The header's cards and the other tabs never project.
+- **The services about to expire** (#225).
+  - The header's « Expirations proches » badge now leads to their card in the Overview.
+  - The card's title counts them all.
+  - Its « Tout afficher » lists every one of them in a table that sorts and exports as CSV.
+- **The budget card on a phone** (#235) sets the budget apart from the consumed amount, which ran together.
+
+### Upgrade notes
+
+- **No migration and no re-import.** The projection reads the bills already imported, when the server reads them.
+- **API.** The routes of the Trends and Compare tabs take `projected=true`, which gives each row its projected part. Without it, they answer as before: see the README's API section.
+- **Issues.** New issues go through a bug report or a feature request form, and are triaged together about once a week: see CONTRIBUTING.md.
 
 ### New features
 * feat: project the month in progress in the Trends tab by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/233
