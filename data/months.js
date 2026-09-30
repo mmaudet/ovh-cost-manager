@@ -77,4 +77,15 @@ function shiftMonth(yearMonth, months) {
   return monthAt(monthIndex(yearMonth) + months);
 }
 
-module.exports = { monthBounds, trendWindow, monthsOfWindow, shiftMonth };
+/**
+ * The 'YYYY-MM' month of a date in local time, unlike the months above: for the date of today,
+ * the month of today, which the server tells the month in progress by (#216). 23:30 UTC on
+ * 30 September is in October on a server in Paris.
+ * @param {Date} date
+ * @returns {string}
+ */
+function monthOfDate(date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+}
+
+module.exports = { monthBounds, trendWindow, monthsOfWindow, shiftMonth, monthOfDate };

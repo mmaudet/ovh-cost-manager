@@ -175,6 +175,19 @@ describe('formatMonthLabel', () => {
     expect(formatMonthLabel('2026-00')).toBe('2026-00');
     expect(formatMonthLabel('N/A')).toBe('N/A');
   });
+
+  // As the Compare tab's months A and B and the report name the month in progress (#216)
+  it('follows a month with what the page calls the month in progress, when given', () => {
+    expect(formatMonthLabel('2026-09', 'fr', { inProgressLabel: 'en cours' }))
+      .toBe('Septembre 2026 (en cours)');
+    expect(formatMonthLabel('2026-09', 'en', { inProgressLabel: 'in progress' }))
+      .toBe('September 2026 (in progress)');
+    expect(formatMonthLabel('2026-08', 'fr', { inProgressLabel: null })).toBe('Août 2026');
+  });
+
+  it('names nothing without a month, even in progress', () => {
+    expect(formatMonthLabel(undefined, 'fr', { inProgressLabel: 'en cours' })).toBe('');
+  });
 });
 
 // The month of a date, as the month-end forecast names that of today (#33)

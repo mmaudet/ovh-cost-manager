@@ -24,6 +24,11 @@ export const translations = {
     compare: 'Comparaison',
     trends: 'Tendances',
 
+    // The month in progress (#216), as the month selectors and the month's cost name it, and
+    // why no variation of it is computed
+    monthInProgress: 'en cours',
+    variationMonthInProgress: 'non calculable : mois en cours',
+
     // KPI Cards
     totalCost: 'Coût total du mois',
     cloudTotal: 'Total Cloud',
@@ -331,6 +336,11 @@ export const translations = {
     overview: 'Overview',
     compare: 'Compare',
     trends: 'Trends',
+
+    // The month in progress (#216), as the month selectors and the month's cost name it, and
+    // why no variation of it is computed
+    monthInProgress: 'in progress',
+    variationMonthInProgress: 'cannot be computed: month in progress',
 
     // KPI Cards
     totalCost: 'Total monthly cost',

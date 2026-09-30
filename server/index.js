@@ -837,10 +837,11 @@ function registerRoutes() {
   // ========================
 
   // The months billed to the account the request asks for, or to any account without one
-  // (#115)
+  // (#115). The month in progress carries `inProgress: true` (#216), the others no mark.
   app.get('/api/months', accountParameter, (req, res) => {
     try {
       const months = db.bills.getMonths(req.account);
+      const monthInProgress = db.bills.getMonthInProgress(req.account);
 
       // Format months with French labels
       const monthNames = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
@@ -851,7 +852,8 @@ function registerRoutes() {
         return {
           value: yearMonth,
           label: `${monthNames[parseInt(month) - 1]} ${year}`,
-          ...monthBounds(yearMonth)
+          ...monthBounds(yearMonth),
+          ...(yearMonth === monthInProgress ? { inProgress: true } : {}),
         };
       });
 

@@ -8,7 +8,8 @@ const { tieFootprint } = require('./carbon-ties');
 const { MONTHLY_KINDS } = require('./cloud-usage');
 const { productFigures } = require('./public-cloud-products');
 const { storageClassLabel } = require('./storage-classes');
-const { monthsOfWindow, shiftMonth } = require('./months');
+const { monthOfDate, monthsOfWindow, shiftMonth } = require('./months');
+const { recurrenceWindow, recurringServicesNotBilled } = require('./month-in-progress');
 const ownership = require('./ownership');
 // The conditions of the queries that keep one account's rows (#115), a list of ids, or the
 // bill lines of the Veeam backups (#197)
@@ -397,6 +398,20 @@ const billOps = {
     `).pluck().all(...ofAccount.params);
   },
 
+  /**
+   * The month in progress (CONTEXT.md, #216): the month of today, as the server's local date
+   * gives it, while a recurring service has no bill line in it (data/month-in-progress.js), read
+   * from the bills as they are.
+   * @param {?string} [account] - The account whose recurring services count (see
+   *   accountCondition()): every account's by default, any of which keeps the month in progress
+   * @returns {?string} The month of today, YYYY-MM, while it is in progress; null otherwise
+   */
+  getMonthInProgress: (account = null) => {
+    const monthOfToday = monthOfDate(new Date());
+    const billed = detailOps.getBilledServices(monthOfToday, account);
+    return recurringServicesNotBilled(billed, monthOfToday).length > 0 ? monthOfToday : null;
+  },
+
   exists: (id) => {
     const db = getDb();
     const result = db.prepare('SELECT 1 FROM bills WHERE id = ? LIMIT 1').get(id);
@@ -436,6 +451,36 @@ const detailOps = {
   getByBillId: (billId) => {
     const db = getDb();
     return db.prepare('SELECT * FROM bill_details WHERE bill_id = ?').all(billId);
+  },
+
+  /**
+   * The services that the bills of the month of today and of the three months before charged
+   * (recurrenceWindow()), which data/month-in-progress.js tells the recurring services not billed
+   * yet from (#216): each service that bill lines name, once for each account and month of their
+   * bills, with the ids of those lines, which a projection of the month in progress repeats
+   * (#214). Those of the months before are the account's, whose recurring services they tell;
+   * those of the month of today are every account's, as any account's bill of the month of today
+   * bills a service that it names, such as one moved from an account to another (#214).
+   * @param {string} monthOfToday - YYYY-MM
+   * @param {?string} [account] - The account whose bills of the months before count (see
+   *   accountCondition()): every account's by default
+   * @returns {Array<{ service: string, account: ?string, month: string, lines: string[] }>} Each
+   *   with the NIC handle of its bills' account, null for the Unknown account, and their month,
+   *   YYYY-MM
+   */
+  getBilledServices: (monthOfToday, account = null) => {
+    const { from, to } = recurrenceWindow(monthOfToday);
+    const ofAccount = accountCondition(account, 'b.account');
+    return getDb().prepare(`
+      SELECT d.domain AS service, b.account AS account, strftime('%Y-%m', b.date) AS month,
+        json_group_array(d.id) AS lines
+      FROM bill_details d
+      JOIN bills b ON d.bill_id = b.id
+      WHERE b.date >= ? AND b.date <= ? AND d.domain IS NOT NULL
+        AND (strftime('%Y-%m', b.date) = ? OR ${ofAccount.sql})
+      GROUP BY d.domain, b.account, month
+    `).all(from, to, monthOfToday, ...ofAccount.params)
+      .map((row) => ({ ...row, lines: JSON.parse(row.lines) }));
   },
 
   /**

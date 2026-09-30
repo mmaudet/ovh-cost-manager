@@ -146,6 +146,26 @@ describe('Markdown report', () => {
     expect(english.split('\n')[0]).toBe('# OVH Cost Report - January 2026 - All accounts');
   });
 
+  // The report of the month in progress says that its figures are partial (#216): the page
+  // gives what it calls the month in progress, which the title names in brackets after the
+  // month, before what the report covers. The rest of the report is the same.
+  it('names the month in progress so in its title', () => {
+    const complete = generateMarkdownReport(summary, byService, byProject, january, 'fr');
+
+    const report = generateMarkdownReport(
+      summary, byService, byProject, january, 'fr', { inProgressLabel: 'en cours' },
+    );
+
+    expect(report.split('\n')[0]).toBe('# Rapport de coûts OVH - Janvier 2026 (en cours)');
+    expect(report.split('\n').slice(1)).toEqual(complete.split('\n').slice(1));
+    const english = generateMarkdownReport(
+      summary, byService, byProject, january, 'en',
+      { scope: 'All accounts', inProgressLabel: 'in progress' },
+    );
+    expect(english.split('\n')[0])
+      .toBe('# OVH Cost Report - January 2026 (in progress) - All accounts');
+  });
+
   // As the report of a single-account installation, which names none
   it('names nothing after the month without anything to name', () => {
     const report = generateMarkdownReport(

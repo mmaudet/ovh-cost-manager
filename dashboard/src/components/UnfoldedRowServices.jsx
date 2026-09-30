@@ -1,5 +1,5 @@
 import { accountInBrackets } from '../utils/accounts.js';
-import { byNameAndAccount, pairMonths } from '../utils/monthComparison.js';
+import { byNameAndAccount, pairMonths, valuesAsShown } from '../utils/monthComparison.js';
 import { MonthAnswersMessage, useMonthAnswers } from './MonthAnswers.jsx';
 import { DETAIL_PADDING, DetailRow, sortUnfolded } from './UnfoldingRow.jsx';
 
@@ -31,12 +31,16 @@ const serviceRows = (servicesA, servicesB) => pairMonths(
  *   backupServicesQuery(), for the row
  * @param {?object} props.monthA
  * @param {?object} props.monthB
+ * @param {{ monthInProgress: boolean }} props.comparedMonths - What the comparison knows of
+ *   months A and B (comparedMonthsOf()), which the variations of the services and their sort
+ *   read (#216)
  * @param {?object} props.sort - The sort of the comparison, by its columns (see
  *   SortableHeader.jsx): null until the user sorts it, as for a comparison that does not sort
  * @param {Object<string, function(object): *>} props.values - The value of a service in each
  *   column of the comparison, by the column's name, as comparisonValues() gives them, those of
  *   months A and B (totalA, totalB) included: a service has its identifier, its description,
- *   and its cost in each month, valA and valB
+ *   and its cost in each month, valA and valB. The services sort by them as the comparison shows
+ *   them (valuesAsShown())
  * @param {number} props.columnCount - The comparison's number of columns
  * @param {?{ nameOf: function(?string): string }} props.accountColumn - The Account column of
  *   the lists (accountColumnOf()), null when they name no account: while it shows, each service
@@ -46,7 +50,8 @@ const serviceRows = (servicesA, servicesB) => pairMonths(
  *   failed; else a row for each service
  */
 const UnfoldedRowServices = ({
-  servicesQueryOf, monthA, monthB, sort, values, columnCount, accountColumn, fmt, language, t,
+  servicesQueryOf, monthA, monthB, comparedMonths, sort, values, columnCount, accountColumn,
+  fmt, language, t,
 }) => {
   const { status, dataA, dataB } = useMonthAnswers(servicesQueryOf, monthA, monthB);
   // Until both months' answers arrive, or when one failed, rather than a month at 0 €, in line
@@ -61,11 +66,14 @@ const UnfoldedRowServices = ({
     );
   }
   return sortUnfolded(
-    serviceRows(dataA ?? [], dataB ?? []), sort, values, language,
+    serviceRows(dataA ?? [], dataB ?? []), sort, valuesAsShown(comparedMonths, values), language,
   ).map(({
     key, identifier, account, description, valA, valB,
   }) => (
-    <DetailRow key={key} valA={valA} valB={valB} fmt={fmt} language={language} t={t}>
+    <DetailRow
+      key={key} valA={valA} valB={valB} comparedMonths={comparedMonths}
+      fmt={fmt} language={language} t={t}
+    >
       {/* The description is cut to the column of the rows' labels, and the identifier wraps to
           it, at its hyphens first */}
       <div className="text-xs break-words">

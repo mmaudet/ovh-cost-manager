@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { byNameAndAccount, pairMonths } from '../../src/utils/monthComparison.js';
+import {
+  byNameAndAccount, comparedMonthsOf, comparisonValues, pairMonths, valuesAsShown,
+  withoutVariation,
+} from '../../src/utils/monthComparison.js';
+import { months } from '../fixtures/calendar.js';
 
 // The rows of a comparison of months A and B of the Compare tab, from what each month gave:
 // the products of a Public Cloud project (#181), or the services of a resource type (#192),
@@ -110,5 +114,57 @@ describe('byNameAndAccount', () => {
       ['example.com', undefined, 15, 17],
       ['example.org', undefined, 15, 0],
     ]);
+  });
+});
+
+// What a comparison of two months knows of them, which its variations and the sort of its
+// tables read (#216): whether either is the month in progress, as the months list marks it
+describe('comparedMonthsOf', () => {
+  const [september, august, july] = months;
+  const inProgress = [{ ...september, inProgress: true }, august, july];
+
+  it('knows whether month A or B is the month in progress', () => {
+    expect(comparedMonthsOf(inProgress, august, september)).toEqual({ monthInProgress: true });
+    expect(comparedMonthsOf(inProgress, september, july)).toEqual({ monthInProgress: true });
+    expect(comparedMonthsOf(inProgress, july, august)).toEqual({ monthInProgress: false });
+    expect(comparedMonthsOf(months, august, september)).toEqual({ monthInProgress: false });
+  });
+
+  // Before months A and B have their defaults, and for the header, before a month with no bill
+  it('knows of no month in progress without a month', () => {
+    expect(comparedMonthsOf(inProgress, null, undefined)).toEqual({ monthInProgress: false });
+  });
+});
+
+// The values of a product in the columns that sort a project's comparison, as an example
+const productValues = comparisonValues('product', ({ product }) => product);
+const instances = { product: 'instances', valA: 100, valB: 150 };
+// What each column gives a row, as [product, month A, month B, variation]
+const columnsOf = (values, row) => ['product', 'totalA', 'totalB', 'variation']
+  .map((column) => values[column](row));
+
+// The values of the rows while the variation shows "—" (#216)
+describe('withoutVariation', () => {
+  it('gives no variation, and the values of the other columns', () => {
+    expect(columnsOf(withoutVariation(productValues), instances))
+      .toEqual(['instances', 100, 150, null]);
+  });
+
+  it('leaves the values it is given as they were', () => {
+    withoutVariation(productValues);
+
+    expect(columnsOf(productValues, instances)).toEqual(['instances', 100, 150, 50]);
+  });
+});
+
+// The values that sort a comparison's rows, as the comparison shows them (#146, #216)
+describe('valuesAsShown', () => {
+  it('drops the variation while month A or B is the month in progress', () => {
+    expect(columnsOf(valuesAsShown({ monthInProgress: true }, productValues), instances))
+      .toEqual(['instances', 100, 150, null]);
+  });
+
+  it('keeps the values of two complete months', () => {
+    expect(valuesAsShown({ monthInProgress: false }, productValues)).toBe(productValues);
   });
 });

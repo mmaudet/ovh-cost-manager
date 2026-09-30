@@ -13,16 +13,21 @@ import { formatCurrency, formatMonthLabel, formatPercent, localeOf } from './for
  * @param {?string} [options.scope] - What the figures cover, as the page names it: all
  *   accounts, or the account selected (scopeLabel()), which the title names after the month
  *   (#124). None for a single-account installation, whose title names the month alone.
+ * @param {?string} [options.inProgressLabel] - What the page calls the month in progress, « en
+ *   cours », when the month is the month in progress (#216): the title names it in brackets
+ *   after the month, as formatMonthLabel() does for the Compare tab's months A and B, so that
+ *   the report says that its figures are partial. None for any other month.
  * @returns {string}
  */
 const generateMarkdownReport = (
-  summary, byService, byProject, selectedMonth, language = 'fr', { scope = null } = {},
+  summary, byService, byProject, selectedMonth, language = 'fr',
+  { scope = null, inProgressLabel = null } = {},
 ) => {
   const locale = localeOf(language);
   const fmt = (v) => formatCurrency(v, language);
   // The month and its period, N/A without them: the page exports the report of a selected
   // month only, which always has its period
-  const month = formatMonthLabel(selectedMonth?.value, language) || 'N/A';
+  const month = formatMonthLabel(selectedMonth?.value, language, { inProgressLabel }) || 'N/A';
   const { from, to } = selectedMonth ?? {};
   let period = 'N/A';
   if (from && to) period = language === 'en' ? `${from} to ${to}` : `du ${from} au ${to}`;

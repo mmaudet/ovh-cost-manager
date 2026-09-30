@@ -22,9 +22,10 @@ import {
 import { formatCurrency, formatMonthLabel, yearMonthOf } from '../utils/format.js';
 import { parseSqliteDate } from '../utils/sqliteDate.js';
 import { generateMarkdownReport, reportFileName } from '../utils/markdownReport.js';
-import { holdsMonth } from '../utils/months.js';
+import { holdsMonth, isMonthInProgress } from '../utils/months.js';
 import { shiftMonths } from '../utils/monthWindow.js';
-import { variationDisplay, variationPercent } from '../utils/variation.js';
+import { comparedMonthsOf } from '../utils/monthComparison.js';
+import { comparedVariation } from '../utils/variation.js';
 import { useWebCloudTab } from '../tabs/useWebCloudTab.js';
 import { WebCloudTab, WebCloudTabModals } from '../tabs/WebCloudTab.jsx';
 import { useBackupTab } from '../tabs/useBackupTab.js';
@@ -345,6 +346,9 @@ export default function Dashboard() {
 
   // The oldest month of the list: there is no month before it to compare with
   const isFirstBilledMonth = selectedMonth?.value === months[months.length - 1]?.value;
+  // Whether the month selected is the month in progress, whose cost lacks that of the recurring
+  // services that it has not billed yet (#216), as the months list marks it now
+  const selectedMonthInProgress = isMonthInProgress(months, selectedMonth);
 
   // Calculations
   const total = summary?.total || 0;
@@ -355,11 +359,13 @@ export default function Dashboard() {
   // with the accounts once an import is over.
   const budget = budgetOf(accounts, selectedAccount, dashboardBudget);
   // The "vs previous month" variation, from the month before (#50), as the page shows it: its
-  // text and its tone, as in the Compare and Trends tabs (#87). Null when it cannot be
-  // computed, as there (#65): from a month before at 0 € or less, or without a bill, so at
-  // 0 €.
-  const variation = variationDisplay(
-    variationPercent(previousSummary?.total ?? 0, total), language,
+  // text and its tone, as in the Compare and Trends tabs (#87), or, as there, the key of the
+  // tooltip that says why it shows none: the month in progress, which it would compare, partial,
+  // with a complete month (#216), or a month before at 0 € or less, or without a bill, so at
+  // 0 € (#65)
+  const variation = comparedVariation(
+    comparedMonthsOf(months, previousMonth, selectedMonth), previousSummary?.total ?? 0, total,
+    language, { notComputable: 'vsPreviousMonthNotComputable' },
   );
 
   // Nothing billed yet, as on a new account or before its first import (#51): with no month
@@ -549,9 +555,13 @@ export default function Dashboard() {
                   onChange={(e) => {
                     const format = e.target.value;
                     if (format === 'md') {
-                      // The figures of the account shown, which the shell holds (#115, #118)
+                      // The figures of the account shown, which the shell holds (#115, #118),
+                      // of a month that the report says is in progress, when it is (#216)
                       const md = generateMarkdownReport(
-                        summary, byService, byProject, selectedMonth, language, { scope },
+                        summary, byService, byProject, selectedMonth, language, {
+                          scope,
+                          inProgressLabel: selectedMonthInProgress ? t('monthInProgress') : null,
+                        },
                       );
                       const blob = new Blob([md], { type: 'text/markdown' });
                       const url = URL.createObjectURL(blob);
@@ -589,9 +599,18 @@ export default function Dashboard() {
           <div className="bg-white rounded-xl p-5 shadow-sm border-2 border-blue-500">
             <div className="flex justify-between items-start mb-3">
               <span className="text-gray-500 text-sm font-medium">{t('totalCost')}</span>
+              {/* The month in progress says so: its cost lacks bills to come (#216) */}
+              {selectedMonthInProgress && (
+                <span
+                  className={'px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 text-xs'
+                    + ' font-medium'}
+                >
+                  {t('monthInProgress')}
+                </span>
+              )}
             </div>
             <div className="text-2xl font-bold text-gray-900">{fmt(total)}€</div>
-            {variation !== null ? (
+            {!variation.why ? (
               <div className={`flex items-center mt-2 text-sm ${VARIATION_TONES[variation.tone]}`}>
                 {variation.text} {t('vsPreviousMonth')}
               </div>
@@ -600,10 +619,9 @@ export default function Dashboard() {
                 {t('noPreviousData')}
               </div>
             ) : (
-              // "—", with a tooltip that says why, as in the Compare and Trends tabs (#65)
+              // "—", with a tooltip that says why, as in the Compare and Trends tabs (#65, #216)
               <div
-                className="flex items-center mt-2 text-sm text-gray-400"
-                title={t('vsPreviousMonthNotComputable')}
+                className="flex items-center mt-2 text-sm text-gray-400" title={t(variation.why)}
               >
                 — {t('vsPreviousMonth')}
               </div>
