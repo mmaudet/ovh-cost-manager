@@ -301,12 +301,14 @@ const TrendsTab = ({
 // The period selector of the Trends tab, which the shell renders in its tab bar while the
 // tab is active, so that the tab bar keeps its markup: see
 // docs/adr/0001-tab-state-lives-in-the-dashboard-shell.md. The checkbox that projects the month
-// in progress follows it (#217): the shell holds that setting, and passes it with its setter.
+// in progress follows it on its line (#217): the shell holds that setting, and passes it with its
+// setter. The line wraps as the tab bar's does (#226): where it lacks room, as on a phone, the
+// checkbox goes whole to a line of its own under the period, rather than wrap its label.
 const TrendsPeriodSelector = ({
   trendPeriod, setTrendPeriod, availablePeriods, projectsMonthInProgress,
   setProjectsMonthInProgress, t,
 }) => (
-  <div className="flex items-center gap-2">
+  <div className="flex flex-wrap items-center gap-2">
     <span className="text-sm text-gray-600">{t('period')}:</span>
     <select
       value={trendPeriod}
