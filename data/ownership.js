@@ -37,13 +37,10 @@ const LISTED_SERVICE_TABLES = [
   'projects', 'dedicated_servers', 'vps_instances', 'storage_services',
 ];
 
-// The resources of a Public Cloud project, and its month-end forecasts (#224), which reach
-// their account through their project, and which the import with the cloud details fetches
-// again: OVH gives the forecast of the current month, and those of the months before are of
-// no use
+// The resources of a Public Cloud project, which reach their account through their project
 const PROJECT_RESOURCE_TABLES = [
   'cloud_instances', 'project_quotas', 'object_storage_buckets', 'cloud_volumes',
-  'cloud_snapshots', 'project_forecasts',
+  'cloud_snapshots',
 ];
 
 // The tables of the balance and consumption snapshots, of which only the latest is read
@@ -253,12 +250,13 @@ function takeOverBilledRows(database, nic, listed) {
 
 /**
  * Clears the imported data of an account, for a full import of it: its bills and their
- * lines, its inventories, the resources and the forecasts of its projects, its balance and
- * consumption snapshots, its credit movements and its consumption history, which the import
- * fetches again. What it cannot fetch again is kept: the consumption of each of its projects,
- * which OVH gives for the current month only (#54), with the month of its last import and the
- * projects it belongs to. Another account's data, and the rows without an account, stay,
- * with the projects of this account whose lines are on another account's bills.
+ * lines, its inventories, the resources of its projects, its balance and consumption
+ * snapshots, its credit movements and its consumption history, which the import fetches
+ * again. What it cannot fetch again is kept: the consumption of each of its projects, which
+ * OVH gives for the current month only (#54), with the month of its last import, and their
+ * month-end forecasts, which the cards read with that consumption (#224), with the projects
+ * they belong to. Another account's data, and the rows without an account, stay, with the
+ * projects of this account whose lines are on another account's bills.
  * @param {object} database - The database
  * @param {string} nic - The NIC handle of the account
  */
@@ -274,6 +272,7 @@ function clearAccount(database, nic) {
   run(`
     DELETE FROM projects WHERE ${sql}
       AND id NOT IN (SELECT project_id FROM project_consumption)
+      AND id NOT IN (SELECT project_id FROM project_forecasts)
       AND id NOT IN (SELECT project_id FROM bill_details WHERE project_id IS NOT NULL)
   `);
   for (const table of REFETCHED_TABLES) run(`DELETE FROM ${table} WHERE ${sql}`);

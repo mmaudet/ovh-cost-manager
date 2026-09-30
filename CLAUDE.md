@@ -253,7 +253,8 @@ everything.
 the month (`usage/current`), and its month-end forecast (`usage/forecast`, #224), dated by
 its own period: the month can turn between the two calls. A forecast call that fails keeps
 the forecast stored, as a failed call keeps a project's stored volumes, and the import goes
-on. `--full` clears the forecasts with the projects' resources, and keeps their consumption.
+on. `--full` keeps the forecasts, as it keeps the projects' consumption, which the cards
+read with them: an import without the cloud details fetches neither again.
 
 `--include-carbon` asks OVHcloud's carbon calculator for each account's footprint of the
 last 24 months: it calls `POST /me/carbonCalculator/csv`, which the key needs a rule for,
