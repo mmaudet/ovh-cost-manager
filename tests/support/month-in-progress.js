@@ -1,12 +1,15 @@
 /**
  * What the tests of the month in progress share (CONTEXT.md): the months list's mark (#216) and
- * the projection of the trends (#217) and of the Compare tab (#218). The server tells the month
- * of today from its local date, so the bills are dated from the real date, the month of today and
- * the three months before, as the Infrastructure tab's tests date the services about to expire.
+ * the projection of the trends (#217) and of the Compare tab (#218, #219). The server tells the
+ * month of today from its local date, so the bills are dated from the real date, the month of
+ * today and the three months before, as the Infrastructure tab's tests date the services about to
+ * expire.
  */
 
-const { bill } = require('./accounts');
-const { shiftMonth } = require('../../data/months');
+const {
+  LYON, PARIS, UNKNOWN_ACCOUNT, bill,
+} = require('./accounts');
+const { monthBounds, shiftMonth } = require('../../data/months');
 
 // The month of today, YYYY-MM, and the day of today, YYYY-MM-DD, from the local date, as the
 // server tells them
@@ -18,6 +21,24 @@ const [MONTH_BEFORE, TWO_MONTHS_BEFORE, THREE_MONTHS_BEFORE] = [1, 2, 3]
   .map((months) => shiftMonth(MONTH_OF_TODAY, -months));
 // And the earliest first
 const MONTHS_BEFORE = [THREE_MONTHS_BEFORE, TWO_MONTHS_BEFORE, MONTH_BEFORE];
+
+// The month of today and the month before, as the Compare tab asks for them (#218, #219): their
+// first and last days, and the period of a request of each, and of both
+const MONTH_IN_PROGRESS = monthBounds(MONTH_OF_TODAY);
+const COMPLETE_MONTH = monthBounds(MONTH_BEFORE);
+const periodOf = ({ from, to }) => `from=${from}&to=${to}`;
+const OF_TODAY = periodOf(MONTH_IN_PROGRESS);
+const OF_MONTH_BEFORE = periodOf(COMPLETE_MONTH);
+const OF_BOTH_MONTHS = periodOf({ from: COMPLETE_MONTH.from, to: MONTH_IN_PROGRESS.to });
+
+// The accounts of the tests of the Compare tab's routes that seed several (#218, #219), each as
+// what the name of a test says of it and the value of the account parameter: the Lyon
+// subsidiary and the Unknown account, which their seeds bill late for a recurring service, and
+// Paris, whose bills of the month of today came; and all accounts, which no parameter names
+const LYON_BILLED_LATE = ['an account billed late', LYON];
+const PARIS_BILLED = ['an account whose bills of the month of today came', PARIS];
+const UNKNOWN_BILLED_LATE = ['the Unknown account, billed late', UNKNOWN_ACCOUNT];
+const ALL_ACCOUNTS = ['all accounts', undefined];
 
 /**
  * A bill of an account, dated on a day, and its lines: one for each service that it charges.
@@ -43,5 +64,6 @@ function billOf(db, id, account, date, charges) {
 
 module.exports = {
   MONTH_OF_TODAY, DAY_OF_TODAY, MONTH_BEFORE, TWO_MONTHS_BEFORE, THREE_MONTHS_BEFORE,
-  MONTHS_BEFORE, billOf,
+  MONTHS_BEFORE, MONTH_IN_PROGRESS, COMPLETE_MONTH, OF_TODAY, OF_MONTH_BEFORE, OF_BOTH_MONTHS,
+  LYON_BILLED_LATE, PARIS_BILLED, UNKNOWN_BILLED_LATE, ALL_ACCOUNTS, billOf,
 };

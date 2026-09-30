@@ -6,29 +6,20 @@
  * covers it, counts each recurring service that it has not billed yet at its bill lines of the
  * month before, counted as they were: its projected cost. A Public Cloud project is such a
  * service, which each of its lines names, its credit's included: a project that the month in
- * progress has not billed yet counts every line of the month before, its credit with the rest.
- * Each project, product and charge gives its projected part, 0 when it has none, and the credit
- * its own; a project, product or charge that projected lines alone make is listed too. Without
- * the parameter, they answer as before. The bills are dated from the real date (see
- * support/month-in-progress.js).
+ * progress has not billed yet counts every line of the month before, its credit with the rest,
+ * and one that it billed, none of them, its credit neither. Each project, product and charge
+ * gives its projected part, 0 when it has none, and the credit its own; a project, product or
+ * charge that projected lines alone make is listed too. Without the parameter, they answer as
+ * before. The bills are dated from the real date (see support/month-in-progress.js).
  */
 
+const { LYON, PARIS, project } = require('./support/accounts');
 const {
-  LYON, PARIS, UNKNOWN_ACCOUNT, project,
-} = require('./support/accounts');
-const {
-  MONTH_BEFORE, MONTH_OF_TODAY, MONTHS_BEFORE, billOf,
+  ALL_ACCOUNTS, LYON_BILLED_LATE, MONTH_BEFORE, MONTH_OF_TODAY, MONTHS_BEFORE, OF_BOTH_MONTHS,
+  OF_MONTH_BEFORE, OF_TODAY, PARIS_BILLED, UNKNOWN_BILLED_LATE, billOf,
 } = require('./support/month-in-progress');
 const { startOcm } = require('./support/ocm-server');
 const { monthBounds, shiftMonth } = require('../data/months');
-
-// The month of today and the month before, as the Compare tab asks for them, and both
-const MONTH_IN_PROGRESS = monthBounds(MONTH_OF_TODAY);
-const COMPLETE_MONTH = monthBounds(MONTH_BEFORE);
-const period = ({ from, to }) => `from=${from}&to=${to}`;
-const OF_TODAY = period(MONTH_IN_PROGRESS);
-const OF_MONTH_BEFORE = period(COMPLETE_MONTH);
-const UP_TO_TODAY = period({ from: COMPLETE_MONTH.from, to: MONTH_IN_PROGRESS.to });
 
 // The projects, each as [id, name]
 const PRODUCTION = ['project-production', 'Production'];
@@ -60,12 +51,13 @@ const cloudLine = ([projectId], description, price) => [
 ];
 
 // The Lyon subsidiary, billed on the first day of each month for its Production project, and
-// late in the month for its Staging project, whose bills used a Public Cloud credit: the bill of
-// the month of today charged Production, a bit more than before, and the one that will charge
-// Staging has not come yet. Staging's instances cost more in the month before than in the two
-// months before it. Paris, whose bill of the month of today came, and the Unknown account, billed
-// late for its Legacy project, word their lines with the period that they cover. Every NIC
-// handle, name, identifier and amount is made up; the descriptions are OVHcloud's.
+// late in the month for its Staging project, whose bills both used a Public Cloud credit: the
+// bill of the month of today charged Production, a bit more than before, without a credit, and
+// the one that will charge Staging has not come yet. Staging's instances cost more in the month
+// before than in the two months before it. Paris, whose bill of the month of today came, and the
+// Unknown account, billed late for its Legacy project, word their lines with the period that they
+// cover. Every NIC handle, name, identifier and amount is made up; the descriptions are
+// OVHcloud's.
 function seed(db) {
   db.accounts.upsert({ nic: LYON, currency: 'EUR', name: 'Lyon subsidiary' });
   db.accounts.upsert({ nic: PARIS, currency: 'EUR' });
@@ -74,9 +66,11 @@ function seed(db) {
   project(db, PARIS_PROJECT[0], PARIS_PROJECT[1], PARIS);
   project(db, LEGACY[0], LEGACY[1], null);
   [...MONTHS_BEFORE, MONTH_OF_TODAY].forEach((yearMonth, index) => {
+    const ofToday = yearMonth === MONTH_OF_TODAY;
     billOf(db, `FR1${index}01`, LYON, `${yearMonth}-01`, [
-      cloudLine(PRODUCTION, hourlyUse('b3-8'), yearMonth === MONTH_OF_TODAY ? 320 : 300),
+      cloudLine(PRODUCTION, hourlyUse('b3-8'), ofToday ? 320 : 300),
       cloudLine(PRODUCTION, BUCKET_STORAGE, 20),
+      ...(ofToday ? [] : [cloudLine(PRODUCTION, CREDIT, -15)]),
     ]);
     billOf(db, `FR2${index}01`, PARIS, `${yearMonth}-10`, [
       cloudLine(PARIS_PROJECT, endingWithPeriod(yearMonth, DISKS), 50),
@@ -110,12 +104,6 @@ const answerOf = (route, parameters, account) => ocm.get(
   `${route}?${parameters}${account === undefined ? '' : `&account=${account}`}`,
 );
 
-// The accounts that the parameter names, and all accounts, without it
-const LYON_BILLED_LATE = ['an account billed late', LYON];
-const PARIS_BILLED = ['an account whose bills of the month of today came', PARIS];
-const UNKNOWN_BILLED_LATE = ['the Unknown account, billed late', UNKNOWN_ACCOUNT];
-const ALL_ACCOUNTS = ['all accounts', undefined];
-
 describe('GET /api/analysis/by-project with projected=true (#219)', () => {
   const projectsOf = (parameters, account) => answerOf(
     '/api/analysis/by-project', parameters, account,
@@ -129,7 +117,8 @@ describe('GET /api/analysis/by-project with projected=true (#219)', () => {
 
   // Staging at its lines of the month before: its instances, 110 €, its registry, 40.50 €, and
   // the credit that they used, -20 €; Legacy at its own. Production and Paris's project, which
-  // the month billed, at what they cost.
+  // the month billed, at what they cost: Production without the credit of -15 € of the month
+  // before, which its bill of the month of today did not use.
   test('adds the projected lines of the month in progress, and gives each project its part',
     async () => {
       expect(await projectsOf(`${OF_TODAY}&projected=true`)).toEqual({
@@ -160,18 +149,19 @@ describe('GET /api/analysis/by-project with projected=true (#219)', () => {
     expect(await projectsOf(`${OF_MONTH_BEFORE}&projected=true`)).toEqual({
       status: 200, body: billed.map((row) => ({ ...row, projected: 0 })),
     });
+    // Production with its credit
     expect(billed).toEqual([
-      costs(PRODUCTION, 320, 2), costs(STAGING, 130.5, 3), costs(PARIS_PROJECT, 50, 1),
+      costs(PRODUCTION, 305, 3), costs(STAGING, 130.5, 3), costs(PARIS_PROJECT, 50, 1),
       costs(LEGACY, 8, 1),
     ]);
   });
 
   // The projected lines, of the month before, count in the month in progress too
   test('projects the month in progress over a period that covers it', async () => {
-    expect(await projectsOf(`${UP_TO_TODAY}&projected=true`)).toEqual({
+    expect(await projectsOf(`${OF_BOTH_MONTHS}&projected=true`)).toEqual({
       status: 200,
       body: [
-        costs(PRODUCTION, 660, 4, 0),
+        costs(PRODUCTION, 645, 5, 0),
         costs(STAGING, 261, 6, 130.5),
         costs(PARIS_PROJECT, 100, 2, 0),
         costs(LEGACY, 16, 2, 8),
@@ -265,6 +255,7 @@ describe('GET /api/projects/:id/products with projected=true (#219)', () => {
         .toEqual({ status: 200, body: STAGING_PROJECTED });
     });
 
+  // Production's bill of the month of today used no credit: nor does its projected cost
   test('gives no projected part to the products and charges of a project that the month billed',
     async () => {
       expect(await productsOf(PRODUCTION, `${OF_TODAY}&projected=true`)).toEqual({
@@ -275,6 +266,21 @@ describe('GET /api/projects/:id/products with projected=true (#219)', () => {
         ], [0, 0]),
       });
     });
+
+  // A project that the month in progress billed lacks no bill: none of its lines of the month
+  // before is projected, the credit that they used included, as its cost by project counts it
+  test('projects no credit of the month before of a project that the month billed', async () => {
+    const { body: monthBefore } = await productsOf(PRODUCTION, OF_MONTH_BEFORE);
+    const { body: products } = await productsOf(PRODUCTION, `${OF_TODAY}&projected=true`);
+    const { body: projects } = await answerOf(
+      '/api/analysis/by-project', `${OF_TODAY}&projected=true`,
+    );
+
+    expect(monthBefore.credits).toBe(-15);
+    expect(products).toMatchObject({ credits: 0, projectedCredits: 0 });
+    expect(projects.find(({ projectId }) => projectId === PRODUCTION[0]))
+      .toMatchObject({ total: 340, projected: 0 });
+  });
 
   test.each([
     ['without the parameter', OF_TODAY],
@@ -309,7 +315,7 @@ describe('GET /api/projects/:id/products with projected=true (#219)', () => {
 
   // The lines of the month before, and the same again, projected, in the month in progress
   test('projects the month in progress over a period that covers it', async () => {
-    expect(await productsOf(STAGING, `${UP_TO_TODAY}&projected=true`)).toEqual({
+    expect(await productsOf(STAGING, `${OF_BOTH_MONTHS}&projected=true`)).toEqual({
       status: 200,
       body: projectedProducts([301, 150.5], [
         ['instances', 220, 110, [[hourlyUse('b3-16'), 220, 110]]],
@@ -343,7 +349,9 @@ describe('GET /api/projects/:id/products with projected=true (#219)', () => {
     [...ALL_ACCOUNTS, STAGING, OF_TODAY],
     [...UNKNOWN_BILLED_LATE, LEGACY, OF_TODAY],
     [...LYON_BILLED_LATE, PRODUCTION, OF_TODAY],
-    [...ALL_ACCOUNTS, STAGING, UP_TO_TODAY],
+    [...ALL_ACCOUNTS, STAGING, OF_BOTH_MONTHS],
+    // With the credit of the month before, not projected
+    [...ALL_ACCOUNTS, PRODUCTION, OF_BOTH_MONTHS],
   ])('add up, with the credit, to the cost by project of %s, and to its projected part',
     async (_, account, projectOfAccount, parameters) => {
       const { body: { total, projected, credits, projectedCredits } } = await productsOf(
