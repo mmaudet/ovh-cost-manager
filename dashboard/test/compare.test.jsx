@@ -75,6 +75,17 @@ const toggleRow = async (user, title, row) => {
   await user.click(chevron(title, row));
   await settle();
 };
+// The chevron of a product of a project's comparison, found by the product that it names, in
+// either language (#195)
+const productChevron = (title, product) => within(comparisonTable(title)).getByRole('button', {
+  name: (name) => name === `Charges : ${product}` || name === `Charges: ${product}`,
+});
+// Unfolds or folds a product of a project's comparison into its charges with a click on its
+// chevron, as the user does
+const toggleProduct = async (user, title, product) => {
+  await user.click(productChevron(title, product));
+  await settle();
+};
 // The rows of the infrastructure comparison, each as the texts it shows, header left out
 const infrastructureRows = () => rowTextsOf(comparisonTable(INFRASTRUCTURE)).slice(1);
 
@@ -1544,19 +1555,11 @@ describe('Compare tab', () => {
   // Each product of a project's comparison unfolds into its charges, month A against month B,
   // which come with the products that the comparison loads (#195). See fixtures/public-cloud.js.
   describe('products unfolded into their charges (#195)', () => {
-    // The chevron of a product of Production's comparison, found by the product that it names
-    const chevron = (product) => within(comparisonTable(PRODUCTION_PRODUCTS))
-      .getByRole('button', { name: `Charges : ${product}` });
     // The products that a chevron folds and unfolds, by their labels: those unfolded, or those
     // folded
     const productsThatUnfold = (unfolded) => within(comparisonTable(PRODUCTION_PRODUCTS))
       .queryAllByRole('button', { expanded: unfolded })
       .map((button) => texts(button.closest('tr'))[0]);
-    // Unfolds or folds a product with a click on its chevron, as the user does
-    const toggleProduct = async (user, product) => {
-      await user.click(chevron(product));
-      await settle();
-    };
     // The rows of Production's comparison, header left out, each as the texts of its cells
     const productRows = () => rowsOf(comparisonTable(PRODUCTION_PRODUCTS)).slice(1);
     // The row of a charge of Production's comparison, found by the charge
@@ -1575,7 +1578,8 @@ describe('Compare tab', () => {
         'Instances', 'Bases de données', 'Stockage objet', 'Savings plans', 'Volumes', 'Snapshots',
       ]);
       expect(productsThatUnfold(true)).toEqual([]);
-      expect(chevron('Instances')).toHaveAttribute('aria-expanded', 'false');
+      expect(productChevron(PRODUCTION_PRODUCTS, 'Instances'))
+        .toHaveAttribute('aria-expanded', 'false');
       // The credit pays for no product: it has no charge to unfold into
       const credit = within(comparisonTable(PRODUCTION_PRODUCTS))
         .getByText('Crédit Cloud utilisé').closest('tr');
@@ -1588,9 +1592,10 @@ describe('Compare tab', () => {
       await openTab(user, 'Comparaison');
       await openComparison(user, PRODUCTION_PRODUCTS);
 
-      await toggleProduct(user, 'Stockage objet');
+      await toggleProduct(user, PRODUCTION_PRODUCTS, 'Stockage objet');
 
-      expect(chevron('Stockage objet')).toHaveAttribute('aria-expanded', 'true');
+      expect(productChevron(PRODUCTION_PRODUCTS, 'Stockage objet'))
+        .toHaveAttribute('aria-expanded', 'true');
       // Each charge, its cost in months A and B, and the variation: (14 - 13.90) / 13.90
       expect(productRows().slice(2, 7)).toEqual([
         ['Stockage objet', '24,90€', '25,00€', '+0,4 %'],
@@ -1602,9 +1607,10 @@ describe('Compare tab', () => {
         ['Volumes', '12,50€', '12,50€', '0,0 %'],
       ]);
 
-      await toggleProduct(user, 'Stockage objet');
+      await toggleProduct(user, PRODUCTION_PRODUCTS, 'Stockage objet');
 
-      expect(chevron('Stockage objet')).toHaveAttribute('aria-expanded', 'false');
+      expect(productChevron(PRODUCTION_PRODUCTS, 'Stockage objet'))
+        .toHaveAttribute('aria-expanded', 'false');
       expect(productRows().slice(2, 4)).toEqual([
         ['Stockage objet', '24,90€', '25,00€', '+0,4 %'],
         ['Volumes', '12,50€', '12,50€', '0,0 %'],
@@ -1618,7 +1624,7 @@ describe('Compare tab', () => {
         await openTab(user, 'Comparaison');
         await openComparison(user, PRODUCTION_PRODUCTS);
 
-        await toggleProduct(user, 'Instances');
+        await toggleProduct(user, PRODUCTION_PRODUCTS, 'Instances');
 
         // Billed in both months: (420.50 - 304.60) / 304.60
         expect(texts(chargeRow(hourlyUse('l4-90'))))
@@ -1640,7 +1646,7 @@ describe('Compare tab', () => {
         await openTab(user, 'Comparaison');
         await openComparison(user, PRODUCTION_PRODUCTS);
 
-        await toggleProduct(user, 'Instances');
+        await toggleProduct(user, PRODUCTION_PRODUCTS, 'Instances');
 
         // Right under the instances: db-1's monthly plan and the web instances' hourly use cost
         // 64 € each in August, the monthly plan the more in September; the b3-16's, from nothing
@@ -1657,8 +1663,8 @@ describe('Compare tab', () => {
         const { user } = await renderDashboard();
         await openTab(user, 'Comparaison');
         await openComparison(user, PRODUCTION_PRODUCTS);
-        await toggleProduct(user, 'Instances');
-        await toggleProduct(user, 'Stockage objet');
+        await toggleProduct(user, PRODUCTION_PRODUCTS, 'Instances');
+        await toggleProduct(user, PRODUCTION_PRODUCTS, 'Stockage objet');
         const sortBy = (column) => sortTable(user, comparisonTable(PRODUCTION_PRODUCTS), column);
         // The rows of the table by their names: the products, and their charges under them
         const names = () => productRows().map(([name]) => name);
@@ -1738,7 +1744,7 @@ describe('Compare tab', () => {
         const { user } = await renderDashboard();
         await openTab(user, 'Comparaison');
         await openComparison(user, PRODUCTION_PRODUCTS);
-        await toggleProduct(user, 'Instances');
+        await toggleProduct(user, PRODUCTION_PRODUCTS, 'Instances');
 
         await pickMonth(user, 'Août 2026', 'Juillet 2026');
 
@@ -1760,12 +1766,12 @@ describe('Compare tab', () => {
         // Closed again, as every comparison but the projects' when the tab opens
         await openComparison(user, PRODUCTION_PRODUCTS);
 
-        expect(chevron('Instances')).toHaveAttribute('aria-expanded', 'true');
+        expect(productChevron(PRODUCTION_PRODUCTS, 'Instances'))
+          .toHaveAttribute('aria-expanded', 'true');
         expect(productRows().slice(0, 7)).toEqual(julyAndSeptember);
         // Each project's products unfold on their own: Staging's instances stay folded
         await openComparison(user, /^Staging \(Projet\)/);
-        expect(within(comparisonTable(/^Staging \(Projet\)/))
-          .getByRole('button', { name: 'Charges : Instances' }))
+        expect(productChevron(/^Staging \(Projet\)/, 'Instances'))
           .toHaveAttribute('aria-expanded', 'false');
       });
 
@@ -1779,7 +1785,7 @@ describe('Compare tab', () => {
         .reduce((count, request) => count + request.mock.calls.length, 0);
       const sent = requestsSent();
 
-      await toggleProduct(user, 'Instances');
+      await toggleProduct(user, PRODUCTION_PRODUCTS, 'Instances');
 
       expect(chargeRow(hourlyUse('l4-90'))).toBeInTheDocument();
       expect(requestsSent()).toBe(sent);
@@ -1791,10 +1797,11 @@ describe('Compare tab', () => {
       const { user } = await renderDashboard();
       await openTab(user, 'Comparaison');
       await openComparison(user, PRODUCTION_PRODUCTS);
-      await toggleProduct(user, 'Instances');
+      await toggleProduct(user, PRODUCTION_PRODUCTS, 'Instances');
       // Found while they show: the comparison's title prints without its button either
       const table = comparisonTable(PRODUCTION_PRODUCTS);
-      const chevrons = [chevron('Instances'), chevron('Stockage objet')];
+      const chevrons = ['Instances', 'Stockage objet']
+        .map((product) => productChevron(PRODUCTION_PRODUCTS, product));
 
       layOutForPrint();
 
@@ -1816,9 +1823,7 @@ describe('Compare tab', () => {
       const title = /^Production \(Project\)/;
       await openComparison(user, title);
 
-      await user.click(within(comparisonTable(title))
-        .getByRole('button', { name: 'Charges: Object storage' }));
-      await settle();
+      await toggleProduct(user, title, 'Object storage');
 
       expect(rowsOf(comparisonTable(title)).slice(3, 8)).toEqual([
         ['Object storage', '24.90€', '25.00€', '+0.4%'],
@@ -1860,9 +1865,7 @@ describe('Compare tab', () => {
       const staging = /^Staging \(Projet\)/;
       await openComparison(user, staging);
 
-      await user.click(within(comparisonTable(staging))
-        .getByRole('button', { name: 'Charges : Instances' }));
-      await settle();
+      await toggleProduct(user, staging, 'Instances');
 
       // Not the 150 € and 180 € that yy2222-ovh's bills charged it
       expect(rowsOf(comparisonTable(staging))).toEqual([
@@ -2052,9 +2055,7 @@ describe('Compare tab', () => {
         await openComparison(user, PRODUCTION_PRODUCTS);
 
         await toggleRow(user, INFRASTRUCTURE, 'Serveurs dédiés');
-        await user.click(within(comparisonTable(PRODUCTION_PRODUCTS))
-          .getByRole('button', { name: 'Charges : Stockage objet' }));
-        await settle();
+        await toggleProduct(user, PRODUCTION_PRODUCTS, 'Stockage objet');
 
         // The server billed in August and September: not 0,0 %
         expect(infrastructureRows()[1]).toEqual([
@@ -2451,11 +2452,6 @@ describe('Compare tab', () => {
     const STAGING = 'project-staging';
     // The comparison of the Staging project's products
     const STAGING_PRODUCTS = /^Staging \(Projet\)/;
-    const unfoldProduct = async (user, title, product) => {
-      await user.click(within(comparisonTable(title))
-        .getByRole('button', { name: `Charges : ${product}` }));
-      await settle();
-    };
 
     // Rather than compare Staging's 0 € of September so far with its 190 € of August
     it('shows the projects at the projected cost of the month in progress, marked so',
@@ -2514,7 +2510,7 @@ describe('Compare tab', () => {
         const { user } = await renderDashboard(stagingLate);
         await openTab(user, 'Comparaison');
         await openComparison(user, STAGING_PRODUCTS);
-        await unfoldProduct(user, STAGING_PRODUCTS, 'Instances');
+        await toggleProduct(user, STAGING_PRODUCTS, 'Instances');
         // Nothing billed yet in September, not even the credit
         expect(rowsOf(comparisonTable(STAGING_PRODUCTS)).slice(1)).toEqual([
           ['Instances', '170,00€', '0,00€', '—'],
@@ -2548,7 +2544,7 @@ describe('Compare tab', () => {
       await openComparison(user, PRODUCTION_PRODUCTS);
       await toggleProjection(user);
 
-      await unfoldProduct(user, PRODUCTION_PRODUCTS, 'Stockage objet');
+      await toggleProduct(user, PRODUCTION_PRODUCTS, 'Stockage objet');
 
       // (538.90 - 440.60) / 440.60, and a bucket's (14 - 13.90) / 13.90
       expect(rowsOf(comparisonTable(PRODUCTION_PRODUCTS)).slice(1, 7)).toEqual([
@@ -2637,17 +2633,24 @@ describe('Compare tab', () => {
       await toggleProjection(user);
 
       await selectLanguage(user, 'en');
+      // The charges of its instances, which projected lines alone make
+      const stagingProducts = /^Staging \(Project\)/;
+      await toggleProduct(user, stagingProducts, 'Instances');
 
       expect(rowsOf(comparisonTable(/^Comparison by project/))[2])
         .toEqual(['Staging', '190.00€', '190.00€ projected', '0.0%']);
       expect(within(comparisonTable(/^Comparison by project/))
         .getByTitle('billed 0.00€, projected 190.00€')).toHaveTextContent('190.00€ projected');
-      expect(rowsOf(comparisonTable(/^Staging \(Project\)/)).slice(1)).toEqual([
+      expect(rowsOf(comparisonTable(stagingProducts)).slice(1)).toEqual([
         ['Instances', '170.00€', '170.00€ projected', '0.0%'],
+        [hourlyUse('b3-16'), '170.00€', '170.00€ projected', '0.0%'],
         ['Container registry', '40.00€', '40.00€ projected', '0.0%'],
         ['Cloud credit used', '-20.00€', '-20.00€ projected', ''],
       ]);
-      expect(within(comparisonTable(/^Staging \(Project\)/))
+      // The product and its charge
+      expect(within(comparisonTable(stagingProducts))
+        .getAllByTitle('billed 0.00€, projected 170.00€')).toHaveLength(2);
+      expect(within(comparisonTable(stagingProducts))
         .getByTitle('billed 0.00€, projected -20.00€')).toHaveTextContent('-20.00€ projected');
     });
 

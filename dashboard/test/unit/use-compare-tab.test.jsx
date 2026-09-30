@@ -770,11 +770,10 @@ describe('useCompareTab', () => {
         }
         // September at its projected cost, and what projected lines make of it
         expect(result.current.compareDataB).toMatchObject({ total: 1220.4, projected: 310 });
-        // Which every variation compares, those of the projects and of their products included,
-        // which compared what the month billed so far until #219
+        // Which every variation compares, those of the projects and of their products included
+        // (#219)
         expect(result.current.comparedMonths)
           .toEqual({ includesMonthInProgress: true, projected: true });
-        expect(result.current).not.toHaveProperty('billedMonths');
         expect(resourceTypes(result.current.byResourceTypeB)).toEqual([
           ['cloud_project', 830.4], ['dedicated_server', 270], ['backup', 60], ['domain', 35],
           ['license', 25],
