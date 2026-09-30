@@ -89,8 +89,12 @@ OVH API ──> data/import.js ──> SQLite (ovh-bills.db) ──> server/inde
     `db.details.getBilledServices()` reads the services that the bills charged, with the ids of
     their lines, `recurringServicesNotBilled()` tells those not billed yet, and
     `db.bills.getMonthInProgress()` composes the two for `GET /api/months`, which marks the
-    month `inProgress: true` for the account asked. **Read when the server reads the bills**,
-    like the products: no re-import.
+    month `inProgress: true` for the account asked. Its projection (#217): each service not
+    billed yet comes with its projected lines, its bill lines of the month before, which
+    `linesOfPeriod()` in `db.js` adds, dated on the month's first day, to the lines that a
+    query of costs adds up, when asked and when its period covers the month in progress: the
+    projected cost (`CONTEXT.md`). **Read when the server reads the bills**, like the
+    products: no re-import.
   - `storage-classes.js` — pure: the names of the storage classes that OVH gives the objects
     of a bucket, for the import and for the buckets an earlier import stored (#145).
 - **`server/`** — read-only Express API over the DB. `index.js` is the single ~1300-line
@@ -109,6 +113,12 @@ OVH API ──> data/import.js ──> SQLite (ovh-bills.db) ──> server/inde
   of the Veeam backups, the VMs backed up and the Enterprise licences,
   `/api/analysis/backup-services` (#197), both once for each account with `byAccount=true`;
   and a project's products with their charges, `/api/projects/:id/products` (#181, #195).
+  The routes of the Trends and Compare tabs take `projected=true` (`projectedParameter`,
+  #214): the monthly trends, the summary, the costs by service type, resource type and
+  project, a resource type's services, the Veeam backups and their services, and a project's
+  products. With it, when their period covers the month in progress, they count its
+  projected cost, and each row gives its projected part, `projected` (`projectedPartOf()`);
+  without it, they answer as before.
   The consumption and forecast cards read `/api/consumption/current` and `/forecast`, which
   `consumption.js` answers from an account's Public Cloud projects whenever they consumed in
   the month of its current consumption, as OVH's Public Cloud page does (#224): their
@@ -174,14 +184,21 @@ NIC handle:
   follows the Account column too is built with `listQuery()`, next to it, the one factory
   of such queries: while the column shows, it asks for the rows of all accounts by account,
   a project or a service once for each account that billed it; otherwise, for those of the
-  account shown, as `accountQuery()` does. The selector
+  account shown, as `accountQuery()` does. A query of the month in progress that may count
+  its projected cost is built with `projectedQuery()`, next to them: its key names the flag
+  (`projected`) only while the page projects the month, after the other parts and before the
+  account (ADR 0001). The shell holds that setting, `useMonthInProgressProjection()`,
+  remembered in the browser and off by default (#214): the Trends and Compare tabs show it
+  as a checkbox, and their queries of the month in progress follow it; the header's cards
+  and the other tabs never project. The selector
   shows when `/api/accounts` lists two entries or more (`offersAccounts()`), the Unknown
   account and the accounts no longer configured included. The same module gives the
   Account column of the lists and CSV exports with all accounts shown, the budget the page
   compares with, and the scope the report names.
 
 A single-account installation sends the same requests as before the accounts, under the
-same query keys, plus `GET /api/accounts` under `['accounts']`, and shows the same page:
+same query keys, plus `GET /api/accounts` under `['accounts']`, while the page does not project
+the month in progress, and shows the same page:
 `dashboard/test/shell-queries.test.jsx` pins the keys, and the real-data comparison of
 `CONTRIBUTING.md` checks the page.
 
