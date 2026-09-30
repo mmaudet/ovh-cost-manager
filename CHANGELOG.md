@@ -12,6 +12,17 @@ sections were written afterwards from the git history.
 
 <!-- scripts/release.sh inserts each new version above the first version heading. -->
 
+## 3.3.2 - 2026-09-30
+
+<!-- Upgrade notes and highlights of this release, if any. -->
+
+### Bug fixes
+* fix: align the dashboard's header on one line from 1280 px wide screens by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/213
+### Maintenance
+* docs: add Month in progress, Recurring service and Projected cost to the glossary by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/221
+
+**Full Changelog**: https://github.com/mmaudet/ovh-cost-manager/compare/v3.3.1...v3.3.2
+
 ## 3.3.1 - 2026-09-29
 
 The dashboard's footer now shows the version of OCM that runs, « OVH Cost
