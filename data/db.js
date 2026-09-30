@@ -97,16 +97,19 @@ function accountOrder(column) {
  * @param {string} column - The column of the query that holds the id of the project or of the
  *   service
  * @param {boolean} byAccount - Whether to give a row to each project or service and account
+ * @param {string} [accountColumn] - The column of the query that holds the NIC handle of the
+ *   account of its lines: that of their bills `b` by default, or that of the lines of
+ *   linesOfPeriod(), which give theirs (#218)
  * @returns {{ select: string, groupBy: string, orderBy: string }} What the query selects
  *   besides, to follow its other columns, and what GROUP BY and ORDER BY take
  */
-function costGrouping(column, byAccount) {
+function costGrouping(column, byAccount, accountColumn = 'b.account') {
   const byCost = `total DESC, ${column} DESC`;
   if (!byAccount) return { select: '', groupBy: column, orderBy: byCost };
   return {
-    select: ', b.account as account',
-    groupBy: `${column}, b.account`,
-    orderBy: `${byCost}, ${accountOrder('b.account')}`,
+    select: `, ${accountColumn} as account`,
+    groupBy: `${column}, ${accountColumn}`,
+    orderBy: `${byCost}, ${accountOrder(accountColumn)}`,
   };
 }
 
@@ -118,46 +121,49 @@ function costGrouping(column, byAccount) {
  * or, with byAccount, per service and account, with the NIC handle of its account, null for
  * the Unknown account, and the description of that account's own lines (see costGrouping()).
  * Only the services whose lines add up to more than 0 €, in the order of costGrouping().
+ *
+ * With the projected option, the lines of the month in progress, when the dates cover it, count
+ * its projected lines too (linesOfPeriod(), #218): a service that they alone make is listed, with
+ * the description of its most expensive projected line, and each row gives its projected part,
+ * `projected`, 0 when it has none.
  * @param {function(string): { sql: string, params: Array }} linesOf - The condition that
  *   selects the lines, for the alias of their table
  * @param {string} fromDate
  * @param {string} toDate
  * @param {?string} account
  * @param {boolean} byAccount - Whether to give a row to each service and account
+ * @param {object} [options]
+ * @param {boolean} [options.projected] - Whether to add the projected lines of the month in
+ *   progress
  * @returns {object[]}
  */
-function servicesOfLines(linesOf, fromDate, toDate, account, byAccount) {
-  const ofAccount = accountCondition(account, 'b.account');
-  const ofLineAccount = accountCondition(account, 'b2.account');
-  const grouping = costGrouping('d.domain', byAccount);
+function servicesOfLines(linesOf, fromDate, toDate, account, byAccount, {
+  projected = false,
+} = {}) {
+  // The lines of the period, which the description of each service is read from too: with the
+  // projection, a service that only projected lines make has no bill line to name it
+  const lines = linesOfPeriod(fromDate, toDate, account, { projected });
+  const grouping = costGrouping('l.domain', byAccount, 'l.account');
   // By account, the description of the row's account's own lines
-  const sameAccount = byAccount ? 'AND b2.account IS b.account' : '';
-  const ofLines = linesOf('d');
-  const ofServiceLines = linesOf('d2');
+  const sameAccount = byAccount ? 'AND l2.account IS l.account' : '';
+  const ofLines = linesOf('l');
+  const ofServiceLines = linesOf('l2');
+  const projectedPart = projected ? ', ROUND(SUM(l.projected), 2) as projected' : '';
   return getDb().prepare(`
     SELECT
-      d.domain,
-      (SELECT d2.description FROM bill_details d2
-       JOIN bills b2 ON d2.bill_id = b2.id
-       WHERE d2.domain = d.domain AND ${ofServiceLines.sql}
-         AND b2.date >= ? AND b2.date <= ?
-         AND ${ofLineAccount.sql} ${sameAccount}
-       ORDER BY d2.total_price DESC LIMIT 1
+      l.domain,
+      (SELECT l2.description FROM (${lines.sql}) l2
+       WHERE l2.domain = l.domain AND ${ofServiceLines.sql} ${sameAccount}
+       ORDER BY l2.total_price DESC LIMIT 1
       ) as description,
-      ROUND(SUM(d.total_price), 2) as total,
-      COUNT(d.id) as line_count${grouping.select}
-    FROM bill_details d
-    JOIN bills b ON d.bill_id = b.id
+      ROUND(SUM(l.total_price), 2) as total,
+      COUNT(l.id) as line_count${grouping.select}${projectedPart}
+    FROM (${lines.sql}) l
     WHERE ${ofLines.sql}
-      AND b.date >= ? AND b.date <= ?
-      AND ${ofAccount.sql}
     GROUP BY ${grouping.groupBy}
     HAVING total > 0
     ORDER BY ${grouping.orderBy}
-  `).all(
-    ...ofServiceLines.params, fromDate, toDate, ...ofLineAccount.params,
-    ...ofLines.params, fromDate, toDate, ...ofAccount.params,
-  );
+  `).all(...lines.params, ...ofServiceLines.params, ...lines.params, ...ofLines.params);
 }
 
 /**
@@ -802,45 +808,47 @@ const analysisOps = {
   // the account (see accountCondition()), every account's by default. A project missing from
   // the projects table keeps the id of its bill lines, without a name: the dashboard tells
   // such projects apart by their id (#55). One row per project, or, with byAccount, per
-  // project and account, with its account (see costGrouping(), #118).
-  byProject: (fromDate, toDate, account = null, { byAccount = false } = {}) => {
+  // project and account, with its account (see costGrouping(), #118). With the projected
+  // option, the month in progress counts its projected lines too, each under its own project,
+  // and each row gives its projected part, 0 when it has none (linesOfPeriod()): the summary's
+  // top projects follow it (#218).
+  byProject: (fromDate, toDate, account = null, { byAccount = false, projected = false } = {}) => {
     const db = getDb();
-    const ofAccount = accountCondition(account, 'b.account');
-    const grouping = costGrouping('d.project_id', byAccount);
+    const lines = linesOfPeriod(fromDate, toDate, account, { projected });
+    const grouping = costGrouping('l.project_id', byAccount, 'l.account');
+    const projectedPart = projected ? ', SUM(l.projected) as projected' : '';
     return db.prepare(`
       SELECT
-        d.project_id as project_id,
+        l.project_id as project_id,
         p.name as project_name,
-        SUM(d.total_price) as total,
-        COUNT(d.id) as details_count${grouping.select}
-      FROM bill_details d
-      JOIN bills b ON d.bill_id = b.id
-      LEFT JOIN projects p ON d.project_id = p.id
-      WHERE b.date >= ? AND b.date <= ?
-        AND d.project_id IS NOT NULL
-        AND ${ofAccount.sql}
+        SUM(l.total_price) as total,
+        COUNT(l.id) as details_count${grouping.select}${projectedPart}
+      FROM (${lines.sql}) l
+      LEFT JOIN projects p ON l.project_id = p.id
+      WHERE l.project_id IS NOT NULL
       GROUP BY ${grouping.groupBy}
       ORDER BY ${grouping.orderBy}
-    `).all(fromDate, toDate, ...ofAccount.params);
+    `).all(...lines.params);
   },
 
   // The costs of each service type billed between two dates, most expensive first, on the
-  // bills of the account (see accountCondition()), every account's by default (#118)
-  byService: (fromDate, toDate, account = null) => {
+  // bills of the account (see accountCondition()), every account's by default (#118). With the
+  // projected option, the month in progress counts its projected lines too, each under the
+  // service type of its line, and each row gives its projected part, 0 when it has none
+  // (linesOfPeriod(), #218).
+  byService: (fromDate, toDate, account = null, { projected = false } = {}) => {
     const db = getDb();
-    const ofAccount = accountCondition(account, 'b.account');
+    const lines = linesOfPeriod(fromDate, toDate, account, { projected });
+    const projectedPart = projected ? ', SUM(l.projected) as projected' : '';
     return db.prepare(`
       SELECT
-        d.service_type,
-        SUM(d.total_price) as total,
-        COUNT(d.id) as details_count
-      FROM bill_details d
-      JOIN bills b ON d.bill_id = b.id
-      WHERE b.date >= ? AND b.date <= ?
-        AND ${ofAccount.sql}
-      GROUP BY d.service_type
+        l.service_type,
+        SUM(l.total_price) as total,
+        COUNT(l.id) as details_count${projectedPart}
+      FROM (${lines.sql}) l
+      GROUP BY l.service_type
       ORDER BY total DESC
-    `).all(fromDate, toDate, ...ofAccount.params);
+    `).all(...lines.params);
   },
 
   /**
@@ -926,23 +934,26 @@ const analysisOps = {
   },
 
   // The totals of the bills between two dates of the account (see accountCondition()), every
-  // account's by default
-  summary: (fromDate, toDate, account = null) => {
+  // account's by default. With the projected option, the month in progress counts its projected
+  // lines too, those of a project in the cloud total, and its projects among the projects, and
+  // the totals give their projected part, `projected`, 0 when there is none (linesOfPeriod(),
+  // #218). The bills are those of the period all the same: a projected line is a line of a bill
+  // of the month before.
+  summary: (fromDate, toDate, account = null, { projected = false } = {}) => {
     const db = getDb();
-    const ofAccount = accountCondition(account, 'b.account');
+    const lines = linesOfPeriod(fromDate, toDate, account, { projected });
+    const billLines = linesOfPeriod(fromDate, toDate, account);
+    const projectedPart = projected ? ', SUM(l.projected) as projected' : '';
 
     const totals = db.prepare(`
       SELECT
-        SUM(CASE WHEN d.project_id IS NOT NULL THEN d.total_price ELSE 0 END) as cloud_total,
-        SUM(CASE WHEN d.project_id IS NULL THEN d.total_price ELSE 0 END) as non_cloud_total,
-        SUM(d.total_price) as grand_total,
-        COUNT(DISTINCT b.id) as bills_count,
-        COUNT(DISTINCT d.project_id) as projects_count
-      FROM bill_details d
-      JOIN bills b ON d.bill_id = b.id
-      WHERE b.date >= ? AND b.date <= ?
-        AND ${ofAccount.sql}
-    `).get(fromDate, toDate, ...ofAccount.params);
+        SUM(CASE WHEN l.project_id IS NOT NULL THEN l.total_price ELSE 0 END) as cloud_total,
+        SUM(CASE WHEN l.project_id IS NULL THEN l.total_price ELSE 0 END) as non_cloud_total,
+        SUM(l.total_price) as grand_total,
+        (SELECT COUNT(DISTINCT bl.bill_id) FROM (${billLines.sql}) bl) as bills_count,
+        COUNT(DISTINCT l.project_id) as projects_count${projectedPart}
+      FROM (${lines.sql}) l
+    `).get(...billLines.params, ...lines.params);
 
     return totals;
   },
@@ -1386,23 +1397,24 @@ const inventoryOps = {
 
   // Analysis by resource type, on the bills of the account (see accountCondition()), every
   // account's by default (#118). The bill lines without a resource type count as 'other', in
-  // the same row as those typed 'other', as the details of that type list them (#86).
-  byResourceType: (fromDate, toDate, account = null) => {
+  // the same row as those typed 'other', as the details of that type list them (#86). With the
+  // projected option, the month in progress counts its projected lines too, each under the
+  // resource type of its line, and each row gives its projected part, 0 when it has none
+  // (linesOfPeriod(), #218).
+  byResourceType: (fromDate, toDate, account = null, { projected = false } = {}) => {
     const db = getDb();
-    const ofAccount = accountCondition(account, 'b.account');
+    const lines = linesOfPeriod(fromDate, toDate, account, { projected });
+    const projectedPart = projected ? ', SUM(l.projected) as projected' : '';
     return db.prepare(`
       SELECT
-        COALESCE(d.resource_type, 'other') as resource_type,
-        SUM(d.total_price) as total,
-        COUNT(d.id) as details_count,
-        COUNT(DISTINCT d.domain) as service_count
-      FROM bill_details d
-      JOIN bills b ON d.bill_id = b.id
-      WHERE b.date >= ? AND b.date <= ?
-        AND ${ofAccount.sql}
-      GROUP BY COALESCE(d.resource_type, 'other')
+        COALESCE(l.resource_type, 'other') as resource_type,
+        SUM(l.total_price) as total,
+        COUNT(l.id) as details_count,
+        COUNT(DISTINCT l.domain) as service_count${projectedPart}
+      FROM (${lines.sql}) l
+      GROUP BY COALESCE(l.resource_type, 'other')
       ORDER BY total DESC
-    `).all(fromDate, toDate, ...ofAccount.params);
+    `).all(...lines.params);
   },
 
   /**
@@ -1415,19 +1427,23 @@ const inventoryOps = {
    * server moved from an account to another, then has a row for each, with the description of
    * its own lines, as a bill line belongs to the account of its bill (ADR 0002).
    *
-   * In the order of costGrouping(), as the costs by project (#118).
+   * In the order of costGrouping(), as the costs by project (#118). With the projected option,
+   * the month in progress counts its projected lines of the resource type too, and each service
+   * gives its projected part (see servicesOfLines(), #218).
    * @param {string} resourceType
    * @param {string} fromDate
    * @param {string} toDate
    * @param {?string} [account]
    * @param {object} [options]
    * @param {boolean} [options.byAccount] - Whether to give a row to each service and account
+   * @param {boolean} [options.projected] - Whether to add the projected lines of the month in
+   *   progress
    * @returns {object[]}
    */
   byResourceTypeDetails: (resourceType, fromDate, toDate, account = null,
-    { byAccount = false } = {}) => servicesOfLines(
+    { byAccount = false, projected = false } = {}) => servicesOfLines(
     (alias) => ({ sql: `COALESCE(${alias}.resource_type, 'other') = ?`, params: [resourceType] }),
-    fromDate, toDate, account, byAccount,
+    fromDate, toDate, account, byAccount, { projected },
   ),
 
   /**
@@ -1541,27 +1557,29 @@ const inventoryOps = {
   // less is counted, but not listed, as the Infrastructure tab leaves such a service out; a
   // line without an identifier is listed, but not counted; and, while the lists name the
   // account of each service, with all accounts shown, a VM that two accounts billed is counted
-  // once, but listed once for each account.
-  getBackupStats: (fromDate, toDate, account = null) => {
-    const ofAccount = accountCondition(account, 'b.account');
-    // The number of services of the lines that a condition keeps, and what they cost
+  // once, but listed once for each account. With the projected option, the month in progress
+  // counts its projected lines too, and so the services that they alone make, and each kind
+  // gives its projected part, 0 when it has none (linesOfPeriod(), #218).
+  getBackupStats: (fromDate, toDate, account = null, { projected = false } = {}) => {
+    const lines = linesOfPeriod(fromDate, toDate, account, { projected });
+    // The number of services of the lines that a condition keeps, what they cost, and with the
+    // projection, what projected lines make of it
     const figuresOf = (ofLines) => {
       const figures = getDb().prepare(`
-        SELECT COUNT(DISTINCT domain) as count, ROUND(SUM(total_price), 2) as total
-        FROM bill_details d
-        JOIN bills b ON d.bill_id = b.id
-        WHERE b.date >= ? AND b.date <= ?
-          AND ${ofLines.sql}
-          AND ${ofAccount.sql}
-      `).get(fromDate, toDate, ...ofLines.params, ...ofAccount.params);
-      return { count: figures?.count || 0, total: figures?.total || 0 };
+        SELECT COUNT(DISTINCT l.domain) as count, ROUND(SUM(l.total_price), 2) as total,
+          ROUND(SUM(l.projected), 2) as projected
+        FROM (${lines.sql}) l
+        WHERE ${ofLines.sql}
+      `).get(...lines.params, ...ofLines.params);
+      const counted = { count: figures?.count || 0, total: figures?.total || 0 };
+      return projected ? { ...counted, projected: figures?.projected || 0 } : counted;
     };
 
     return {
       // The Veeam VMs backed up
-      vms: figuresOf(ofBackupLines.vms('d')),
+      vms: figuresOf(ofBackupLines.vms('l')),
       // The Veeam Enterprise licences, from the descriptions of their lines
-      enterprise: figuresOf(ofBackupLines.enterprise('d')),
+      enterprise: figuresOf(ofBackupLines.enterprise('l')),
     };
   },
 
@@ -1577,18 +1595,26 @@ const inventoryOps = {
    * shows as they are: a VM that a refund brings to 0 € or less is counted, but not listed, as
    * the Infrastructure tab leaves such a service out; a line without an identifier is listed,
    * but not counted; and, with byAccount, a VM that two accounts billed is counted once, but
-   * listed once for each account.
+   * listed once for each account. With the projected option, those of the projected lines of the
+   * month in progress too, as getBackupStats() counts them, each with its projected part (see
+   * servicesOfLines(), #218).
    * @param {string} fromDate
    * @param {string} toDate
    * @param {?string} [account]
    * @param {object} [options]
    * @param {boolean} [options.byAccount] - Whether to give a row to each service and account
+   * @param {boolean} [options.projected] - Whether to add the projected lines of the month in
+   *   progress
    * @returns {{ vms: object[], enterprise: object[] }}
    */
-  getBackupServices: (fromDate, toDate, account = null, { byAccount = false } = {}) => ({
-    vms: servicesOfLines(ofBackupLines.vms, fromDate, toDate, account, byAccount),
-    enterprise: servicesOfLines(ofBackupLines.enterprise, fromDate, toDate, account, byAccount),
-  }),
+  getBackupServices: (fromDate, toDate, account = null, {
+    byAccount = false, projected = false,
+  } = {}) => {
+    const servicesOf = (ofLines) => servicesOfLines(
+      ofLines, fromDate, toDate, account, byAccount, { projected },
+    );
+    return { vms: servicesOf(ofBackupLines.vms), enterprise: servicesOf(ofBackupLines.enterprise) };
+  },
 
   clearAll: () => {
     const db = getDb();

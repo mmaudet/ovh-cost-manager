@@ -1,8 +1,9 @@
 import { describe, it, expect } from 'vitest';
+import { translations } from '../../src/i18n/translations.js';
 import {
   localeOf, formatCurrency, formatWholeNumber, formatDecimal, formatPercent, formatYearMonth,
   formatMonthLabel, formatMonthName, yearMonthOf, fmtBytes, fmtMemory, formatTokens,
-  takesSingular,
+  takesSingular, formatBilledAndProjected,
 } from '../../src/utils/format.js';
 import { NBSP, NNBSP } from '../support/amounts.js';
 
@@ -187,6 +188,25 @@ describe('formatMonthLabel', () => {
 
   it('names nothing without a month, even in progress', () => {
     expect(formatMonthLabel(undefined, 'fr', { inProgressLabel: 'en cours' })).toBe('');
+  });
+});
+
+// An amount of the month in progress at its projected cost, as the tooltips of the Trends (#217)
+// and Compare (#218) tabs detail it: what it billed so far, and its projected cost
+describe('formatBilledAndProjected', () => {
+  const tIn = (language) => (key) => translations[language][key];
+
+  it('gives what the month billed and its projected cost, in the language of the page', () => {
+    expect(formatBilledAndProjected(1220.4, 310, (value) => formatCurrency(value, 'fr'),
+      tIn('fr'))).toBe(`facturé 910,40€, projeté 1${NNBSP}220,40€`);
+    expect(formatBilledAndProjected(1220.4, 310, (value) => formatCurrency(value, 'en'),
+      tIn('en'))).toBe('billed 910.40€, projected 1,220.40€');
+  });
+
+  // A service that the month in progress has not billed yet
+  it('gives nothing billed when projected lines make the whole amount', () => {
+    expect(formatBilledAndProjected(270, 270, (value) => formatCurrency(value, 'fr'), tIn('fr')))
+      .toBe('facturé 0,00€, projeté 270,00€');
   });
 });
 

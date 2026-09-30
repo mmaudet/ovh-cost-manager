@@ -128,19 +128,33 @@ const ofAccount = (data, account = null) => {
 const entryForPeriodOfAccount = (key, empty) => (data, from, to, account) =>
   entryForPeriod(key, empty)(ofAccount(data, account), from, to);
 
+// The same for a request that may ask for the projected cost of the month in
+// progress, with { projected: true } after the account (#218): then from the
+// entry of its own key, such as projectedSummary for summary
+const projectableEntryForPeriodOfAccount = (key, projectedKey, empty) => (
+  data, from, to, account, { projected = false } = {},
+) => entryForPeriod(projected ? projectedKey : key, empty)(ofAccount(data, account), from, to);
+
 // Every function of src/services/api.js, with how it answers:
 // (dataset, ...arguments of the call) => answer
 const answers = {
   fetchAccounts: entry('accounts', emptyAnswers.list),
   // The months list and the summaries follow the account the page selects
   fetchMonths: (data, account) => entry('months', emptyAnswers.list)(ofAccount(data, account)),
-  fetchSummary: entryForPeriodOfAccount('summary', emptyAnswers.summary),
+  // Asked with the projection of the month in progress, the summaries, the costs by service type
+  // and by resource type, the services of a resource type and the Veeam backups and their
+  // services answer from their own entries (#218), keyed as the others
+  fetchSummary: projectableEntryForPeriodOfAccount(
+    'summary', 'projectedSummary', emptyAnswers.summary,
+  ),
   // So do the Public Cloud projects and figures (#121), not the resources of a project
   fetchProjectsEnriched: (data, account) =>
     entry('projectsEnriched', emptyAnswers.list)(ofAccount(data, account)),
   // The Overview's figures follow it too (#118)
   fetchByProject: entryForPeriodOfAccount('byProject', emptyAnswers.list),
-  fetchByService: entryForPeriodOfAccount('byService', emptyAnswers.list),
+  fetchByService: projectableEntryForPeriodOfAccount(
+    'byService', 'projectedByService', emptyAnswers.list,
+  ),
   // And its lists by account, for all accounts only (#118)
   fetchProjectsByAccount: entryForPeriod('projectsByAccount', emptyAnswers.list),
   fetchGpuProjectsByAccount: entryForPeriod('gpuProjectsByAccount', emptyAnswers.list),
@@ -173,14 +187,17 @@ const answers = {
   // And so do the services about to expire, over the days of the request
   fetchExpiringServices: (data, days, account) =>
     entry('expiringServices', emptyAnswers.list)(ofAccount(data, account)),
-  fetchByResourceType: entryForPeriodOfAccount('byResourceType', emptyAnswers.list),
+  fetchByResourceType: projectableEntryForPeriodOfAccount(
+    'byResourceType', 'projectedByResourceType', emptyAnswers.list,
+  ),
   // So do the bill lines of a resource type, by type and period (#123)
-  fetchResourceTypeDetails: (data, type, from, to, account) =>
-    ofAccount(data, account).resourceTypeDetails?.[type]?.[periodKey(from, to)]
-      ?? emptyAnswers.list(),
+  fetchResourceTypeDetails: (data, type, from, to, account, { projected = false } = {}) =>
+    ofAccount(data, account)[projected ? 'projectedResourceTypeDetails' : 'resourceTypeDetails']
+      ?.[type]?.[periodKey(from, to)] ?? emptyAnswers.list(),
   // And those by account, for all accounts only (#123)
-  fetchResourceTypeDetailsByAccount: (data, type, from, to) =>
-    data.resourceTypeDetailsByAccount?.[type]?.[periodKey(from, to)] ?? emptyAnswers.list(),
+  fetchResourceTypeDetailsByAccount: (data, type, from, to, { projected = false } = {}) =>
+    data[projected ? 'projectedResourceTypeDetailsByAccount' : 'resourceTypeDetailsByAccount']
+      ?.[type]?.[periodKey(from, to)] ?? emptyAnswers.list(),
   fetchProjectConsumption: entryForProject('projectConsumption', emptyAnswers.list),
   fetchProjectInstances: entryForProject('projectInstances', emptyAnswers.list),
   fetchProjectVolumes: entryForProject('projectVolumes', emptyAnswers.list),
@@ -205,12 +222,18 @@ const answers = {
   // And its AI Endpoints models (#193)
   fetchAiEndpoints: entryForPeriodOfAccount('aiEndpoints', emptyAnswers.aiEndpoints),
   // And the Veeam backups of a month, which the Compare and Backup tabs show (#119)
-  fetchBackupStats: entryForPeriodOfAccount('backupStats', emptyAnswers.backupStats),
+  fetchBackupStats: projectableEntryForPeriodOfAccount(
+    'backupStats', 'projectedBackupStats', emptyAnswers.backupStats,
+  ),
   // And their services, which the Compare tab's backup comparison unfolds into (#197), and
   // those by account, for all accounts only
-  fetchBackupServices: entryForPeriodOfAccount('backupServices', emptyAnswers.backupServices),
-  fetchBackupServicesByAccount:
-    entryForPeriod('backupServicesByAccount', emptyAnswers.backupServices),
+  fetchBackupServices: projectableEntryForPeriodOfAccount(
+    'backupServices', 'projectedBackupServices', emptyAnswers.backupServices,
+  ),
+  fetchBackupServicesByAccount: (data, from, to, { projected = false } = {}) => entryForPeriod(
+    projected ? 'projectedBackupServicesByAccount' : 'backupServicesByAccount',
+    emptyAnswers.backupServices,
+  )(data, from, to),
   // The carbon footprint of a month, by that month, of the account the page selects (#147)
   fetchCarbonFootprint: (data, month, account) =>
     ofAccount(data, account).carbonFootprint?.[month]

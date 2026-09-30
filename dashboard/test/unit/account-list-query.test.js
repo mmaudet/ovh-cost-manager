@@ -62,14 +62,53 @@ describe('listQuery', () => {
 
   // Such as the Overview's projects by account, which the shell's projects of the account shown
   // stand for while the lists name no account
-  it('does not run a list by account only while the lists name no account', () => {
+  it('does not run a list by account only while the lists name no account', async () => {
     const { byAccount } = servicesOfSeptember(null);
 
-    expect(listQuery(accountColumn, { byAccount })).toEqual({
-      queryKey: byAccount.key, queryFn: byAccount.fetch, enabled: true,
+    const shown = listQuery(accountColumn, { byAccount });
+    const hidden = listQuery(null, { byAccount });
+
+    expect([shown.queryKey, shown.enabled]).toEqual([byAccount.key, true]);
+    expect([hidden.queryKey, hidden.enabled]).toEqual([byAccount.key, false]);
+    // Its request asks for the list as it is, whatever the query's client passes it
+    await expect(shown.queryFn({ signal: null })).resolves.toBe('by account');
+    expect(byAccount.fetch).toHaveBeenCalledWith();
+  });
+
+  // The Compare tab's lists of the month in progress, while the page projects it (#218)
+  describe('with the projected cost of the month in progress', () => {
+    it('names the flag in the key and the request of the rows by account', async () => {
+      const list = servicesOfSeptember(null);
+
+      const query = listQuery(accountColumn, { ...list, projected: true });
+
+      expect(query.queryKey)
+        .toEqual(['servicesByAccount', '2026-09-01', '2026-09-30', 'projected']);
+      expect(query.enabled).toBe(true);
+      await query.queryFn();
+      expect(list.byAccount.fetch).toHaveBeenCalledWith({ projected: true });
     });
-    expect(listQuery(null, { byAccount })).toEqual({
-      queryKey: byAccount.key, queryFn: byAccount.fetch, enabled: false,
+
+    // As projectedQuery() does: the flag before the account
+    it('names it before the account in those of the account shown', async () => {
+      const list = servicesOfSeptember(lyonAccount.id);
+
+      const query = listQuery(null, { ...list, projected: true });
+
+      expect(query.queryKey)
+        .toEqual(['services', '2026-09-01', '2026-09-30', 'projected', lyonAccount.id]);
+      await query.queryFn();
+      expect(list.ofAccountShown.fetch).toHaveBeenCalledWith(lyonAccount.id, { projected: true });
+    });
+
+    it('names it nowhere while the list does not project', async () => {
+      const list = servicesOfSeptember(null);
+
+      const query = listQuery(accountColumn, { ...list, projected: false });
+
+      expect(query.queryKey).toEqual(['servicesByAccount', '2026-09-01', '2026-09-30']);
+      await query.queryFn();
+      expect(list.byAccount.fetch).toHaveBeenCalledWith();
     });
   });
 });

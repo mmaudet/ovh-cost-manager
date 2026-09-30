@@ -2,6 +2,8 @@
 // segment to it dashed and its point hollow, whether the page projects it or not, and their
 // tooltips give what it billed and, while the trends project it, its projected cost (#217).
 
+import { formatBilledAndProjected } from './format.js';
+
 /**
  * The two parts that draw each series of a line chart of the Trends tab: a solid line through
  * the complete months, and a dashed one from the month before the month in progress to it, as
@@ -40,6 +42,6 @@ export function lineParts(rows, monthInProgress) {
  */
 export const trendAmount = (amount, projectedPart, { inProgress, projected }, fmt, t) => {
   if (!inProgress) return `${fmt(amount)}€`;
-  const billed = `${t('billed')} ${fmt(amount - projectedPart)}€`;
-  return projected ? `${billed}, ${t('projected')} ${fmt(amount)}€` : billed;
+  if (projected) return formatBilledAndProjected(amount, projectedPart, fmt, t);
+  return `${t('billed')} ${fmt(amount - projectedPart)}€`;
 };

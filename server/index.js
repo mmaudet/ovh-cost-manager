@@ -410,9 +410,9 @@ function registerRoutes() {
   // account, as the lists that name the account of each row do, rather than once
   const byAccountParameter = booleanParameter('byAccount');
 
-  // The projected parameter of the routes of the Trends tab (#217): req.projected, whether a
-  // request asks for the projected cost of the month in progress (CONTEXT.md), when its period
-  // covers it, with each row's projected part (projectedPartOf())
+  // The projected parameter of the routes of the Trends (#217) and Compare (#218) tabs:
+  // req.projected, whether a request asks for the projected cost of the month in progress
+  // (CONTEXT.md), when its period covers it, with each row's projected part (projectedPartOf())
   const projectedParameter = booleanParameter('projected');
 
   // ========================
@@ -551,8 +551,9 @@ function registerRoutes() {
   });
 
   // The costs of each service type of a period, for the account the request asks for, or for
-  // every account without one (#118)
-  app.get('/api/analysis/by-service', accountParameter, (req, res) => {
+  // every account without one (#118). With projected=true, the month in progress costs its
+  // projected cost, and each service type gives its projected part (#218).
+  app.get('/api/analysis/by-service', accountParameter, projectedParameter, (req, res) => {
     try {
       const { from, to } = req.query;
       const validation = validateDateRange(from, to);
@@ -560,7 +561,7 @@ function registerRoutes() {
         return res.status(400).json({ error: validation.error });
       }
 
-      const data = db.analysis.byService(from, to, req.account);
+      const data = db.analysis.byService(from, to, req.account, { projected: req.projected });
 
       // Define colors for each service type
       const colors = {
@@ -579,7 +580,8 @@ function registerRoutes() {
         name: row.service_type || 'Other',
         value: Math.round(row.total * 100) / 100,
         color: colors[row.service_type] || colors['Other'],
-        detailsCount: row.details_count
+        detailsCount: row.details_count,
+        ...projectedPartOf(req, () => Math.round(row.projected * 100) / 100),
       }));
 
       res.json(result);
@@ -717,8 +719,10 @@ function registerRoutes() {
   // ========================
 
   // The figures of a period: those of the account the request asks for, or of every account
-  // without one (#115)
-  app.get('/api/summary', accountParameter, (req, res) => {
+  // without one (#115). With projected=true, the month in progress counts at its projected cost,
+  // in every figure but the number of bills: the total gives its projected part, and so does
+  // each of the top projects (#218).
+  app.get('/api/summary', accountParameter, projectedParameter, (req, res) => {
     try {
       const { from, to } = req.query;
       const validation = validateDateRange(from, to);
@@ -726,8 +730,9 @@ function registerRoutes() {
         return res.status(400).json({ error: validation.error });
       }
 
-      const summary = db.analysis.summary(from, to, req.account);
-      const byProject = db.analysis.byProject(from, to, req.account);
+      const options = { projected: req.projected };
+      const summary = db.analysis.summary(from, to, req.account, options);
+      const byProject = db.analysis.byProject(from, to, req.account, options);
 
       // Calculate daily average
       const startDate = new Date(from);
@@ -737,6 +742,7 @@ function registerRoutes() {
       const result = {
         period: { from, to },
         total: Math.round((summary.grand_total || 0) * 100) / 100,
+        ...projectedPartOf(req, () => Math.round((summary.projected || 0) * 100) / 100),
         cloudTotal: Math.round((summary.cloud_total || 0) * 100) / 100,
         nonCloudTotal: Math.round((summary.non_cloud_total || 0) * 100) / 100,
         dailyAverage: Math.round(((summary.grand_total || 0) / days) * 100) / 100,
@@ -744,7 +750,8 @@ function registerRoutes() {
         projectsCount: summary.projects_count || 0,
         topProjects: byProject.slice(0, 5).map(p => ({
           name: p.project_name || 'Unknown',
-          value: Math.round(p.total * 100) / 100
+          value: Math.round(p.total * 100) / 100,
+          ...projectedPartOf(req, () => Math.round(p.projected * 100) / 100),
         }))
       };
 
@@ -1371,8 +1378,9 @@ function registerRoutes() {
   });
 
   // The costs of each resource type of a period, for the account the request asks for, or for
-  // every account without one (#118)
-  app.get('/api/analysis/by-resource-type', accountParameter, (req, res) => {
+  // every account without one (#118). With projected=true, the month in progress costs its
+  // projected cost, and each resource type gives its projected part (#218).
+  app.get('/api/analysis/by-resource-type', accountParameter, projectedParameter, (req, res) => {
     try {
       const { from, to } = req.query;
       const validation = validateDateRange(from, to);
@@ -1380,7 +1388,9 @@ function registerRoutes() {
         return res.status(400).json({ error: validation.error });
       }
 
-      const data = db.inventory.byResourceType(from, to, req.account);
+      const data = db.inventory.byResourceType(from, to, req.account, {
+        projected: req.projected,
+      });
 
       const result = data.map(row => ({
         name: RESOURCE_TYPE_LABELS[row.resource_type] || row.resource_type || 'Other',
@@ -1388,7 +1398,8 @@ function registerRoutes() {
         value: Math.round(row.total * 100) / 100,
         color: RESOURCE_TYPE_COLORS[row.resource_type] || RESOURCE_TYPE_COLORS['other'],
         detailsCount: row.details_count,
-        serviceCount: row.service_count
+        serviceCount: row.service_count,
+        ...projectedPartOf(req, () => Math.round(row.projected * 100) / 100),
       }));
 
       res.json(result);
@@ -1401,16 +1412,18 @@ function registerRoutes() {
   // lists under each resource type, the Private Cloud hosts and datastores included: those of
   // the account the request asks for, or of every account without one (#123). Once each
   // service, as before, or, by account, once for each account that billed it, with that
-  // account: its NIC handle, or null for the Unknown account.
+  // account: its NIC handle, or null for the Unknown account. With projected=true, the month in
+  // progress counts the projected lines of the resource type too, a service that they alone make
+  // included, and each service gives its projected part (#218).
   app.get('/api/analysis/resource-type-details', accountParameter, byAccountParameter,
-    (req, res) => {
+    projectedParameter, (req, res) => {
       try {
         const { type, from, to } = req.query;
         if (!type) return res.status(400).json({ error: 'type parameter is required' });
         const validation = validateDateRange(from, to);
         if (!validation.valid) return res.status(400).json({ error: validation.error });
         const data = db.inventory.byResourceTypeDetails(
-          type, from, to, req.account, { byAccount: req.byAccount },
+          type, from, to, req.account, { byAccount: req.byAccount, projected: req.projected },
         );
         res.json(data);
       } catch (err) {
@@ -1456,13 +1469,17 @@ function registerRoutes() {
   });
 
   // The Veeam backups of a month: those of the account the request asks for, or of every
-  // account without one (#119), as the Compare and Backup tabs show them
-  app.get('/api/analysis/backup-stats', accountParameter, (req, res) => {
+  // account without one (#119), as the Compare and Backup tabs show them. With projected=true,
+  // the month in progress counts its projected lines too, and each kind gives its projected part
+  // (#218).
+  app.get('/api/analysis/backup-stats', accountParameter, projectedParameter, (req, res) => {
     try {
       const { from, to } = req.query;
       const validation = validateDateRange(from, to);
       if (!validation.valid) return res.status(400).json({ error: validation.error });
-      const data = db.inventory.getBackupStats(from, to, req.account);
+      const data = db.inventory.getBackupStats(from, to, req.account, {
+        projected: req.projected,
+      });
       res.json(data);
     } catch (err) {
       res.status(500).json({ error: err.message });
@@ -1472,15 +1489,16 @@ function registerRoutes() {
   // The services of the Veeam backups of a month (#197): the VMs backed up and the Enterprise
   // licences, which the Compare tab's backup comparison unfolds its two rows into, those of the
   // account the request asks for, or of every account without one, and with byAccount, each
-  // once for each account that billed it, with that account
+  // once for each account that billed it, with that account. With projected=true, those of the
+  // projected lines of the month in progress too, each with its projected part (#218).
   app.get('/api/analysis/backup-services', accountParameter, byAccountParameter,
-    (req, res) => {
+    projectedParameter, (req, res) => {
       try {
         const { from, to } = req.query;
         const validation = validateDateRange(from, to);
         if (!validation.valid) return res.status(400).json({ error: validation.error });
         const data = db.inventory.getBackupServices(
-          from, to, req.account, { byAccount: req.byAccount },
+          from, to, req.account, { byAccount: req.byAccount, projected: req.projected },
         );
         res.json(data);
       } catch (err) {

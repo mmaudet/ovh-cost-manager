@@ -34,14 +34,24 @@ export const fetchAccounts = async () => {
 // the NIC handle of an account or `unknown` for the Unknown account, or null, by default, for
 // all accounts (#115)
 
+// The parameter that asks a route for the projected cost of the month in progress (#217): none
+// unless asked, so that a request without it names nothing. The functions that take
+// { projected } after the account, or after the period for all accounts, ask for it so: those of
+// the Trends tab (#217) and of the Compare tab (#218).
+const projectionParams = (projected) => (projected ? { projected: true } : {});
+
 // The months billed to the account
 export const fetchMonths = async (account = null) => {
   const { data } = await api.get('/months', { params: accountParams(account) });
   return data;
 };
 
-export const fetchSummary = async (from, to, account = null) => {
-  const { data } = await api.get('/summary', { params: { from, to, ...accountParams(account) } });
+// The figures of a period of the account. With `projected`, the month in progress at its
+// projected cost, and the projected part of its total (#218).
+export const fetchSummary = async (from, to, account = null, { projected = false } = {}) => {
+  const { data } = await api.get('/summary', {
+    params: { from, to, ...accountParams(account), ...projectionParams(projected) },
+  });
   return data;
 };
 
@@ -76,16 +86,14 @@ export const fetchGpuProjectsByAccount = async (from, to) => {
   return data.byProject;
 };
 
-export const fetchByService = async (from, to, account = null) => {
+// The costs by service type of a period of the account. With `projected`, those of the month in
+// progress at its projected cost, each with its projected part (#218).
+export const fetchByService = async (from, to, account = null, { projected = false } = {}) => {
   const { data } = await api.get('/analysis/by-service', {
-    params: { from, to, ...accountParams(account) },
+    params: { from, to, ...accountParams(account), ...projectionParams(projected) },
   });
   return data;
 };
-
-// The parameter that asks a route for the projected cost of the month in progress (#217): none
-// unless asked, so that a request without it names nothing
-const projectionParams = (projected) => (projected ? { projected: true } : {});
 
 // Trends over `months` months that end on the `end` month, 'YYYY-MM', of the account. With
 // `projected`, the month in progress at its projected cost, and each month's projected part
@@ -165,19 +173,25 @@ export const fetchExpiringServices = async (days = 30, account = null) => {
   return data;
 };
 
-export const fetchByResourceType = async (from, to, account = null) => {
+// The costs by resource type of a period of the account. With `projected`, those of the month in
+// progress at its projected cost, each with its projected part (#218).
+export const fetchByResourceType = async (from, to, account = null, { projected = false } = {}) => {
   const { data } = await api.get('/analysis/by-resource-type', {
-    params: { from, to, ...accountParams(account) },
+    params: { from, to, ...accountParams(account), ...projectionParams(projected) },
   });
   return data;
 };
 
 // The bill lines of a resource type billed to the account, by service (#123), which the
 // Infrastructure tab lists under its open resource type and the Compare tab under a row it
-// unfolds (#192). The tabs ask for them through tabs/resourceTypeServicesQueries.js.
-export const fetchResourceTypeDetails = async (type, from, to, account = null) => {
+// unfolds (#192). The tabs ask for them through tabs/resourceTypeServicesQueries.js. With
+// `projected`, those of the month in progress at its projected cost, each service with its
+// projected part, those not billed yet included (#218).
+export const fetchResourceTypeDetails = async (
+  type, from, to, account = null, { projected = false } = {},
+) => {
   const { data } = await api.get('/analysis/resource-type-details', {
-    params: { type, from, to, ...accountParams(account) },
+    params: { type, from, to, ...accountParams(account), ...projectionParams(projected) },
   });
   return data;
 };
@@ -185,9 +199,11 @@ export const fetchResourceTypeDetails = async (type, from, to, account = null) =
 // The same for all accounts, for the list that names the account of each service (#123):
 // each service once for each account whose bills billed it, with that account, rather than
 // once. The tabs ask for them through tabs/resourceTypeServicesQueries.js too.
-export const fetchResourceTypeDetailsByAccount = async (type, from, to) => {
+export const fetchResourceTypeDetailsByAccount = async (
+  type, from, to, { projected = false } = {},
+) => {
   const { data } = await api.get('/analysis/resource-type-details', {
-    params: { type, from, to, byAccount: true },
+    params: { type, from, to, byAccount: true, ...projectionParams(projected) },
   });
   return data;
 };
@@ -307,12 +323,15 @@ export const fetchAiEndpoints = async (from, to, account = null) => {
  * @param {string} to - Its last day
  * @param {?string} [account] - The account whose backups to ask for, as the functions above
  *   take it: null for all accounts
+ * @param {object} [options]
+ * @param {boolean} [options.projected] - Whether to ask for the month in progress at its
+ *   projected cost (#218)
  * @returns {Promise<{ vms: object, enterprise: object }>} The number and cost of the Veeam
- *   VMs and of the Enterprise licences
+ *   VMs and of the Enterprise licences, with their projected parts when asked for
  */
-export const fetchBackupStats = async (from, to, account = null) => {
+export const fetchBackupStats = async (from, to, account = null, { projected = false } = {}) => {
   const { data } = await api.get('/analysis/backup-stats', {
-    params: { from, to, ...accountParams(account) },
+    params: { from, to, ...accountParams(account), ...projectionParams(projected) },
   });
   return data;
 };
@@ -324,20 +343,25 @@ export const fetchBackupStats = async (from, to, account = null) => {
  * @param {string} from
  * @param {string} to
  * @param {?string} [account] - The account, null for all accounts
+ * @param {object} [options]
+ * @param {boolean} [options.projected] - Whether to ask for the month in progress at its
+ *   projected cost, each service with its projected part, those not billed yet included (#218)
  * @returns {Promise<{ vms: object[], enterprise: object[] }>}
  */
-export const fetchBackupServices = async (from, to, account = null) => {
+export const fetchBackupServices = async (
+  from, to, account = null, { projected = false } = {},
+) => {
   const { data } = await api.get('/analysis/backup-services', {
-    params: { from, to, ...accountParams(account) },
+    params: { from, to, ...accountParams(account), ...projectionParams(projected) },
   });
   return data;
 };
 
 // The same for all accounts, for the lists that name the account of each service: each
 // service once for each account whose bills billed it, with that account, rather than once
-export const fetchBackupServicesByAccount = async (from, to) => {
+export const fetchBackupServicesByAccount = async (from, to, { projected = false } = {}) => {
   const { data } = await api.get('/analysis/backup-services', {
-    params: { from, to, byAccount: true },
+    params: { from, to, byAccount: true, ...projectionParams(projected) },
   });
   return data;
 };
