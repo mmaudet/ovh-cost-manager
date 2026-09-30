@@ -388,6 +388,21 @@ function registerRoutes() {
     return next();
   };
 
+  // The projected parameter of the routes of the Trends tab (#217): req.projected, whether a
+  // request asks for the projected cost of the month in progress (CONTEXT.md), when its period
+  // covers it, with each row's projected part. true or false, false without it; any other value
+  // is refused.
+  const projectedParameter = (req, res, next) => {
+    const { projected } = req.query;
+    if (projected !== undefined && projected !== 'true' && projected !== 'false') {
+      return res.status(400).json({
+        error: "Invalid 'projected' parameter: expected true or false",
+      });
+    }
+    req.projected = projected === 'true';
+    return next();
+  };
+
   // ========================
   // Projects Endpoints
   // ========================
@@ -593,15 +608,16 @@ function registerRoutes() {
   // for a month without any bill, or none when none of them has a bill (#65). That of the
   // account the request asks for, or of every account without one (#120). By default, it
   // ends on the latest bill of any account for one account too: the trends of the accounts
-  // then cover the same months, and add up to that of every account.
-  app.get('/api/analysis/monthly-trend', accountParameter, (req, res) => {
+  // then cover the same months, and add up to that of every account. With projected=true, the
+  // month in progress costs its projected cost, and each month gives its projected part (#217).
+  app.get('/api/analysis/monthly-trend', accountParameter, projectedParameter, (req, res) => {
     try {
       const { valid, error, from, to } = trendWindowFromQuery(req.query, latestBilledMonth());
       if (!valid) {
         return res.status(400).json({ error });
       }
 
-      const data = db.analysis.monthlyTrend(from, to, req.account);
+      const data = db.analysis.monthlyTrend(from, to, req.account, { projected: req.projected });
 
       // Month names in French
       const monthNames = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Jun', 'Jul', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc'];
@@ -611,7 +627,8 @@ function registerRoutes() {
         return {
           month: monthNames[parseInt(month) - 1],
           yearMonth: row.month,
-          cost: Math.round(row.total * 100) / 100
+          cost: Math.round(row.total * 100) / 100,
+          ...(req.projected ? { projected: Math.round(row.projected * 100) / 100 } : {}),
         };
       });
 
