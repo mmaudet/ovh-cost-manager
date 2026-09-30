@@ -99,7 +99,7 @@ async function spawnOcm(envOf, config, seed) {
     output += chunk;
   });
   const exited = new Promise((resolve) => child.on('exit', resolve));
-  return { home, url, env, child, exited, output: () => output };
+  return { home, dataDir, url, env, child, exited, output: () => output };
 }
 
 /**
@@ -114,14 +114,20 @@ async function spawnOcm(envOf, config, seed) {
  *   starts, through the data layer (data/db.js) that it is handed
  * @returns {Promise<{ url: string, output: function(): string,
  *   logged: function(string): Promise, get: function(string): Promise,
- *   getText: function(string): Promise, stop: function }>}
+ *   getText: function(string): Promise, write: function(function(object)),
+ *   stop: function }>}
  */
 async function startOcm(envOf, { config, seed } = {}) {
-  const { home, url, env, child, exited, output } = await spawnOcm(envOf, config, seed);
+  const {
+    home, dataDir, url, env, child, exited, output,
+  } = await spawnOcm(envOf, config, seed);
 
   const server = {
     url,
     output,
+    // Writes to its database while it runs, through the data layer (data/db.js) that it hands to
+    // `write`, as an import run does: the server reads the database at each request
+    write: (write) => seedDatabase(dataDir, write),
     // Resolves with the status and the JSON body of the server's answer to a path
     get: async (path) => {
       const res = await fetch(`${url}${path}`);

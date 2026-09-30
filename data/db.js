@@ -8,7 +8,8 @@ const { tieFootprint } = require('./carbon-ties');
 const { MONTHLY_KINDS } = require('./cloud-usage');
 const { productFigures } = require('./public-cloud-products');
 const { storageClassLabel } = require('./storage-classes');
-const { monthsOfWindow, shiftMonth } = require('./months');
+const { monthBounds, monthsOfWindow, shiftMonth } = require('./months');
+const { isInProgress, monthOfDate, monthsRead } = require('./month-in-progress');
 const ownership = require('./ownership');
 // The conditions of the queries that keep one account's rows (#115), a list of ids, or the
 // bill lines of the Veeam backups (#197)
@@ -395,6 +396,29 @@ const billOps = {
       WHERE ${ofAccount.sql}
       ORDER BY month DESC
     `).pluck().all(...ofAccount.params);
+  },
+
+  /**
+   * The month in progress (CONTEXT.md, #216): the month of today, while a recurring service has
+   * no bill line in it (data/month-in-progress.js), read from the bills as they are.
+   * @param {?string} [account] - The account whose bills count (see accountCondition()): every
+   *   account's by default, where any account's recurring service keeps the month in progress
+   * @param {Date} [today] - The date of today, the server's by default
+   * @returns {?string} The month of today, YYYY-MM, while it is in progress; null otherwise
+   */
+  getMonthInProgress: (account = null, today = new Date()) => {
+    const monthOfToday = monthOfDate(today);
+    const months = monthsRead(monthOfToday);
+    const ofAccount = accountCondition(account, 'b.account');
+    // Each service that a bill line of those months names, by the account and the month of its
+    // bill
+    const billed = getDb().prepare(`
+      SELECT DISTINCT d.domain AS service, b.account AS account, strftime('%Y-%m', b.date) AS month
+      FROM bill_details d
+      JOIN bills b ON d.bill_id = b.id
+      WHERE b.date >= ? AND b.date <= ? AND d.domain IS NOT NULL AND ${ofAccount.sql}
+    `).all(monthBounds(months[0]).from, monthBounds(monthOfToday).to, ...ofAccount.params);
+    return isInProgress(billed, monthOfToday) ? monthOfToday : null;
   },
 
   exists: (id) => {
