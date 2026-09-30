@@ -84,9 +84,11 @@ const TrendsTab = ({
   const chartOf = (rows) => ({
     parts: lineParts(rows, monthInProgress), monthInProgress, projected, fmt, t,
   });
+  const totalChart = chartOf(monthlyTrend);
+  const categoryChart = chartOf(trendByCategory.data);
   // The months as the tooltips name them
   const monthLabel = (yearMonth) => trendMonthLabel(yearMonth, monthInProgress, language, t);
-  // The first and the last months of the period, as the months list names them
+  // The first and the last months of the period, as the trend gives them
   const firstMonth = monthlyTrend[0];
   const lastMonth = monthlyTrend[monthlyTrend.length - 1];
   // The growth over the period, in percent, from its first month to its last, as the page
@@ -127,7 +129,7 @@ const TrendsTab = ({
                   key: 'cost', name: t('cost'), color: '#3b82f6', width: 3,
                   dot: { fill: '#3b82f6', r: 6, strokeWidth: 2, stroke: '#fff' },
                   dotRadius: 6, activeRadius: 8, projectedPartOf: (row) => row.projected ?? 0,
-                }, chartOf(monthlyTrend))}
+                }, totalChart)}
               </LineChart>
             </ResponsiveContainer>
           </div>
@@ -177,7 +179,7 @@ const TrendsTab = ({
                       key: c.key, name: c.label, color: c.color, width: 2, dot: false,
                       dotRadius: 4, activeRadius: 5,
                       projectedPartOf: (row) => row.projected?.[c.key] ?? 0,
-                    }, chartOf(trendByCategory.data)))}
+                    }, categoryChart))}
                 </LineChart>
               </ResponsiveContainer>
             </div>
