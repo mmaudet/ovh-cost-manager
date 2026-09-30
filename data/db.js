@@ -161,6 +161,22 @@ function servicesOfLines(linesOf, fromDate, toDate, account, byAccount) {
 }
 
 /**
+ * The recurring services (CONTEXT.md) that the month of today has not billed yet, as
+ * data/month-in-progress.js tells them from the bills as they are, each with its projected lines:
+ * the month of today is in progress while there are any (#216), and its projection counts those
+ * lines (#217).
+ * @param {string} monthOfToday - YYYY-MM, as the server's local date gives it (monthOfDate())
+ * @param {?string} account - The account whose recurring services count (see
+ *   accountCondition()): null for every account
+ * @returns {Array<{ service: string, account: ?string, lines: string[] }>}
+ */
+function servicesNotBilledYet(monthOfToday, account) {
+  return recurringServicesNotBilled(
+    detailOps.getBilledServices(monthOfToday, account), monthOfToday,
+  );
+}
+
+/**
  * The bill lines that a query of the costs between two dates, both included, adds up, as a table
  * for its FROM clause, with its parameters: the lines of the bills of the account (see
  * accountCondition()), every account's by default. With the projected option, when the dates
@@ -189,9 +205,8 @@ function linesOfPeriod(fromDate, toDate, account = null, { projected = false } =
   };
   const monthOfToday = monthOfDate(new Date());
   if (!projected || !monthsOfWindow(fromDate, toDate).includes(monthOfToday)) return billLines;
-  const projectedLines = recurringServicesNotBilled(
-    detailOps.getBilledServices(monthOfToday, account), monthOfToday,
-  ).flatMap(({ lines }) => lines);
+  const projectedLines = servicesNotBilledYet(monthOfToday, account)
+    .flatMap(({ lines }) => lines);
   if (projectedLines.length === 0) return billLines;
   const ofProjectedLines = idInList('d.id', projectedLines);
   return {
@@ -455,8 +470,7 @@ const billOps = {
    */
   getMonthInProgress: (account = null) => {
     const monthOfToday = monthOfDate(new Date());
-    const billed = detailOps.getBilledServices(monthOfToday, account);
-    return recurringServicesNotBilled(billed, monthOfToday).length > 0 ? monthOfToday : null;
+    return servicesNotBilledYet(monthOfToday, account).length > 0 ? monthOfToday : null;
   },
 
   exists: (id) => {
