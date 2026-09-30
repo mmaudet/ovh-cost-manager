@@ -19,17 +19,19 @@ const SERVER = path.resolve(__dirname, '..', '..', 'server', 'index.js');
 const HIDE_REPO_CONFIG = path.resolve(__dirname, 'hide-repo-config.js');
 const DATA_LAYER = path.resolve(__dirname, '..', '..', 'data', 'db.js');
 
-// Creates the database of `dataDir` as the server does, and hands its data
-// layer to `seed`, which writes the rows the test needs. data/db.js reads
-// DATA_DIR once, when it is first required.
-function seedDatabase(dataDir, seed) {
+// Writes to the database of `dataDir` through its data layer, which it hands to
+// `writeRows`: the rows that a test seeds before the server starts, in a
+// database that it creates as the server does, or those that an import run
+// stores while the server runs. data/db.js reads DATA_DIR once, when it is
+// first required.
+function writeDatabase(dataDir, writeRows) {
   const previousDataDir = process.env.DATA_DIR;
   process.env.DATA_DIR = dataDir;
   try {
     jest.isolateModules(() => {
       const db = require(DATA_LAYER);
       try {
-        seed(db);
+        writeRows(db);
       } finally {
         db.closeDb();
       }
@@ -73,7 +75,7 @@ async function spawnOcm(envOf, config, seed) {
   }
   const dataDir = path.join(home, 'data');
   if (seed !== undefined) {
-    seedDatabase(dataDir, seed);
+    writeDatabase(dataDir, seed);
   }
   const port = await freePort();
   const url = `http://127.0.0.1:${port}`;
@@ -125,9 +127,10 @@ async function startOcm(envOf, { config, seed } = {}) {
   const server = {
     url,
     output,
-    // Writes to its database while it runs, through the data layer (data/db.js) that it hands to
-    // `write`, as an import run does: the server reads the database at each request
-    write: (write) => seedDatabase(dataDir, write),
+    // Writes to its database while it runs, as an import run does, through the data layer
+    // (data/db.js) that it hands to `writeRows`, at once: the server reads the database at each
+    // request
+    write: (writeRows) => writeDatabase(dataDir, writeRows),
     // Resolves with the status and the JSON body of the server's answer to a path
     get: async (path) => {
       const res = await fetch(`${url}${path}`);

@@ -92,7 +92,7 @@ describe('GET /api/months: the month in progress (#216)', () => {
         const inProgress = await ocm.get('/api/months');
 
         // The bill of the server comes today, and the import stores it
-        await ocm.write((db) => billOf(db, 'FR1032', LYON, DAY_OF_TODAY, [
+        ocm.write((db) => billOf(db, 'FR1032', LYON, DAY_OF_TODAY, [
           [SERVER, 'dedicated_server', 200],
         ]));
 
