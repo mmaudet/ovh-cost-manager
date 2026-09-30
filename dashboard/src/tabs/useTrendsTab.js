@@ -6,7 +6,7 @@ import { useQuery } from '@tanstack/react-query';
 import {
   fetchMonthlyTrend, fetchMonthlyTrendByCategory, fetchGpuSummary, fetchAiEndpoints,
 } from '../services/api.js';
-import { accountQuery } from '../utils/accounts.js';
+import { accountQuery, projectedQuery } from '../utils/accounts.js';
 import { monthInProgressWithin } from '../utils/months.js';
 import { monthsBetween, availablePeriodsFor } from '../utils/trendPeriods.js';
 import { monthWindowEndingOn } from '../utils/monthWindow.js';
@@ -41,30 +41,28 @@ const useTrendsTab = ({
 
   // The month in progress that the period covers (#216), null when it covers none, and whether
   // the trends project it: while the page projects the month in progress (#217). Their requests
-  // and their keys name the flag only then, so that a single-account installation keeps its keys
-  // while the setting is off; before the account, which comes last (ADR 0001).
+  // and their keys name the flag only then (projectedQuery()).
   const monthInProgress = monthInProgressWithin(months, trendWindow);
   const projected = projectsMonthInProgress && monthInProgress !== null;
-  const projection = projected
-    ? { key: ['projected'], options: [{ projected: true }] }
-    : { key: [], options: [] };
 
   // The trends wait until the months list holds the month selected. It does not while the
   // months of the account just selected load, nor when that account lacks the month, until
   // the shell selects its latest month (#115): the period would then count no month, or end
   // on a month the account lacks, and the tab would ask for trends it never shows (#120).
-  const { data: monthlyTrend = [] } = useQuery(accountQuery(selectedAccount, {
-    key: ['monthlyTrend', trendPeriod, endMonth, ...projection.key],
-    fetch: (account) => fetchMonthlyTrend(trendPeriod, endMonth, account, ...projection.options),
+  const { data: monthlyTrend = [] } = useQuery(projectedQuery(selectedAccount, {
+    key: ['monthlyTrend', trendPeriod, endMonth],
+    fetch: (account, ...options) => fetchMonthlyTrend(trendPeriod, endMonth, account, ...options),
+    projected,
     enabled: holdsSelectedMonth,
   }));
 
   const { data: trendByCategory = { categories: [], data: [] } } = useQuery(
-    accountQuery(selectedAccount, {
-      key: ['monthlyTrendByCategory', trendPeriod, endMonth, ...projection.key],
-      fetch: (account) => fetchMonthlyTrendByCategory(
-        trendPeriod, endMonth, account, ...projection.options,
+    projectedQuery(selectedAccount, {
+      key: ['monthlyTrendByCategory', trendPeriod, endMonth],
+      fetch: (account, ...options) => fetchMonthlyTrendByCategory(
+        trendPeriod, endMonth, account, ...options,
       ),
+      projected,
       enabled: holdsSelectedMonth,
     }),
   );

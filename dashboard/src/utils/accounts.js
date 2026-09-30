@@ -192,6 +192,30 @@ export function accountQuery(account, { key, fetch, enabled = true }) {
 }
 
 /**
+ * The options of a query that follows the account shown, as accountQuery() gives them, and that
+ * may count the month in progress at its projected cost (#217): while it does, its key names the
+ * flag, before the account, and its request passes { projected: true } after the account, as the
+ * functions of services/api.js take it. While it does not, neither names it, so that a
+ * single-account installation keeps its keys while the page's setting is off. The Trends tab asks
+ * for its trends so, and the Compare tab for its months (#218).
+ * @param {?string|undefined} account - The account shown, as accountQuery() takes it
+ * @param {object} query
+ * @param {Array} query.key - Its key for all accounts, without the flag
+ * @param {function(?string, object=): Promise} query.fetch - Requests its answer for an account,
+ *   and while the query projects, with { projected: true } after it
+ * @param {boolean} [query.projected] - Whether it asks for the projected cost
+ * @param {boolean} [query.enabled] - Whether it may run besides
+ * @returns {{ queryKey: Array, queryFn: function(): Promise, enabled: boolean }}
+ */
+export function projectedQuery(account, { key, fetch, projected = false, enabled = true }) {
+  return accountQuery(account, {
+    key: projected ? [...key, 'projected'] : key,
+    fetch: projected ? (shown) => fetch(shown, { projected: true }) : fetch,
+    enabled,
+  });
+}
+
+/**
  * The options of the query of a list, for useQuery, as the lists show it (#118, #194): while
  * they name the account of each row, with all accounts shown, the rows of all accounts by
  * account, each row, such as a project or a service, once for each account that billed it,
