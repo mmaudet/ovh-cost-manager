@@ -3,7 +3,9 @@
 // Overview's lists and the Compare tab's comparison by project (#119) ask for them, a month
 // each, under keys built here only, so that two tabs that ask for the same month share its
 // answer (ADR 0001). The comparison by project asks here for those of the account shown too,
-// while the lists name no account.
+// while the lists name no account, and for those of the month in progress at its projected
+// cost while the page projects it (#219), under keys that name the flag: the Overview's, which
+// never project, share no answer with them.
 
 import {
   fetchByProject, fetchGpuProjectsByAccount, fetchProjectsByAccount,
@@ -12,10 +14,11 @@ import { listQuery } from '../utils/accounts.js';
 
 // The query of the projects of a month by account, for listQuery(), from the name of its key
 // and the function that requests them: its key names the month, and no account, as its request
-// asks for all accounts
+// asks for all accounts, and the request passes on what listQuery() gives it, { projected: true }
+// while it projects
 const byAccountOf = (name, requestProjects) => (month) => ({
   key: [name, month?.from, month?.to],
-  fetch: () => requestProjects(month.from, month.to),
+  fetch: (...options) => requestProjects(month.from, month.to, ...options),
 });
 const projectsByAccount = byAccountOf('projectsByAccount', fetchProjectsByAccount);
 const gpuProjectsByAccount = byAccountOf('gpuProjectsByAccount', fetchGpuProjectsByAccount);
@@ -54,23 +57,30 @@ export const gpuProjectsByAccountQuery = (accountColumn, month, enabled) => list
  * of the costs by project that the shell loads for its selected month; or, while the lists
  * name the account of each project, with all accounts shown, those of all accounts by account,
  * under the key of the Overview's breakdown by project (#119). The Compare tab's comparison by
- * project asks for them so.
+ * project asks for them so, and for those of the month in progress at its projected cost while
+ * the page projects it (#219): their key names the flag then, and they share no answer with the
+ * shell's nor the Overview's, which never project.
  * @param {?string|undefined} account - The account shown: null for all accounts, undefined
  *   while the page does not know it, which the query waits for
  * @param {?object} accountColumn - The Account column of the lists (accountColumnOf()), null
  *   when they name no account
  * @param {?{ from: string, to: string }} month - The month, null while there is none yet
  * @param {boolean} enabled - Whether the query may run besides
+ * @param {object} [options]
+ * @param {boolean} [options.projected] - Whether it asks for the projected cost (listQuery())
  * @returns {{ queryKey: Array, queryFn: function(): Promise<object[]>, enabled: boolean }}
  */
-export const projectsQuery = (account, accountColumn, month, enabled) => listQuery(
+export const projectsQuery = (
+  account, accountColumn, month, enabled, { projected = false } = {},
+) => listQuery(
   accountColumn, {
     byAccount: projectsByAccount(month),
     ofAccountShown: {
       account,
       key: ['byProject', month?.from, month?.to],
-      fetch: (shown) => fetchByProject(month.from, month.to, shown),
+      fetch: (shown, ...options) => fetchByProject(month.from, month.to, shown, ...options),
     },
+    projected,
     enabled,
   },
 );

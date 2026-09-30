@@ -2118,10 +2118,11 @@ describe('Compare tab', () => {
     const AUGUST = ['2026-08-01', '2026-08-31', null];
     const JULY = ['2026-07-01', '2026-07-31', null];
     const PROJECTED = { projected: true };
-    // What the tab asks for each month: its totals, its service types, its resource types and
-    // its Veeam backups
+    // What the tab asks for each month: its totals, its service types, its projects, since #219,
+    // its resource types and its Veeam backups
     const figures = () => [
-      api.fetchSummary, api.fetchByService, api.fetchByResourceType, api.fetchBackupStats,
+      api.fetchSummary, api.fetchByService, api.fetchByProject, api.fetchByResourceType,
+      api.fetchBackupStats,
     ];
     const projectionAsked = (fetchFigure) => fetchFigure.mock.calls
       .some((call) => call.at(-1)?.projected === true);
@@ -2153,8 +2154,6 @@ describe('Compare tab', () => {
           expect(fetchFigure).toHaveBeenCalledWith(...SEPTEMBER, PROJECTED);
           expect(fetchFigure).not.toHaveBeenCalledWith(...AUGUST, PROJECTED);
         }
-        // Not the projects, which compare what the month billed so far until #219
-        expect(projectionAsked(api.fetchByProject)).toBe(false);
       });
 
     // Rather than compare a partial month with a complete one, or leave the variation out

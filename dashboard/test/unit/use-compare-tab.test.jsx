@@ -9,7 +9,9 @@ import {
   lyonAccount, lyonBilledLate, removedAccount, severalAccounts, unknownAccount, unnamedAccount,
 } from '../fixtures/accounts.js';
 import { enterpriseLicence } from '../fixtures/backup.js';
-import { serverAndBackupsBilledLate } from '../fixtures/compare.js';
+import {
+  serverAndBackupsBilledLate, stagingBilledLate, unnamedBilledLate,
+} from '../fixtures/compare.js';
 import { api } from '../support/api.js';
 import { renderTabHook, TAB_IDS, WAITING } from '../support/hooks.jsx';
 import { settle } from '../support/query-client.js';
@@ -752,34 +754,32 @@ describe('useCompareTab', () => {
     const SEPTEMBER = ['2026-09-01', '2026-09-30'];
     const AUGUST = ['2026-08-01', '2026-08-31'];
     const PROJECTED = { projected: true };
-    // The figures that the hook asks for projected: all but the projects', until #219
-    const PROJECTED_FIGURES = FIGURES.filter((name) => name !== 'fetchByProject');
-    const NAMES = ['summary', 'byService', 'byResourceType', 'backupStats'];
+    const NAMES = ['summary', 'byService', 'byProject', 'byResourceType', 'backupStats'];
+    const PRODUCTION = 'project-production';
+    const STAGING = 'project-staging';
 
+    // The projects' too since #219, which compared what the month billed so far until then
     it('asks for its figures projected while the page projects it, under keys of their own',
       async () => {
         const { result, keysOf } = await renderTabHook(useCompareTab, projecting, billedLate);
 
-        for (const name of PROJECTED_FIGURES) {
+        for (const name of FIGURES) {
           expect(api[name], name).toHaveBeenCalledWith(...SEPTEMBER, null, PROJECTED);
           // Month A, August, complete, as before
           expect(api[name], name).toHaveBeenCalledWith(...AUGUST, null);
           expect(api[name], name).not.toHaveBeenCalledWith(...AUGUST, null, PROJECTED);
         }
-        expect(api.fetchByProject).not.toHaveBeenCalledWith(...SEPTEMBER, null, PROJECTED);
         // September at its projected cost, and what projected lines make of it
         expect(result.current.compareDataB).toMatchObject({ total: 1220.4, projected: 310 });
-        // Which the variations compare, but the projects', at what September billed (#219)
+        // Which the variations compare
         expect(result.current.comparedMonths)
           .toEqual({ includesMonthInProgress: true, projected: true });
-        expect(result.current.billedMonths)
-          .toEqual({ includesMonthInProgress: true, projected: false });
         expect(resourceTypes(result.current.byResourceTypeB)).toEqual([
           ['cloud_project', 830.4], ['dedicated_server', 270], ['backup', 60], ['domain', 35],
           ['license', 25],
         ]);
         // The flag after the other parts, and none in August's: the shell's keys of September
-        // stay its own, as the header never projects
+        // stay its own, as the header, the Overview and the Public Cloud tab never project
         for (const name of NAMES) {
           expect(keysOf(name)).toEqual([
             [name, undefined, undefined],
@@ -789,11 +789,23 @@ describe('useCompareTab', () => {
         }
       });
 
+    // Staging, whose bill of September has not come yet, at its cost of August (#219)
+    it('gives the projects of the month in progress at their projected cost', async () => {
+      const { result } = await renderTabHook(useCompareTab, projecting,
+        { ...account, ...stagingBilledLate });
+
+      expect(result.current.byProjectA.map(({ projectName, total }) => [projectName, total]))
+        .toEqual([['Production', 512], ['Staging', 190]]);
+      expect(result.current.byProjectB.map(({ projectName, total, projected }) => [
+        projectName, total, projected,
+      ])).toEqual([['Production', 610.4, 0], ['Staging', 190, 190]]);
+    });
+
     it('asks for them as before while the page does not project it', async () => {
       const { result, keysOf } = await renderTabHook(useCompareTab,
         { ...projecting, projectsMonthInProgress: false }, billedLate);
 
-      for (const name of PROJECTED_FIGURES) {
+      for (const name of FIGURES) {
         expect(api[name], name).toHaveBeenCalledWith(...SEPTEMBER, null);
         expect(api[name], name).not.toHaveBeenCalledWith(...SEPTEMBER, null, PROJECTED);
       }
@@ -914,6 +926,91 @@ describe('useCompareTab', () => {
       expect(backups.queryKey).toEqual(['backupServicesByAccount', ...SEPTEMBER, 'projected']);
       await backups.queryFn();
       expect(api.fetchBackupServicesByAccount).toHaveBeenCalledWith(...SEPTEMBER, PROJECTED);
+    });
+
+    // What the comparison of a project's products runs once opened (#219)
+    it("asks for a project's products projected, under a key of its own", async () => {
+      const { result } = await renderTabHook(useCompareTab, projecting,
+        { ...account, ...stagingBilledLate });
+
+      const staging = result.current.projectProductsQuery(STAGING, september);
+
+      expect(staging.queryKey)
+        .toEqual(['projectProducts', STAGING, ...SEPTEMBER, 'projected']);
+      expect(staging.enabled).toBe(true);
+      // Its products and the credit at their cost of August, which projected lines alone make
+      await expect(staging.queryFn()).resolves.toMatchObject({
+        total: 210, projected: 210, credits: -20, projectedCredits: -20,
+      });
+      expect(api.fetchProjectProducts)
+        .toHaveBeenCalledWith(STAGING, ...SEPTEMBER, null, PROJECTED);
+      // Those of August, complete, as before
+      expect(result.current.projectProductsQuery(STAGING, august).queryKey)
+        .toEqual(['projectProducts', STAGING, ...AUGUST]);
+    });
+
+    it("asks for a project's products as before while the page does not project it",
+      async () => {
+        const { result } = await renderTabHook(useCompareTab,
+          { ...projecting, projectsMonthInProgress: false }, { ...account, ...stagingBilledLate });
+
+        const production = result.current.projectProductsQuery(PRODUCTION, september);
+
+        expect(production.queryKey)
+          .toEqual(['projectProducts', PRODUCTION, ...SEPTEMBER]);
+        await production.queryFn();
+        expect(api.fetchProjectProducts)
+          .toHaveBeenCalledWith(PRODUCTION, ...SEPTEMBER, null);
+        expect(api.fetchProjectProducts)
+          .not.toHaveBeenCalledWith(PRODUCTION, ...SEPTEMBER, null, PROJECTED);
+      });
+
+    // As the months list of the account shown marks it, with the flag before the account
+    it("asks for a project's products of the account shown projected, the flag before it",
+      async () => {
+        const unnamedMonths = unnamedBilledLate.ofAccount[unnamedAccount.id].months;
+        const { result } = await renderTabHook(useCompareTab, {
+          ...projecting, months: unnamedMonths, selectedAccount: unnamedAccount.id,
+        }, unnamedBilledLate);
+
+        const staging = result.current.projectProductsQuery(STAGING, september);
+
+        expect(staging.queryKey).toEqual([
+          'projectProducts', STAGING, ...SEPTEMBER, 'projected', unnamedAccount.id,
+        ]);
+        await staging.queryFn();
+        expect(api.fetchProjectProducts)
+          .toHaveBeenCalledWith(STAGING, ...SEPTEMBER, unnamedAccount.id, PROJECTED);
+        expect(api.fetchByProject)
+          .toHaveBeenCalledWith(...SEPTEMBER, unnamedAccount.id, PROJECTED);
+        expect(result.current.byProjectB).toEqual([
+          expect.objectContaining({ projectName: 'Staging', total: 190, projected: 190 }),
+        ]);
+      });
+
+    // While the comparison names the account of each project, all accounts shown: under a key of
+    // their own, which the Overview's projects by account of September, never projected, do not
+    // share (ADR 0001)
+    it('asks for the projects by account projected, the flag last in their keys', async () => {
+      const { result, keysOf } = await renderTabHook(useCompareTab, {
+        ...projecting,
+        accountColumn: accountColumnOf(
+          accountsOf(unnamedBilledLate.accounts), null, (key) => translations.fr[key],
+        ),
+      }, unnamedBilledLate);
+
+      expect(api.fetchProjectsByAccount).toHaveBeenCalledWith(...SEPTEMBER, PROJECTED);
+      expect(api.fetchProjectsByAccount).toHaveBeenCalledWith(...AUGUST);
+      expect(api.fetchProjectsByAccount).not.toHaveBeenCalledWith(...AUGUST, PROJECTED);
+      expect(keysOf('projectsByAccount')).toEqual([
+        ['projectsByAccount', undefined, undefined],
+        ['projectsByAccount', ...AUGUST],
+        ['projectsByAccount', ...SEPTEMBER, 'projected'],
+      ]);
+      // Staging of the unnamed account at its cost of August
+      expect(result.current.byProjectB.map(({ projectName, account: nic, projected }) => [
+        projectName, nic, projected,
+      ])).toEqual([['Production', lyonAccount.nic, 0], ['Staging', unnamedAccount.nic, 190]]);
     });
   });
 });

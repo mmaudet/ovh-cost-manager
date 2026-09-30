@@ -150,13 +150,19 @@ const answers = {
   // So do the Public Cloud projects and figures (#121), not the resources of a project
   fetchProjectsEnriched: (data, account) =>
     entry('projectsEnriched', emptyAnswers.list)(ofAccount(data, account)),
-  // The Overview's figures follow it too (#118)
-  fetchByProject: entryForPeriodOfAccount('byProject', emptyAnswers.list),
+  // The Overview's figures follow it too (#118). Asked with the projection of the month in
+  // progress, the costs by project answer from their own entries too (#219).
+  fetchByProject: projectableEntryForPeriodOfAccount(
+    'byProject', 'projectedByProject', emptyAnswers.list,
+  ),
   fetchByService: projectableEntryForPeriodOfAccount(
     'byService', 'projectedByService', emptyAnswers.list,
   ),
-  // And its lists by account, for all accounts only (#118)
-  fetchProjectsByAccount: entryForPeriod('projectsByAccount', emptyAnswers.list),
+  // And its lists by account, for all accounts only (#118), the costs by project from their own
+  // entry with the projection (#219)
+  fetchProjectsByAccount: (data, from, to, { projected = false } = {}) => entryForPeriod(
+    projected ? 'projectedProjectsByAccount' : 'projectsByAccount', emptyAnswers.list,
+  )(data, from, to),
   fetchGpuProjectsByAccount: entryForPeriod('gpuProjectsByAccount', emptyAnswers.list),
   // Trends: by the month they end on, then by their number of months, and those of the
   // account the page selects (#120). Asked with the projection of the month in progress, those of
@@ -211,10 +217,12 @@ const answers = {
   fetchProjectOtherServices: entryForProject('projectOtherServices',
     () => ({ total: 0, products: [], credits: 0 })),
   // The products of a project from the bills of a period, of the account the page selects,
-  // as the costs by project (#181)
-  fetchProjectProducts: (data, projectId, from, to, account) =>
-    entryForProject('projectProducts', emptyAnswers.projectProducts)(
-      ofAccount(data, account), projectId, from, to),
+  // as the costs by project (#181); with the projection of the month in progress, from their own
+  // entry, projectedProjectProducts (#219)
+  fetchProjectProducts: (data, projectId, from, to, account, { projected = false } = {}) =>
+    entryForProject(
+      projected ? 'projectedProjectProducts' : 'projectProducts', emptyAnswers.projectProducts,
+    )(ofAccount(data, account), projectId, from, to),
   fetchProjectInstanceTotal: entryForProject('projectInstanceTotal', emptyAnswers.instanceTotal),
   // The GPU costs of a period, of the account the page selects (#120)
   fetchGpuSummary: entryForPeriodOfAccount('gpuSummary', emptyAnswers.gpuSummary),
