@@ -661,9 +661,10 @@ export default function Dashboard() {
         </div>
 
         {/* Consumption, Forecast and Resource Count KPI Cards: one a row below md, where three
-            would leave each too little room for its title, date and figure (#226) */}
+            would leave each too little room for its title, date and figure, but three on
+            paper, as before: A4 or Letter in portrait prints at about 730 px, below md (#226) */}
         {(consumptionCurrent || byResourceType.length > 0) && (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 print:grid-cols-3 gap-4">
             {consumptionCurrent && (
               <div className={`${FIGURE_CARD} border-2 border-emerald-500`}>
                 <div className={KPI_TITLE_ROW}>
