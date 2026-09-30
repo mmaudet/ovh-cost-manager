@@ -132,6 +132,27 @@ describe('a full import', () => {
     });
   });
 
+  // The import with the cloud details asks OVH for that of the current month again (#224)
+  test('clears the forecast of each project, even of one that consumed nothing', async () => {
+    // A forecast of September, as the import stores it
+    const storeForecast = (projectId, total) => db.cloudDetails.upsertForecast({
+      project_id: projectId, period_start: '2026-09-01', total_price: total,
+    });
+    storeProject(PROJECT);
+    storeProject('proj-idle');
+    storeConsumption(PROJECT, '2026-09', 12.25);
+    storeForecast(PROJECT, 30);
+    storeForecast('proj-idle', 0);
+    serveProjects(PROJECT);
+
+    await importFull();
+
+    expect(db.importLog.getLatest()).toMatchObject({ type: 'full', status: 'success' });
+    expect(db.getDb().prepare('SELECT * FROM project_forecasts').all()).toEqual([]);
+    // The project that consumed nothing goes, as its forecast does
+    expect(db.projects.getAll().map(p => p.id)).toEqual([PROJECT]);
+  });
+
   // Its own entry is the one that the other imports check while it runs
   test('clears the log of the imports before it, but for its own entry', async () => {
     const earlier = db.importLog.start('differential', '2026-08-01', '2026-09-15');

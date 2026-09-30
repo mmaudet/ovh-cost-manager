@@ -10,7 +10,7 @@
 
 const {
   LYON, PARIS, NEW_ACCOUNT, UNKNOWN_ACCOUNT, REFUSED, SQLITE_TIME, project, consumption,
-  consumptionMonth, snapshot, historyEntry, balance, movement,
+  projectForecast, consumptionMonth, snapshot, historyEntry, balance, movement,
 } = require('./support/accounts');
 const { startOcm } = require('./support/ocm-server');
 
@@ -42,10 +42,12 @@ const LYON_DETAILS = {
 // Two accounts, with their balances, credits, consumption and consumption history, and the
 // Unknown account's, which an import before the accounts stored, but for its balance, which
 // the import drops. The latest balance of each account is not the latest stored, and that of
-// the removed account is of March. OVH gives Lyon its consumption of September, and Paris
-// none: the consumption of Paris's project tells it. The Unknown account's is that of the
-// month of the last import before the accounts, August, and the removed account's, which OVH
-// gave, July's. Every NIC handle, name and amount is made up.
+// the removed account is of March. Lyon, which has no project, has the consumption of
+// September that OVH's /me/consumption gives it. Paris's snapshot stays on one transaction:
+// the consumption of Paris's project tells Paris's, as OVH's Public Cloud page does (#224).
+// The Unknown account's is that of the month of the last import before the accounts, August,
+// and the removed account's, which OVH gave, July's. Every NIC handle, name and amount is
+// made up.
 function seed(db) {
   db.accounts.upsert({ nic: LYON, currency: 'EUR', name: 'Lyon subsidiary' });
   db.accounts.upsert({ nic: PARIS, currency: 'EUR' });
@@ -81,10 +83,7 @@ function seed(db) {
   snapshot(db, LYON, SEPTEMBER_TO_14,
     { current: 87.5, forecast: 192.25, details: LYON_DETAILS, takenAt: '2026-09-14 04:02:00' });
   snapshot(db, PARIS, SEPTEMBER_TO_15,
-    { current: 0, forecast: 0, takenAt: '2026-09-15 04:01:00' });
-  // Lyon's project, whose consumption the snapshot of Lyon's already tells
-  project(db, 'project-production', 'Production', LYON);
-  consumption(db, 'project-production', SEPTEMBER_TO_14, 300);
+    { current: 5, forecast: 5, takenAt: '2026-09-15 04:01:00' });
   project(db, 'project-staging', 'Staging', PARIS);
   consumption(db, 'project-staging', SEPTEMBER_TO_15, 12.25);
   for (const nic of [LYON, PARIS]) consumptionMonth(db, nic, '2026-09-01');
@@ -208,8 +207,8 @@ describe('GET /api/account/credits', () => {
 describe('GET /api/consumption/current', () => {
   const current = (parameters = '') => ocm.get(`/api/consumption/current${parameters}`);
 
-  // Lyon's, which OVH tells, and Paris's, which its project tells. The Unknown account's is
-  // of an earlier month than theirs, the current one.
+  // Lyon's, which OVH tells, and Paris's, which its project tells rather than its snapshot.
+  // The Unknown account's is of an earlier month than theirs, the current one.
   test('adds up the consumption of the accounts in the current month without the parameter',
     async () => {
       expect(await current()).toEqual({
@@ -237,16 +236,17 @@ describe('GET /api/consumption/current', () => {
       });
     });
 
-  test("gives the consumption of the account's projects when OVH tells none", async () => {
-    expect(await current(of(PARIS))).toEqual({
-      status: 200,
-      body: {
-        snapshot_date: '2026-09-15 04:01:00', period_start: '2026-09-01',
-        period_end: '2026-09-15', current_total: 12.25, source: 'cloud_projects',
-        project_count: 1, currency: 'EUR',
-      },
+  test("gives the consumption of the account's projects rather than its snapshot's",
+    async () => {
+      expect(await current(of(PARIS))).toEqual({
+        status: 200,
+        body: {
+          snapshot_date: '2026-09-15 04:01:00', period_start: '2026-09-01',
+          period_end: '2026-09-15', current_total: 12.25, source: 'cloud_projects',
+          project_count: 1, currency: 'EUR',
+        },
+      });
     });
-  });
 
   // Its latest is of an earlier month than the current one, September: as for an account
   // without any, rather than an old month's under the date of today
@@ -297,8 +297,8 @@ describe('GET /api/consumption/forecast', () => {
       });
     });
 
-  // 12.25 € over 14 days, for the 30 days of September
-  test("extrapolates the consumption of the account's projects when OVH tells none",
+  // 12.25 € over 14 days, for the 30 days of September: OVH forecasts none of its projects
+  test("extrapolates the consumption of the account's projects rather than read its snapshot's",
     async () => {
       expect(await forecast(of(PARIS))).toEqual({
         status: 200,
@@ -392,7 +392,8 @@ describe('an account the server does not know', () => {
 
 // Two accounts that OVH tells no consumption of, each of whose last import covered the
 // consumption of its project up to its own day: the forecast of all accounts adds up each
-// account's, extrapolated over its own days, as the account shows it alone
+// account's, as the account shows it alone, the forecasts that OVH gives its projects or their
+// consumption extrapolated over its own days
 describe('the forecast of the accounts that their projects tell', () => {
   // Lyon's project consumed 70 € up to the 15th of September, and Paris's `consumed` up to
   // `to`
@@ -440,6 +441,48 @@ describe('the forecast of the accounts that their projects tell', () => {
         currency: 'EUR',
         source: 'cloud_projects',
         project_count: 2,
+      });
+    } finally {
+      await server.stop();
+    }
+  }, 30000);
+
+  // Lyon's two projects consumed 70 € and 10 €, and OVH forecasts them 100 € and 50 € (#224).
+  // It forecasts nothing of Paris's, whose 28 € over 14 days extrapolate to 60 €.
+  test('adds up the forecasts that OVH gives the projects of an account', async () => {
+    const server = await startOcm(inUtc, {
+      seed: (db) => {
+        seedProjects({ to: '2026-09-15', consumed: 28 })(db);
+        project(db, 'project-lyon-2', 'Lyon 2', LYON);
+        consumption(db, 'project-lyon-2', SEPTEMBER_TO_15, 10);
+        projectForecast(db, 'project-lyon', '2026-09-01', 100);
+        projectForecast(db, 'project-lyon-2', '2026-09-01', 50);
+      },
+    });
+    try {
+      expect((await server.get(`/api/consumption/forecast${of(LYON)}`)).body).toEqual({
+        snapshot_date: expect.stringMatching(ISO_TIME),
+        period_start: '2026-09-01',
+        period_end: '2026-09-15',
+        forecast_total: 150,
+        current_total: 80,
+        currency: 'EUR',
+        progress: 53,
+        source: 'cloud_projects',
+      });
+      // Lyon's forecasts are none of Paris's
+      expect((await server.get(`/api/consumption/forecast${of(PARIS)}`)).body)
+        .toMatchObject({ forecast_total: 60, current_total: 28, days_elapsed: 14 });
+      // Without the days of an extrapolation, which Lyon's is not
+      expect((await server.get('/api/consumption/forecast')).body).toEqual({
+        snapshot_date: expect.stringMatching(ISO_TIME),
+        period_start: '2026-09-01',
+        period_end: '2026-09-15',
+        forecast_total: 210,
+        current_total: 108,
+        currency: 'EUR',
+        progress: 51,
+        source: 'cloud_projects',
       });
     } finally {
       await server.stop();

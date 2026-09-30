@@ -26,7 +26,8 @@ OVH API ──> data/import.js ──> SQLite (ovh-bills.db) ──> server/inde
   - `db.js` — connection singleton (`getDb()`). Opens SQLite in WAL mode, runs
     `schema.sql`, then applies idempotent runtime migrations via `addColumnIfNotExists`.
     There is no migration framework; schema changes are made by editing `schema.sql` AND
-    adding an `addColumnIfNotExists` call for existing databases.
+    adding an `addColumnIfNotExists` call for existing databases. A new table needs none:
+    `getDb()` runs `schema.sql` at each open, whose `CREATE TABLE IF NOT EXISTS` adds it.
   - `migrations.js` — what `getDb()` migrates with: `addColumnIfNotExists()`,
     `migrateWhenNeeded()`, which takes the write lock only when the database needs the
     migration, as the import may hold that lock while the server opens the database, and
@@ -60,7 +61,9 @@ OVH API ──> data/import.js ──> SQLite (ovh-bills.db) ──> server/inde
   - `cloud-usage.js` — pure: the rows of a Public Cloud project's current consumption, from
     what OVH's `usage/current` answers, one per resource and cloud resource kind. Every part
     counts, the typed resources such as the registry included, and `other` holds what no
-    part names, so that a project's rows add up to the total OVH gives it (#145).
+    part names, so that a project's rows add up to the total OVH gives it (#145). And its
+    month-end forecast, the `totalPrice` that `usage/forecast` answers (`forecastTotal()`),
+    which the import stores in `project_forecasts`, by project and month (#224).
   - `public-cloud-products.js` — pure: the Public Cloud product of a bill line (`CONTEXT.md`),
     and what lines add up to by product (`productFigures()`), for the Public Cloud cards, a
     project's other services, and the products of a project that the Compare tab compares
@@ -105,6 +108,13 @@ OVH API ──> data/import.js ──> SQLite (ovh-bills.db) ──> server/inde
   of the Veeam backups, the VMs backed up and the Enterprise licences,
   `/api/analysis/backup-services` (#197), both once for each account with `byAccount=true`;
   and a project's products with their charges, `/api/projects/:id/products` (#181, #195).
+  The consumption and forecast cards read `/api/consumption/current` and `/forecast`, which
+  `consumption.js` answers from an account's Public Cloud projects whenever they consumed in
+  the month of its current consumption, as OVH's Public Cloud page does (#224): their
+  consumption, and the sum of the month-end forecasts that OVH gives them, or else their
+  consumption extrapolated to the month's end, what OVH gives for the whole month counted
+  once (#145). Otherwise from the account's `/me/consumption` snapshot, which can stay on one
+  transaction for days while the projects consume.
 - **`dashboard/`** — Vite + React SPA (Recharts, TanStack Query, Tailwind, axios). In dev,
   Vite proxies `/api` to `:3001` (see `dashboard/vite.config.js`). i18n is FR/EN
   (`src/i18n/translations.js`). The page, `src/pages/Dashboard.jsx`, is a shell: each tab
@@ -134,10 +144,10 @@ In every layer, all accounts is the absence of a filter, and one account a filte
 NIC handle:
 
 - **Data layer.** The root tables fed by the OVH API hold the NIC handle in an `account`
-  column; bill lines and a project's resources, consumption and quotas reach it through
-  their bill or project. Their writers require the account (`requireAccount()`), so a row
-  without one was stored before the accounts: the Unknown account's. A query that can keep
-  one account's rows takes an `account` argument, `null` for all accounts,
+  column; bill lines and a project's resources, consumption, forecasts and quotas reach it
+  through their bill or project. Their writers require the account (`requireAccount()`), so
+  a row without one was stored before the accounts: the Unknown account's. A query that can
+  keep one account's rows takes an `account` argument, `null` for all accounts,
   `UNKNOWN_ACCOUNT` or a NIC handle, and joins `accountCondition()` to its WHERE clause.
   The carbon footprint's lines always carry their account: no claim reaches them.
 - **API.** Every route that lists or adds up data takes the optional `account` parameter
@@ -235,6 +245,13 @@ npm run bills -- --project "AI" --format md
 datasets, off by default: `--include-consumption`, `--include-account`,
 `--include-inventory`, `--include-cloud-details`, `--include-carbon`, or `--all` for
 everything.
+
+`--include-cloud-details` imports each Public Cloud project's inventory, its consumption of
+the month (`usage/current`), and its month-end forecast (`usage/forecast`, #224), as that of
+the month of its usage: a project whose usage cannot be read gets none. A forecast call that
+fails keeps the forecast stored, as a failed call keeps a project's stored volumes, and the
+import goes on. `--full` clears the forecasts with the projects' resources, and keeps their
+consumption.
 
 `--include-carbon` asks OVHcloud's carbon calculator for each account's footprint of the
 last 24 months: it calls `POST /me/carbonCalculator/csv`, which the key needs a rule for,

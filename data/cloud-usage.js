@@ -2,6 +2,8 @@
  * The current consumption of a Public Cloud project, as OVH's
  * GET /cloud/project/{id}/usage/current answers it (cloud.usage.UsageCurrent), in the rows
  * that the import stores in project_consumption: one per resource and cloud resource kind.
+ * And its month-end forecast, the total that usage/forecast answers
+ * (cloud.usage.UsageForecast), which the import stores in project_forecasts (#224).
  *
  * Every part of the answer counts, so that the rows of a project add up to the total that
  * OVH gives it (#145): the hourly and monthly resources, and the typed resources of the
@@ -119,4 +121,17 @@ function beyondTotal(usage, rows) {
   return Math.round((counted - amountOf(usage.totalPrice)) * 100) / 100;
 }
 
-module.exports = { MONTHLY_KINDS, beyondTotal, usageRows };
+/**
+ * What OVH forecasts a project to cost in the month, from what
+ * GET /cloud/project/{id}/usage/forecast answers (cloud.usage.UsageForecast, #224): its
+ * totalPrice, an order.Price. The answer has the parts of the current usage, run to the end of
+ * the month; OVH's Public Cloud page estimates the next bill from them, the month's use with
+ * the renewal of the monthly plans.
+ * @param {?object} forecast - The answer, cloud.usage.UsageForecast
+ * @returns {?number} The amount, null when the answer gives none
+ */
+function forecastTotal(forecast) {
+  return forecast?.totalPrice == null ? null : amountOf(forecast.totalPrice);
+}
+
+module.exports = { MONTHLY_KINDS, beyondTotal, forecastTotal, usageRows };

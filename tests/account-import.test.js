@@ -51,8 +51,8 @@ function serveBills() {
   routes.set('/me/bill/FR1/details/D2', billLine('example.com', 'Nom de domaine example.com', 10));
 }
 
-// The resources of the project, which the cloud details give: its usage of the month, an
-// instance, its quotas, a volume, a snapshot and an S3 bucket
+// The resources of the project, which the cloud details give: its usage of the month, its
+// month-end forecast, an instance, its quotas, a volume, a snapshot and an S3 bucket
 function serveProjectResources() {
   const base = `/cloud/project/${PROJECT}`;
   routes.set(`${base}/usage/current`, ok({
@@ -66,6 +66,10 @@ function serveProjectResources() {
         ],
       }],
     },
+  }));
+  routes.set(`${base}/usage/forecast`, ok({
+    period: { from: '2026-09-01T00:00:00+02:00', to: '2026-10-01T00:00:00+02:00' },
+    totalPrice: { currencyCode: 'EUR', text: '26.25 €', value: 26.25 },
   }));
   routes.set(`${base}/instance`, ok([
     { id: 'inst-1', name: 'web-1', flavor: { name: 'b2-7' }, region: 'GRA11' },
@@ -166,6 +170,7 @@ const accountsIn = (table) => db.getDb()
 const CHILD_TABLES = {
   bill_details: ['bills', 'bill_id'],
   project_consumption: ['projects', 'project_id'],
+  project_forecasts: ['projects', 'project_id'],
   cloud_instances: ['projects', 'project_id'],
   project_quotas: ['projects', 'project_id'],
   cloud_volumes: ['projects', 'project_id'],

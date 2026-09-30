@@ -280,9 +280,10 @@ describe.each([
       });
     }, 30000);
 
-  // OVH forecasts the month, but reports no consumption yet: the consumption is that of the
-  // projects, and the forecast OVH's
-  test('the consumption reads the projects, and the forecast the snapshot that has one',
+  // /me/consumption forecasts the month, but reports no consumption yet: once the projects
+  // consumed, both figures are theirs, as those of OVH's Public Cloud page (#224). OVH
+  // forecasts none of the projects: their consumption is extrapolated.
+  test('the consumption and the forecast read the projects, whatever the snapshot forecasts',
     async () => {
       const answers = await answersOf((db) => {
         storeProjectConsumption(db);
@@ -300,14 +301,18 @@ describe.each([
           project_count: 1,
           currency: 'EUR',
         },
+        // 12.25 € over 14 days, for the 30 days of September
         '/api/consumption/forecast': {
-          snapshot_date: expect.stringMatching(SQLITE_TIME),
+          snapshot_date: expect.any(String),
           period_start: '2026-09-01',
           period_end: '2026-09-15',
-          forecast_total: 150,
-          current_total: 0,
+          forecast_total: 26.25,
+          current_total: 12.25,
           currency: 'EUR',
-          progress: 0,
+          progress: 47,
+          source: 'cloud_projects',
+          days_elapsed: 14,
+          days_in_month: 30,
         },
       });
     }, 30000);

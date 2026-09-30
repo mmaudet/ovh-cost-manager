@@ -27,7 +27,7 @@ const {
 } = require('./account-attempts');
 const { classifyService, classifyResourceTypeFromDomain } = require('./classify');
 const { footprintMonths, readFootprintFile } = require('./carbon-footprint');
-const { beyondTotal, usageRows } = require('./cloud-usage');
+const { beyondTotal, forecastTotal, usageRows } = require('./cloud-usage');
 const { acceptingRequest } = require('./ovh-accepting-request');
 const { monthBounds } = require('./months');
 const { storageClassLabel } = require('./storage-classes');
@@ -1056,8 +1056,34 @@ function usagePeriod(usage) {
 }
 
 /**
- * Imports the resources and the consumption of each Public Cloud project of the account, and
- * records the month of its current consumption for the account (#114).
+ * Imports the month-end forecast that OVH gives a Public Cloud project (#224), as that of the
+ * month of the usage that the import has just stored for it, which the consumption cards read
+ * together: it replaces the forecast that an earlier import of the month stored. One that
+ * cannot be imported keeps the forecast stored, as a failed call keeps a project's stored
+ * volumes, and the import goes on.
+ * @param {object} ovh - The OVH API client of the account
+ * @param {string} projectId - The project
+ * @param {string} month - The first day of the month of its usage, YYYY-MM-01
+ */
+async function importForecast(ovh, projectId, month) {
+  try {
+    const forecast = await withRetry(() => ovh.requestPromised('GET',
+      `/cloud/project/${projectId}/usage/forecast`));
+    const total = forecastTotal(forecast);
+    if (total === null) throw new Error('its answer gives no total');
+    db.cloudDetails.upsertForecast({
+      project_id: projectId, period_start: month, total_price: total,
+    });
+    console.log(`    Forecast of the month: ${total}`);
+  } catch (err) {
+    console.warn(`    Forecast fetch failed, keeping the stored forecast: ${describeError(err)}`);
+  }
+}
+
+/**
+ * Imports the resources, the consumption and the month-end forecast of each Public Cloud
+ * project of the account, and records the month of its current consumption for the account
+ * (#114).
  * @param {object} ovh - The OVH API client of the account
  * @param {string[]} projectIds - Its projects, which its API lists
  * @param {string} nic - The NIC handle of the account
@@ -1074,12 +1100,14 @@ async function importCloudDetails(ovh, projectIds, nic, heartbeat = () => {}) {
     heartbeat();
     console.log(`  Project ${projectId}...`);
 
-    // Current usage
+    // Current usage, and the month that it covers, once read
+    let usageMonth = null;
     try {
       const usage = await ovh.requestPromised('GET', `/cloud/project/${projectId}/usage/current`);
 
       if (usage) {
         const { start: periodStart, end: periodEnd } = usagePeriod(usage);
+        usageMonth = periodStart;
         if (!consumptionMonth || periodStart > consumptionMonth) consumptionMonth = periodStart;
 
         // Clear old data for this project: its consumption of the other months is kept
@@ -1107,6 +1135,10 @@ async function importCloudDetails(ovh, projectIds, nic, heartbeat = () => {}) {
     } catch (err) {
       console.error(`    Error fetching usage: ${err.message}`);
     }
+
+    // Its month-end forecast, of the month of its usage: without the usage, the month of the
+    // forecast is unknown
+    if (usageMonth) await importForecast(ovh, projectId, usageMonth);
 
     // Instances
     try {

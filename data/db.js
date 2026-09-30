@@ -963,14 +963,14 @@ const consumptionOps = {
   /**
    * What tells the current month's consumption of each account (#116): its latest
    * consumption snapshot, and what its Public Cloud projects consumed in the month of its
-   * current consumption. Of the account given (see accountCondition()), or of every account
-   * that has either, the Unknown account's included, by default: each account's import
-   * records its own (#114).
+   * current consumption, with what OVH forecasts them (#224). Of the account given (see
+   * accountCondition()), or of every account that has either, the Unknown account's included,
+   * by default: each account's import records its own (#114).
    * @param {?string} [account]
    * @returns {{ account: ?string, snapshot: (object|undefined), cloud: object }[]} For each
    *   account, by NIC handle, the Unknown account's last: its NIC handle, null for the
-   *   Unknown account; its latest snapshot, if any; and what its projects consumed (see
-   *   cloudDetails.getConsumptionSummary())
+   *   Unknown account; its latest snapshot, if any; and what its projects consumed and OVH
+   *   forecasts them (see cloudDetails.getConsumptionSummary())
    */
   getCurrentByAccount: (account = null) => {
     const db = getDb();
@@ -1859,6 +1859,22 @@ const cloudDetailOps = {
     return stmt.run(entry);
   },
 
+  /**
+   * Records the month-end forecast that OVH gives a project for a month (#224), in place of
+   * the one that an earlier import of that month recorded
+   * @param {{ project_id: string, period_start: string, total_price: number }} forecast - The
+   *   project, the first day of the month, YYYY-MM-01, and what OVH forecasts the project to
+   *   cost in it
+   */
+  upsertForecast: (forecast) => {
+    getDb().prepare(`
+      INSERT INTO project_forecasts (project_id, period_start, total_price, imported_at)
+      VALUES (@project_id, @period_start, @total_price, CURRENT_TIMESTAMP)
+      ON CONFLICT(project_id, period_start) DO UPDATE SET
+        total_price = excluded.total_price, imported_at = CURRENT_TIMESTAMP
+    `).run(forecast);
+  },
+
   getConsumptionByProject: (projectId, fromDate, toDate) => {
     const db = getDb();
     let query = 'SELECT * FROM project_consumption WHERE project_id = ?';
@@ -2334,18 +2350,23 @@ const cloudDetailOps = {
 
   /**
    * What the Public Cloud projects of an account consumed in the month of its current
-   * consumption (#116; see getCurrentConsumptionMonth())
+   * consumption (#116; see getCurrentConsumptionMonth()), and what OVH forecasts them to cost
+   * in that month (#224)
    * @param {string} account - The account (see accountCondition()): a NIC handle, or
    *   UNKNOWN_ACCOUNT
    * @returns {{ period_start: ?string, period_end: ?string, total: ?number,
-   *   monthly_total: ?number, project_count: number }} The period from the earliest start to
-   *   the latest end of their consumption, its total, the part of it that OVH gives for the
-   *   whole month (#145), and the number of projects that it covers
+   *   monthly_total: ?number, project_count: number, forecast_total: ?number }} The period
+   *   from the earliest start to the latest end of their consumption, its total, the part of
+   *   it that OVH gives for the whole month (#145), the number of projects that it covers, and
+   *   the sum of the month-end forecasts that the imports stored for the month, those of the
+   *   projects that have one: null when none has
    */
   getConsumptionSummary: (account) => {
+    const database = getDb();
     const ofAccount = accountCondition(account, 'p.account');
+    const month = cloudDetailOps.getCurrentConsumptionMonth(account);
     const monthly = MONTHLY_KINDS.map(() => '?').join(', ');
-    return getDb().prepare(`
+    const consumed = database.prepare(`
       SELECT
         MIN(c.period_start) as period_start,
         MAX(c.period_end) as period_end,
@@ -2355,8 +2376,13 @@ const cloudDetailOps = {
         COUNT(DISTINCT c.project_id) as project_count
       FROM project_consumption c LEFT JOIN projects p ON p.id = c.project_id
       WHERE c.period_start = ? AND ${ofAccount.sql}
-    `).get(...MONTHLY_KINDS, cloudDetailOps.getCurrentConsumptionMonth(account),
-      ...ofAccount.params);
+    `).get(...MONTHLY_KINDS, month, ...ofAccount.params);
+    const forecast = database.prepare(`
+      SELECT SUM(f.total_price) as forecast_total
+      FROM project_forecasts f LEFT JOIN projects p ON p.id = f.project_id
+      WHERE f.period_start = ? AND ${ofAccount.sql}
+    `).get(month, ...ofAccount.params);
+    return { ...consumed, ...forecast };
   },
 
   // GPU cost summary from bill_details (covers full history) + project_consumption (current

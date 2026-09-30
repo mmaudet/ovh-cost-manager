@@ -37,10 +37,13 @@ const LISTED_SERVICE_TABLES = [
   'projects', 'dedicated_servers', 'vps_instances', 'storage_services',
 ];
 
-// The resources of a Public Cloud project, which reach their account through their project
+// The resources of a Public Cloud project, and its month-end forecasts (#224), which reach
+// their account through their project, and which the import with the cloud details fetches
+// again: OVH gives the forecast of the current month, and those of the months before are of
+// no use
 const PROJECT_RESOURCE_TABLES = [
   'cloud_instances', 'project_quotas', 'object_storage_buckets', 'cloud_volumes',
-  'cloud_snapshots',
+  'cloud_snapshots', 'project_forecasts',
 ];
 
 // The tables of the balance and consumption snapshots, of which only the latest is read
@@ -250,10 +253,10 @@ function takeOverBilledRows(database, nic, listed) {
 
 /**
  * Clears the imported data of an account, for a full import of it: its bills and their
- * lines, its inventories, the resources of its projects, its balance and consumption
- * snapshots, its credit movements and its consumption history, which the import fetches
- * again. What it cannot fetch again is kept: the consumption of each of its projects, which
- * OVH gives for the current month only (#54), with the month of its last import and the
+ * lines, its inventories, the resources and the forecasts of its projects, its balance and
+ * consumption snapshots, its credit movements and its consumption history, which the import
+ * fetches again. What it cannot fetch again is kept: the consumption of each of its projects,
+ * which OVH gives for the current month only (#54), with the month of its last import and the
  * projects it belongs to. Another account's data, and the rows without an account, stay,
  * with the projects of this account whose lines are on another account's bills.
  * @param {object} database - The database

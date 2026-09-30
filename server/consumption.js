@@ -1,10 +1,13 @@
 /**
  * The current month's consumption and its month-end forecast, which the consumption routes
- * answer (#116). An account's come from its latest consumption snapshot, which its import
- * records from what OVH tells of the month, or, when OVH tells no consumption, from what its
- * Public Cloud projects consumed in the month of its current consumption. Those of all
- * accounts add up the accounts', as they bill in one currency: each account's figure, as it
- * shows alone, in the current month. data/db.js's consumption.getCurrentByAccount() gives
+ * answer (#116). An account's come from its Public Cloud projects whenever they consumed in
+ * the month of its current consumption, as OVH's Public Cloud page reads them (#224): what they
+ * consumed, and the sum of the month-end forecasts that OVH gives them, or, when it gives none,
+ * their consumption extrapolated to the end of the month. Otherwise from its latest
+ * consumption snapshot, which its import records from what OVH's /me/consumption tells of the
+ * month: that one can stay on one transaction for days while the projects consume. Those of
+ * all accounts add up the accounts', as they bill in one currency: each account's figure, as
+ * it shows alone, in the current month. data/db.js's consumption.getCurrentByAccount() gives
  * what tells them.
  */
 
@@ -49,17 +52,38 @@ function daysOf(periodStart, periodEnd) {
   };
 }
 
+// Whether the Public Cloud projects of an account consumed in the month of its current
+// consumption: they then tell both of its figures, rather than its snapshot (#224)
+const projectsConsumed = (cloud) => Boolean(cloud && cloud.total > 0);
+
+// The time of the figures that the projects of an account tell, unless the route computes
+// them: that of its latest snapshot, or, without one, when the route answers
+const projectsTime = (snapshot, now) => snapshot?.snapshot_date || now.toISOString();
+
+// What the projects of an account, which consumed in the month, forecast for its end: the sum
+// of the forecasts that OVH gives them (#224), with no days; or, when it gives none, their
+// consumption so far, over the days that it covers, extrapolated to the end of the month, but
+// for what OVH gives for the whole month, such as the monthly plans, which counts once (#145),
+// with those days
+function projectsForecast(cloud) {
+  if (cloud.forecast_total > 0) return { forecast: cloud.forecast_total, days: null };
+  const days = daysOf(cloud.period_start, cloud.period_end);
+  const monthly = cloud.monthly_total || 0;
+  return {
+    forecast: monthly + ((cloud.total - monthly) / days.daysElapsed) * days.daysInMonth,
+    days,
+  };
+}
+
 // The current consumption of an account: `answer`, as the current route gives it for that
-// account alone, and `total`, its amount before rounding. Null when neither its snapshot nor
-// its projects tell any.
+// account alone, and `total`, its amount before rounding. Its projects' whenever they consumed
+// in the month, else its snapshot's; null when neither tells any.
 function currentOfAccount({ snapshot, cloud }, now) {
-  const snapshotTotal = snapshot?.current_total || 0;
-  // OVH tells no consumption: what the projects consumed tells it
-  if (snapshotTotal === 0 && cloud && cloud.total > 0) {
+  if (projectsConsumed(cloud)) {
     return {
       total: cloud.total,
       answer: {
-        snapshot_date: snapshot?.snapshot_date || now.toISOString(),
+        snapshot_date: projectsTime(snapshot, now),
         period_start: cloud.period_start,
         period_end: cloud.period_end,
         current_total: toCents(cloud.total),
@@ -70,6 +94,7 @@ function currentOfAccount({ snapshot, cloud }, now) {
     };
   }
   if (!snapshot) return null;
+  const snapshotTotal = snapshot.current_total || 0;
   return {
     total: snapshotTotal,
     answer: {
@@ -85,25 +110,20 @@ function currentOfAccount({ snapshot, cloud }, now) {
 }
 
 // The month-end forecast of an account: `answer`, as the forecast route gives it for that
-// account alone, and `forecast` and `current`, its amounts before rounding. Null when neither
-// its snapshot nor its projects tell any.
+// account alone, and `forecast` and `current`, its amounts before rounding. Its projects'
+// whenever they consumed in the month (see projectsForecast()), else its snapshot's; null when
+// neither tells any.
 function forecastOfAccount({ snapshot, cloud }, now) {
-  const snapshotForecast = snapshot?.forecast_total || 0;
-  const snapshotCurrent = snapshot?.current_total || 0;
-  // OVH tells neither: the consumption of the projects so far, over the days it covers,
-  // extrapolated to the end of the month, but for what OVH gives for the whole month, such as
-  // the monthly plans, which counts once (#145)
-  if (snapshotForecast === 0 && snapshotCurrent === 0 && cloud && cloud.total > 0) {
-    const { daysElapsed, daysInMonth } = daysOf(cloud.period_start, cloud.period_end);
-    const monthly = cloud.monthly_total || 0;
-    const forecast = monthly + ((cloud.total - monthly) / daysElapsed) * daysInMonth;
+  if (projectsConsumed(cloud)) {
+    const { forecast, days } = projectsForecast(cloud);
     const forecastTotal = toCents(forecast);
     const currentTotal = toCents(cloud.total);
     return {
       forecast,
       current: cloud.total,
       answer: {
-        snapshot_date: now.toISOString(),
+        // An extrapolation is computed as the route answers
+        snapshot_date: days ? now.toISOString() : projectsTime(snapshot, now),
         period_start: cloud.period_start,
         period_end: cloud.period_end,
         forecast_total: forecastTotal,
@@ -111,12 +131,13 @@ function forecastOfAccount({ snapshot, cloud }, now) {
         currency: 'EUR',
         progress: progressOf(currentTotal, forecastTotal),
         source: 'cloud_projects',
-        days_elapsed: daysElapsed,
-        days_in_month: daysInMonth,
+        ...(days && { days_elapsed: days.daysElapsed, days_in_month: days.daysInMonth }),
       },
     };
   }
   if (!snapshot) return null;
+  const snapshotForecast = snapshot.forecast_total || 0;
+  const snapshotCurrent = snapshot.current_total || 0;
   return {
     forecast: snapshotForecast,
     current: snapshotCurrent,
@@ -170,15 +191,16 @@ function sumOfCurrent(figures) {
 }
 
 // The month-end forecast of several accounts: the sum of each account's forecast, as it shows
-// alone, extrapolated over its own days. When every account's is extrapolated from its
-// projects, the sum says so, with the days from the earliest start to the latest end, as for
-// the projects of one account.
+// alone, one extrapolated over its own days. When every account's comes from its projects,
+// the sum says so; when every account's is extrapolated from its projects, with the days from
+// the earliest start to the latest end, as for the projects of one account.
 function sumOfForecasts(figures) {
   const answers = figures.map(({ answer }) => answer);
   const dates = datesOfSum(answers);
   const forecastTotal = toCents(sumOf(figures.map(({ forecast }) => forecast)));
   const currentTotal = toCents(sumOf(figures.map(({ current }) => current)));
-  const extrapolated = sharedSourceOf(answers) === 'cloud_projects';
+  const source = sharedSourceOf(answers);
+  const extrapolated = answers.every(({ days_elapsed: days }) => days !== undefined);
   const days = extrapolated && daysOf(dates.period_start, dates.period_end);
   return {
     ...dates,
@@ -186,11 +208,8 @@ function sumOfForecasts(figures) {
     current_total: currentTotal,
     currency: answers[0].currency,
     progress: progressOf(currentTotal, forecastTotal),
-    ...(extrapolated && {
-      source: 'cloud_projects',
-      days_elapsed: days.daysElapsed,
-      days_in_month: days.daysInMonth,
-    }),
+    ...(source && { source }),
+    ...(extrapolated && { days_elapsed: days.daysElapsed, days_in_month: days.daysInMonth }),
   };
 }
 
@@ -216,8 +235,8 @@ function addUpCurrentMonth({ asked, every }, figureOf, { none, sum }) {
  * @param {object} accounts
  * @param {{ snapshot: (object|undefined), cloud: object }[]} accounts.asked - What tells the
  *   consumption of each account asked for, one or all of them: its latest consumption
- *   snapshot, and what its projects consumed (see consumption.getCurrentByAccount() in
- *   data/db.js)
+ *   snapshot, and what its projects consumed and OVH forecasts them (see
+ *   consumption.getCurrentByAccount() in data/db.js)
  * @param {{ snapshot: (object|undefined), cloud: object }[]} accounts.every - The same for
  *   every account, whose latest month is the current one
  * @param {Date} now - When the route answers, the time of a figure that it computes
@@ -243,8 +262,9 @@ function currentConsumption(accounts, now) {
  * @returns {object} What GET /api/consumption/forecast answers: `{ forecast_total: 0,
  *   currency: 'EUR' }` when no account asked for has one in the current month; else
  *   `snapshot_date`, `period_start`, `period_end`, `forecast_total`, `current_total`,
- *   `currency` and `progress`, with `source`, 'cloud_projects', `days_elapsed` and
- *   `days_in_month` when every account's is extrapolated from its projects
+ *   `currency` and `progress`, with `source`, 'cloud_projects', when every account's comes
+ *   from its projects, and `days_elapsed` and `days_in_month` when every account's is
+ *   extrapolated from them, OVH forecasting none of its projects
  */
 function consumptionForecast(accounts, now) {
   return addUpCurrentMonth(accounts, (account) => forecastOfAccount(account, now),
