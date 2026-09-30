@@ -1,8 +1,8 @@
 /**
  * What the tests of the month in progress share (CONTEXT.md): the months list's mark (#216) and
- * the projection of the trends (#217). The server tells the month of today from its local date,
- * so the bills are dated from the real date, the month of today and the three months before, as
- * the Infrastructure tab's tests date the services about to expire.
+ * the projection of the trends (#217) and of the Compare tab (#218). The server tells the month
+ * of today from its local date, so the bills are dated from the real date, the month of today and
+ * the three months before, as the Infrastructure tab's tests date the services about to expire.
  */
 
 const { bill } = require('./accounts');
@@ -25,16 +25,19 @@ const MONTHS_BEFORE = [THREE_MONTHS_BEFORE, TWO_MONTHS_BEFORE, MONTH_BEFORE];
  * @param {string} id - The bill's id, which starts the ids of its lines
  * @param {?string} account - The NIC handle of its account, null for the Unknown account
  * @param {string} date - YYYY-MM-DD
- * @param {Array<[string, string, number]>} charges - Each service that it charges: its
- *   identifier, its resource type and the amount; a Public Cloud project's identifier is its id
+ * @param {Array<[string, string, number, object=]>} charges - Each service that it charges: its
+ *   identifier, its resource type and the amount; a Public Cloud project's identifier is its id.
+ *   And, when its line says more than its service, what it says: its `description`, the service
+ *   and « 1 mois » by default, and its `serviceType`, Other by default (#218).
  */
 function billOf(db, id, account, date, charges) {
   bill(db, id, date, account);
-  db.details.insertMany(charges.map(([service, resourceType, price], index) => ({
+  db.details.insertMany(charges.map(([service, resourceType, price, line = {}], index) => ({
     id: `${id}-${index + 1}`, bill_id: id,
     project_id: resourceType === 'cloud_project' ? service : null,
-    domain: service, description: `${service} - 1 mois`, quantity: 1, unit_price: price,
-    total_price: price, service_type: 'Other', resource_type: resourceType,
+    domain: service, description: line.description ?? `${service} - 1 mois`, quantity: 1,
+    unit_price: price, total_price: price, service_type: line.serviceType ?? 'Other',
+    resource_type: resourceType,
   })));
 }
 
