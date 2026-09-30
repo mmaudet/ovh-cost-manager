@@ -1,11 +1,11 @@
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from 'recharts';
-import { FIGURE_CARD, TAB_FIGURE } from '../components/figureCards.js';
 import { SortableHeader, sortRows } from '../components/SortableHeader.jsx';
 import TableActions from '../components/TableActions.jsx';
 import { accountCsvColumns, withAccountNames } from '../utils/accounts.js';
 import { downloadCSV } from '../utils/csv.js';
+import { FIGURE_CARD, SUMMARY_FIGURE } from '../utils/figureCards.js';
 import {
   formatDecimal, formatMonthLabel, formatMonthName, formatPercent, formatWholeNumber,
   formatYearMonth,
@@ -36,7 +36,7 @@ const beforeColon = (language) => (language === 'en' ? '' : ' ');
 const FootprintCard = ({ label, value, fmt, emphasis = false, children = null }) => (
   <div className={`${FIGURE_CARD} border border-gray-100`}>
     <span className="text-gray-500 text-sm">{label}</span>
-    <div className={`${TAB_FIGURE} mt-2 ${emphasis ? 'text-green-700' : 'text-gray-800'}`}>
+    <div className={`${SUMMARY_FIGURE} mt-2 ${emphasis ? 'text-green-700' : 'text-gray-800'}`}>
       {fmt(value)} kgCO₂e
     </div>
     {children}

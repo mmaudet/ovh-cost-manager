@@ -1,5 +1,5 @@
-import { FIGURE_CARD, TAB_FIGURE } from '../components/figureCards.js';
 import { backupFigures } from '../utils/backupFigures.js';
+import { FIGURE_CARD, SUMMARY_FIGURE } from '../utils/figureCards.js';
 import { formatMonthLabel, formatPercent } from '../utils/format.js';
 
 // The Backup tab, which the shell renders while it is active: what useBackupTab() returns,
@@ -39,7 +39,7 @@ const BackupTab = ({
           <span className="text-gray-500 text-sm">
             {language === 'en' ? 'Total Backup Cost' : 'Coût total backup'}
           </span>
-          <div className={`${TAB_FIGURE} text-emerald-600 mt-2`}>
+          <div className={`${SUMMARY_FIGURE} text-emerald-600 mt-2`}>
             {fmt(figures.total.cost)}€
           </div>
         </div>
@@ -47,7 +47,7 @@ const BackupTab = ({
           <span className="text-gray-500 text-sm">
             {language === 'en' ? 'Veeam VMs' : 'VMs Veeam'}
           </span>
-          <div className={`${TAB_FIGURE} text-green-600 mt-2`}>
+          <div className={`${SUMMARY_FIGURE} text-green-600 mt-2`}>
             {figures.vms.count}
           </div>
           {figures.vms.cost > 0 && (
@@ -58,7 +58,7 @@ const BackupTab = ({
           <span className="text-gray-500 text-sm">
             {language === 'en' ? 'Veeam Enterprise Licenses' : 'Licences Veeam Enterprise'}
           </span>
-          <div className={`${TAB_FIGURE} text-teal-600 mt-2`}>
+          <div className={`${SUMMARY_FIGURE} text-teal-600 mt-2`}>
             {figures.enterprise.count}
           </div>
           {figures.enterprise.cost > 0 && (
@@ -69,7 +69,7 @@ const BackupTab = ({
           <span className="text-gray-500 text-sm">
             {language === 'en' ? '% of Total Cost' : '% du coût total'}
           </span>
-          <div className={`${TAB_FIGURE} text-gray-600 mt-2`}>
+          <div className={`${SUMMARY_FIGURE} text-gray-600 mt-2`}>
             {/* In the number format of the language, and 0,0 % of a month without cost (#64) */}
             {formatPercent(
               (summary?.total || 0) > 0 ? figures.total.cost / summary.total : 0,

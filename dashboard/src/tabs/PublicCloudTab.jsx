@@ -1,6 +1,5 @@
 import { Fragment } from 'react';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
-import { FIGURE_CARD, TAB_FIGURE } from '../components/figureCards.js';
 import Modal from '../components/Modal.jsx';
 import { pieLabel, pieLabelLine } from '../components/pieLabels.jsx';
 import TableActions from '../components/TableActions.jsx';
@@ -14,6 +13,7 @@ import {
   InstancesTable, instanceCsvColumns, instanceCsvRows
 } from '../components/InstancesTable.jsx';
 import { downloadCSV } from '../utils/csv.js';
+import { FIGURE_CARD, SUMMARY_FIGURE } from '../utils/figureCards.js';
 import { formatMonthLabel, formatMonthName } from '../utils/format.js';
 import { cloudKindLabel } from '../utils/cloudKinds.js';
 import { projectListRows } from '../utils/projectList.js';
@@ -134,13 +134,13 @@ const PublicCloudTab = ({
       <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
         <div className={`${FIGURE_CARD} border border-gray-100`}>
           <span className="text-gray-500 text-sm">{t('cloudProjects')}</span>
-          <div className={`${TAB_FIGURE} text-blue-600 mt-2`}>
+          <div className={`${SUMMARY_FIGURE} text-blue-600 mt-2`}>
             {byResourceType.find(r => r.resource_type === 'cloud_project')?.serviceCount || 0}
           </div>
         </div>
         <div className={`${FIGURE_CARD} border border-gray-100`}>
           <span className="text-gray-500 text-sm">{t('instances')}</span>
-          <div className={`${TAB_FIGURE} text-indigo-600 mt-2`}>
+          <div className={`${SUMMARY_FIGURE} text-indigo-600 mt-2`}>
             {projectsEnriched.reduce((sum, p) => sum + (p.instance_count || 0), 0)}
           </div>
           {publicCloudStats?.instances?.total > 0 && (
@@ -149,13 +149,13 @@ const PublicCloudTab = ({
         </div>
         <div className={`${FIGURE_CARD} border border-gray-100`}>
           <span className="text-gray-500 text-sm">{language === 'en' ? 'GPU Instances' : 'Instances GPU'}</span>
-          <div className={`${TAB_FIGURE} text-purple-600 mt-2`}>
+          <div className={`${SUMMARY_FIGURE} text-purple-600 mt-2`}>
             {gpuSummary?.instances?.length || 0}
           </div>
         </div>
         <div className={`${FIGURE_CARD} border border-gray-100`}>
           <span className="text-gray-500 text-sm">Kubernetes</span>
-          <div className={`${TAB_FIGURE} text-cyan-600 mt-2`}>
+          <div className={`${SUMMARY_FIGURE} text-cyan-600 mt-2`}>
             {publicCloudStats?.kubernetes?.count || 0}
           </div>
           {publicCloudStats?.kubernetes?.total > 0 && (
@@ -164,7 +164,7 @@ const PublicCloudTab = ({
         </div>
         <div className={`${FIGURE_CARD} border border-gray-100`}>
           <span className="text-gray-500 text-sm">{language === 'en' ? 'Object Storage' : 'Stockage Objet'}</span>
-          <div className={`${TAB_FIGURE} text-green-600 mt-2`}>
+          <div className={`${SUMMARY_FIGURE} text-green-600 mt-2`}>
             {publicCloudStats?.objectStorage?.count || 0}
           </div>
           {publicCloudStats?.objectStorage?.total > 0 && (
@@ -173,7 +173,7 @@ const PublicCloudTab = ({
         </div>
         <div className={`${FIGURE_CARD} border border-gray-100`}>
           <span className="text-gray-500 text-sm">{language === 'en' ? 'Volumes' : 'Volumes'}</span>
-          <div className={`${TAB_FIGURE} text-teal-600 mt-2`}>
+          <div className={`${SUMMARY_FIGURE} text-teal-600 mt-2`}>
             {publicCloudStats?.volumes?.count || 0}
           </div>
           {publicCloudStats?.volumes?.total > 0 && (
@@ -182,7 +182,7 @@ const PublicCloudTab = ({
         </div>
         <div className={`${FIGURE_CARD} border border-gray-100`}>
           <span className="text-gray-500 text-sm">Snapshots</span>
-          <div className={`${TAB_FIGURE} text-amber-600 mt-2`}>
+          <div className={`${SUMMARY_FIGURE} text-amber-600 mt-2`}>
             {publicCloudStats?.snapshots?.count || 0}
           </div>
           {publicCloudStats?.snapshots?.total > 0 && (
@@ -191,7 +191,7 @@ const PublicCloudTab = ({
         </div>
         <div className={`${FIGURE_CARD} border border-gray-100`}>
           <span className="text-gray-500 text-sm">{language === 'en' ? 'Savings plans' : 'Savings plans'}</span>
-          <div className={`${TAB_FIGURE} text-rose-600 mt-2`}>
+          <div className={`${SUMMARY_FIGURE} text-rose-600 mt-2`}>
             {publicCloudStats?.savingsPlans?.count || 0}
           </div>
           {publicCloudStats?.savingsPlans?.total > 0 && (
@@ -200,7 +200,7 @@ const PublicCloudTab = ({
         </div>
         <div className={`${FIGURE_CARD} border border-gray-100`}>
           <span className="text-gray-500 text-sm">{language === 'en' ? 'Container Registry' : 'Registre'}</span>
-          <div className={`${TAB_FIGURE} text-orange-600 mt-2`}>
+          <div className={`${SUMMARY_FIGURE} text-orange-600 mt-2`}>
             {publicCloudStats?.registry?.count || 0}
           </div>
           {publicCloudStats?.registry?.total > 0 && (
@@ -210,7 +210,7 @@ const PublicCloudTab = ({
         {/* What no card of its own counts: its products, and their cost (#145) */}
         <div className={`${FIGURE_CARD} border border-gray-100`}>
           <span className="text-gray-500 text-sm">{t('otherServices')}</span>
-          <div className={`${TAB_FIGURE} text-slate-600 mt-2`}>
+          <div className={`${SUMMARY_FIGURE} text-slate-600 mt-2`}>
             {publicCloudStats?.other?.products?.length || 0}
           </div>
           {publicCloudStats?.other?.products?.length > 0 && (

@@ -12,7 +12,6 @@ import { useLanguage } from '../hooks/useLanguage.jsx';
 import { useSelectedAccount } from '../hooks/useSelectedAccount.js';
 import Logo from '../components/Logo';
 import { AccountSelector } from '../components/AccountSelector.jsx';
-import { FIGURE_CARD, KPI_FIGURE } from '../components/figureCards.js';
 import { HeaderSelect } from '../components/HeaderSelect.jsx';
 import { ImportStatus, importStatusName } from '../components/ImportStatus.jsx';
 import { ResyncButton } from '../components/ResyncButton.jsx';
@@ -21,6 +20,7 @@ import {
   accountColumnOf, accountLabel, accountQuery, accountsOf, budgetOf, importStateOf,
   offersAccounts, scopeLabel,
 } from '../utils/accounts.js';
+import { FIGURE_CARD } from '../utils/figureCards.js';
 import { formatCurrency, formatMonthLabel, yearMonthOf } from '../utils/format.js';
 import { parseSqliteDate } from '../utils/sqliteDate.js';
 import { generateMarkdownReport, reportFileName } from '../utils/markdownReport.js';
@@ -86,6 +86,9 @@ const VARIATION_TONES = {
 // The row of a KPI card's title and of its date or mark: the date or mark goes under the title
 // when they lack room, as on a phone (#226)
 const KPI_TITLE_ROW = 'flex flex-wrap justify-between items-start gap-x-2 mb-3';
+// The figure of a KPI card, one size smaller below sm, as that of a summary card of a tab
+// (figureCards.js)
+const KPI_FIGURE = 'text-xl sm:text-2xl font-bold text-gray-900';
 
 export default function Dashboard() {
   const { language, setLanguage, t } = useLanguage();

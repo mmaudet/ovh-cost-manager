@@ -1,9 +1,9 @@
-import { FIGURE_CARD, TAB_FIGURE } from '../components/figureCards.js';
 import Modal from '../components/Modal.jsx';
 import TableActions from '../components/TableActions.jsx';
 import { WebCloudTable, webCloudCsvColumns } from '../components/WebCloudFamilyTable.jsx';
 import { withAccountNames } from '../utils/accounts.js';
 import { downloadCSV } from '../utils/csv.js';
+import { FIGURE_CARD, SUMMARY_FIGURE } from '../utils/figureCards.js';
 import { formatYearMonth } from '../utils/format.js';
 
 // Web Cloud families, in display order. Each one gets a card and a table.
@@ -51,7 +51,7 @@ const WebCloudTab = ({
         {WEB_CLOUD_CATEGORIES.map(cat => (
           <div key={cat.key} className={`${FIGURE_CARD} border border-gray-100`}>
             <span className="text-gray-500 text-sm">{t(cat.labelKey)}</span>
-            <div className={`${TAB_FIGURE} ${cat.color} mt-2`}>
+            <div className={`${SUMMARY_FIGURE} ${cat.color} mt-2`}>
               {webCloudSummary?.[cat.key]?.count || 0}
             </div>
             {webCloudSummary?.[cat.key]?.total > 0 && (
@@ -61,7 +61,7 @@ const WebCloudTab = ({
         ))}
         <div className={`${FIGURE_CARD} border border-gray-100`}>
           <span className="text-gray-500 text-sm">Total</span>
-          <div className={`${TAB_FIGURE} text-gray-900 mt-2`}>
+          <div className={`${SUMMARY_FIGURE} text-gray-900 mt-2`}>
             {fmt(webCloudSummary?.total || 0)}€
           </div>
         </div>
