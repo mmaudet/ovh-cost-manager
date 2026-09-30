@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { translations } from '../../src/i18n/translations.js';
 import { formatCurrency } from '../../src/utils/format.js';
-import { lineParts, trendAmount, trendMonthLabel } from '../../src/utils/trendLines.js';
+import { lineParts, trendAmount } from '../../src/utils/trendLines.js';
 import { NNBSP } from '../support/amounts.js';
 
 // How the line charts of the Trends tab draw the month in progress (#216), and what their
@@ -62,18 +62,6 @@ describe('lineParts', () => {
     const parts = lineParts(byResourceType, '2026-09');
 
     expect(valuesOf(parts.dashed('dedicated_server'), byResourceType)).toEqual([270, 0]);
-  });
-});
-
-describe('trendMonthLabel', () => {
-  it('names the month in progress so, in the language of the page', () => {
-    expect(trendMonthLabel('2026-09', '2026-09', 'fr', tIn('fr'))).toBe('sept. 2026 (en cours)');
-    expect(trendMonthLabel('2026-09', '2026-09', 'en', tIn('en'))).toBe('Sep 2026 (in progress)');
-  });
-
-  it('names any other month by its short name', () => {
-    expect(trendMonthLabel('2026-08', '2026-09', 'fr', tIn('fr'))).toBe('août 2026');
-    expect(trendMonthLabel('2026-09', null, 'en', tIn('en'))).toBe('Sep 2026');
   });
 });
 

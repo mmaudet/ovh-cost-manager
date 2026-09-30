@@ -3,8 +3,8 @@ import {
 } from 'recharts';
 import { AiEndpointsTrend } from '../components/AiEndpointsTrend.jsx';
 import { ProjectionCheckbox } from '../components/ProjectionCheckbox.jsx';
-import { formatYearMonth } from '../utils/format.js';
-import { lineParts, trendAmount, trendMonthLabel } from '../utils/trendLines.js';
+import { formatMonthLabel, formatYearMonth } from '../utils/format.js';
+import { lineParts, trendAmount } from '../utils/trendLines.js';
 import { PERIOD_OPTIONS } from '../utils/trendPeriods.js';
 import { comparedVariation, comparesPartialMonth } from '../utils/variation.js';
 
@@ -84,8 +84,11 @@ const TrendsTab = ({
   });
   const totalChart = chartOf(monthlyTrend);
   const categoryChart = chartOf(trendByCategory.data);
-  // The months as the tooltips name them
-  const monthLabel = (yearMonth) => trendMonthLabel(yearMonth, monthInProgress, language, t);
+  // The months as the tooltips name them: the month in progress « Septembre 2026 (en cours) »,
+  // as the month selectors of the Compare tab do
+  const monthLabel = (yearMonth) => formatMonthLabel(yearMonth, language, {
+    inProgressLabel: yearMonth === monthInProgress ? t('monthInProgress') : null,
+  });
   // The first and the last months of the period, as the trend gives them
   const firstMonth = monthlyTrend[0];
   const lastMonth = monthlyTrend[monthlyTrend.length - 1];

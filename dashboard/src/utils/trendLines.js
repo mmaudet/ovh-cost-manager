@@ -2,8 +2,6 @@
 // segment to it dashed and its point hollow, whether the page projects it or not, and their
 // tooltips give what it billed and, while the trends project it, its projected cost (#217).
 
-import { formatYearMonth } from './format.js';
-
 /**
  * The two parts that draw each series of a line chart of the Trends tab: a solid line through
  * the complete months, and a dashed one through the month in progress and the months next to it,
@@ -26,20 +24,6 @@ export function lineParts(rows, monthInProgress) {
     dashed: (key) => (row) => (dashedMonths.has(row.yearMonth) ? row[key] : null),
   };
 }
-
-/**
- * A month as the tooltips of the Trends tab's line charts name it: its short name and its year,
- * followed by « (en cours) » for the month in progress.
- * @param {string} yearMonth - YYYY-MM
- * @param {?string} monthInProgress - The month in progress, YYYY-MM, when the chart covers it
- * @param {string} language - The page's, 'fr' or 'en'
- * @param {function(string): string} t
- * @returns {string} août 2026, sept. 2026 (en cours), Sep 2026 (in progress)…
- */
-export const trendMonthLabel = (yearMonth, monthInProgress, language, t) => {
-  const label = formatYearMonth(yearMonth, language);
-  return yearMonth === monthInProgress ? `${label} (${t('monthInProgress')})` : label;
-};
 
 /**
  * The amount of a series in a month as the tooltips of the Trends tab's line charts give it: that
