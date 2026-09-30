@@ -14,7 +14,16 @@ sections were written afterwards from the git history.
 
 ## 3.3.2 - 2026-09-30
 
-<!-- Upgrade notes and highlights of this release, if any. -->
+The dashboard's header holds on one line again, from 1280 px wide screens up: the
+title, its subtitle, the user's name and every control, the language selector now
+last and level with the others. A user reported it wrapped and misaligned once the
+account selector and the resync had joined it.
+
+- **A wider page.** The page is 1280 px wide at most, where it was 1152 px, so the
+  other tabs get wider too.
+- **The export select** reads « Exporter… » ("Export…"), in place of its « Export: »
+  label and « Choisir... ».
+- **On narrower screens,** the last controls go whole to a line of their own.
 
 ### Bug fixes
 * fix: align the dashboard's header on one line from 1280 px wide screens by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/213
