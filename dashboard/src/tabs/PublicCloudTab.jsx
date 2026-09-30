@@ -247,7 +247,8 @@ const PublicCloudTab = ({
       {projects.length > 0 && (
         <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
           <h3 className="font-semibold text-gray-900 mb-4">{t('cloudProjects')}</h3>
-          <div className="overflow-x-auto">
+          {/* A query container, which an open project's detail keeps to (#226) */}
+          <div className="overflow-x-auto [container-type:inline-size]">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b bg-gray-50">
@@ -333,14 +334,13 @@ const PublicCloudTab = ({
                     {openProject?.id === p.id && (
                       <tr>
                         <td colSpan={accountColumn ? 7 : 6} className="p-0">
-                          {/* Below md, where the list scrolls sideways, the detail keeps to
-                              the part of the list on the screen, held at its left edge,
-                              rather than span the whole table: as wide as the page, less
-                              its padding (2 × 1rem), the card's (2 × 1.25rem) and the
-                              card's border (2 × 1px) (#226) */}
+                          {/* Where the list scrolls sideways, as on a phone, the detail keeps
+                              to the part of the list in view, as wide as its box (100cqw),
+                              and held at its left edge, rather than span the whole table
+                              (#226) */}
                           <div
                             className={'bg-blue-50 border-l-4 border-blue-400 p-5 sticky left-0'
-                              + ' max-w-[calc(100vw-4.5rem-2px)] md:max-w-none'}
+                              + ' max-w-[100cqw]'}
                           >
                             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                               {/* Consumption by resource type */}
