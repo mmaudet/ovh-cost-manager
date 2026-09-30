@@ -14,7 +14,33 @@ sections were written afterwards from the git history.
 
 ## 3.3.3 - 2026-09-30
 
-<!-- Upgrade notes and highlights of this release, if any. -->
+Three fixes that a user of 3.3.2 reported, and the month in progress told apart:
+
+- **The backups are counted once** (#223). OVH bills each VM that it backs up with Veeam
+  Enterprise on one line, which OCM counted both as the VM and as a licence, doubling the
+  backups' cost.
+- **The consumption cards read the Public Cloud projects** (#224). « Consommation en cours »
+  and « Prévision fin de mois » now read the projects, as OVH's Public Cloud page does, where
+  they read the account-wide consumption, which OVH may leave frozen. The forecast adds up
+  each project's own forecast from OVH, and never falls below what the month already
+  consumed.
+- **The dashboard fits phones and tablets** (#226). The tab bar wraps and scrolls, the cards
+  stack, the tables scroll within their card, the pies leave out the labels they cannot
+  place, and print keeps its layout.
+- **The month in progress is told apart** (#212, #216). The month of today is in progress
+  while a service billed in each of the three months before has not been billed yet.
+  Meanwhile, the « Coût total du mois » card says « en cours », and the variations that
+  involve that month read « — », rather than compare a partial month with a complete one.
+  The Compare tab's month selectors mark it « (en cours) ». A projection of its cost comes
+  with 3.4.0.
+
+### Upgrade notes
+
+- **The forecast comes with the cloud details.** Each project's forecast is imported with
+  `--include-cloud-details`, which `--all` and the Docker image's default import include.
+  Until such an import runs, the forecast card extrapolates the projects' consumption.
+- **A new table,** `project_forecasts`, which the server creates on its own: no migration to
+  run, no re-import.
 
 ### New features
 * feat: tell the month in progress apart by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/228
