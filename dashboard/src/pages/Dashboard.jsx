@@ -733,8 +733,10 @@ export default function Dashboard() {
           </div>
         )}
 
-        {/* Tabs */}
-        <div className="flex items-center gap-4">
+        {/* Tabs, and the Trends tab's period selector, which goes whole to a line of its own
+            when it lacks room, with the checkbox that projects the month in progress (#217),
+            rather than squeeze the tabs' names */}
+        <div className="flex flex-wrap items-center gap-4">
           <div className="flex gap-1 bg-white p-1 rounded-xl shadow-sm">
             {[
               { id: 'overview', labelKey: 'overview' },
