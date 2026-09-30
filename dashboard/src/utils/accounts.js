@@ -223,26 +223,34 @@ export function projectedQuery(account, { key, fetch, projected = false, enabled
  * accounts; otherwise the rows of the account shown, as accountQuery() asks for them. A list
  * that the page shows by account only gives no query of the account shown: it does not run
  * then.
+ *
+ * A list may count the month in progress at its projected cost (#218), as projectedQuery() asks
+ * for it: while it does, its key names the flag, before the account of the account shown, and
+ * its request passes { projected: true }, after the account of the account shown, or as the only
+ * argument of the request by account. While it does not, neither names it.
  * @param {?object} accountColumn - The Account column of the lists (accountColumnOf()), null
  *   when they name no account
  * @param {object} query
- * @param {{ key: Array, fetch: function(): Promise }} query.byAccount - The key of the query
- *   by account, and what requests its answer
- * @param {{ account: (?string|undefined), key: Array, fetch: function(?string): Promise }}
- *   [query.ofAccountShown] - The query of the account shown, as accountQuery() takes it: that
+ * @param {{ key: Array, fetch: function(object=): Promise }} query.byAccount - The key of the
+ *   query by account, and what requests its answer, with { projected: true } while it projects
+ * @param {{ account: (?string|undefined), key: Array, fetch: function(?string, object=): Promise }}
+ *   [query.ofAccountShown] - The query of the account shown, as projectedQuery() takes it: that
  *   account, its key for all accounts, and what requests its answer for an account
+ * @param {boolean} [query.projected] - Whether it asks for the projected cost
  * @param {boolean} [query.enabled] - Whether it may run besides, such as once it has the month
  *   it needs
  * @returns {{ queryKey: Array, queryFn: function(): Promise, enabled: boolean }}
  */
-export function listQuery(accountColumn, { byAccount, ofAccountShown, enabled = true }) {
+export function listQuery(accountColumn, {
+  byAccount, ofAccountShown, projected = false, enabled = true,
+}) {
   if (!accountColumn && ofAccountShown) {
     const { account, key, fetch } = ofAccountShown;
-    return accountQuery(account, { key, fetch, enabled });
+    return projectedQuery(account, { key, fetch, projected, enabled });
   }
   return {
-    queryKey: byAccount.key,
-    queryFn: byAccount.fetch,
+    queryKey: projected ? [...byAccount.key, 'projected'] : byAccount.key,
+    queryFn: projected ? () => byAccount.fetch({ projected: true }) : () => byAccount.fetch(),
     enabled: Boolean(accountColumn) && enabled,
   };
 }
