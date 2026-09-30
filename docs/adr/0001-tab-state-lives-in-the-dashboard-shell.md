@@ -35,13 +35,13 @@ second latest billed month (`months[1]`): when it is the month just before the l
 as it is unless nothing was billed that month, its summary shares its key with the shell's
 month before. While the lists show the Account column, with all accounts shown, the Compare
 hook asks for the projects of its months by account, under the key of the Overview hook's
-projects by account (`projectsByAccount`, #119), but for the month in progress while the page
-projects it (#219): the Overview's projects, which the Public Cloud tab's list reads too (#180),
-are never projected. The services of a resource type that the
-Compare tab lists under a row it unfolds, for a month and the account shown, share the key
-of the bill lines that the Infrastructure hook loads for the same resource type, month and
-account (`resourceTypeDetails`, #192), and while the lists show the Account column, with
-all accounts shown, both ask for them by account, under one key again
+projects by account (`projectsByAccount`, #119), but for the month in progress while the
+page projects it (#219): the Overview's projects, which the Public Cloud tab's list reads
+too (#180), are never projected. The services of a resource type that the Compare tab lists
+under a row it unfolds, for a month and the account shown, share the key of the bill lines
+that the Infrastructure hook loads for the same resource type, month and account
+(`resourceTypeDetails`, #192), and while the lists show the Account column, with all
+accounts shown, both ask for them by account, under one key again
 (`resourceTypeDetailsByAccount`, #194): both hooks take their query from
 `tabs/resourceTypeServicesQueries.js`, which picks the query and its key, and the Compare
 hook gives its options, which the row runs once unfolded, as a project's comparison runs
@@ -51,8 +51,9 @@ the header carries that account in its key, after the other parts, and none when
 accounts are shown, as its request names the account or not (#115): two queries share a key
 only for the same account, or both for all accounts. A query of the month in progress at
 its projected cost names the flag in its key (`projected`), after the other parts and
-before the account, as its request asks for it (#217, #218): it shares no key with a query
-of what the month billed, such as the Infrastructure hook's services of a resource type.
+before the account, as its request asks for it (#217, #218, #219): it shares no key with
+a query of what the month billed, such as the Infrastructure hook's services of a resource
+type or the Overview hook's projects by account.
 
 What stays open depends on how the user moves around the page (#56):
 
