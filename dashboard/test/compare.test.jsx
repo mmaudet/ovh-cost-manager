@@ -2186,6 +2186,24 @@ describe('Compare tab', () => {
       ]);
     });
 
+    // The header's cards never project (#214): the month in progress at what it billed so far,
+    // and no variation of it, while the Compare tab shows its projected cost
+    it('leaves the header\'s cost of the month at what it billed, without a variation',
+      async () => {
+        const { user } = await renderDashboard(billedLate);
+        await openTab(user, 'Comparaison');
+
+        await toggleProjection(user);
+
+        const totalCost = cardOf('Coût total du mois');
+        expect(texts(totalCost))
+          .toEqual(['Coût total du mois', 'en cours', '910,40€', '— vs mois précédent']);
+        expect(within(totalCost).getByTitle(whyNotComputed))
+          .toHaveTextContent('— vs mois précédent');
+        expect(texts(comparedTotals()).slice(-3))
+          .toEqual(['1 220,40€', 'projeté', 'Septembre 2026']);
+      });
+
     it('shows the infrastructure and backup comparisons at the projected cost, marked so',
       async () => {
         const { user } = await renderDashboard(billedLate);

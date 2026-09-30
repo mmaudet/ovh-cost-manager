@@ -377,6 +377,20 @@ describe('the routes of the Compare tab with projected=true (#218)', () => {
       });
     });
 
+    test('projects nothing over a complete month', async () => {
+      const { body: billed } = await servicesOf(OF_MONTH_BEFORE);
+      const withoutPart = (services) => services.map((row) => ({ ...row, projected: 0 }));
+
+      expect((await servicesOf(`${OF_MONTH_BEFORE}&projected=true`)).body).toEqual({
+        vms: withoutPart(billed.vms), enterprise: withoutPart(billed.enterprise),
+      });
+      // The second VM, with its extra storage, the first, and the Veeam licence
+      expect(billed.vms.map(({ domain, total }) => [domain, total]))
+        .toEqual([[VM_BILLED_LATE, 25], [VM_BILLED_EARLY, 15]]);
+      expect(billed.enterprise.map(({ domain, total }) => [domain, total]))
+        .toEqual([[VEEAM_LICENCE, 25]]);
+    });
+
     // As many as the Veeam backups count, and adding up to their cost and projected part
     test('add up to the projected backups', async () => {
       const { body: services } = await servicesOf(`${OF_TODAY}&projected=true`);
@@ -447,11 +461,13 @@ describe('the routes of the Compare tab with projected=true and several accounts
   let ocm;
   const LYON_SERVER = 'ns3000001.ip-203-0-113.eu';
   const UNKNOWN_SERVER = 'ns3000004.ip-203-0-113.eu';
+  const UNKNOWN_LICENCE = 'veeam-licence-0';
 
   // Lyon, billed late for its dedicated server and the backup of a VM, and the Unknown account,
-  // billed late for its own server: the bills of the month of today that will charge them have
-  // not come yet. Paris, whose bill of the month of today charged all its services. Each
-  // account's bill of the month of today charged its other services.
+  // billed late for its own server, the backup of a VM and a Veeam licence: the bills of the month
+  // of today that will charge them have not come yet. Paris, whose bill of the month of today
+  // charged all its services. Each account's bill of the month of today charged its other
+  // services.
   function seedAccounts(db) {
     db.accounts.upsert({ nic: LYON, currency: 'EUR', name: 'Lyon subsidiary' });
     db.accounts.upsert({ nic: PARIS, currency: 'EUR' });
@@ -459,19 +475,20 @@ describe('the routes of the Compare tab with projected=true and several accounts
     project(db, 'project-paris', 'Paris', PARIS);
     [...MONTHS_BEFORE, MONTH_OF_TODAY].forEach((yearMonth, index) => {
       billOf(db, `FR1${index}01`, LYON, `${yearMonth}-01`, [
-        ['project-lyon', 'cloud_project', 600],
+        ['project-lyon', 'cloud_project', 600, COMPUTE],
       ]);
       billOf(db, `FR2${index}01`, PARIS, `${yearMonth}-01`, [
-        ['project-paris', 'cloud_project', 400], backupOf('vm-paris-1', 10),
+        ['project-paris', 'cloud_project', 400, COMPUTE], backupOf('vm-paris-1', 10),
       ]);
       billOf(db, `FR0${index}01`, null, `${yearMonth}-01`, [['example.com', 'domain', 15]]);
     });
     MONTHS_BEFORE.forEach((yearMonth, index) => {
       billOf(db, `FR1${index}02`, LYON, `${yearMonth}-25`, [
-        [LYON_SERVER, 'dedicated_server', 200], backupOf('vm-lyon-1', 12),
+        [LYON_SERVER, 'dedicated_server', 200, COMPUTE], backupOf('vm-lyon-1', 12),
       ]);
       billOf(db, `FR0${index}02`, null, `${yearMonth}-25`, [
-        [UNKNOWN_SERVER, 'dedicated_server', 80],
+        [UNKNOWN_SERVER, 'dedicated_server', 80, COMPUTE], backupOf('vm-old-1', 8),
+        [UNKNOWN_LICENCE, 'license', 25, { description: VEEAM_ENTERPRISE, ...LICENCES }],
       ]);
     });
   }
@@ -484,81 +501,128 @@ describe('the routes of the Compare tab with projected=true and several accounts
     await ocm?.stop();
   });
 
-  // The resource types of an answer, as [resource type, cost, projected part]
-  const resourceTypesOf = async (account) => {
-    const { body } = await ocm.get(
-      `/api/analysis/by-resource-type?${OF_TODAY}${account}&projected=true`,
-    );
-    return body.map(({ resource_type: type, value, projected }) => [type, value, projected]);
-  };
+  // The answer of a route over the month of today with projected=true, for the account that the
+  // parameter names, or for every account without one, and with the parameters given besides
+  const projectedOf = (route, account, parameters = '') => ocm.get(`${route}?${OF_TODAY}`
+    + `${parameters}&projected=true${account === undefined ? '' : `&account=${account}`}`);
+  // The accounts that the parameter names, and all accounts, without it
+  const LYON_BILLED_LATE = ['an account billed late', LYON];
+  const PARIS_BILLED = ['an account whose bills of the month of today came', PARIS];
+  const UNKNOWN_BILLED_LATE = ['the Unknown account, billed late', UNKNOWN_ACCOUNT];
+  const ALL_ACCOUNTS = ['all accounts', undefined];
+  // A service of a resource type or of the backups, as the routes give it: its description, the
+  // service followed by « 1 mois », or that of a backup
+  const service = (domain, total, projected, description = `${domain} - 1 mois`) => ({
+    domain, description, total, line_count: 1, projected,
+  });
+  const backup = (vm, total, projected) => service(vm, total, projected, `Veeam Backup ${vm}`);
 
   test.each([
-    ['an account billed late', `&account=${LYON}`, [
+    [...LYON_BILLED_LATE, [
       ['cloud_project', 600, 0], ['dedicated_server', 200, 200], ['backup', 12, 12],
     ]],
-    ['an account whose bills of the month of today came', `&account=${PARIS}`, [
-      ['cloud_project', 400, 0], ['backup', 10, 0],
+    [...PARIS_BILLED, [['cloud_project', 400, 0], ['backup', 10, 0]]],
+    [...UNKNOWN_BILLED_LATE, [
+      ['dedicated_server', 80, 80], ['license', 25, 25], ['domain', 15, 0], ['backup', 8, 8],
     ]],
-    ['the Unknown account, billed late', `&account=${UNKNOWN_ACCOUNT}`, [
-      ['dedicated_server', 80, 80], ['domain', 15, 0],
+    [...ALL_ACCOUNTS, [
+      ['cloud_project', 1000, 0], ['dedicated_server', 280, 280], ['backup', 30, 20],
+      ['license', 25, 25], ['domain', 15, 0],
     ]],
-    ['all accounts', '', [
-      ['cloud_project', 1000, 0], ['dedicated_server', 280, 280], ['backup', 22, 12],
-      ['domain', 15, 0],
+  ])('project the resource types of %s', async (_, account, resourceTypes) => {
+    const { body } = await projectedOf('/api/analysis/by-resource-type', account);
+
+    expect(body.map(({ resource_type: type, value, projected }) => [type, value, projected]))
+      .toEqual(resourceTypes);
+  });
+
+  // Each projected line under the service type of its line
+  test.each([
+    [...LYON_BILLED_LATE, [['Compute', 800, 200], ['Backup', 12, 12]]],
+    [...PARIS_BILLED, [['Compute', 400, 0], ['Backup', 10, 0]]],
+    [...UNKNOWN_BILLED_LATE, [
+      ['Compute', 80, 80], ['Licenses', 25, 25], ['Other', 15, 0], ['Backup', 8, 8],
     ]],
-  ])('project the recurring services of %s', async (_, account, resourceTypes) => {
-    expect(await resourceTypesOf(account)).toEqual(resourceTypes);
+    [...ALL_ACCOUNTS, [
+      ['Compute', 1280, 280], ['Backup', 30, 20], ['Licenses', 25, 25], ['Other', 15, 0],
+    ]],
+  ])('project the service types of %s', async (_, account, serviceTypes) => {
+    const { body } = await projectedOf('/api/analysis/by-service', account);
+
+    expect(body.map(({ name, value, projected }) => [name, value, projected]))
+      .toEqual(serviceTypes);
   });
 
   test('give summaries of the accounts that add up to that of all accounts', async () => {
-    const summaryOf = async (account) => (
-      await ocm.get(`/api/summary?${OF_TODAY}${account}&projected=true`)).body;
-    const ofEachAccount = await Promise.all([LYON, PARIS, UNKNOWN_ACCOUNT]
-      .map((account) => summaryOf(`&account=${account}`)));
-    const ofAllAccounts = await summaryOf('');
+    const summaryOf = async (account) => (await projectedOf('/api/summary', account)).body;
+    const ofEachAccount = await Promise.all([LYON, PARIS, UNKNOWN_ACCOUNT].map(summaryOf));
+    const ofAllAccounts = await summaryOf(undefined);
 
     expect(ofEachAccount.map(({ total, projected }) => [total, projected]))
-      .toEqual([[812, 212], [410, 0], [95, 80]]);
-    expect(ofAllAccounts).toMatchObject({ total: 1317, projected: 292 });
+      .toEqual([[812, 212], [410, 0], [128, 113]]);
+    expect(ofAllAccounts).toMatchObject({ total: 1350, projected: 325 });
+  });
+
+  test.each([
+    [...LYON_BILLED_LATE, [service(LYON_SERVER, 200, 200)]],
+    [...PARIS_BILLED, []],
+    [...UNKNOWN_BILLED_LATE, [service(UNKNOWN_SERVER, 80, 80)]],
+  ])('give the services of a resource type of %s, with their parts', async (
+    _, account, services,
+  ) => {
+    expect(await projectedOf('/api/analysis/resource-type-details', account,
+      '&type=dedicated_server')).toEqual({ status: 200, body: services });
   });
 
   // The server of Lyon and that of the Unknown account, each with its account
   test('give each service of a resource type with its account and its part, by account',
     async () => {
-      expect(await ocm.get('/api/analysis/resource-type-details?type=dedicated_server'
-        + `&${OF_TODAY}&byAccount=true&projected=true`)).toEqual({
+      expect(await projectedOf('/api/analysis/resource-type-details', undefined,
+        '&type=dedicated_server&byAccount=true')).toEqual({
         status: 200,
         body: [
-          {
-            domain: LYON_SERVER, description: `${LYON_SERVER} - 1 mois`, total: 200,
-            line_count: 1, account: LYON, projected: 200,
-          },
-          {
-            domain: UNKNOWN_SERVER, description: `${UNKNOWN_SERVER} - 1 mois`, total: 80,
-            line_count: 1, account: null, projected: 80,
-          },
+          { ...service(LYON_SERVER, 200, 200), account: LYON },
+          { ...service(UNKNOWN_SERVER, 80, 80), account: null },
         ],
       });
     });
 
+  test.each([
+    [...LYON_BILLED_LATE, { vms: [backup('vm-lyon-1', 12, 12)], enterprise: [] }],
+    [...PARIS_BILLED, { vms: [backup('vm-paris-1', 10, 0)], enterprise: [] }],
+    [...UNKNOWN_BILLED_LATE, {
+      vms: [backup('vm-old-1', 8, 8)],
+      enterprise: [service(UNKNOWN_LICENCE, 25, 25, VEEAM_ENTERPRISE)],
+    }],
+  ])('give the services of the backups of %s, with their parts', async (_, account, services) => {
+    expect(await projectedOf('/api/analysis/backup-services', account))
+      .toEqual({ status: 200, body: services });
+  });
+
   test('give the services of the backups with their accounts and their parts, by account',
     async () => {
-      const { body } = await ocm.get(
-        `/api/analysis/backup-services?${OF_TODAY}&byAccount=true&projected=true`,
-      );
+      const { body } = await projectedOf('/api/analysis/backup-services', undefined,
+        '&byAccount=true');
 
       expect(body.vms.map(({ domain, total, account, projected }) => [
         domain, total, account, projected,
-      ])).toEqual([['vm-lyon-1', 12, LYON, 12], ['vm-paris-1', 10, PARIS, 0]]);
-      expect(body.enterprise).toEqual([]);
+      ])).toEqual([
+        ['vm-lyon-1', 12, LYON, 12], ['vm-paris-1', 10, PARIS, 0], ['vm-old-1', 8, null, 8],
+      ]);
+      expect(body.enterprise.map(({ domain, account, projected }) => [domain, account, projected]))
+        .toEqual([[UNKNOWN_LICENCE, null, 25]]);
     });
 
-  test('count the backups of the account asked', async () => {
-    const backupsOf = async (account) => (
-      await ocm.get(`/api/analysis/backup-stats?${OF_TODAY}${account}&projected=true`)).body.vms;
+  test.each([
+    [...LYON_BILLED_LATE, [1, 12, 12], [0, 0, 0]],
+    [...PARIS_BILLED, [1, 10, 0], [0, 0, 0]],
+    [...UNKNOWN_BILLED_LATE, [1, 8, 8], [1, 25, 25]],
+    [...ALL_ACCOUNTS, [3, 30, 20], [1, 25, 25]],
+  ])('count the backups of %s, with their parts', async (_, account, vms, licences) => {
+    const figures = ([count, total, projected]) => ({ count, total, projected });
 
-    expect(await backupsOf(`&account=${LYON}`)).toEqual({ count: 1, total: 12, projected: 12 });
-    expect(await backupsOf(`&account=${PARIS}`)).toEqual({ count: 1, total: 10, projected: 0 });
-    expect(await backupsOf('')).toEqual({ count: 2, total: 22, projected: 12 });
+    expect(await projectedOf('/api/analysis/backup-stats', account)).toEqual({
+      status: 200, body: { vms: figures(vms), enterprise: figures(licences) },
+    });
   });
 });
