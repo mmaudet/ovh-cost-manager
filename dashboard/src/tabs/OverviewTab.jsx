@@ -430,8 +430,13 @@ const OverviewTab = ({
               style={{ width: `${Math.min(budgetUsage, 100)}%` }}
             />
           </div>
-          <div className="flex justify-between items-center mt-2 text-sm text-gray-500">
-            <span>{t('consumed')}: {fmt(total)}€</span>
+          {/* What the month consumed, and the budget apart from it: side by side, or the budget
+              under it where the card lacks room, as on a phone (#235) */}
+          <div
+            className={'flex flex-wrap justify-between items-center gap-x-4 gap-y-1 mt-2 text-sm'
+              + ' text-gray-500'}
+          >
+            <span className="whitespace-nowrap">{t('consumed')}: {fmt(total)}€</span>
             <div className="flex items-center gap-1">
               <span>{t('budget')}:</span>
               {budget.editable ? (
