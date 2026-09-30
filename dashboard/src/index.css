@@ -35,6 +35,11 @@
     display: none !important;
   }
 
+  /* The header's badge of the services about to expire prints the count it shows (#225) */
+  button.expirations-badge {
+    display: flex !important;
+  }
+
   select {
     appearance: none;
     border: none;

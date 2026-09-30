@@ -56,6 +56,8 @@ What stays open depends on how the user moves around the page (#56):
 
 - the tab bar keeps the open project and resource type;
 - the logo goes back to the Overview and closes both;
+- the header's badge of the services about to expire opens the Overview on their card, and
+  keeps both, as the tab bar does (#225);
 - the Overview's link to the Infrastructure tab opens its summary, with no resource type
   open;
 - the Overview's other links open their target, a project on the Public Cloud tab or the

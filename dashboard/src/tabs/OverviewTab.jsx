@@ -4,9 +4,18 @@ import {
 } from 'recharts';
 import { pieLabel } from '../components/PieLabels.jsx';
 import { PieLegend } from '../components/PieLegend.jsx';
+import {
+  ExpirationDelay, ExpiringServicesTable, ExpiringTypeBadge, downloadExpiringServices,
+} from '../components/ExpiringServicesTable.jsx';
+import Modal from '../components/Modal.jsx';
+import TableActions from '../components/TableActions.jsx';
 import { SortableHeader, sortRows } from '../components/SortableHeader.jsx';
-import { accountInBrackets } from '../utils/accounts.js';
-import { formatPercent, takesSingular } from '../utils/format.js';
+import { accountInBrackets, withAccountNames } from '../utils/accounts.js';
+import { formatPercent } from '../utils/format.js';
+
+// The services about to expire that the card lists, the soonest: its title and the header's
+// badge count them all, which a modal lists (#225)
+const EXPIRING_IN_CARD = 5;
 
 // The share of the Cloud total of the month that a project's amount is: 0 of a Cloud total of
 // 0 € (#87)
@@ -42,14 +51,15 @@ const gpuProjectValues = (accountColumn) => ({
 // breakdown by project and the GPU projects, name the account of each project in the Account
 // column of the shell (accountColumn), when it shows one: they then list the projects by
 // account that the hook requests, a project billed to several accounts once for each (#118).
-// The services about to expire name their account there too (#123).
+// The services about to expire name their account there too (#123); their card takes
+// expirationsRef, which the header's badge focuses (#225).
 // Its links navigate with the shell's setters: what each one keeps open is in
 // docs/adr/0001-tab-state-lives-in-the-dashboard-shell.md (#56).
 const OverviewTab = ({
   sortingOf, projectsByAccount, gpuProjectsByAccount,
   language, t, fmt, accountColumn,
   summary, total, byService, byProject, byResourceType, gpuSummary,
-  expiringServices, budget, setBudget,
+  expiringServices, expirationsRef, setShowAllExpiring, budget, setBudget,
   setActiveTab, setSelectedProject, setSelectedResourceType,
 }) => {
   // The share of the budget the month has used, and the same in whole percents, which the bar
@@ -443,46 +453,55 @@ const OverviewTab = ({
         </div>
       )}
 
-      {/* Expiration Alerts */}
+      {/* Expiration Alerts, which the header's badge leads to, focusing the card, a region that
+          a screen reader names by its title (#225). As the other lists, its title counts them
+          all, and offers them in full in a modal, when the card cannot list them all, and as
+          CSV */}
       {expiringServices.length > 0 && (
-        <div className="bg-white rounded-xl p-5 shadow-sm border border-orange-200 lg:col-span-2">
-          <h3 className="font-semibold text-orange-700 mb-4">{t('expiringSoon')}</h3>
+        <div
+          ref={expirationsRef}
+          tabIndex={-1}
+          role="region"
+          aria-labelledby="expiring-services-title"
+          className={'bg-white rounded-xl p-5 shadow-sm border border-orange-200 lg:col-span-2'
+            + ' focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300'}
+        >
+          {/* Its buttons go under its title where they lack room, as on a phone, rather than
+              break their labels (#226) */}
+          <h3 className="font-semibold text-orange-700 mb-4 flex flex-wrap items-center gap-2">
+            <span id="expiring-services-title" className="whitespace-nowrap">
+              {t('expiringSoon')} ({expiringServices.length})
+            </span>
+            <TableActions
+              language={language}
+              onShowAll={expiringServices.length > EXPIRING_IN_CARD
+                ? () => setShowAllExpiring(true)
+                : undefined}
+              onExport={() => downloadExpiringServices(
+                withAccountNames(expiringServices, accountColumn), language, accountColumn,
+              )}
+            />
+          </h3>
           <div className="space-y-2">
-            {expiringServices.slice(0, 5).map(s => {
-              const daysLeft = Math.ceil((new Date(s.expiration_date) - new Date()) / (1000 * 60 * 60 * 24));
-              // The days since it expired or until it does: "1 jour", "2 jours" (#74)
-              const days = Math.abs(daysLeft);
-              const singular = takesSingular(days, language);
-              return (
-                <div key={s.id} className="flex items-center justify-between text-sm p-2 bg-orange-50 rounded">
-                  <div className="flex items-center gap-2">
-                    <span className={`px-2 py-0.5 rounded text-xs font-medium ${
-                      s.type === 'dedicated_server' ? 'bg-red-100 text-red-700' :
-                      s.type === 'vps' ? 'bg-amber-100 text-amber-700' :
-                      'bg-green-100 text-green-700'
-                    }`}>
-                      {s.type === 'dedicated_server' ? t('dedicatedServers') :
-                       s.type === 'vps' ? t('vpsInstances') : t('storageServices')}
+            {expiringServices.slice(0, EXPIRING_IN_CARD).map(s => (
+              <div
+                key={`${s.type} ${s.id}`}
+                className="flex items-center justify-between text-sm p-2 bg-orange-50 rounded"
+              >
+                <div className="flex items-center gap-2">
+                  <ExpiringTypeBadge service={s} t={t} />
+                  <span className="font-medium">{s.display_name || s.id}</span>
+                  {/* Its account, in brackets, when the lists name it (#123) */}
+                  {accountColumn && (
+                    <span className="text-gray-500">
+                      {accountInBrackets(accountColumn, s.account)}
                     </span>
-                    <span className="font-medium">{s.display_name || s.id}</span>
-                    {/* Its account, in brackets, when the lists name it (#123) */}
-                    {accountColumn && (
-                      <span className="text-gray-500">
-                        {accountInBrackets(accountColumn, s.account)}
-                      </span>
-                    )}
-                  </div>
-                  <span className={`text-sm font-medium ${daysLeft <= 7 ? 'text-red-600' : 'text-orange-600'}`}>
-                    {/* A service already expired, first in the list, says since when (#74) */}
-                    {daysLeft < 0 ? (
-                      <>{t('expiredSince')} {days} {t(singular ? 'dayAgo' : 'daysAgo')}</>
-                    ) : (
-                      <>{t('expiringIn')} {days} {t(singular ? 'day' : 'days')}</>
-                    )}
-                  </span>
+                  )}
                 </div>
-              );
-            })}
+                {/* A service already expired, first in the list, says since when (#74) */}
+                <ExpirationDelay service={s} language={language} t={t} />
+              </div>
+            ))}
           </div>
         </div>
       )}
@@ -491,4 +510,32 @@ const OverviewTab = ({
   );
 };
 
-export { OverviewTab };
+// The "show all" modal of the services about to expire (#225), which the shell renders after
+// the page column, whatever the active tab, so that its backdrop covers the whole page: see
+// docs/adr/0001-tab-state-lives-in-the-dashboard-shell.md. It names the account of each service
+// as the card does (#123), and sorts them as the other lists do (#146).
+const OverviewTabModals = ({
+  expiringServices, showAllExpiring, setShowAllExpiring, sortingOf, accountColumn, language, t,
+}) => {
+  const services = withAccountNames(expiringServices, accountColumn);
+  return (
+    <Modal
+      open={showAllExpiring}
+      onClose={() => setShowAllExpiring(false)}
+      title={`${t('expiringSoon')} (${services.length})`}
+      actions={
+        <TableActions
+          language={language}
+          onExport={() => downloadExpiringServices(services, language, accountColumn)}
+        />
+      }
+    >
+      <ExpiringServicesTable
+        services={services} sorting={sortingOf('expiring')} accountColumn={accountColumn}
+        language={language} t={t}
+      />
+    </Modal>
+  );
+};
+
+export { OverviewTab, OverviewTabModals };
