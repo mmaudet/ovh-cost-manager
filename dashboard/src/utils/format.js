@@ -151,8 +151,16 @@ const formatTokens = (tokens, language = 'fr') => {
 const takesSingular = (count, language = 'fr') =>
   new Intl.PluralRules(localeOf(language)).select(count) === 'one';
 
+// An amount of the month in progress at its projected cost as the page details it (#217, #218):
+// what the month billed so far, and its projected cost, which the amount is, in the amount format
+// (fmt) and the words (t) of the page. The tooltips of the Trends tab's charts and of the
+// projected amounts of both tabs say so: facturé 980,40€, projeté 1 250,40€.
+const formatBilledAndProjected = (amount, projectedPart, fmt, t) => (
+  `${t('billed')} ${fmt(amount - projectedPart)}€, ${t('projected')} ${fmt(amount)}€`
+);
+
 export {
   localeOf, formatCurrency, formatWholeNumber, formatDecimal, formatPercent, formatYearMonth,
   formatMonthLabel, formatMonthName, yearMonthOf, fmtBytes, fmtMemory, formatTokens,
-  takesSingular,
+  takesSingular, formatBilledAndProjected,
 };

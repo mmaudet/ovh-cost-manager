@@ -11,6 +11,7 @@ import {
 } from './fixtures/accounts.js';
 import { enterpriseLicence } from './fixtures/backup.js';
 import { months } from './fixtures/calendar.js';
+import { serverAndBackupsBilledLate } from './fixtures/compare.js';
 import { api, failFor, holdBack } from './support/api.js';
 import {
   accordionOf,
@@ -18,9 +19,11 @@ import {
   dropdown,
   firstColumnOf,
   headerOf,
+  inItalics,
   layOutForPrint,
   openTab,
   optionsOf,
+  projectionCheckbox,
   renderDashboard,
   resourceType,
   rowTextsOf,
@@ -30,6 +33,7 @@ import {
   settle,
   sortTable,
   texts,
+  toggleProjection,
   toneOf,
 } from './support/render.jsx';
 
@@ -116,6 +120,7 @@ describe('Compare tab', () => {
       // (1 250.40 - 1 042) / 1 042
       expect(texts(comparedTotals())).toEqual([
         'Mois A :', 'Août 2026', 'VS', 'Mois B :', 'Septembre 2026',
+        'Projeter le mois en cours',
         '1 042,00€', 'Août 2026', '+20,0 %', '1 250,40€', 'Septembre 2026',
       ]);
     });
@@ -131,6 +136,7 @@ describe('Compare tab', () => {
       // (1 042 - 980) / 980
       expect(texts(comparedTotals())).toEqual([
         'Mois A :', 'Juillet 2026', 'VS', 'Mois B :', 'Août 2026',
+        'Projeter le mois en cours',
         '980,00€', 'Juillet 2026', '+6,3 %', '1 042,00€', 'Août 2026',
       ]);
 
@@ -139,6 +145,7 @@ describe('Compare tab', () => {
       // (1 042 - 1 250.40) / 1 250.40
       expect(texts(comparedTotals())).toEqual([
         'Mois A :', 'Septembre 2026', 'VS', 'Mois B :', 'Août 2026',
+        'Projeter le mois en cours',
         '1 250,40€', 'Septembre 2026', '-16,7 %', '1 042,00€', 'Août 2026',
       ]);
     });
@@ -153,6 +160,7 @@ describe('Compare tab', () => {
 
       expect(texts(comparedTotals())).toEqual([
         'Mois A :', 'Juillet 2026', 'VS', 'Mois B :', 'Septembre 2026',
+        'Projeter le mois en cours',
         '980,00€', 'Juillet 2026', '+27,6 %', '1 250,40€', 'Septembre 2026',
       ]);
     });
@@ -166,6 +174,7 @@ describe('Compare tab', () => {
 
       expect(texts(comparedTotals())).toEqual([
         'Mois A :', 'Septembre 2026', 'VS', 'Mois B :', 'Septembre 2026',
+        'Projeter le mois en cours',
         '1 250,40€', 'Septembre 2026', '0,0 %', '1 250,40€', 'Septembre 2026',
       ]);
     });
@@ -197,6 +206,7 @@ describe('Compare tab', () => {
 
       expect(texts(comparedTotals())).toEqual([
         'Mois A :', 'Septembre 2026', 'VS', 'Mois B :', 'Septembre 2026',
+        'Projeter le mois en cours',
         '1 250,40€', 'Septembre 2026', '0,0 %', '1 250,40€', 'Septembre 2026',
       ]);
     });
@@ -1876,6 +1886,7 @@ describe('Compare tab', () => {
 
       expect(texts(comparedTotals())).toEqual([
         'Mois A :', 'Juillet 2026', 'VS', 'Mois B :', 'Septembre 2026',
+        'Projeter le mois en cours',
         shown, 'Juillet 2026', '—', '1 250,40€', 'Septembre 2026',
       ]);
       expect(within(comparedTotals()).getByTitle('non calculable : mois A à 0 € ou moins'))
@@ -1948,6 +1959,7 @@ describe('Compare tab', () => {
 
       expect(texts(comparedTotals())).toEqual([
         'Mois A :', 'Août 2026', 'VS', 'Mois B :', 'Septembre 2026 (en cours)',
+        'Projeter le mois en cours',
         '1 042,00€', 'Août 2026', '—', '1 250,40€', 'Septembre 2026',
       ]);
       expect(within(comparedTotals()).getByTitle(whyNotComputed)).toHaveTextContent('—');
@@ -1967,7 +1979,7 @@ describe('Compare tab', () => {
         await pickMonth(user, 'Septembre 2026 (en cours)', 'Août 2026');
 
         // (1 042 - 980) / 980
-        expect(texts(comparedTotals()).slice(5)).toEqual([
+        expect(texts(comparedTotals()).slice(6)).toEqual([
           '980,00€', 'Juillet 2026', '+6,3 %', '1 042,00€', 'Août 2026',
         ]);
         expect(rowsOf(comparisonTable(PROJECTS))[1]).toEqual([
@@ -1977,7 +1989,7 @@ describe('Compare tab', () => {
         // Month A in progress
         await pickMonth(user, 'Juillet 2026', 'Septembre 2026 (en cours)');
 
-        expect(texts(comparedTotals()).slice(5)).toEqual([
+        expect(texts(comparedTotals()).slice(6)).toEqual([
           '1 250,40€', 'Septembre 2026', '—', '1 042,00€', 'Août 2026',
         ]);
         expect(within(comparedTotals()).getByTitle(whyNotComputed)).toHaveTextContent('—');
@@ -2096,6 +2108,267 @@ describe('Compare tab', () => {
     });
   });
 
+  // The month in progress at its projected cost, while the page projects it (#218): see
+  // fixtures/compare.js, where September has not billed its dedicated server and the backups of
+  // two VMs yet. One setting for the whole page, as the Trends tab's (#217).
+  describe('projection of the month in progress (#218)', () => {
+    const billedLate = { ...account, ...septemberInProgress, ...serverAndBackupsBilledLate };
+    // The months that the tab asks for, as their requests name them, for all accounts
+    const SEPTEMBER = ['2026-09-01', '2026-09-30', null];
+    const AUGUST = ['2026-08-01', '2026-08-31', null];
+    const JULY = ['2026-07-01', '2026-07-31', null];
+    const PROJECTED = { projected: true };
+    // What the tab asks for each month: its totals, its service types, its resource types and
+    // its Veeam backups
+    const figures = () => [
+      api.fetchSummary, api.fetchByService, api.fetchByResourceType, api.fetchBackupStats,
+    ];
+    const projectionAsked = (fetchFigure) => fetchFigure.mock.calls
+      .some((call) => call.at(-1)?.projected === true);
+    const whyNotComputed = 'non calculable : mois en cours';
+
+    it('offers to project it next to months A and B, off by default', async () => {
+      const { user } = await renderDashboard(billedLate);
+
+      await openTab(user, 'Comparaison');
+
+      expect(within(comparedTotals()).getByRole('checkbox'))
+        .toHaveAccessibleName('Projeter le mois en cours');
+      expect(projectionCheckbox()).not.toBeChecked();
+
+      await selectLanguage(user, 'en');
+
+      expect(projectionCheckbox()).toHaveAccessibleName('Project the month in progress');
+    });
+
+    it('asks for the figures of the month in progress projected once ticked, and those only',
+      async () => {
+        const { user } = await renderDashboard(billedLate);
+        await openTab(user, 'Comparaison');
+        for (const fetchFigure of figures()) expect(projectionAsked(fetchFigure)).toBe(false);
+
+        await toggleProjection(user);
+
+        for (const fetchFigure of figures()) {
+          expect(fetchFigure).toHaveBeenCalledWith(...SEPTEMBER, PROJECTED);
+          expect(fetchFigure).not.toHaveBeenCalledWith(...AUGUST, PROJECTED);
+        }
+        // Not the projects, which compare what the month billed so far until #219
+        expect(projectionAsked(api.fetchByProject)).toBe(false);
+      });
+
+    // Rather than compare a partial month with a complete one, or leave the variation out
+    it('shows the totals of the month in progress at its projected cost, marked so', async () => {
+      const { user } = await renderDashboard(billedLate);
+      await openTab(user, 'Comparaison');
+      // What September billed so far, without a variation
+      expect(texts(comparedTotals()).slice(6)).toEqual([
+        '1 042,00€', 'Août 2026', '—', '910,40€', 'Septembre 2026',
+      ]);
+      expect(within(comparedTotals()).getByTitle(whyNotComputed)).toHaveTextContent('—');
+
+      await toggleProjection(user);
+
+      // With the server and the backups at their cost of August: (1 220.40 - 1 042) / 1 042
+      expect(texts(comparedTotals()).slice(6)).toEqual([
+        '1 042,00€', 'Août 2026', '+17,1 %', '1 220,40€', 'projeté', 'Septembre 2026',
+      ]);
+      expect(inItalics(within(comparedTotals()).getByText('1 220,40€'))).toBe(true);
+      expect(within(comparedTotals()).getByTitle('facturé 910,40€, projeté 1 220,40€'))
+        .toHaveTextContent('1 220,40€ projeté');
+      // August, complete, as it was
+      expect(inItalics(within(comparedTotals()).getByText('1 042,00€'))).toBe(false);
+
+      await toggleProjection(user);
+
+      expect(texts(comparedTotals()).slice(6)).toEqual([
+        '1 042,00€', 'Août 2026', '—', '910,40€', 'Septembre 2026',
+      ]);
+    });
+
+    it('shows the infrastructure and backup comparisons at the projected cost, marked so',
+      async () => {
+        const { user } = await renderDashboard(billedLate);
+        await openTab(user, 'Comparaison');
+        await openComparison(user, INFRASTRUCTURE);
+        await openComparison(user, BACKUP);
+        // The server, not billed yet in September, and no variation
+        expect(infrastructureRows()[0]).toEqual(['Serveurs dédiés', '270,00€', '0,00€', '—']);
+        expect(rowsOf(comparisonTable(BACKUP))[1])
+          .toEqual(['VMs Veeam Backup', '2 / 40,00€', '1 / 20,00€', '—']);
+
+        await toggleProjection(user);
+
+        // The server at its cost of August; the domains, billed, as they were
+        expect(infrastructureRows()).toEqual([
+          ['Serveurs dédiés', '270,00€', '270,00€', 'projeté', '0,0 %'],
+          ['VPS', '0,00€', '0,00€', '—'],
+          ['Stockage', '0,00€', '0,00€', '—'],
+          ['Load Balancer', '0,00€', '0,00€', '—'],
+          ['Adresses IP', '0,00€', '0,00€', '—'],
+          ['Noms de domaine', '30,00€', '35,00€', '+16,7 %'],
+          ['Hôtes Private Cloud', '0,00€', '0,00€', '—'],
+          ['Datastores Private Cloud', '0,00€', '0,00€', '—'],
+        ]);
+        expect(within(comparisonTable(INFRASTRUCTURE))
+          .getByTitle('facturé 0,00€, projeté 270,00€')).toHaveTextContent('270,00€ projeté');
+        // The two VMs at their cost of August, 25 € and 15 €, with the one billed
+        expect(rowsOf(comparisonTable(BACKUP))).toEqual([
+          ['Catégorie', 'Août 2026', 'Septembre 2026', 'Variation'],
+          ['VMs Veeam Backup', '2 / 40,00€', '3 / 60,00€ projeté', '+50,0 %'],
+          ['Licence Veeam Enterprise', '0 / 0,00€', '1 / 25,00€', '—'],
+        ]);
+        const vms = within(comparisonTable(BACKUP)).getByTitle('facturé 20,00€, projeté 60,00€');
+        expect(vms).toHaveTextContent('60,00€ projeté');
+        expect(inItalics(within(vms).getByText('60,00€'))).toBe(true);
+      });
+
+    it('marks projeté the services that rows unfold into and that the month did not bill yet',
+      async () => {
+        const { user } = await renderDashboard(billedLate);
+        await openTab(user, 'Comparaison');
+        await openComparison(user, INFRASTRUCTURE);
+        await openComparison(user, BACKUP);
+        await toggleProjection(user);
+
+        await toggleRow(user, INFRASTRUCTURE, 'Serveurs dédiés');
+        await toggleRow(user, BACKUP, 'VMs Veeam Backup');
+
+        expect(infrastructureRows()[1]).toEqual([
+          'ns3000001.ip-203-0-113.eu',
+          'Location du serveur RISE-1 ns3000001.ip-203-0-113.eu - 1 mois',
+          '270,00€', '270,00€', 'projeté', '0,0 %',
+        ]);
+        expect(within(comparisonTable(INFRASTRUCTURE)).getAllByTitle(
+          'facturé 0,00€, projeté 270,00€',
+        )).toHaveLength(2);
+        // The VM added in September, billed, from 0 € in August
+        expect(rowTextsOf(comparisonTable(BACKUP)).slice(2, 5)).toEqual([
+          ['vm-app-1.example.com', 'Veeam Managed Backup - vm-app-1.example.com',
+            '25,00€', '25,00€', 'projeté', '0,0 %'],
+          ['vm-db-1.example.com', 'Veeam Managed Backup - vm-db-1.example.com',
+            '15,00€', '15,00€', 'projeté', '0,0 %'],
+          ['vm-files-1.example.com', 'Veeam Managed Backup - vm-files-1.example.com',
+            '0,00€', '20,00€', '—'],
+        ]);
+        expect(api.fetchResourceTypeDetails)
+          .toHaveBeenCalledWith('dedicated_server', ...SEPTEMBER, PROJECTED);
+        expect(api.fetchResourceTypeDetails)
+          .not.toHaveBeenCalledWith('dedicated_server', ...AUGUST, PROJECTED);
+        expect(api.fetchBackupServices).toHaveBeenCalledWith(...SEPTEMBER, PROJECTED);
+        expect(api.fetchBackupServices).not.toHaveBeenCalledWith(...AUGUST, PROJECTED);
+      });
+
+    // Only what the Private Cloud comparison reads: a host billed in August, whose bill of
+    // September has not come yet
+    it('shows the Private Cloud comparison at the projected cost, marked so', async () => {
+      const hosts = (value) => ({
+        name: 'Private Cloud Hosts', resource_type: 'private_cloud_host', color: '#9333ea',
+        value, detailsCount: 1, serviceCount: 1,
+      });
+      const host = {
+        domain: 'pcc-203-0-113-10/host/1234',
+        description: 'Host Private Cloud 256 Go pcc-203-0-113-10 - 1 mois',
+        total: 850,
+        line_count: 1,
+      };
+      const { user } = await renderDashboard({
+        ...billedLate,
+        byResourceType: {
+          ...billedLate.byResourceType,
+          '2026-08': [...billedLate.byResourceType['2026-08'], hosts(850)],
+        },
+        projectedByResourceType: {
+          '2026-09': [
+            ...billedLate.projectedByResourceType['2026-09'], { ...hosts(850), projected: 850 },
+          ],
+        },
+        resourceTypeDetails: {
+          ...billedLate.resourceTypeDetails, private_cloud_host: { '2026-08': [host] },
+        },
+        projectedResourceTypeDetails: {
+          ...billedLate.projectedResourceTypeDetails,
+          private_cloud_host: { '2026-09': [{ ...host, projected: 850 }] },
+        },
+      });
+      await openTab(user, 'Comparaison');
+      await openComparison(user, PRIVATE_CLOUD);
+      await toggleProjection(user);
+
+      await toggleRow(user, PRIVATE_CLOUD, 'Hôtes Private Cloud');
+
+      expect(rowTextsOf(comparisonTable(PRIVATE_CLOUD))).toEqual([
+        ['Type', 'Août 2026', 'Septembre 2026', 'Variation'],
+        ['Hôtes Private Cloud', '850,00€', '850,00€', 'projeté', '0,0 %'],
+        [host.domain, host.description, '850,00€', '850,00€', 'projeté', '0,0 %'],
+        ['Datastores Private Cloud', '0,00€', '0,00€', '—'],
+      ]);
+    });
+
+    // Until they project it too (#219): what September billed them so far, compared with no
+    // variation, as without the projection
+    it('leaves the projects as September billed them so far, without a variation', async () => {
+      const { user } = await renderDashboard(billedLate);
+      await openTab(user, 'Comparaison');
+
+      await toggleProjection(user);
+
+      expect(rowsOf(comparisonTable(PROJECTS))).toEqual([
+        ['Projet○', 'Août 2026▼', 'Septembre 2026○', 'Variation○'],
+        ['Production', '512,00€', '610,40€', '—'],
+        ['Staging', '190,00€', '220,00€', '—'],
+      ]);
+      for (const variation of within(comparisonTable(PROJECTS)).getAllByText('—')) {
+        expect(variation).toHaveAttribute('title', whyNotComputed);
+      }
+    });
+
+    // Whichever of months A and B it is, and never a complete month
+    it('projects only the month in progress, month A or month B', async () => {
+      const { user } = await renderDashboard(billedLate);
+      await openTab(user, 'Comparaison');
+      await toggleProjection(user);
+
+      // August and July, complete
+      await pickMonth(user, 'Septembre 2026 (en cours)', 'Juillet 2026');
+
+      // (980 - 1 042) / 1 042
+      expect(texts(comparedTotals()).slice(6)).toEqual([
+        '1 042,00€', 'Août 2026', '-6,0 %', '980,00€', 'Juillet 2026',
+      ]);
+      for (const fetchFigure of figures()) {
+        expect(fetchFigure).toHaveBeenCalledWith(...JULY);
+        expect(fetchFigure).not.toHaveBeenCalledWith(...JULY, PROJECTED);
+      }
+
+      // September, month A, and July: (980 - 1 220.40) / 1 220.40
+      await pickMonth(user, 'Août 2026', 'Septembre 2026 (en cours)');
+
+      expect(texts(comparedTotals()).slice(6)).toEqual([
+        '1 220,40€', 'projeté', 'Septembre 2026', '-19,7 %', '980,00€', 'Juillet 2026',
+      ]);
+    });
+
+    it('speaks English when the page does', async () => {
+      const { user } = await renderDashboard(billedLate);
+      await openTab(user, 'Comparaison');
+      await openComparison(user, INFRASTRUCTURE);
+      await toggleProjection(user);
+
+      await selectLanguage(user, 'en');
+
+      expect(texts(comparedTotals())).toEqual([
+        'Month A :', 'August 2026', 'VS', 'Month B :', 'September 2026 (in progress)',
+        'Project the month in progress',
+        '1,042.00€', 'August 2026', '+17.1%', '1,220.40€', 'projected', 'September 2026',
+      ]);
+      expect(within(comparedTotals()).getByTitle('billed 910.40€, projected 1,220.40€'))
+        .toHaveTextContent('1,220.40€ projected');
+      expect(within(comparisonTable(/^Infrastructure Comparison/))
+        .getByTitle('billed 0.00€, projected 270.00€')).toHaveTextContent('270.00€ projected');
+    });
+  });
+
   describe('tones of the variations (#87)', () => {
     it('show an increase in red, and a decrease in green', async () => {
       const { user } = await renderDashboard({
@@ -2124,7 +2397,7 @@ describe('Compare tab', () => {
       await openTab(user, 'Comparaison');
 
       // (1 250.40 - 1 250) / 1 250 is 0.03 %
-      expect(texts(comparedTotals()).slice(5)).toEqual([
+      expect(texts(comparedTotals()).slice(6)).toEqual([
         '1 250,00€', 'Août 2026', '0,0 %', '1 250,40€', 'Septembre 2026',
       ]);
       expect(toneOf(within(comparedTotals()).getByText('0,0 %'))).toBe('neutral');
@@ -2158,6 +2431,7 @@ describe('Compare tab', () => {
     // The months in the language of the page, not in the French of the API (#33)
     expect(texts(comparedTotals())).toEqual([
       'Month A :', 'August 2026', 'VS', 'Month B :', 'September 2026',
+      'Project the month in progress',
       '1,042.00€', 'August 2026', '+20.0%', '1,250.40€', 'September 2026',
     ]);
     expect(screen.getByRole('heading', { name: 'Comparison by service' })).toBeInTheDocument();
@@ -2258,6 +2532,7 @@ describe('Compare tab', () => {
 
         expect(texts(comparedTotals())).toEqual([
           'Mois A :', 'Août 2026', 'VS', 'Mois B :', 'Septembre 2026',
+          'Projeter le mois en cours',
           '1 042,00€', 'Août 2026', '+20,0 %', '1 250,40€', 'Septembre 2026',
         ]);
       });
@@ -2299,6 +2574,7 @@ describe('Compare tab', () => {
         // (890.40 - 612) / 612
         expect(texts(comparedTotals())).toEqual([
           'Mois A :', 'Août 2026', 'VS', 'Mois B :', 'Septembre 2026',
+          'Projeter le mois en cours',
           '612,00€', 'Août 2026', '+45,5 %', '890,40€', 'Septembre 2026',
         ]);
         // What the chart of the service types is drawn from
@@ -2335,6 +2611,7 @@ describe('Compare tab', () => {
         // (360 - 230) / 230
         expect(texts(comparedTotals())).toEqual([
           'Mois A :', 'Août 2026', 'VS', 'Mois B :', 'Septembre 2026',
+          'Projeter le mois en cours',
           '230,00€', 'Août 2026', '+56,5 %', '360,00€', 'Septembre 2026',
         ]);
         expect(rowsOf(comparisonTable(PROJECTS))).toEqual([
@@ -2363,6 +2640,7 @@ describe('Compare tab', () => {
 
         expect(texts(comparedTotals())).toEqual([
           'Mois A :', 'Août 2026', 'VS', 'Mois B :', 'Septembre 2026',
+          'Projeter le mois en cours',
           '1 042,00€', 'Août 2026', '+20,0 %', '1 250,40€', 'Septembre 2026',
         ]);
       });
@@ -2453,6 +2731,7 @@ describe('Compare tab', () => {
         // (200 - 180) / 180
         expect(texts(comparedTotals())).toEqual([
           'Mois A :', 'Juillet 2026', 'VS', 'Mois B :', 'Août 2026',
+          'Projeter le mois en cours',
           '180,00€', 'Juillet 2026', '+11,1 %', '200,00€', 'Août 2026',
         ]);
         // Without a project

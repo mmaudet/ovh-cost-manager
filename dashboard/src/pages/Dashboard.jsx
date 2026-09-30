@@ -151,7 +151,8 @@ export default function Dashboard() {
   // it when the page offers several (#124): null when it names none
   const scope = scopeLabel(accounts, selectedAccount, t);
   // Whether the page projects the month in progress (#214), page-wide, and what turns it on or
-  // off: the Trends tab shows it next to its period selector, and its trends follow it (#217)
+  // off: the Trends tab shows it next to its period selector, and its trends follow it (#217),
+  // and the Compare tab next to its months A and B, and its figures follow it (#218)
   const projectionSetting = useMonthInProgressProjection();
 
   // The months billed to the account shown
@@ -267,7 +268,10 @@ export default function Dashboard() {
     ? overviewTab.projectsByAccountFailed
     : byProjectFailed;
 
-  const compareTab = useCompareTab({ months, activeTab, selectedAccount, accountColumn });
+  const compareTab = useCompareTab({
+    months, activeTab, selectedAccount, accountColumn,
+    projectsMonthInProgress: projectionSetting.projectsMonthInProgress,
+  });
 
   const trendsTab = useTrendsTab({
     months, selectedMonth, holdsSelectedMonth, selectedAccount, activeTab,
@@ -802,7 +806,7 @@ export default function Dashboard() {
         {/* Tab Content - Compare */}
         {activeTab === 'compare' && (
           <CompareTab
-            {...compareTab} language={language} t={t} fmt={fmt}
+            {...compareTab} {...projectionSetting} language={language} t={t} fmt={fmt}
             months={months} accountColumn={accountColumn}
           />
         )}

@@ -8,12 +8,17 @@ import { DETAIL_PADDING, DetailRow, sortUnfolded } from './UnfoldingRow.jsx';
 // name the account of each service (#194): a service billed to two accounts has a row for each.
 // Each service that either month billed, with its account, the description of its most
 // expensive bill line, month B's when month B billed it, and its cost in each month, 0 € in a
-// month that did not bill it.
+// month that did not bill it. And the projected part of each cost, 0 for none: that of a service
+// that the month in progress has not billed yet, its whole cost, while the page projects it
+// (#218).
 const serviceRows = (servicesA, servicesB) => pairMonths(
   servicesA, servicesB, byNameAndAccount(({ domain }) => domain),
 ).map(({ key, rowA, rowB, valA, valB }) => {
   const { domain, account, description } = rowB ?? rowA;
-  return { key, identifier: domain, account, description, valA, valB };
+  return {
+    key, identifier: domain, account, description, valA, valB,
+    projectedA: rowA?.projected ?? 0, projectedB: rowB?.projected ?? 0,
+  };
 });
 
 /**
@@ -24,7 +29,9 @@ const serviceRows = (servicesA, servicesB) => pairMonths(
  * licences (#197). They follow the comparison's sort, within their row, and come by month A, the
  * most expensive first, then by month B, until the user sorts it (sortUnfolded()). While the
  * lists name the account of each service, each names its account in brackets, and a service
- * billed to several accounts has a row for each (#194).
+ * billed to several accounts has a row for each (#194). While the page projects the month in
+ * progress, a service that it has not billed yet shows at its projected cost, which its
+ * projected lines make, marked « projeté » (#218).
  * @param {object} props
  * @param {function(?object): object} props.servicesQueryOf - The options of the query of the
  *   row's services in a month, for useQuery: useCompareTab()'s resourceTypeServicesQuery() or
@@ -68,11 +75,11 @@ const UnfoldedRowServices = ({
   return sortUnfolded(
     serviceRows(dataA ?? [], dataB ?? []), sort, valuesAsShown(comparedMonths, values), language,
   ).map(({
-    key, identifier, account, description, valA, valB,
+    key, identifier, account, description, valA, valB, projectedA, projectedB,
   }) => (
     <DetailRow
-      key={key} valA={valA} valB={valB} comparedMonths={comparedMonths}
-      fmt={fmt} language={language} t={t}
+      key={key} valA={valA} valB={valB} projectedA={projectedA} projectedB={projectedB}
+      comparedMonths={comparedMonths} fmt={fmt} language={language} t={t}
     >
       {/* The description is cut to the column of the rows' labels, and the identifier wraps to
           it, at its hyphens first */}

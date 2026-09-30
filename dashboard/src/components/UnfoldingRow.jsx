@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { BY_MONTH_A, BY_MONTH_B } from '../utils/monthComparison.js';
+import { ComparedAmount } from './ProjectedAmount.jsx';
 import { sortRows } from './SortableHeader.jsx';
 import { Variation } from './Variation.jsx';
 
@@ -68,10 +69,14 @@ const UnfoldingRow = ({ unfolding, chevronLabel, label, detail, children }) => (
  * A row that shows under an unfolded row of a comparison (#189), what the row adds up: a service
  * or a charge, indented under the row's label, in the comparison's columns, its amount in months
  * A and B, 0 € in a month that did not bill it, and the variation from one to the other. The
- * caller gives it its key.
+ * caller gives it its key. An amount that projected lines make, that of a service that the month
+ * in progress has not billed yet, while the page projects it, is marked so (ComparedAmount, #218).
  * @param {object} props
  * @param {number} props.valA - Its amount in month A
  * @param {number} props.valB - Its amount in month B
+ * @param {number} [props.projectedA] - What projected lines make of its amount in month A, 0
+ *   for none
+ * @param {number} [props.projectedB] - The same in month B
  * @param {{ includesMonthInProgress: boolean, projected: boolean }} props.comparedMonths - What
  *   the comparison knows of months A and B (comparedMonthsOf()), which its variation reads (#216)
  * @param {React.ReactNode} props.children - What names it, in its first cell, which asks the
@@ -79,11 +84,17 @@ const UnfoldingRow = ({ unfolding, chevronLabel, label, detail, children }) => (
  *   rows' labels, whatever the page's width, rather than widen the table
  * @returns {JSX.Element}
  */
-const DetailRow = ({ valA, valB, comparedMonths, fmt, language, t, children }) => (
+const DetailRow = ({
+  valA, valB, projectedA = 0, projectedB = 0, comparedMonths, fmt, language, t, children,
+}) => (
   <tr className="border-b text-gray-600">
     <td className={`max-w-0 ${DETAIL_PADDING}`}>{children}</td>
-    <td className="py-2 px-3 text-right">{fmt(valA)}€</td>
-    <td className="py-2 px-3 text-right">{fmt(valB)}€</td>
+    <td className="py-2 px-3 text-right">
+      <ComparedAmount amount={valA} projectedPart={projectedA} fmt={fmt} t={t} />
+    </td>
+    <td className="py-2 px-3 text-right">
+      <ComparedAmount amount={valB} projectedPart={projectedB} fmt={fmt} t={t} />
+    </td>
     <td className="py-2 px-3 text-right">
       <Variation
         from={valA} to={valB} comparedMonths={comparedMonths} language={language} t={t}
