@@ -208,10 +208,9 @@ describe('useCompareTab', () => {
       setCompareMonthA: expect.any(Function),
       compareMonthB: expect.any(Object),
       setCompareMonthB: expect.any(Function),
-      // What the comparison knows of them, which decides its variations (#216, #218): two
+      // What the comparison knows of them, which decides its variations (#216, #218, #219): two
       // complete months here
       comparedMonths: { includesMonthInProgress: false, projected: false },
-      billedMonths: { includesMonthInProgress: false, projected: false },
       sortingOf: expect.any(Function),
       // The rows unfolded into their services, by comparison (#192)
       unfoldingOf: expect.any(Function),
@@ -771,9 +770,11 @@ describe('useCompareTab', () => {
         }
         // September at its projected cost, and what projected lines make of it
         expect(result.current.compareDataB).toMatchObject({ total: 1220.4, projected: 310 });
-        // Which the variations compare
+        // Which every variation compares, those of the projects and of their products included,
+        // which compared what the month billed so far until #219
         expect(result.current.comparedMonths)
           .toEqual({ includesMonthInProgress: true, projected: true });
+        expect(result.current).not.toHaveProperty('billedMonths');
         expect(resourceTypes(result.current.byResourceTypeB)).toEqual([
           ['cloud_project', 830.4], ['dedicated_server', 270], ['backup', 60], ['domain', 35],
           ['license', 25],

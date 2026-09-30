@@ -102,12 +102,10 @@ const useCompareTab = ({
   // tables read (comparedMonthsOf()): whether either is the month in progress, which leaves no
   // variation to compute, as it would compare a partial month with a complete one (#216), unless
   // its figures are its projected cost, while the page projects it (#218), those of the projects
-  // and of their products included (#219). And the same at what the month in progress billed so
-  // far, which the tab's projects and their products compare until it shows them projected.
+  // and of their products included (#219)
   const comparedMonths = comparedMonthsOf(months, compareMonthA, compareMonthB, {
     projected: projectsMonthInProgress,
   });
-  const billedMonths = comparedMonthsOf(months, compareMonthA, compareMonthB);
 
   // A figure of month A or B, for the account shown (#119), which fetchFigure(from, to,
   // account) requests, under the key of the same figure that the shell loads for its selected
@@ -230,7 +228,6 @@ const useCompareTab = ({
     compareMonthB,
     setCompareMonthB,
     comparedMonths,
-    billedMonths,
     sortingOf,
     unfoldingOf,
     compareDataA,

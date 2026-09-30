@@ -2,12 +2,17 @@ import { formatMonthLabel } from '../utils/format.js';
 import { comparisonValues, pairMonths, valuesAsShown } from '../utils/monthComparison.js';
 import { publicCloudProductLabel } from '../utils/publicCloudProducts.js';
 import { MonthAnswersMessage, useMonthAnswers } from './MonthAnswers.jsx';
+import { ComparedAmount } from './ProjectedAmount.jsx';
 import { SortableHeader, sortRows } from './SortableHeader.jsx';
 import { DetailRow, LABEL_PADDING, UnfoldingRow, sortUnfolded } from './UnfoldingRow.jsx';
 import { Variation } from './Variation.jsx';
 
 // What the server answers for a month whose bills charged the project nothing
 const NOTHING_BILLED = { total: 0, products: [], credits: 0 };
+
+// What projected lines make of an amount of a month (#219): the part that the server gives it,
+// for the month in progress at its projected cost, 0 for none, as in a complete month
+const projectedPartOf = (row) => row?.projected ?? 0;
 
 // The value of a product in each column that sorts the comparison (#146): its name as the table
 // gives it, its cost in months A and B, and the variation from one to the other
@@ -21,11 +26,13 @@ const CHARGE_VALUES = comparisonValues('product', (row) => row.charge);
 
 // The rows of the comparison, from the products of months A and B, each the most expensive
 // first: those of month A, in its order, then those of month B only, in theirs, each with its
-// cost and its charges in both months, 0 € and none in a month whose bills did not charge it
+// cost and its charges in both months, 0 € and none in a month whose bills did not charge it,
+// and what projected lines make of each cost (#219)
 const productRows = (billedA, billedB) => pairMonths(
   billedA.products, billedB.products, ({ product }) => product,
 ).map(({ key, rowA, rowB, valA, valB }) => ({
   product: key, chargesA: rowA?.charges ?? [], chargesB: rowB?.charges ?? [], valA, valB,
+  projectedA: projectedPartOf(rowA), projectedB: projectedPartOf(rowB),
 }));
 
 /**
@@ -34,11 +41,15 @@ const productRows = (billedA, billedB) => pairMonths(
  * that the bills of either month charged the project, paired by charge, its cost in each month,
  * 0 € in a month whose bills did not charge it, and the variation. They follow the comparison's
  * sort, within their row, and come by month A, the most expensive first, then by month B, until
- * the user sorts it (sortUnfolded()).
+ * the user sorts it (sortUnfolded()). A charge's cost that projected lines make, that of the
+ * month in progress while the page projects it, is marked so, as a charge that the month has not
+ * billed yet (#219).
  * @param {object} props
- * @param {{ charge: string, total: number }[]} props.chargesA - The product's charges in month A,
- *   as the server gives them, the most expensive first
- * @param {{ charge: string, total: number }[]} props.chargesB - Those of month B
+ * @param {{ charge: string, total: number, projected: (number|undefined) }[]} props.chargesA -
+ *   The product's charges in month A, as the server gives them, the most expensive first, with
+ *   their projected parts for the month in progress at its projected cost
+ * @param {{ charge: string, total: number, projected: (number|undefined) }[]} props.chargesB -
+ *   Those of month B
  * @param {?object} props.sort - The sort of the comparison, by its columns (see
  *   SortableHeader.jsx): null until the user sorts it
  * @param {{ includesMonthInProgress: boolean, projected: boolean }} props.comparedMonths - What
@@ -50,12 +61,16 @@ const ProductCharges = ({
   chargesA, chargesB, sort, comparedMonths, fmt, language, t,
 }) => sortUnfolded(
   pairMonths(chargesA, chargesB, ({ charge }) => charge)
-    .map(({ key, valA, valB }) => ({ charge: key, valA, valB })),
+    .map(({ key, rowA, rowB, valA, valB }) => ({
+      charge: key, valA, valB, projectedA: projectedPartOf(rowA), projectedB: projectedPartOf(rowB),
+    })),
   sort, valuesAsShown(comparedMonths, CHARGE_VALUES), language,
-).map(({ charge, valA, valB }) => (
+).map(({
+  charge, valA, valB, projectedA, projectedB,
+}) => (
   <DetailRow
-    key={charge} valA={valA} valB={valB} comparedMonths={comparedMonths}
-    fmt={fmt} language={language} t={t}
+    key={charge} valA={valA} valB={valB} projectedA={projectedA} projectedB={projectedB}
+    comparedMonths={comparedMonths} fmt={fmt} language={language} t={t}
   >
     {/* A long charge, such as an instance's monthly plan, which names the instance, wraps to the
         column of the products */}
@@ -72,7 +87,8 @@ const ProductCharges = ({
  * holds for each project: see SortableHeader.jsx). Each product unfolds into its charges (#195),
  * which come with the products: unfolding one asks for nothing. The credit does not unfold. It
  * says that it loads until the answers of both months arrive, and that it could not load when
- * one failed.
+ * one failed. The month in progress at its projected cost, while the page projects it, marks
+ * the costs of its products, charges and credit that projected lines make (#219).
  * @param {object} props
  * @param {function(?object): object} props.productsQueryOf - The options of the query of the
  *   project's products in a month, for useQuery (useCompareTab()'s projectProductsQuery())
@@ -144,7 +160,7 @@ export default function ProjectProductComparison({
         {sortRows(
           rows, sorting.sort, valuesAsShown(comparedMonths, productValues(t)), language,
         ).map(({
-          product, chargesA, chargesB, valA, valB,
+          product, chargesA, chargesB, valA, valB, projectedA, projectedB,
         }) => {
           const label = publicCloudProductLabel(product, t);
           return (
@@ -162,8 +178,12 @@ export default function ProjectProductComparison({
                 />
               )}
             >
-              <td className="p-3 text-right font-medium">{fmt(valA)}€</td>
-              <td className="p-3 text-right text-gray-500">{fmt(valB)}€</td>
+              <td className="p-3 text-right font-medium">
+                <ComparedAmount amount={valA} projectedPart={projectedA} fmt={fmt} t={t} />
+              </td>
+              <td className="p-3 text-right text-gray-500">
+                <ComparedAmount amount={valB} projectedPart={projectedB} fmt={fmt} t={t} />
+              </td>
               <td className="p-3 text-right">
                 <Variation
                   from={valA} to={valB} comparedMonths={comparedMonths}
@@ -175,13 +195,23 @@ export default function ProjectProductComparison({
         })}
       </tbody>
       {/* The credit that the bills used, which pays for no product: after them, whatever
-          their order, its label in line with theirs, which leave room for their chevrons */}
+          their order, its label in line with theirs, which leave room for their chevrons. That
+          of the month in progress at its projected cost is projected with the project's other
+          lines of the month before, marked so (#219). */}
       {credited && (
         <tfoot>
           <tr className="border-b text-gray-500">
             <td className={LABEL_PADDING}>{t('cloudCreditUsed')}</td>
-            <td className="p-3 text-right">{fmt(billedA.credits)}€</td>
-            <td className="p-3 text-right">{fmt(billedB.credits)}€</td>
+            <td className="p-3 text-right">
+              <ComparedAmount
+                amount={billedA.credits} projectedPart={billedA.projectedCredits} fmt={fmt} t={t}
+              />
+            </td>
+            <td className="p-3 text-right">
+              <ComparedAmount
+                amount={billedB.credits} projectedPart={billedB.projectedCredits} fmt={fmt} t={t}
+              />
+            </td>
             {/* No variation of a credit to compute (#65) */}
             <td className="p-3" />
           </tr>

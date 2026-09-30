@@ -11,11 +11,14 @@ import {
 } from './fixtures/accounts.js';
 import { enterpriseLicence } from './fixtures/backup.js';
 import { months } from './fixtures/calendar.js';
-import { serverAndBackupsBilledLate } from './fixtures/compare.js';
+import {
+  serverAndBackupsBilledLate, stagingBilledLate, unnamedBilledLate,
+} from './fixtures/compare.js';
 import { api, failFor, holdBack } from './support/api.js';
 import {
   accordionOf,
   cardOf,
+  cloudProjectsTable,
   dropdown,
   firstColumnOf,
   headerOf,
@@ -23,6 +26,7 @@ import {
   layOutForPrint,
   openTab,
   optionsOf,
+  projectBreakdown,
   projectionCheckbox,
   renderDashboard,
   resourceType,
@@ -2372,23 +2376,23 @@ describe('Compare tab', () => {
         }
       });
 
-    // Until they project it too (#219): what September billed them so far, compared with no
-    // variation, as without the projection
-    it('leaves the projects as September billed them so far, without a variation', async () => {
-      const { user } = await renderDashboard(billedLate);
-      await openTab(user, 'Comparaison');
+    // Which September billed: at what they cost, unmarked, and compared since the projects follow
+    // the projection too (#219), rather than « — »
+    it('compares the projects that September billed at what they cost, with variations',
+      async () => {
+        const { user } = await renderDashboard(billedLate);
+        await openTab(user, 'Comparaison');
 
-      await toggleProjection(user);
+        await toggleProjection(user);
 
-      expect(rowsOf(comparisonTable(PROJECTS))).toEqual([
-        ['Projet○', 'Août 2026▼', 'Septembre 2026○', 'Variation○'],
-        ['Production', '512,00€', '610,40€', '—'],
-        ['Staging', '190,00€', '220,00€', '—'],
-      ]);
-      for (const variation of within(comparisonTable(PROJECTS)).getAllByText('—')) {
-        expect(variation).toHaveAttribute('title', whyNotComputed);
-      }
-    });
+        // (610.40 - 512) / 512 and (220 - 190) / 190
+        expect(rowsOf(comparisonTable(PROJECTS))).toEqual([
+          ['Projet○', 'Août 2026▼', 'Septembre 2026○', 'Variation○'],
+          ['Production', '512,00€', '610,40€', '+19,2 %'],
+          ['Staging', '190,00€', '220,00€', '+15,8 %'],
+        ]);
+        expect(within(comparisonTable(PROJECTS)).queryByText('projeté')).toBeNull();
+      });
 
     // Whichever of months A and B it is, and never a complete month
     it('projects only the month in progress, month A or month B', async () => {
@@ -2433,6 +2437,294 @@ describe('Compare tab', () => {
         .toHaveTextContent('1,220.40€ projected');
       expect(within(comparisonTable(/^Infrastructure Comparison/))
         .getByTitle('billed 0.00€, projected 270.00€')).toHaveTextContent('270.00€ projected');
+    });
+  });
+
+  // The projects of the month in progress and their products at its projected cost, while the
+  // page projects it (#219): see fixtures/compare.js, where September has not billed the Staging
+  // project yet, whose bill comes late in the month, and whose bills of August used a credit
+  describe('projection of the month in progress in the projects and their products (#219)', () => {
+    const stagingLate = { ...account, ...septemberInProgress, ...stagingBilledLate };
+    const SEPTEMBER = ['2026-09-01', '2026-09-30'];
+    const AUGUST = ['2026-08-01', '2026-08-31'];
+    const PROJECTED = { projected: true };
+    const STAGING = 'project-staging';
+    // The comparison of the Staging project's products
+    const STAGING_PRODUCTS = /^Staging \(Projet\)/;
+    const unfoldProduct = async (user, title, product) => {
+      await user.click(within(comparisonTable(title))
+        .getByRole('button', { name: `Charges : ${product}` }));
+      await settle();
+    };
+
+    // Rather than compare Staging's 0 € of September so far with its 190 € of August
+    it('shows the projects at the projected cost of the month in progress, marked so',
+      async () => {
+        const { user } = await renderDashboard(stagingLate);
+        await openTab(user, 'Comparaison');
+        // Staging, not billed yet in September, and no variation
+        expect(rowsOf(comparisonTable(PROJECTS))).toEqual([
+          ['Projet○', 'Août 2026▼', 'Septembre 2026○', 'Variation○'],
+          ['Production', '512,00€', '610,40€', '—'],
+          ['Staging', '190,00€', '0,00€', '—'],
+        ]);
+
+        await toggleProjection(user);
+
+        // Staging at its cost of August, and the variations computed: (610.40 - 512) / 512
+        expect(rowsOf(comparisonTable(PROJECTS))).toEqual([
+          ['Projet○', 'Août 2026▼', 'Septembre 2026○', 'Variation○'],
+          ['Production', '512,00€', '610,40€', '+19,2 %'],
+          ['Staging', '190,00€', '190,00€ projeté', '0,0 %'],
+        ]);
+        const staging = within(comparisonTable(PROJECTS))
+          .getByTitle('facturé 0,00€, projeté 190,00€');
+        expect(staging).toHaveTextContent('190,00€ projeté');
+        expect(inItalics(within(staging).getByText('190,00€'))).toBe(true);
+        // August, complete, as it was
+        const [inAugust] = within(comparisonTable(PROJECTS)).getAllByText('190,00€');
+        expect(inItalics(inAugust)).toBe(false);
+
+        await toggleProjection(user);
+
+        expect(rowsOf(comparisonTable(PROJECTS))[2])
+          .toEqual(['Staging', '190,00€', '0,00€', '—']);
+      });
+
+    it('asks for the projects and products of the month in progress projected, those only',
+      async () => {
+        const { user } = await renderDashboard(stagingLate);
+        await openTab(user, 'Comparaison');
+
+        await toggleProjection(user);
+        await openComparison(user, STAGING_PRODUCTS);
+
+        expect(api.fetchByProject).toHaveBeenCalledWith(...SEPTEMBER, null, PROJECTED);
+        expect(api.fetchByProject).not.toHaveBeenCalledWith(...AUGUST, null, PROJECTED);
+        expect(api.fetchProjectProducts)
+          .toHaveBeenCalledWith(STAGING, ...SEPTEMBER, null, PROJECTED);
+        expect(api.fetchProjectProducts).toHaveBeenCalledWith(STAGING, ...AUGUST, null);
+        expect(api.fetchProjectProducts)
+          .not.toHaveBeenCalledWith(STAGING, ...AUGUST, null, PROJECTED);
+      });
+
+    // Its instances, its registry, their charges and the credit that they used, all projected
+    it("shows a project's products, charges and credit at the projected cost, marked so",
+      async () => {
+        const { user } = await renderDashboard(stagingLate);
+        await openTab(user, 'Comparaison');
+        await openComparison(user, STAGING_PRODUCTS);
+        await unfoldProduct(user, STAGING_PRODUCTS, 'Instances');
+        // Nothing billed yet in September, not even the credit
+        expect(rowsOf(comparisonTable(STAGING_PRODUCTS)).slice(1)).toEqual([
+          ['Instances', '170,00€', '0,00€', '—'],
+          [hourlyUse('b3-16'), '170,00€', '0,00€', '—'],
+          ['Registre', '40,00€', '0,00€', '—'],
+          ['Crédit Cloud utilisé', '-20,00€', '0,00€', ''],
+        ]);
+
+        await toggleProjection(user);
+
+        expect(rowsOf(comparisonTable(STAGING_PRODUCTS)).slice(1)).toEqual([
+          ['Instances', '170,00€', '170,00€ projeté', '0,0 %'],
+          [hourlyUse('b3-16'), '170,00€', '170,00€ projeté', '0,0 %'],
+          ['Registre', '40,00€', '40,00€ projeté', '0,0 %'],
+          ['Crédit Cloud utilisé', '-20,00€', '-20,00€ projeté', ''],
+        ]);
+        // The product and its charge
+        expect(within(comparisonTable(STAGING_PRODUCTS))
+          .getAllByTitle('facturé 0,00€, projeté 170,00€')).toHaveLength(2);
+        const credit = within(comparisonTable(STAGING_PRODUCTS))
+          .getByTitle('facturé 0,00€, projeté -20,00€');
+        expect(credit).toHaveTextContent('-20,00€ projeté');
+        expect(inItalics(within(credit).getByText('-20,00€'))).toBe(true);
+      });
+
+    // Rather than « — », as while the setting is off (#216): Production, which September billed,
+    // unmarked
+    it("computes the variations of the products and charges on the projected cost", async () => {
+      const { user } = await renderDashboard(stagingLate);
+      await openTab(user, 'Comparaison');
+      await openComparison(user, PRODUCTION_PRODUCTS);
+      await toggleProjection(user);
+
+      await unfoldProduct(user, PRODUCTION_PRODUCTS, 'Stockage objet');
+
+      // (538.90 - 440.60) / 440.60, and a bucket's (14 - 13.90) / 13.90
+      expect(rowsOf(comparisonTable(PRODUCTION_PRODUCTS)).slice(1, 7)).toEqual([
+        ['Instances', '440,60€', '538,90€', '+22,3 %'],
+        ['Savings plans', '28,00€', '28,00€', '0,0 %'],
+        ['Stockage objet', '24,90€', '25,00€', '+0,4 %'],
+        ['Stockage Standard - Bucket assets-example-com sur la région gra',
+          '13,90€', '14,00€', '+0,7 %'],
+        ['Stockage Cold Archive', '9,00€', '9,00€', '0,0 %'],
+        ['Stockage Standard - Bucket old-exports sur la région sbg', '2,00€', '2,00€', '0,0 %'],
+      ]);
+      expect(within(comparisonTable(PRODUCTION_PRODUCTS)).queryByText('projeté')).toBeNull();
+    });
+
+    // Rather than keep their order, as while the variations are not computed (#216)
+    it('sorts the projects by their variations on the projected cost, while ticked',
+      async () => {
+        const { user } = await renderDashboard(stagingLate);
+        await openTab(user, 'Comparaison');
+        await toggleProjection(user);
+
+        // The smallest first: Staging, 0,0 %, then Production, +19,2 %
+        await sortTable(user, comparisonTable(PROJECTS), /^Variation/);
+        await sortTable(user, comparisonTable(PROJECTS), /^Variation/);
+
+        expect(firstColumnOf(comparisonTable(PROJECTS))).toEqual(['Staging', 'Production']);
+
+        await toggleProjection(user);
+
+        expect(firstColumnOf(comparisonTable(PROJECTS))).toEqual(['Production', 'Staging']);
+      });
+
+    // Month A, September, and July, which never billed Staging: (680 - 610.40) / 610.40
+    it('projects the month in progress as month A too', async () => {
+      const { user } = await renderDashboard(stagingLate);
+      await openTab(user, 'Comparaison');
+      await toggleProjection(user);
+
+      await pickMonth(user, 'Septembre 2026 (en cours)', 'Juillet 2026');
+      await pickMonth(user, 'Août 2026', 'Septembre 2026 (en cours)');
+
+      expect(rowsOf(comparisonTable(PROJECTS))).toEqual([
+        ['Projet○', 'Septembre 2026▼', 'Juillet 2026○', 'Variation○'],
+        ['Production', '610,40€', '680,00€', '+11,4 %'],
+        ['Staging', '190,00€ projeté', '0,00€', '-100,0 %'],
+      ]);
+      expect(api.fetchByProject).not.toHaveBeenCalledWith('2026-07-01', '2026-07-31', null,
+        PROJECTED);
+    });
+
+    // The Overview's breakdown by project and the Public Cloud tab's list of projects, which the
+    // shell loads, and the header's cards, never project (#214, #180)
+    it('leaves the Overview, the Public Cloud tab and the header at what September billed',
+      async () => {
+        const { user } = await renderDashboard(stagingLate);
+        await openTab(user, 'Comparaison');
+        await toggleProjection(user);
+        expect(rowsOf(comparisonTable(PROJECTS))[2])
+          .toEqual(['Staging', '190,00€', '190,00€ projeté', '0,0 %']);
+
+        await openTab(user, "Vue d'ensemble");
+
+        expect(rowsOf(within(projectBreakdown()).getByRole('table'))).toEqual([
+          ['Projet○', 'Montant▼', '%○'],
+          ['Production', '610,40€', '100,0 %'],
+          ['Total Cloud', '610,40€', '100 %'],
+        ]);
+        expect(texts(cardOf('Coût total du mois')).slice(0, 3))
+          .toEqual(['Coût total du mois', 'en cours', '1 030,40€']);
+
+        await openTab(user, 'Public Cloud');
+
+        expect(rowsOf(cloudProjectsTable()).slice(1).map((row) => [row[0], row.at(-2)]))
+          .toEqual([
+            ['ProductionCustomer-facing services', '610,40€'],
+            ['Staging', '-'],
+            ['Sandbox', '-'],
+            ['Total Cloud', '610,40€'],
+          ]);
+      });
+
+    it('speaks English when the page does', async () => {
+      const { user } = await renderDashboard(stagingLate);
+      await openTab(user, 'Comparaison');
+      await openComparison(user, STAGING_PRODUCTS);
+      await toggleProjection(user);
+
+      await selectLanguage(user, 'en');
+
+      expect(rowsOf(comparisonTable(/^Comparison by project/))[2])
+        .toEqual(['Staging', '190.00€', '190.00€ projected', '0.0%']);
+      expect(within(comparisonTable(/^Comparison by project/))
+        .getByTitle('billed 0.00€, projected 190.00€')).toHaveTextContent('190.00€ projected');
+      expect(rowsOf(comparisonTable(/^Staging \(Project\)/)).slice(1)).toEqual([
+        ['Instances', '170.00€', '170.00€ projected', '0.0%'],
+        ['Container registry', '40.00€', '40.00€ projected', '0.0%'],
+        ['Cloud credit used', '-20.00€', '-20.00€ projected', ''],
+      ]);
+      expect(within(comparisonTable(/^Staging \(Project\)/))
+        .getByTitle('billed 0.00€, projected -20.00€')).toHaveTextContent('-20.00€ projected');
+    });
+
+    // See fixtures/compare.js: the unnamed account, whose bills charge Staging, billed late, and
+    // Lyon, whose bills of September came in
+    describe('with several accounts', () => {
+      it('name the account of each project projected, asked for by account with all accounts',
+        async () => {
+          const { user } = await renderDashboard(unnamedBilledLate);
+          await openTab(user, 'Comparaison');
+
+          await toggleProjection(user);
+
+          expect(rowsOf(comparisonTable(PROJECTS))).toEqual([
+            ['Projet○', 'Compte○', 'Août 2026▼', 'Septembre 2026○', 'Variation○'],
+            ['Production', 'Lyon subsidiary', '512,00€', '610,40€', '+19,2 %'],
+            ['Staging', 'yy2222-ovh', '190,00€', '190,00€ projeté', '0,0 %'],
+          ]);
+          expect(api.fetchProjectsByAccount).toHaveBeenCalledWith(...SEPTEMBER, PROJECTED);
+          expect(api.fetchProjectsByAccount).not.toHaveBeenCalledWith(...AUGUST, PROJECTED);
+        });
+
+      // Which share the projects by account of September with the Compare tab while it does not
+      // project them (#119, #180)
+      it('leave the Overview and the Public Cloud tab at what September billed, by account',
+        async () => {
+          const { user } = await renderDashboard(unnamedBilledLate);
+          await openTab(user, 'Comparaison');
+          await toggleProjection(user);
+
+          await openTab(user, "Vue d'ensemble");
+
+          expect(rowsOf(within(projectBreakdown()).getByRole('table'))).toEqual([
+            ['Projet○', 'Compte○', 'Montant▼', '%○'],
+            ['Production', 'Lyon subsidiary', '610,40€', '100,0 %'],
+            ['Total Cloud', '610,40€', '100 %'],
+          ]);
+
+          await openTab(user, 'Public Cloud');
+
+          expect(rowsOf(cloudProjectsTable()).slice(1).map((row) => [row[0], row.at(-2)]))
+            .toEqual([
+              ['ProductionCustomer-facing services', '610,40€'],
+              ['Staging', '-'],
+              ['Sandbox', '-'],
+              ['Total Cloud', '610,40€'],
+            ]);
+        });
+
+      it('ask for the projects and products of the account shown projected, while in progress',
+        async () => {
+          const { user } = await renderDashboard(unnamedBilledLate);
+          await openTab(user, 'Comparaison');
+          await toggleProjection(user);
+
+          await selectAccount(user, 'yy2222-ovh');
+          await openComparison(user, STAGING_PRODUCTS);
+
+          expect(rowsOf(comparisonTable(PROJECTS))).toEqual([
+            ['Projet○', 'Août 2026▼', 'Septembre 2026○', 'Variation○'],
+            ['Staging', '190,00€', '190,00€ projeté', '0,0 %'],
+          ]);
+          expect(api.fetchByProject)
+            .toHaveBeenCalledWith(...SEPTEMBER, unnamedAccount.id, PROJECTED);
+          expect(api.fetchProjectProducts)
+            .toHaveBeenCalledWith(STAGING, ...SEPTEMBER, unnamedAccount.id, PROJECTED);
+          expect(rowsOf(comparisonTable(STAGING_PRODUCTS))[1])
+            .toEqual(['Instances', '170,00€', '170,00€ projeté', '0,0 %']);
+
+          // Whose bills of September came in
+          await selectAccount(user, 'Lyon subsidiary');
+
+          expect(api.fetchByProject)
+            .toHaveBeenCalledWith(...SEPTEMBER, lyonAccount.id);
+          expect(api.fetchByProject)
+            .not.toHaveBeenCalledWith(...SEPTEMBER, lyonAccount.id, PROJECTED);
+        });
     });
   });
 

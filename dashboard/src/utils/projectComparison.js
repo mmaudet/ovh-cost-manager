@@ -5,7 +5,9 @@ import { variationPercent } from './variation.js';
 // as /api/analysis/by-project lists them: every project billed in either month (#55), with
 // its cost in month A (totalA) and in month B (totalB), 0 € in a month it was not billed in,
 // and its variation from A to B in percent (variation): null from 0 € or less in month A,
-// which leaves none to compute (#65).
+// which leaves none to compute (#65). And what projected lines make of each cost (projectedA,
+// projectedB), 0 for none: those of the month in progress at its projected cost, while the page
+// projects it, whose projects give their projected parts (#219).
 //
 // A project of month A and one of month B are the same when they have the same id: a
 // project renamed between the two months stays one row, under its name in month A, and the
@@ -40,6 +42,8 @@ const row = (projectA, projectB) => {
     ...('account' in project ? { account: project.account } : {}),
     totalA,
     totalB,
+    projectedA: projectA?.projected ?? 0,
+    projectedB: projectB?.projected ?? 0,
     variation: variationPercent(totalA, totalB),
   };
 };
@@ -47,11 +51,12 @@ const row = (projectA, projectB) => {
 /**
  * The rows of the project comparison of the Compare tab (see above).
  * @param {object[]} projectsA - The projects of month A, as /api/analysis/by-project lists
- *   them: once each, or once for each account that billed them, with that account
+ *   them: once each, or once for each account that billed them, with that account; and with
+ *   their projected parts, for the month in progress at its projected cost (#219)
  * @param {object[]} projectsB - Those of month B, listed the same way
  * @returns {{ projectId: ?string, projectName: string, account: (?string|undefined),
- *   totalA: number, totalB: number, variation: ?number }[]} A row for each project, and
- *   account when the projects name theirs
+ *   totalA: number, totalB: number, projectedA: number, projectedB: number,
+ *   variation: ?number }[]} A row for each project, and account when the projects name theirs
  */
 const projectComparisonRows = (projectsA, projectsB) => {
   const unpairedB = [...projectsB];

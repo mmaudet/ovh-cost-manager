@@ -109,12 +109,12 @@ const projectComparisonValues = (accountColumn) => ({
 // its setter (useMonthInProgressProjection()), show as a checkbox next to months A and B (#218):
 // while it is on, the totals, the service types, and the infrastructure, backup and Private
 // Cloud comparisons, their services included, count the month in progress at its projected cost,
-// as the hook asks for them, and mark the amounts that projected lines make. What the hook knows
-// of months A and B decides the variations and the sort of the tables: comparedMonths, and
-// billedMonths for the projects and their products, at what the month in progress billed so far
-// until #219 projects them too.
+// as the hook asks for them, and mark the amounts that projected lines make; and so do the
+// comparison by project and each project's products, their charges and credit included (#219).
+// What the hook knows of months A and B, comparedMonths, decides the variations and the sort of
+// the tables.
 const CompareTab = ({
-  compareMonthA, setCompareMonthA, compareMonthB, setCompareMonthB, comparedMonths, billedMonths,
+  compareMonthA, setCompareMonthA, compareMonthB, setCompareMonthB, comparedMonths,
   sortingOf, unfoldingOf, compareDataA, compareDataB, byServiceA, byServiceB, byProjectA,
   byProjectB, byResourceTypeA, byResourceTypeB, backupStatsA, backupStatsB, projectProductsQuery,
   resourceTypeServicesQuery, backupServicesQuery, projectsMonthInProgress = false,
@@ -125,11 +125,13 @@ const CompareTab = ({
   const monthBLabel = formatMonthLabel(compareMonthB?.value, language);
 
   // The projects of months A and B, paired by id (#55), and by account in the Account column
-  // (#119), in the order the user sorts them, by month A until then (#146)
+  // (#119), in the order the user sorts them, by month A until then (#146), and by the costs
+  // that the table shows, those of the month in progress at its projected cost while the page
+  // projects it (#219)
   const projectSorting = sortingOf('projects');
   const compareProjects = sortRows(
     projectComparisonRows(byProjectA, byProjectB), projectSorting.sort,
-    valuesAsShown(billedMonths, projectComparisonValues(accountColumn)), language,
+    valuesAsShown(comparedMonths, projectComparisonValues(accountColumn)), language,
   );
   // The projects whose products the tab compares (#181), once each, in the order of their
   // first rows: in the Account column, a project billed to several accounts has a row for each
@@ -413,11 +415,16 @@ const CompareTab = ({
                 {accountColumn && (
                   <td className="p-3 text-gray-600">{accountColumn.nameOf(p.account)}</td>
                 )}
-                <td className="p-3 text-right font-medium">{fmt(p.totalA)}€</td>
-                <td className="p-3 text-right text-gray-500">{fmt(p.totalB)}€</td>
+                {/* Its cost in each month, and what projected lines make of it (#219) */}
+                <td className="p-3 text-right font-medium">
+                  <ComparedAmount amount={p.totalA} projectedPart={p.projectedA} fmt={fmt} t={t} />
+                </td>
+                <td className="p-3 text-right text-gray-500">
+                  <ComparedAmount amount={p.totalB} projectedPart={p.projectedB} fmt={fmt} t={t} />
+                </td>
                 <td className="p-3 text-right">
                   <Variation
-                    from={p.totalA} to={p.totalB} comparedMonths={billedMonths}
+                    from={p.totalA} to={p.totalB} comparedMonths={comparedMonths}
                     language={language} t={t}
                   />
                 </td>
@@ -525,7 +532,8 @@ const CompareTab = ({
       </Accordion>
       {/* One accordion per Public Cloud project: the comparison of its products (#181), each of
           which unfolds into its charges, the products unfolded held for each project (#195). As
-          the comparison by project, at what the month in progress billed so far (#219). */}
+          the comparison by project, the month in progress at its projected cost while the page
+          projects it (#219). */}
       {detailedProjects.map((proj) => {
         // The name of the project's comparison, under which the hook holds its sort and the
         // products unfolded
@@ -534,7 +542,7 @@ const CompareTab = ({
           <Accordion key={proj.projectId} title={`${proj.projectName} (${t('project')})`}>
             <ProjectProductComparison
               productsQueryOf={(month) => projectProductsQuery(proj.projectId, month)}
-              monthA={compareMonthA} monthB={compareMonthB} comparedMonths={billedMonths}
+              monthA={compareMonthA} monthB={compareMonthB} comparedMonths={comparedMonths}
               sorting={sortingOf(productsComparison)}
               unfoldingOf={(product) => unfoldingOf(productsComparison, product)}
               fmt={fmt} language={language} t={t}
