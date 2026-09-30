@@ -458,10 +458,12 @@ const detailOps = {
    * (recurrenceWindow()), which data/month-in-progress.js tells the recurring services not billed
    * yet from (#216): each service that bill lines name, once for each account and month of their
    * bills, with the ids of those lines, which a projection of the month in progress repeats
-   * (#214).
+   * (#214). Those of the months before are the account's, whose recurring services they tell;
+   * those of the month of today are every account's, as any account's bill of the month of today
+   * bills a service that it names, such as one moved from an account to another (#214).
    * @param {string} monthOfToday - YYYY-MM
-   * @param {?string} [account] - The account whose bills count (see accountCondition()): every
-   *   account's by default
+   * @param {?string} [account] - The account whose bills of the months before count (see
+   *   accountCondition()): every account's by default
    * @returns {Array<{ service: string, account: ?string, month: string, lines: string[] }>} Each
    *   with the NIC handle of its bills' account, null for the Unknown account, and their month,
    *   YYYY-MM
@@ -474,9 +476,10 @@ const detailOps = {
         json_group_array(d.id) AS lines
       FROM bill_details d
       JOIN bills b ON d.bill_id = b.id
-      WHERE b.date >= ? AND b.date <= ? AND d.domain IS NOT NULL AND ${ofAccount.sql}
+      WHERE b.date >= ? AND b.date <= ? AND d.domain IS NOT NULL
+        AND (strftime('%Y-%m', b.date) = ? OR ${ofAccount.sql})
       GROUP BY d.domain, b.account, month
-    `).all(from, to, ...ofAccount.params)
+    `).all(from, to, monthOfToday, ...ofAccount.params)
       .map((row) => ({ ...row, lines: JSON.parse(row.lines) }));
   },
 

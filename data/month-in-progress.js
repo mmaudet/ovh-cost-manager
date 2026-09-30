@@ -30,28 +30,34 @@ const serviceKey = ({ service, account }) => JSON.stringify([service, account ??
 /**
  * The recurring services (CONTEXT.md) that no bill line of the month of today names yet: each
  * service, by its identifier and its account, that bills of each of the three months before the
- * month of today charged, by the month of their bills.
+ * month of today charged, by the month of their bills, and whose identifier no account's bill of
+ * the month of today charged. A service moved from an account to another, which bills it since,
+ * lacks no bill (#214).
  * @param {Array<{ service: string, account: ?string, month: string }>} billed - The services
  *   that the bills of the recurrence window (recurrenceWindow()) charged: each once for each
- *   account and month of the bills that charged it, YYYY-MM (getBilledServices() in data/db.js)
+ *   account and month of the bills that charged it, YYYY-MM, those of the month of today of every
+ *   account (getBilledServices() in data/db.js)
  * @param {string} monthOfToday - YYYY-MM
  * @returns {Array<{ service: string, account: ?string }>} In the order that `billed` gives them
  */
 function recurringServicesNotBilled(billed, monthOfToday) {
   const { from, to } = trendWindow(shiftMonth(monthOfToday, -1), RECURRENCE_MONTHS);
   const monthsBefore = monthsOfWindow(from, to);
-  const billedInIt = new Set(billed.filter(({ month }) => month === monthOfToday).map(serviceKey));
-  // Each service, and the months before the month of today that billed it
+  // The identifiers of the services that the month of today billed, whatever the account
+  const billedInIt = new Set(billed
+    .filter(({ month }) => month === monthOfToday)
+    .map(({ service }) => service));
+  // Each service, and the months that billed it
   const services = new Map();
   for (const { service, account = null, month } of billed) {
     const key = serviceKey({ service, account });
     if (!services.has(key)) services.set(key, { service, account, months: new Set() });
     services.get(key).months.add(month);
   }
-  return [...services]
-    .filter(([key, { months }]) => !billedInIt.has(key)
+  return [...services.values()]
+    .filter(({ service, months }) => !billedInIt.has(service)
       && monthsBefore.every((month) => months.has(month)))
-    .map(([, { service, account }]) => ({ service, account }));
+    .map(({ service, account }) => ({ service, account }));
 }
 
 module.exports = { recurrenceWindow, recurringServicesNotBilled };

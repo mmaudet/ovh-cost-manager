@@ -207,7 +207,8 @@ describe('GET /api/months: the month in progress (#216)', () => {
   });
 
   // A recurring service is a service by its identifier and its account, as a bill line belongs
-  // to the account of its bill (ADR 0002)
+  // to the account of its bill (ADR 0002); but it lacks no bill once any account's bill of the
+  // month of today charges its identifier (#214)
   describe('with a service moved to another account', () => {
     let ocm;
 
@@ -239,13 +240,12 @@ describe('GET /api/months: the month in progress (#216)', () => {
       await ocm?.stop();
     });
 
-    test('keeps the month in progress for the account that billed it, and with all accounts shown',
+    test('keeps nothing in progress for the account it moved from, nor with all accounts shown',
       async () => {
-        expect(marksOf(await ocm.get(`/api/months?account=${LYON}`)))
-          .toEqual([[MONTH_OF_TODAY, true]]);
+        expect(marksOf(await ocm.get(`/api/months?account=${LYON}`))).toEqual([]);
+        expect(marksOf(await ocm.get('/api/months'))).toEqual([]);
         // For Paris, billed once, it is no recurring service
         expect(marksOf(await ocm.get(`/api/months?account=${PARIS}`))).toEqual([]);
-        expect(marksOf(await ocm.get('/api/months'))).toEqual([[MONTH_OF_TODAY, true]]);
       });
   });
 });
