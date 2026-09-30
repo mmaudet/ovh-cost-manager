@@ -279,6 +279,10 @@ export const translations = {
     dayAgo: 'jour',
     daysAgo: 'jours',
     noExpirations: 'Aucune expiration proche',
+    // The "show all" modal of the services about to expire (#225)
+    showAll: 'Tout afficher',
+    service: 'Service',
+    expiration: 'Expiration',
 
     // Cloud details (Phase 4)
     instances: 'Instances',
@@ -602,6 +606,10 @@ export const translations = {
     dayAgo: 'day ago',
     daysAgo: 'days ago',
     noExpirations: 'No upcoming expirations',
+    // The "show all" modal of the services about to expire (#225)
+    showAll: 'Show all',
+    service: 'Service',
+    expiration: 'Expiration',
 
     // Cloud details (Phase 4)
     instances: 'Instances',

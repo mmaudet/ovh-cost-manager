@@ -124,9 +124,12 @@ describe('useOverviewTab', () => {
 
     // What the shell spreads over the tab, and nothing else: the budget is the shell's. And
     // whether the projects by account have loaded, which the shell reads for the Public Cloud
-    // tab (#180)
+    // tab (#180), and whether the "show all" modal of the services about to expire is open,
+    // closed at first (#225)
     expect(result.current).toEqual({
       sortingOf: expect.any(Function),
+      showAllExpiring: false,
+      setShowAllExpiring: expect.any(Function),
       projectsByAccount: [],
       projectsByAccountLoaded: false,
       projectsByAccountFailed: false,
@@ -137,6 +140,8 @@ describe('useOverviewTab', () => {
     expect(result.current.sortingOf('projects').sort)
       .toEqual({ column: 'total', kind: 'number', direction: 'desc' });
     expect(result.current.sortingOf('gpuProjects').sort).toBeNull();
+    // The services about to expire in the order of the server, soonest first (#225)
+    expect(result.current.sortingOf('expiring').sort).toBeNull();
   });
 
   it('keeps the sort order across renders', async () => {
