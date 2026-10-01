@@ -60,7 +60,7 @@ New in version 3.1.0.
 - **Logs Data Platform Charges** (new in version 3.5.0): each charge that the month's bills give the Logs Data Platform services, such as their account's rental or their streams' hot storage, with its cost, in the Infrastructure tab (see [Logs Data Platform](#logs-data-platform))
 - **Month Comparison**: Side-by-side comparison between two months with variation tracking, including infrastructure, backup, Private Cloud, and per-project product breakdowns, whose rows unfold into their services and charges since version 3.3.0 (see [Month Comparison](#month-comparison))
 - **Trend Analysis**: Historical trends with configurable period (3-36 months), and GPU and AI Endpoints evolution charts
-- **Month in Progress** (marked since version 3.3.3, projected since 3.4.0): the month whose bills still lack a service billed every month is marked in progress rather than compared as a complete month, and a checkbox projects its cost in the Trends and Compare tabs (see [Month in Progress](#month-in-progress))
+- **Month in Progress** (marked since version 3.3.3, projected since 3.4.0): the month whose bills still lack a service billed every month is marked in progress rather than compared as a complete month, and a checkbox projects its cost in the Trends and Compare tabs. Since version 3.5.0, that can be the month before, until the month of today has a bill (see [Month in Progress](#month-in-progress))
 - **Budget Tracking**: Visual budget consumption with configurable targets
 
 ### Real-time Monitoring
@@ -568,17 +568,25 @@ The services and charges are those of the account selected in the header, and, f
 
 ## Month in Progress
 
-OVHcloud bills some accounts early in the month and others late. So the bills of the month of today may still lack some of the services billed every month: its cost so far is below what the month will cost, and comparing it with a complete month would show a drop that is not one. Since version 3.3.3, OCM tells that month apart; since version 3.4.0, it can project its cost.
+OVHcloud bills some accounts early in the month and others late, and some bills of a month land once the next one has begun. So the bills of the latest month may still lack some of the services billed every month: its cost so far is below what the month will cost, and comparing it with a complete month would show a drop that is not one. Since version 3.3.3, OCM tells that month apart; since version 3.4.0, it can project its cost; since version 3.5.0, that month can be the month before, until the month of today has a bill.
 
 The words are those of the [glossary](CONTEXT.md):
 
-- **Recurring service**: a service that the bills of each of the three months before the month of today charged.
-- **Month in progress**: the month of today, as the server's clock gives it, while it has not billed each recurring service yet. Once the import brings the last late bill, the month is complete, however early it is. A month of today without any bill yet is not listed.
+- **Recurring service**: a service of a month that the bills of each of the three months before it charged.
+- **Month in progress**: the latest month with bills, while it has not billed each of its recurring services yet: the month of today, as the server's clock gives it, or, until the month of today has a bill, the month before (see [The Turn of the Month](#the-turn-of-the-month)). Once the import brings the last late bill, the month is complete, however early it is. A month of today without any bill yet is not listed.
 - **Projected cost**: the cost of the month in progress with each recurring service that it has not billed yet counted at its cost of the month before, assuming it stays the same.
 
 OCM tells them when the server reads the bills: the bills already imported show them, without a new import. A yearly renewal or a one-off purchase is not a recurring service, and keeps no month in progress.
 
 The month of today is that of the server's clock, in its time zone. The Docker image runs in UTC unless `TZ` is set, and the compose files set it to `Europe/Paris` by default: `TZ=America/Montreal` in `.env`, for instance, sets another. A Kubernetes deployment sets `TZ` in its environment.
+
+### The Turn of the Month
+
+On the first days of a month, before its first bill, the month of today has no bill, and OCM does not list it yet. The month before may still lack the bills that land once the month has begun: until the month of today has a bill, the month before is the month in progress while it lacks one of its recurring services, those that the bills of each of the three months before it charged. The page marks and projects it as it would the month of today: on October 1st, before any October bill, September is « en cours » while it lacks a recurring service, dashed in the Trends tab, its variations « — », and projected when the checkbox is ticked.
+
+As soon as the month of today has a bill, it takes over: it is the month in progress while it lacks a recurring service, and the month before shows as complete, even if it still lacks a late bill. One month only is ever in progress, the latest month listed. An account billed early in the month sees no change: its month before is complete when the month of today begins, so no month is in progress until the month of today has a bill. An account without a bill in either month, such as one removed from the configuration or whose imports stalled, has no month in progress: the month in progress always has bills.
+
+The limit: OCM cannot tell a late bill from a service that was cancelled. A recurring service that was cancelled keeps the month in progress, at most until the month ends or, for the month before, until the month of today has a bill or ends. The next month no longer counts it among its recurring services, as the month before it did not bill it.
 
 ### How the Page Marks It
 
@@ -604,7 +612,7 @@ A service not billed yet counts as its bill lines of the month before, with thei
 
 ### Several Accounts
 
-Each account's recurring services are its own. With all accounts shown, the month is in progress while any account lacks one of its recurring services, and the projection adds up the accounts'. A service that another account billed this month, such as one moved from an account to another, is not missing.
+Each account's recurring services are its own, and so is its month of today, which begins with its own first bill. The Unknown account's bills stopped with the accounts, as every bill imported since has its account: it has a month in progress only while its last month is the month before and lacks a recurring service. With all accounts shown, the month of today begins as soon as any account has a bill in it, as the months list then lists it; the month is in progress while any account lacks one of its recurring services in it, and the projection adds up what each account lacks in it. A service that another account billed this month, such as one moved from an account to another, is not missing.
 
 ## Docker Deployment
 

@@ -4,16 +4,42 @@
  * service, one that the bills of each of the three months before charged, has no bill line in
  * it. OVHcloud bills some accounts early in the month, others late: the mark goes as soon as the
  * import stores the bill of each recurring service. The bills are dated from the real date (see
- * support/month-in-progress.js).
+ * support/month-in-progress.js). And the pure function that chooses the candidate month (#258).
  */
 
 const {
   LYON, PARIS, UNKNOWN_ACCOUNT, project,
 } = require('./support/accounts');
 const {
-  DAY_OF_TODAY, MONTH_BEFORE, MONTH_OF_TODAY, MONTHS_BEFORE, TWO_MONTHS_BEFORE, billOf,
+  DAY_OF_TODAY, FOUR_MONTHS_BEFORE, FOUR_MONTHS_UP_TO_MONTH_BEFORE, MONTH_BEFORE, MONTH_OF_TODAY,
+  MONTHS_BEFORE, THREE_MONTHS_BEFORE, TWO_MONTHS_BEFORE, VPS, billOf, seedAccountsAtTurnOfMonth,
 } = require('./support/month-in-progress');
 const { startOcm } = require('./support/ocm-server');
+const { chooseCandidateMonth } = require('../data/month-in-progress');
+
+// The one month that can be in progress (#258), from the months that the bills of the account shown
+// fall in, as the months list lists them: the month of today once the account shown has a bill in
+// it, and until then the month before, as some bills of a month land once the next one has begun,
+// if the account shown has a bill in it
+describe('chooseCandidateMonth (#258)', () => {
+  test('chooses the month of today once the account shown has a bill in it', () => {
+    expect(chooseCandidateMonth('2026-10', ['2026-10', '2026-09', '2026-08'])).toBe('2026-10');
+    expect(chooseCandidateMonth('2026-10', ['2026-10', '2026-08'])).toBe('2026-10');
+    expect(chooseCandidateMonth('2027-01', ['2027-01', '2026-12'])).toBe('2027-01');
+  });
+
+  test('chooses the month before while the month of today has no bill', () => {
+    expect(chooseCandidateMonth('2026-10', ['2026-09', '2026-08'])).toBe('2026-09');
+    // In January, December of the year before
+    expect(chooseCandidateMonth('2027-01', ['2026-12', '2026-11'])).toBe('2026-12');
+  });
+
+  // Such as an account removed from the configuration, whose imports stopped
+  test('chooses no month while the account shown has a bill in neither', () => {
+    expect(chooseCandidateMonth('2026-10', ['2026-08', '2026-07'])).toBeNull();
+    expect(chooseCandidateMonth('2026-10', [])).toBeNull();
+  });
+});
 
 // The months of an answer of /api/months, the latest first, and the months that it marks in
 // progress, with their mark
@@ -94,11 +120,11 @@ describe('GET /api/months: the month in progress (#216)', () => {
       });
       billOf(db, 'FR1012', LYON, `${TWO_MONTHS_BEFORE}-12`, [
         [SERVER, 'dedicated_server', 99],
-        ['vps-0a1b2c3d.vps.ovh.net', 'vps', 12],
+        [VPS, 'vps', 12],
       ]);
       billOf(db, 'FR1022', LYON, `${MONTH_BEFORE}-12`, [
         ['example.com', 'domain', 15],
-        ['vps-0a1b2c3d.vps.ovh.net', 'vps', 12],
+        [VPS, 'vps', 12],
       ]);
     }
 
@@ -257,6 +283,132 @@ describe('GET /api/months: the month in progress (#216)', () => {
         expect(marksOf(await ocm.get('/api/months'))).toEqual([]);
         // For Paris, billed once, it is no recurring service
         expect(marksOf(await ocm.get(`/api/months?account=${PARIS}`))).toEqual([]);
+      });
+  });
+});
+
+// Until the month of today has a bill, the month before is the candidate month (#258): OVHcloud
+// brings some bills of a month once the next one has begun, so that on the first days of a month,
+// before its first bill, the month before may still lack its late bills. Its recurring services
+// are those that the bills of each of the three months before it charged. Once the month of today
+// has a bill, it takes over: one month only is ever in progress, the latest month listed. The
+// seeds bill the months before the month of today only, which leaves it without a bill.
+describe('GET /api/months: the month before, until the month of today has a bill (#258)', () => {
+  // A single account, billed on the first day of each month for its Public Cloud project, on the
+  // second for its VPS, and late for its dedicated server: the month of today has no bill yet,
+  // and the bill of the month before that will charge the server has not come either
+  function seedMonthBeforeLate(db) {
+    db.accounts.upsert({ nic: LYON, currency: 'EUR' });
+    project(db, PROJECT, 'Production', LYON);
+    FOUR_MONTHS_UP_TO_MONTH_BEFORE.forEach((month, index) => {
+      billOf(db, `FR10${index}1`, LYON, `${month}-01`, [[PROJECT, 'cloud_project', 600]]);
+      billOf(db, `FR10${index}2`, LYON, `${month}-02`, [[VPS, 'vps', 12]]);
+      if (month === MONTH_BEFORE) return;
+      billOf(db, `FR10${index}3`, LYON, `${month}-25`, [[SERVER, 'dedicated_server', 200]]);
+    });
+  }
+
+  describe('with a single account billed late', () => {
+    let ocm;
+
+    beforeAll(async () => {
+      ocm = await startOcm(() => ({}), { seed: seedMonthBeforeLate });
+    }, 30000);
+
+    afterAll(async () => {
+      await ocm?.stop();
+    });
+
+    test('marks the month before while the month of today has no bill and it lacks one',
+      async () => {
+        const answer = await ocm.get('/api/months');
+
+        expect(answer.status).toBe(200);
+        expect(monthsOf(answer))
+          .toEqual([MONTH_BEFORE, TWO_MONTHS_BEFORE, THREE_MONTHS_BEFORE, FOUR_MONTHS_BEFORE]);
+        expect(marksOf(answer)).toEqual([[MONTH_BEFORE, true]]);
+      });
+
+    // Read when the server reads the bills: no re-import, nor any restart. An account billed
+    // early in the month sees no month in progress either, until the month of today has a bill.
+    test('marks no month once the late bill of the month before comes', async () => {
+      ocm.write((db) => billOf(db, 'FR1033', LYON, `${MONTH_BEFORE}-25`, [
+        [SERVER, 'dedicated_server', 200],
+      ]));
+
+      const answer = await ocm.get('/api/months');
+      expect(monthsOf(answer)[0]).toBe(MONTH_BEFORE);
+      expect(marksOf(answer)).toEqual([]);
+    });
+  });
+
+  describe('once the month of today has a bill', () => {
+    let ocm;
+
+    beforeAll(async () => {
+      ocm = await startOcm(() => ({}), { seed: seedMonthBeforeLate });
+    }, 30000);
+
+    afterAll(async () => {
+      await ocm?.stop();
+    });
+
+    // The bill of the first day charges the project; the VPS's, on the second, has not come. The
+    // server is no recurring service of the month of today, as the month before has not billed it.
+    test('marks the month of today if it lacks one, and no longer the month before', async () => {
+      expect(marksOf(await ocm.get('/api/months'))).toEqual([[MONTH_BEFORE, true]]);
+
+      ocm.write((db) => billOf(db, 'FR1041', LYON, `${MONTH_OF_TODAY}-01`, [
+        [PROJECT, 'cloud_project', 610],
+      ]));
+
+      const answer = await ocm.get('/api/months');
+      expect(monthsOf(answer)).toEqual([MONTH_OF_TODAY, MONTH_BEFORE, TWO_MONTHS_BEFORE,
+        THREE_MONTHS_BEFORE, FOUR_MONTHS_BEFORE]);
+      // Even though the month before still lacks the bill of the server
+      expect(marksOf(answer)).toEqual([[MONTH_OF_TODAY, true]]);
+    });
+  });
+
+  // The month of today begins for each account with its own first bill: for one account, its
+  // bills; for the Unknown account, the bills without an account; and with all accounts shown,
+  // any bill, as the months list lists the month of today then
+  describe('with several accounts', () => {
+    let ocm;
+
+    // Lyon and the Unknown account, whose bills of the month of today have not come, and whose
+    // month before still lacks the bill of its dedicated server; Paris, whose bill of the month of
+    // today came, and charged each of its services (see support/month-in-progress.js)
+    beforeAll(async () => {
+      ocm = await startOcm(() => ({}), { seed: seedAccountsAtTurnOfMonth });
+    }, 30000);
+
+    afterAll(async () => {
+      await ocm?.stop();
+    });
+
+    test.each([
+      ['an account', LYON],
+      ['the Unknown account', UNKNOWN_ACCOUNT],
+    ])('marks the month before for %s whose month of today has no bill, while another\'s has',
+      async (_, account) => {
+        const answer = await ocm.get(`/api/months?account=${account}`);
+
+        expect(monthsOf(answer)[0]).toBe(MONTH_BEFORE);
+        expect(marksOf(answer)).toEqual([[MONTH_BEFORE, true]]);
+      });
+
+    test('marks nothing for the account whose bill of the month of today came', async () => {
+      const answer = await ocm.get(`/api/months?account=${PARIS}`);
+
+      expect(monthsOf(answer)[0]).toBe(MONTH_OF_TODAY);
+      expect(marksOf(answer)).toEqual([]);
+    });
+
+    // Lyon's project and the Unknown account's domain lack their bills of the month of today
+    test('marks the month of today with all accounts shown, once any account has a bill in it',
+      async () => {
+        expect(marksOf(await ocm.get('/api/months'))).toEqual([[MONTH_OF_TODAY, true]]);
       });
   });
 });

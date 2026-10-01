@@ -11,7 +11,8 @@ const {
   LYON, PARIS, UNKNOWN_ACCOUNT, project,
 } = require('./support/accounts');
 const {
-  MONTH_BEFORE, MONTH_OF_TODAY, MONTHS_BEFORE, THREE_MONTHS_BEFORE, TWO_MONTHS_BEFORE, billOf,
+  FOUR_MONTHS_UP_TO_MONTH_BEFORE, MONTH_BEFORE, MONTH_OF_TODAY, MONTHS_BEFORE, THREE_MONTHS_BEFORE,
+  TWO_MONTHS_BEFORE, VPS, billOf, seedAccountsAtTurnOfMonth,
 } = require('./support/month-in-progress');
 const { startOcm } = require('./support/ocm-server');
 
@@ -370,3 +371,130 @@ describe('GET /api/analysis/monthly-trend?projected=true with a service moved to
       expect(body[2]).toEqual(month(MONTH_OF_TODAY, cost, 0));
     });
   });
+
+// Until the month of today has a bill, the month before is the candidate month (#258): while it
+// lacks a recurring service, one that the bills of each of the three months before it charged,
+// the projection counts that service at its bill lines of the month before it, dated on its first
+// day. Once the month of today has a bill, the projection goes to it. The seeds bill the months
+// before the month of today only, which leaves it without a bill.
+describe('GET /api/analysis/monthly-trend?projected=true at the turn of the month (#258)', () => {
+  // The month before and the month of today
+  const FROM_MONTH_BEFORE = `months=2&end=${MONTH_OF_TODAY}`;
+
+  describe('with a single account billed late', () => {
+    const trend = (parameters) => ocm.get(`/api/analysis/monthly-trend?${parameters}`);
+    let ocm;
+
+    // A single account, billed on the first day of each month for its Public Cloud project, on the
+    // second for its VPS, and late in the month for its dedicated server, which cost more two
+    // months before the month of today than before: the month of today has no bill yet, and the
+    // bill of the month before that will charge the server has not come either
+    function seedMonthBeforeLate(db) {
+      db.accounts.upsert({ nic: LYON, currency: 'EUR' });
+      project(db, PROJECT, 'Production', LYON);
+      FOUR_MONTHS_UP_TO_MONTH_BEFORE.forEach((yearMonth, index) => {
+        billOf(db, `FR10${index}1`, LYON, `${yearMonth}-01`, [[PROJECT, 'cloud_project', 600]]);
+        billOf(db, `FR10${index}2`, LYON, `${yearMonth}-02`, [[VPS, 'vps', 20]]);
+        if (yearMonth === MONTH_BEFORE) return;
+        billOf(db, `FR10${index}3`, LYON, `${yearMonth}-25`, [
+          [SERVER, 'dedicated_server', yearMonth === TWO_MONTHS_BEFORE ? 210 : 200],
+        ]);
+      });
+    }
+
+    beforeAll(async () => {
+      ocm = await startOcm(() => ({}), { seed: seedMonthBeforeLate });
+    }, 30000);
+
+    afterAll(async () => {
+      await ocm?.stop();
+    });
+
+    // The server's 210 € of the month before the month before; the project and the VPS, which
+    // the month before billed, at what they cost
+    test('counts each recurring service that the month before has not billed yet', async () => {
+      expect(await trend(`${UP_TO_MONTH_BEFORE}&projected=true`)).toEqual({
+        status: 200,
+        body: [
+          month(THREE_MONTHS_BEFORE, 820, 0),
+          month(TWO_MONTHS_BEFORE, 830, 0),
+          month(MONTH_BEFORE, 830, 210),
+        ],
+      });
+    });
+
+    test('answers as before without the parameter: the billed costs', async () => {
+      expect(await trend(UP_TO_MONTH_BEFORE)).toEqual({
+        status: 200,
+        body: [
+          month(THREE_MONTHS_BEFORE, 820),
+          month(TWO_MONTHS_BEFORE, 830),
+          month(MONTH_BEFORE, 620),
+        ],
+      });
+    });
+
+    test('projects nothing in the month of today, which has no bill', async () => {
+      expect(await trend(`${FROM_MONTH_BEFORE}&projected=true`)).toEqual({
+        status: 200,
+        body: [month(MONTH_BEFORE, 830, 210), month(MONTH_OF_TODAY, 0, 0)],
+      });
+    });
+
+    // The bill of the first day charges the project: the month of today, which has not billed the
+    // VPS yet, counts it at its 20 € of the month before. The server is no recurring service of
+    // the month of today, as the month before has not billed it.
+    test('projects the month of today, and no longer the month before, once it has a bill',
+      async () => {
+        ocm.write((db) => billOf(db, 'FR1041', LYON, `${MONTH_OF_TODAY}-01`, [
+          [PROJECT, 'cloud_project', 610],
+        ]));
+
+        expect(await trend(`${FROM_MONTH_BEFORE}&projected=true`)).toEqual({
+          status: 200,
+          body: [month(MONTH_BEFORE, 620, 0), month(MONTH_OF_TODAY, 630, 20)],
+        });
+      });
+  });
+
+  // The month of today begins for each account with its own first bill: for one account, its
+  // bills; for the Unknown account, the bills without an account; and with all accounts shown,
+  // any bill. So the accounts' projections add up to that of all accounts only once their months
+  // of today begin together.
+  describe('with several accounts', () => {
+    const trend = (parameters) => ocm.get(`/api/analysis/monthly-trend?${parameters}`);
+    let ocm;
+
+    // Lyon, whose project costs 600 € a month, and the Unknown account, whose domain costs 15 €,
+    // each with a dedicated server billed late, of 200 € and 80 €: their bills of the month of
+    // today have not come, and their months before still lack the bills of their servers. Paris,
+    // whose project costs 400 €, and whose bill of the month of today came (see
+    // support/month-in-progress.js).
+    beforeAll(async () => {
+      ocm = await startOcm(() => ({}), { seed: seedAccountsAtTurnOfMonth });
+    }, 30000);
+
+    afterAll(async () => {
+      await ocm?.stop();
+    });
+
+    // Each as the month before and the month of today, their costs and projected parts. With all
+    // accounts shown, Paris's bill begins the month of today, which counts Lyon's project and the
+    // Unknown account's domain at their bills of the month before; not the servers, which the
+    // month before has not billed.
+    test.each([
+      ['an account whose month of today has no bill', `&account=${LYON}`, [800, 200], [0, 0]],
+      ['an account whose bill of the month of today came', `&account=${PARIS}`, [400, 0],
+        [400, 0]],
+      ['the Unknown account, whose month of today has no bill', `&account=${UNKNOWN_ACCOUNT}`,
+        [95, 80], [0, 0]],
+      ['all accounts, as one account has a bill in the month of today', '', [1015, 0],
+        [1015, 615]],
+    ])('projects the month in progress of %s', async (_, account, monthBefore, monthOfToday) => {
+      expect(await trend(`${FROM_MONTH_BEFORE}${account}&projected=true`)).toEqual({
+        status: 200,
+        body: [month(MONTH_BEFORE, ...monthBefore), month(MONTH_OF_TODAY, ...monthOfToday)],
+      });
+    });
+  });
+});

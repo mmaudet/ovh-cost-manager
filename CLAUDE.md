@@ -103,14 +103,20 @@ OVH API ──> data/import.js ──> SQLite (ovh-bills.db) ──> server/inde
     `LOGS_DATA_PLATFORM`, for `/api/analysis/logs-data-platform` and the Infrastructure tab's
     table of the charges (#247). **Charges are read when the server reads the bills**, like the
     products: no re-import.
-  - `month-in-progress.js` — pure: the month in progress (`CONTEXT.md`, #216), the month of
-    today, as the server's local date gives it (`monthOfDate()` in `months.js`), while a
-    recurring service, one that bills of each of the three months before charged, by identifier
-    and account, has no bill line in it that any account's bill names.
-    `db.details.getBilledServices()` reads the services that the bills charged, with the ids of
-    their lines, `recurringServicesNotBilled()` tells those not billed yet, and
-    `db.bills.getMonthInProgress()` composes the two for `GET /api/months`, which marks the
-    month `inProgress: true` for the account asked. Its projection (#217): each service not
+  - `month-in-progress.js` — pure: the month in progress (`CONTEXT.md`, #216), the candidate
+    month while a recurring service of it, one that bills of each of the three months before
+    it charged, by identifier and account, has no bill line in it that any account's bill
+    names. The candidate month (#258), which `chooseCandidateMonth()` chooses among the months
+    that the bills of the account shown fall in, is the month of today, as the server's local
+    date gives it (`monthOfDate()` in `months.js`), once the account shown has a bill in it,
+    and until then the month before, as some bills of a month land once the next one has
+    begun, if the account shown has a bill in it; with a bill in neither, there is none, and no
+    month is in progress. `candidateMonthOf()` in `db.js` gives it the account's months list
+    (`getMonths()`): its bills, those without an account for the Unknown account, and any bill
+    for all accounts. `db.details.getBilledServices()` reads the services that the bills
+    charged, with the ids of their lines, `recurringServicesNotBilled()` tells those not billed
+    yet, and `db.bills.getMonthInProgress()` composes them for `GET /api/months`, which marks
+    the month `inProgress: true` for the account asked. Its projection (#217): each service not
     billed yet comes with its projected lines, its bill lines of the month before, which
     `linesOfPeriod()` in `db.js` adds, dated on the month's first day, to the lines that a
     query of costs adds up, when asked and when its period covers the month in progress: the
