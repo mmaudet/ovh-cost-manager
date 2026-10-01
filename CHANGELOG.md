@@ -14,7 +14,19 @@ sections were written afterwards from the git history.
 
 ## 3.5.0 - 2026-10-01
 
-<!-- Upgrade notes and highlights of this release, if any. -->
+Logs Data Platform broken down, and the month in progress at the turn of the month:
+
+- **Logs Data Platform** (#222). OVHcloud's log platform gets a resource type of its own, « Logs Data Platform », out of « Storage », everywhere the page lists resource types, in the bills already imported too.
+  - The Infrastructure tab lists the month's LDP charges, as the bills name them, with a total.
+  - The Compare tab's LDP row unfolds into its charges, projected with the month in progress on request.
+- **The month in progress at the turn of the month** (#252). Until the month of today has a bill, the month before is the month in progress while it lacks a service billed in each of the three months before it: marked « en cours », and projected on request. Once the month of today has a bill, it takes over.
+- **The « Tout afficher » modals** (#236) take the keyboard focus, keep it while open and give it back. They are named by their title, and their close button speaks the page's language.
+
+### Upgrade notes
+
+- **No re-import.** The first time OCM opens its database after the upgrade, whether the server, the import or the CLI does, it moves the stored LDP lines from the storage resource type to the new one. It does so once.
+- **API and CSV.** The routes by resource type and the bill lines' export now give LDP lines the resource type `logs_data_platform` where they gave `storage`. `GET /api/analysis/logs-data-platform` gives a period's LDP charges.
+- **The month of today** is the server's clock's: the compose files set its time zone since 3.4.0 (`TZ`).
 
 ### New features
 * feat: give Logs Data Platform its own resource type, the bills already imported included by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/256
