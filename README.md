@@ -57,7 +57,7 @@ New in version 3.1.0.
 - **Resource Type Detail**: Expandable cost breakdown per individual service within each category
 - **GPU Cost Consolidation**: Dedicated view for GPU costs by model (NVIDIA L4, L40S, A100, H100) and by project
 - **AI Endpoints Models** (new in version 3.3.0): each AI Endpoints model that the month's bills name, with its input tokens, its output tokens and its cost, in the Public Cloud tab, and its monthly cost in the Trends tab (see [AI Endpoints Models](#ai-endpoints-models))
-- **Logs Data Platform Charges** (new in version 3.5.0): each charge that the month's bills give the Logs Data Platform services, such as their account's rental or their streams' hot storage, with its cost, in the Infrastructure tab (see [Logs Data Platform](#logs-data-platform))
+- **Logs Data Platform Charges** (new in version 3.5.0): each charge that the month's bills give the Logs Data Platform services, such as their account's rental or their streams' hot storage, with its cost, in the Infrastructure tab, and month A against month B under the Compare tab's Logs Data Platform row (see [Logs Data Platform](#logs-data-platform))
 - **Month Comparison**: Side-by-side comparison between two months with variation tracking, including infrastructure, backup, Private Cloud, and per-project product breakdowns, whose rows unfold into their services and charges since version 3.3.0 (see [Month Comparison](#month-comparison))
 - **Trend Analysis**: Historical trends with configurable period (3-36 months), and GPU and AI Endpoints evolution charts
 - **Month in Progress** (marked since version 3.3.3, projected since 3.4.0): the month whose bills still lack a service billed every month is marked in progress rather than compared as a complete month, and a checkbox projects its cost in the Trends and Compare tabs. Since version 3.5.0, that can be the month before, until the month of today has a bill (see [Month in Progress](#month-in-progress))
@@ -524,6 +524,16 @@ Under the costs by resource type, the **Logs Data Platform by charge** table lis
 
 The table sorts by cost, the most expensive first, until a header is clicked, and its last row gives what the charges cost in all: the month's Logs Data Platform cost, which its card gives too. A charge that costs nothing, such as the free tier of the hot storage, is left out, as a product's are in the Compare tab, while a charge that a refund brings below 0 € shows, with its negative amount, so that the charges add up to that cost. The table shows only for a month with a charge, a refund alone included. It follows the account selected in the header, and adds up the accounts' charges when all are shown, without an Account column. It shows what the month billed, never its projected cost, and prints with the page; it has no CSV export, as the export of the bill lines holds every line.
 
+### What the Compare Tab Shows
+
+The infrastructure comparison gives Logs Data Platform a row of its own, with its cost in months A and B and the variation. Where the other resource types unfold into their services, it unfolds into its charges, the services together, as a project's products unfold into theirs (see [Rows That Unfold](#rows-that-unfold)):
+
+- **Charges**: those that the Infrastructure tab's table lists for each month, as the bills name them, paired by charge, so that a charge billed in both months makes one row.
+- **Amounts**: what each charge cost in month A and in month B, 0 € in a month that did not bill it. They add up to the row's amounts, a charge that a refund brings below 0 € included, and the row unfolds as soon as either month's cost is other than 0 €, a refund alone included.
+- **Variation**: from month A to month B, as for the other rows: « — » from 0 € or less in month A, and −100 % to a month B that did not bill the charge.
+
+The charges load once the row unfolds, for the account selected in the header, every account's added up when all are shown, and share each month's answer with the Infrastructure tab's table. They follow the table's sort within the row, by month A, the most expensive first, until the user sorts it. While « Projeter le mois en cours » is ticked and month A or B is the month in progress, they count its projected cost, as the row does: a charge whose amount includes a projected part, or that only the projection brings, such as the hot storage of a service whose bill has not come yet, is in italics and marked « projeté », with a tooltip that gives what was billed and the projected cost, and the variations are computed on the projected cost (see [Projecting Its Cost](#projecting-its-cost)). The Infrastructure tab's table still shows what the month billed.
+
 ## Month Comparison
 
 The Compare tab compares two months, month A and month B, from their bills: it opens on the two latest months that have bills, and the user picks others. It compares their totals, their costs by service type and by project, their costs by resource type in the infrastructure and Private Cloud comparisons, their Veeam backups, and each Public Cloud project's products. Each row gives the amount of month A, the amount of month B and the variation from one to the other, in red when it grows and in green when it shrinks. The tab follows the account selected in the header.
@@ -532,11 +542,12 @@ The Compare tab compares two months, month A and month B, from their bills: it o
 
 Since version 3.3.0, each row that adds up several services or charges unfolds into them, month A against month B, one row each, in the columns of the row it details:
 
-- **Infrastructure and Private Cloud comparisons**: each resource type (dedicated servers, VPS, storage, load balancers, IP addresses, domains, Logs Data Platform, Private Cloud hosts and datastores) unfolds into its services, named as the Infrastructure tab names them: by their identifier and the description of their most expensive bill line, month B's when month B billed them, cut to its column, whole on hover. The Dedicated Servers row no longer lists the servers that the inventory holds today, which have nothing to do with months A and B: it unfolds into the servers that either month billed, and the Infrastructure tab keeps listing the inventory.
+- **Infrastructure and Private Cloud comparisons**: each resource type (dedicated servers, VPS, storage, load balancers, IP addresses, domains, Private Cloud hosts and datastores) unfolds into its services, named as the Infrastructure tab names them: by their identifier and the description of their most expensive bill line, month B's when month B billed them, cut to its column, whole on hover. The Dedicated Servers row no longer lists the servers that the inventory holds today, which have nothing to do with months A and B: it unfolds into the servers that either month billed, and the Infrastructure tab keeps listing the inventory.
+- **Logs Data Platform**: since version 3.5.0, its row of the infrastructure comparison unfolds into its charges rather than its services, the services together, as the Infrastructure tab lists them (see [Logs Data Platform](#logs-data-platform)).
 - **Backup comparison**: the row of the Veeam VMs unfolds into each VM backed up, and that of the Enterprise licenses into each license. Folded, each keeps its number of services and its amount, and it unfolds into as many services, but in three cases: a VM that a refund brings to 0 € or less is counted, but not listed; a line without an identifier is listed, but not counted; and, while the lists name each row's account, a VM that two accounts billed is counted once, but listed once for each account.
 - **A project's comparison**: each product unfolds into its charges. The Public Cloud credit that the bills used pays for no product, and does not unfold.
 
-Every row starts folded. A chevron at the start of a row unfolds it and folds it again, from the keyboard too; a row that neither month billed has none. A row stays unfolded when the table is sorted, when the user picks other months, whose services or charges it then shows, and when another tab is opened. A row's services load once it unfolds: it says so until both months have answered, or that a month's could not load. A resource type's services of a month load once for this tab and the Infrastructure tab, for the same account. A product's charges come with the products, so that it unfolds at once. The PDF export prints the unfolded rows, without their chevrons.
+Every row starts folded. A chevron at the start of a row unfolds it and folds it again, from the keyboard too; a row that neither month billed has none. A row stays unfolded when the table is sorted, when the user picks other months, whose services or charges it then shows, and when another tab is opened. A row's services, or the Logs Data Platform row's charges, load once it unfolds: it says so until both months have answered, or that a month's could not load. A resource type's services of a month, and the Logs Data Platform charges, load once for this tab and the Infrastructure tab, for the same account. A product's charges come with the products, so that it unfolds at once. The PDF export prints the unfolded rows, without their chevrons.
 
 The service type chart and the comparison by project do not unfold.
 
@@ -545,7 +556,7 @@ The service type chart and the comparison by project do not unfold.
 The words are those of the [glossary](CONTEXT.md):
 
 - **Service**: what OVHcloud bills under one identifier, which each of its bill lines names: a dedicated server, a VPS, a domain, an IP block, a Public Cloud project… Its identifier gives its resource type.
-- **Charge**: what a service's bill line pays for, as its description names it without the period it covers: an instance's monthly plan, named with the instance's id and region, a flavor's hourly use in a region, a bucket's storage, an AI Endpoints model's input tokens… A Public Cloud project is a single service, whose bill lines differ by what they pay for: its products unfold into their charges.
+- **Charge**: what a service's bill line pays for, as its description names it without the period it covers: an instance's monthly plan, named with the instance's id and region, a flavor's hourly use in a region, a bucket's storage, an AI Endpoints model's input tokens… A Public Cloud project is a single service, whose bill lines differ by what they pay for: its products unfold into their charges. The row of Logs Data Platform unfolds into the charges of its services' lines too, the services together: their account's rental, their streams' storage, their input instances…
 
 On some accounts' bills, the Public Cloud descriptions end with the period that the line covers, such as « (01/08/2026-31/08/2026) »; on others, they carry none. A charge leaves that period out, and writes a curly apostrophe straight, so that the lines that pay for one charge in two months, or on two accounts' bills, make one row. The lines of one charge in a month add up, and a product's charges add up to its amount; the charges that cost nothing in a month are left out, as the products that cost nothing are. OCM reads the charges when the server reads the bills, as it reads the products: the bills already imported show them, without a new import.
 
@@ -564,7 +575,7 @@ The services and charges of a row follow the table's sort, within their row, by 
 
 ### Several Accounts
 
-The services and charges are those of the account selected in the header, and, for the Unknown account, those of the bills without an account. With all accounts shown, a project's products and their charges add up the bills of every account. When the instance holds several accounts, the lists then name each row's account: each service names its own in brackets, by its name, or else its NIC handle, and the Unknown account as such. A service that two accounts billed shows once for each, so that its rows add up to the row's amounts.
+The services and charges are those of the account selected in the header, and, for the Unknown account, those of the bills without an account. With all accounts shown, a project's products and their charges, and the Logs Data Platform charges, add up the bills of every account. When the instance holds several accounts, the lists then name each row's account: each service names its own in brackets, by its name, or else its NIC handle, and the Unknown account as such. A service that two accounts billed shows once for each, so that its rows add up to the row's amounts.
 
 ## Month in Progress
 
@@ -716,7 +727,8 @@ or none when none of them has a bill.
   `/api/analysis/by-resource-type` and `/api/analysis/by-project`;
 - the services: `/api/analysis/resource-type-details`,
   `/api/analysis/backup-stats` and `/api/analysis/backup-services`;
-- a project's products: `/api/projects/:id/products`.
+- a project's products: `/api/projects/:id/products`;
+- the Logs Data Platform charges: `/api/analysis/logs-data-platform`.
 
 When their period covers the month in progress, they count its projected cost,
 and each row gives its projected part as `projected`, 0 when it has none: a
@@ -737,12 +749,16 @@ at 0 for a model that the month did not bill. Amounts are to the cent.
 
 `/api/analysis/logs-data-platform` gives the charges that the bills of the
 period give the Logs Data Platform services, the services together, which the
-Infrastructure tab shows (see [Logs Data Platform](#logs-data-platform)):
+Infrastructure tab shows, and the Compare tab's Logs Data Platform row unfolds
+into (see [Logs Data Platform](#logs-data-platform)):
 `total`, what they cost in all, and `charges`, each with its `charge`, as the
 bills name it without its period, and its `total`, the most expensive first.
 A charge that costs nothing is left out, one that a refund brings below 0 is
 kept, and a period without any gives an empty list. Each line counts in the month of its bill. Amounts are to
-the cent.
+the cent. With `projected=true`, the total and each charge give their projected
+parts as `projected`, which add up as their amounts do, and they add up to the
+`logs_data_platform` row of `/api/analysis/by-resource-type` with the same
+parameters.
 
 `/api/analysis/backup-services` gives the services of the Veeam backups that
 the bills of the period charged, which the Compare tab's backup comparison

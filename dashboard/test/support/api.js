@@ -245,9 +245,10 @@ const answers = {
   fetchPublicCloudStats: entryForPeriodOfAccount('publicCloudStats', emptyAnswers.publicCloudStats),
   // And its AI Endpoints models (#193)
   fetchAiEndpoints: entryForPeriodOfAccount('aiEndpoints', emptyAnswers.aiEndpoints),
-  // The Logs Data Platform charges of a period, of the account the page selects (#247)
-  fetchLogsDataPlatform: entryForPeriodOfAccount(
-    'logsDataPlatform', emptyAnswers.logsDataPlatform,
+  // The Logs Data Platform charges of a period, of the account the page selects (#247); with the
+  // projection of the month in progress, from their own entry, projectedLogsDataPlatform (#248)
+  fetchLogsDataPlatform: projectableEntryForPeriodOfAccount(
+    'logsDataPlatform', 'projectedLogsDataPlatform', emptyAnswers.logsDataPlatform,
   ),
   // And the Veeam backups of a month, which the Compare and Backup tabs show (#119)
   fetchBackupStats: projectableEntryForPeriodOfAccount(

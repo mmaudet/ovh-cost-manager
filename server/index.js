@@ -1483,13 +1483,17 @@ function registerRoutes() {
   // which the Infrastructure tab lists for the month it shows: each charge as the bills name it,
   // without its period, with its cost, the most expensive first, those at 0 € left out and those
   // that a refund brings below kept, and what they cost in all. Those of the bills of the account
-  // the request asks for, or of every account without one, the services together.
-  app.get('/api/analysis/logs-data-platform', accountParameter, (req, res) => {
+  // the request asks for, or of every account without one, the services together. With
+  // projected=true, the month in progress counts the projected lines of these services too, as
+  // /api/analysis/by-resource-type counts them, for the Compare tab's row of their resource type,
+  // which unfolds into these charges (#248): each charge, a charge that projected lines alone make
+  // included, and what they cost in all give their projected parts, `projected`.
+  app.get('/api/analysis/logs-data-platform', accountParameter, projectedParameter, (req, res) => {
     try {
       const { from, to } = req.query;
       const validation = validateDateRange(from, to);
       if (!validation.valid) return res.status(400).json({ error: validation.error });
-      res.json(db.analysis.logsDataPlatform(from, to, req.account));
+      res.json(db.analysis.logsDataPlatform(from, to, req.account, { projected: req.projected }));
     } catch (err) {
       res.status(500).json({ error: err.message });
     }

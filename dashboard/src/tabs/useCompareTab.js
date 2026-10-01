@@ -7,7 +7,7 @@ import { useTableSorts } from '../components/SortableHeader.jsx';
 import { useUnfoldedRows } from '../components/UnfoldingRow.jsx';
 import {
   fetchSummary, fetchByService, fetchByResourceType, fetchBackupStats,
-  fetchBackupServices, fetchBackupServicesByAccount, fetchProjectProducts,
+  fetchBackupServices, fetchBackupServicesByAccount, fetchProjectProducts, fetchLogsDataPlatform,
 } from '../services/api.js';
 import { listQuery, projectedQuery } from '../utils/accounts.js';
 import { BY_MONTH_A, comparedMonthsOf } from '../utils/monthComparison.js';
@@ -44,8 +44,9 @@ import * as servicesQueries from './resourceTypeServicesQueries.js';
  *   (unfoldingOf(), see useUnfoldedRows()), the figures of both months, which the tab shows,
  *   the query of a project's products in a month (projectProductsQuery(projectId, month)),
  *   which the comparison of the project's products runs once opened, and the queries of a
- *   resource type's services in a month (resourceTypeServicesQuery(resourceType, month)) and of
- *   a backup row's (backupServicesQuery(kind, month)), which the row runs once unfolded
+ *   resource type's services in a month (resourceTypeServicesQuery(resourceType, month)), of
+ *   a backup row's (backupServicesQuery(kind, month)) and of the Logs Data Platform charges
+ *   (logsDataPlatformChargesQuery(month), #248), which the row runs once unfolded
  */
 const useCompareTab = ({
   months, activeTab, selectedAccount, accountColumn, projectsMonthInProgress = false,
@@ -219,6 +220,18 @@ const useCompareTab = ({
     select: (services) => services[kind],
   });
 
+  // The options of the query of the Logs Data Platform charges of month A or B, for useQuery
+  // (#248): those that the Infrastructure tab lists for the month, as it asks for them, under the
+  // same key, the services together, as the row of their resource type adds them up. Those of the
+  // account shown, and every account's added up when all are shown, whatever the Account column
+  // of the lists, as the charges name no account. The row runs it once unfolded, as the other
+  // figures of the month run: on the tab, for a month of the months list. Those of the month in
+  // progress, while the page projects it, at its projected cost, under a key of their own, which
+  // the Infrastructure tab, whose charges are never projected, does not share.
+  const logsDataPlatformChargesQuery = (month) => figureOf(
+    ['logsDataPlatform'], month, fetchLogsDataPlatform,
+  );
+
   return {
     compareMonthA,
     setCompareMonthA,
@@ -240,6 +253,7 @@ const useCompareTab = ({
     projectProductsQuery,
     resourceTypeServicesQuery,
     backupServicesQuery,
+    logsDataPlatformChargesQuery,
   };
 };
 

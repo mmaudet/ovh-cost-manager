@@ -13,7 +13,7 @@
  * before. The bills are dated from the real date (see support/month-in-progress.js).
  */
 
-const { LYON, PARIS, project } = require('./support/accounts');
+const { LYON, PARIS, answerOf, project } = require('./support/accounts');
 const {
   ALL_ACCOUNTS, LYON_BILLED_LATE, MONTH_BEFORE, MONTH_OF_TODAY, MONTHS_BEFORE, OF_BOTH_MONTHS,
   OF_MONTH_BEFORE, OF_TODAY, PARIS_BILLED, UNKNOWN_BILLED_LATE, billOf,
@@ -101,15 +101,9 @@ afterAll(async () => {
   await ocm?.stop();
 });
 
-// The answer of a route for a period, with the parameters given besides, and for the account
-// that the parameter names, or for every account without one
-const answerOf = (route, parameters, account) => ocm.get(
-  `${route}?${parameters}${account === undefined ? '' : `&account=${account}`}`,
-);
-
 describe('GET /api/analysis/by-project with projected=true (#219)', () => {
   const projectsOf = (parameters, account) => answerOf(
-    '/api/analysis/by-project', parameters, account,
+    ocm, '/api/analysis/by-project', parameters, account,
   );
   // A project as the route gives it: its cost, its number of lines, and its projected part when
   // the request asks for it
@@ -209,7 +203,7 @@ describe('GET /api/analysis/by-project with projected=true (#219)', () => {
 
 describe('GET /api/projects/:id/products with projected=true (#219)', () => {
   const productsOf = ([projectId], parameters, account) => answerOf(
-    `/api/projects/${projectId}/products`, parameters, account,
+    ocm, `/api/projects/${projectId}/products`, parameters, account,
   );
   // The products of a project as the route gives them with projected=true: what they cost in all
   // and its projected part, each product as [product, cost, projected part, charges], each charge
@@ -276,7 +270,7 @@ describe('GET /api/projects/:id/products with projected=true (#219)', () => {
     const { body: monthBefore } = await productsOf(PRODUCTION, OF_MONTH_BEFORE);
     const { body: products } = await productsOf(PRODUCTION, `${OF_TODAY}&projected=true`);
     const { body: projects } = await answerOf(
-      '/api/analysis/by-project', `${OF_TODAY}&projected=true`,
+      ocm, '/api/analysis/by-project', `${OF_TODAY}&projected=true`,
     );
 
     expect(monthBefore.credits).toBe(-15);
@@ -361,7 +355,7 @@ describe('GET /api/projects/:id/products with projected=true (#219)', () => {
         projectOfAccount, `${parameters}&projected=true`, account,
       );
       const { body: projects } = await answerOf(
-        '/api/analysis/by-project', `${parameters}&projected=true`, account,
+        ocm, '/api/analysis/by-project', `${parameters}&projected=true`, account,
       );
       const [projectId] = projectOfAccount;
 

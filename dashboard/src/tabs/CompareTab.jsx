@@ -6,6 +6,7 @@ import { ComparedAmount } from '../components/ProjectedAmount.jsx';
 import { ProjectionCheckbox } from '../components/ProjectionCheckbox.jsx';
 import { SortableHeader, sortRows } from '../components/SortableHeader.jsx';
 import ProjectProductComparison from '../components/ProjectProductComparison.jsx';
+import { UnfoldedRowCharges, chargeValues } from '../components/UnfoldedRowCharges.jsx';
 import { UnfoldedRowServices } from '../components/UnfoldedRowServices.jsx';
 import { UnfoldingRow } from '../components/UnfoldingRow.jsx';
 import { Variation } from '../components/Variation.jsx';
@@ -88,6 +89,10 @@ const resourceTypeValues = (byResourceTypeA, byResourceTypeB) => {
 // B alone.
 const SERVICE_VALUES = comparisonValues('type', (service) => service.identifier);
 
+// The value of a charge in the same columns, which sort the charges of the Logs Data Platform row
+// as they sort the rows (#248): the charge itself, its cost in each month, and the variation
+const CHARGE_VALUES = chargeValues('type');
+
 // The columns of the infrastructure, Private Cloud and backup comparisons: the row, the cost in
 // months A and B, and the variation
 const COMPARISON_COLUMNS = 4;
@@ -105,25 +110,27 @@ const projectComparisonValues = (accountColumn) => ({
 // The Compare tab, which the shell renders while it is active: what useCompareTab() returns,
 // the sort order of its tables, the query of a project's products, the rows unfolded into their
 // services and the queries of those services, and a project's products unfolded into their
-// charges, which come with the products, included (#146, #181, #192, #195, #197), with the
-// shell's language, translations (t), amount format (fmt) and months list. The months and their
-// figures are those of the account selected in the header (#119). The comparison by project
-// names the account of each project in the Account column of the shell (accountColumn), when it
-// shows one: it then compares the projects by account that the hook requests, a project billed
-// to several accounts once for each. The page's setting that projects the month in progress, and
-// its setter (useMonthInProgressProjection()), show as a checkbox next to months A and B (#218):
-// while it is on, the totals, the service types, and the infrastructure, backup and Private
-// Cloud comparisons, their services included, count the month in progress at its projected cost,
-// as the hook asks for them, and mark the amounts that projected lines make; and so do the
-// comparison by project and each project's products, their charges and credit included (#219).
-// What the hook knows of months A and B, comparedMonths, decides the variations and the sort of
-// the tables.
+// charges, which come with the products, included (#146, #181, #192, #195, #197), and the query
+// of the Logs Data Platform charges, which the row of their resource type unfolds into (#248),
+// with the shell's language, translations (t), amount format (fmt) and months list. The months
+// and their figures are those of the account selected in the header (#119). The comparison by
+// project names the account of each project in the Account column of the shell (accountColumn),
+// when it shows one: it then compares the projects by account that the hook requests, a project
+// billed to several accounts once for each. The page's setting that projects the month in
+// progress, and its setter (useMonthInProgressProjection()), show as a checkbox next to months A
+// and B (#218): while it is on, the totals, the service types, and the infrastructure, backup and
+// Private Cloud comparisons, their services and the Logs Data Platform charges included, count
+// the month in progress at its projected cost, as the hook asks for them, and mark the amounts
+// that projected lines make; and so do the comparison by project and each project's products,
+// their charges and credit included (#219). What the hook knows of months A and B,
+// comparedMonths, decides the variations and the sort of the tables.
 const CompareTab = ({
   compareMonthA, setCompareMonthA, compareMonthB, setCompareMonthB, comparedMonths,
   sortingOf, unfoldingOf, compareDataA, compareDataB, byServiceA, byServiceB, byProjectA,
   byProjectB, byResourceTypeA, byResourceTypeB, backupStatsA, backupStatsB, projectProductsQuery,
-  resourceTypeServicesQuery, backupServicesQuery, projectsMonthInProgress = false,
-  setProjectsMonthInProgress, language, t, fmt, months, accountColumn,
+  resourceTypeServicesQuery, backupServicesQuery, logsDataPlatformChargesQuery,
+  projectsMonthInProgress = false, setProjectsMonthInProgress, language, t, fmt, months,
+  accountColumn,
 }) => {
   // Months A and B as the page names them, in its language (#33)
   const monthALabel = formatMonthLabel(compareMonthA?.value, language);
@@ -206,7 +213,8 @@ const CompareTab = ({
 
   // The rows of the infrastructure comparison, which ends with those of the Private Cloud
   // comparison, in the order the user sorts them, in this order until then (#146). Logs Data
-  // Platform, apart from the storage since #246, unfolds into its services as the others do.
+  // Platform, apart from the storage since #246, unfolds into its charges, which the query of its
+  // charges gives (chargesQueryOf), rather than into its services, as the others do (#248).
   const infrastructureSorting = sortingOf('infrastructure');
   const infrastructureTypes = sortRows([
     { key: 'dedicated_server', label: t('dedicatedServers') },
@@ -215,7 +223,10 @@ const CompareTab = ({
     { key: 'load_balancer', label: language === 'en' ? 'Load Balancer' : 'Load Balancer' },
     { key: 'ip_service', label: language === 'en' ? 'IP Addresses' : 'Adresses IP' },
     { key: 'domain', label: language === 'en' ? 'Domains' : 'Noms de domaine' },
-    { key: 'logs_data_platform', label: t('logsDataPlatform') },
+    {
+      key: 'logs_data_platform', label: t('logsDataPlatform'),
+      chargesQueryOf: logsDataPlatformChargesQuery,
+    },
     ...privateCloudTypes,
   ], infrastructureSorting.sort, valuesAsShown(
     comparedMonths, resourceTypeValues(byResourceTypeA, byResourceTypeB),
@@ -234,25 +245,18 @@ const CompareTab = ({
   // Draws a row of the infrastructure, backup or Private Cloud comparison, by the comparison's
   // name: its label, its figures in months A and B, its cost and what projected lines make of it
   // (#218), with, for a row of the backups, the number of services that it counts, and the
-  // variation from one cost to the other. It unfolds when either month billed it more than 0 €,
-  // into its services, which the query of its services in a month gives (servicesQueryOf) and
-  // which follow the comparison's sort; each comparison's rows unfold on their own (#192, #197).
-  const drawServicesRow = (comparison, {
-    key, label, figuresA, figuresB, servicesQueryOf,
+  // variation from one cost to the other. It unfolds when it has anything to unfold into
+  // (unfolds), into the rows that `detail` draws under it, which its chevron names
+  // (chevronLabel); each comparison's rows unfold on their own (#192, #197).
+  const drawUnfoldingRow = (comparison, {
+    key, label, figuresA, figuresB, unfolds, chevronLabel, detail,
   }) => (
     <UnfoldingRow
       key={key}
-      unfolding={figuresA.total > 0 || figuresB.total > 0 ? unfoldingOf(comparison, key) : null}
-      chevronLabel={`${t('servicesOf')} ${label}`}
+      unfolding={unfolds ? unfoldingOf(comparison, key) : null}
+      chevronLabel={chevronLabel}
       label={label}
-      detail={(
-        <UnfoldedRowServices
-          servicesQueryOf={servicesQueryOf}
-          monthA={compareMonthA} monthB={compareMonthB} comparedMonths={comparedMonths}
-          sort={sortingOf(comparison).sort} values={SERVICE_VALUES} columnCount={COMPARISON_COLUMNS}
-          accountColumn={accountColumn} fmt={fmt} language={language} t={t}
-        />
-      )}
+      detail={detail}
     >
       <td className="p-3 text-right font-medium">{monthCell(figuresA)}</td>
       <td className="p-3 text-right text-gray-500">{monthCell(figuresB)}</td>
@@ -265,16 +269,64 @@ const CompareTab = ({
     </UnfoldingRow>
   );
 
+  // Draws a row of these comparisons that unfolds into its services, when either month billed it
+  // more than 0 €, as its services are those whose lines add up to more than 0 €: those that the
+  // query of its services in a month gives (servicesQueryOf), which follow the comparison's sort
+  // (#192, #197)
+  const drawServicesRow = (comparison, { servicesQueryOf, ...row }) => drawUnfoldingRow(
+    comparison, {
+      ...row,
+      unfolds: row.figuresA.total > 0 || row.figuresB.total > 0,
+      chevronLabel: `${t('servicesOf')} ${row.label}`,
+      detail: (
+        <UnfoldedRowServices
+          servicesQueryOf={servicesQueryOf}
+          monthA={compareMonthA} monthB={compareMonthB} comparedMonths={comparedMonths}
+          sort={sortingOf(comparison).sort} values={SERVICE_VALUES} columnCount={COMPARISON_COLUMNS}
+          accountColumn={accountColumn} fmt={fmt} language={language} t={t}
+        />
+      ),
+    },
+  );
+
+  // Draws a row of these comparisons that unfolds into its charges rather than its services, as
+  // a product of a project does: those that the query of its charges in a month gives
+  // (chargesQueryOf), the services together, which follow the comparison's sort (#248). It
+  // unfolds when either month's cost is other than 0 €: its charges keep those that a refund
+  // brings below 0 €, so that they add up to its amounts.
+  const drawChargesRow = (comparison, { chargesQueryOf, ...row }) => drawUnfoldingRow(
+    comparison, {
+      ...row,
+      unfolds: row.figuresA.total !== 0 || row.figuresB.total !== 0,
+      chevronLabel: `${t('chargesOf')} ${row.label}`,
+      detail: (
+        <UnfoldedRowCharges
+          chargesQueryOf={chargesQueryOf}
+          monthA={compareMonthA} monthB={compareMonthB} comparedMonths={comparedMonths}
+          sort={sortingOf(comparison).sort} values={CHARGE_VALUES} columnCount={COMPARISON_COLUMNS}
+          fmt={fmt} language={language} t={t}
+        />
+      ),
+    },
+  );
+
   // Draws a row of the infrastructure or Private Cloud comparison, by the comparison's name: the
   // cost of a resource type in months A and B (#32), and what projected lines make of it in the
-  // month in progress (#218), which unfolds into each service that it lists (#192)
-  const drawResourceTypeRow = (comparison, { key, label }) => drawServicesRow(comparison, {
-    key,
-    label,
-    figuresA: costsOfType(byResourceTypeA, key),
-    figuresB: costsOfType(byResourceTypeB, key),
-    servicesQueryOf: (month) => resourceTypeServicesQuery(key, month),
-  });
+  // month in progress (#218), which unfolds into each service that it lists (#192), or, for a
+  // resource type that gives the query of its charges (chargesQueryOf), into its charges (#248)
+  const drawResourceTypeRow = (comparison, { key, label, chargesQueryOf }) => {
+    const row = {
+      key,
+      label,
+      figuresA: costsOfType(byResourceTypeA, key),
+      figuresB: costsOfType(byResourceTypeB, key),
+    };
+    return chargesQueryOf
+      ? drawChargesRow(comparison, { ...row, chargesQueryOf })
+      : drawServicesRow(comparison, {
+        ...row, servicesQueryOf: (month) => resourceTypeServicesQuery(key, month),
+      });
+  };
 
   return (
     <div className="space-y-6">

@@ -1,4 +1,6 @@
-import { account, septemberInProgress } from './account.js';
+import {
+  LDP_CHARGES, account, logsDataPlatformBilled, logsDataPlatformCharges, septemberInProgress,
+} from './account.js';
 import { severalAccounts, unnamedAccount } from './accounts.js';
 import { enterpriseLicence } from './backup.js';
 import { months } from './calendar.js';
@@ -338,6 +340,51 @@ export const unnamedBilledLate = {
       projectedProjectProducts: {
         [STAGING]: { '2026-09': productsWithParts(stagingInAugust, { projected: true }) },
       },
+    },
+  },
+};
+
+// The figures of the infrastructure comparison while September is in progress for a Logs Data
+// Platform service (#248), over logsDataPlatformBilled (account.js): the bill that charges
+// ldp-ab-12345 each month comes late in the month, and has not come yet in September, while that
+// of ldp-cd-67890, new in September, came. What September billed so far lacks the first one's
+// 50,50 €, and what the routes answer with the projection of the month in progress counts it at
+// its bill lines of August, its projected lines: its account's rental, 30 €, and its streams' hot
+// storage, 12,50 €, which make its 42,50 € of August. The resource type, its charges and what
+// they cost in all give their projected parts: the hot storage, which only projected lines make,
+// its whole cost. Only what the infrastructure comparison and its Logs Data Platform row read.
+// Every name, identifier and amount is made up; the charges are an invoice's.
+
+// September's costs by resource type, those of Logs Data Platform as given, the most expensive
+// first, as /api/analysis/by-resource-type answers
+const septemberWithLogsDataPlatform = (costs) => logsDataPlatformBilled.byResourceType['2026-09']
+  .map((row) => (row.resource_type === 'logs_data_platform' ? { ...row, ...costs } : row))
+  .sort((a, b) => b.value - a.value);
+// A Logs Data Platform charge as the route answers it with the projection
+const projectedCharge = (charge, total, projected) => ({ charge, total, projected });
+
+export const logsDataPlatformBilledLate = {
+  byResourceType: {
+    ...logsDataPlatformBilled.byResourceType,
+    '2026-09': septemberWithLogsDataPlatform({ value: 30, detailsCount: 1, serviceCount: 1 }),
+  },
+  projectedByResourceType: {
+    '2026-09': septemberWithLogsDataPlatform({ value: 72.5, detailsCount: 3, serviceCount: 2 })
+      .map((row) => withPart(row, row.resource_type === 'logs_data_platform' ? 42.5 : 0)),
+  },
+  // The rental of ldp-cd-67890 alone, then with ldp-ab-12345's lines of August
+  logsDataPlatform: {
+    ...logsDataPlatformBilled.logsDataPlatform,
+    '2026-09': logsDataPlatformCharges(30, [[LDP_CHARGES.accountRental, 30]]),
+  },
+  projectedLogsDataPlatform: {
+    '2026-09': {
+      total: 72.5,
+      projected: 42.5,
+      charges: [
+        projectedCharge(LDP_CHARGES.accountRental, 60, 30),
+        projectedCharge(LDP_CHARGES.hotStorage, 12.5, 12.5),
+      ],
     },
   },
 };
