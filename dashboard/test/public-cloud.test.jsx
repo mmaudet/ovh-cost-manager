@@ -71,11 +71,19 @@ const resourceTable = (kind) => within(resourcePanel(kind)).getByRole('table');
 // The name of each row of a table, in the order shown: the first text of its first cell
 const namesIn = (table) => rowTextsOf(table).slice(1).map(([name]) => name);
 const resourceButton = (kind, name) => within(resourcePanel(kind)).getByRole('button', { name });
-// The "show all" modal of a resource table, which a screen reader names by its title: the
-// resources, their count, and what it gives of them, such as their cost (#236)
+// The "show all" modal of a resource table of the Production project, which a screen reader
+// names by its whole title, its parts apart: the resources, their count and their cost, and the
+// month of the buckets, the project of the instances (#236)
+const modalNames = {
+  Instances: 'Instances (5) 538,90€ Production',
+  Buckets: 'Buckets (4) 25,00€ Septembre 2026',
+  Volumes: 'Volumes (4) 12,50€',
+  Snapshots: 'Snapshots (2) 6,00€',
+  'Savings plans': 'Savings plans (2) 28,00€',
+};
 const showAll = async (user, kind) => {
   await user.click(resourceButton(kind, 'Tout afficher'));
-  return screen.getByRole('dialog', { name: new RegExp(`^${kind} \\(`) });
+  return screen.getByRole('dialog', { name: modalNames[kind] });
 };
 const openProduction = async () => {
   const { user } = await renderDashboard();

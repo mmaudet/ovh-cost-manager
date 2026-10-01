@@ -163,11 +163,12 @@ describe('Web Cloud tab', () => {
   });
 
   describe('"show all" modal', () => {
-    // The modal, which a screen reader names by its title: the family, its count and its cost
-    // (#236)
+    // The modal of a family, which a screen reader names by its whole title, its parts apart:
+    // the family, its count and its cost (#236)
+    const modalNames = { Emails: 'Emails (2) 44,52€', Domaines: 'Domaines (2) 28,48€' };
     const showAll = async (user, family) => {
       await user.click(familyButton(family, 'Tout afficher'));
-      return screen.getByRole('dialog', { name: new RegExp(`^${family} \\(`) });
+      return screen.getByRole('dialog', { name: modalNames[family] });
     };
 
     // As the WAI-ARIA dialog pattern describes (#236), the keyboard focus moves into the modal

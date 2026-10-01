@@ -124,7 +124,8 @@ const WebCloudTab = ({
 // The "show all" modal of a Web Cloud family, which the shell renders after the page
 // column, whatever the active tab, so that its backdrop covers the whole page: see
 // docs/adr/0001-tab-state-lives-in-the-dashboard-shell.md. It sorts the family as its panel
-// does (#146).
+// does (#146). A screen reader reads its title as the modal's name: a space sets the family
+// apart from its cost, which a margin alone left run together (#236).
 const WebCloudTabModals = ({
   webCloudPeriod, webCloudItems, showAllWebCloud, setShowAllWebCloud, sortingOf,
   accountColumn, language, t, fmt,
@@ -141,8 +142,8 @@ const WebCloudTabModals = ({
           maxWidth="max-w-5xl"
           title={cat ? (
             <>
-              {t(cat.labelKey)} ({items.length})
-              <span className={`ml-2 text-sm font-normal ${cat.color}`}>
+              {t(cat.labelKey)} ({items.length}){' '}
+              <span className={`ml-1 text-sm font-normal ${cat.color}`}>
                 {fmt(items.reduce((sum, i) => sum + (i.total || 0), 0))}€
               </span>
             </>

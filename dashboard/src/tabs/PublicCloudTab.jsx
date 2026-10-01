@@ -673,7 +673,8 @@ const PublicCloudTab = ({
 // The "show all" modals of the resources of the selected project, which the shell renders
 // after the page column, whatever the active tab, so that their backdrop covers the whole
 // page: see docs/adr/0001-tab-state-lives-in-the-dashboard-shell.md. Each sorts its table as
-// the panel of the tab does (#146).
+// the panel of the tab does (#146). A screen reader reads each title as the modal's name: a
+// space sets its parts apart, which a margin alone left run together (#236).
 const PublicCloudTabModals = ({
   sortingOf, showAllBuckets, setShowAllBuckets, showAllInstances, setShowAllInstances,
   showAllVolumes, setShowAllVolumes, showAllSnapshots, setShowAllSnapshots,
@@ -693,14 +694,17 @@ const PublicCloudTabModals = ({
         maxWidth="max-w-5xl"
         title={
           <>
-            Buckets ({projectBuckets.length})
-            <span className="ml-2 text-sm font-normal text-green-600">
+            Buckets ({projectBuckets.length}){' '}
+            <span className="ml-1 text-sm font-normal text-green-600">
               {fmt(projectBuckets.reduce((sum, b) => sum + (b.total || 0), 0))}€
             </span>
             {selectedMonth?.value && (
-              <span className="ml-2 text-sm font-normal text-gray-400">
-                {formatMonthLabel(selectedMonth.value, language)}
-              </span>
+              <>
+                {' '}
+                <span className="ml-1 text-sm font-normal text-gray-400">
+                  {formatMonthLabel(selectedMonth.value, language)}
+                </span>
+              </>
             )}
           </>
         }
@@ -733,10 +737,18 @@ const PublicCloudTabModals = ({
           <>
             {t('instances')} ({instanceCount})
             {projectInstanceTotal?.total > 0 && (
-              <span className="ml-2 text-sm font-normal text-indigo-600">{fmt(projectInstanceTotal.total)}€</span>
+              <>
+                {' '}
+                <span className="ml-1 text-sm font-normal text-indigo-600">
+                  {fmt(projectInstanceTotal.total)}€
+                </span>
+              </>
             )}
             {openProject?.name && (
-              <span className="ml-2 text-sm font-normal text-gray-400">{openProject.name}</span>
+              <>
+                {' '}
+                <span className="ml-1 text-sm font-normal text-gray-400">{openProject.name}</span>
+              </>
             )}
           </>
         }
@@ -765,8 +777,8 @@ const PublicCloudTabModals = ({
         maxWidth="max-w-5xl"
         title={
           <>
-            Volumes ({projectVolumes.length})
-            <span className="ml-2 text-sm font-normal text-teal-600">
+            Volumes ({projectVolumes.length}){' '}
+            <span className="ml-1 text-sm font-normal text-teal-600">
               {fmt(projectVolumes.reduce((sum, v) => sum + (v.total || 0), 0))}€
             </span>
           </>
@@ -796,8 +808,8 @@ const PublicCloudTabModals = ({
         maxWidth="max-w-5xl"
         title={
           <>
-            Snapshots ({projectSnapshots.length})
-            <span className="ml-2 text-sm font-normal text-amber-600">
+            Snapshots ({projectSnapshots.length}){' '}
+            <span className="ml-1 text-sm font-normal text-amber-600">
               {fmt(projectSnapshots.reduce((sum, sn) => sum + (sn.total || 0), 0))}€
             </span>
           </>
@@ -827,8 +839,8 @@ const PublicCloudTabModals = ({
         maxWidth="max-w-4xl"
         title={
           <>
-            Savings plans ({projectSavingsPlans.length})
-            <span className="ml-2 text-sm font-normal text-rose-600">
+            Savings plans ({projectSavingsPlans.length}){' '}
+            <span className="ml-1 text-sm font-normal text-rose-600">
               {fmt(projectSavingsPlans.reduce((sum, p) => sum + (p.total || 0), 0))}€
             </span>
           </>
