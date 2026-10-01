@@ -7,7 +7,7 @@
 
 import { readFileSync } from 'node:fs';
 import { StrictMode } from 'react';
-import { onTestFinished, vi } from 'vitest';
+import { expect, onTestFinished, vi } from 'vitest';
 import { cleanup, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClientProvider } from '@tanstack/react-query';
@@ -395,6 +395,31 @@ export function lastSyncLines() {
 // The dimmed backdrop around a dialog, which closes it on a click
 export function backdropOf(dialog) {
   return dialog.parentElement;
+}
+
+// The ways a user closes a "show all" modal: its close button, in the page's language, Escape,
+// or a click on the backdrop around it
+const closeModalBy = {
+  button: (user, dialog) =>
+    user.click(within(dialog).getByRole('button', { name: /^(Fermer|Close)$/ })),
+  escape: (user) => user.keyboard('{Escape}'),
+  backdrop: (user, dialog) => user.click(backdropOf(dialog)),
+};
+
+/**
+ * Closes a "show all" modal one way, and checks where the keyboard focus goes, as the WAI-ARIA
+ * dialog pattern describes (#236): onto the modal's first control, its CSV export, while it is
+ * open, and back to the button that opened it once it is closed, however it closes.
+ * @param {object} user - The user of the test, as renderDashboard() gives it
+ * @param {HTMLElement} dialog - The open modal
+ * @param {HTMLElement} opener - The button that opened it
+ * @param {'button'|'escape'|'backdrop'} way - Its close button, Escape, or a click outside it
+ */
+export async function closeAndCheckFocus(user, dialog, opener, way) {
+  expect(within(dialog).getByRole('button', { name: 'CSV' })).toHaveFocus();
+  await closeModalBy[way](user, dialog);
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  expect(opener).toHaveFocus();
 }
 
 // The coloured dot of a chart legend item

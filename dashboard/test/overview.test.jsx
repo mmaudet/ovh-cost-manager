@@ -573,9 +573,13 @@ describe('Overview tab', () => {
       ['VPS', 'staging-vps', 'Expire dans 27 jours'],
       ['Stockage', 'shared-files', 'Expire dans 29 jours'],
     ];
+    // The card's button that opens the modal
+    const showAllButton = () =>
+      within(expirationCard()).getByRole('button', { name: 'Tout afficher' });
+    // The modal, which a screen reader names by its title (#236)
     const showAll = async (user) => {
-      await user.click(within(expirationCard()).getByRole('button', { name: 'Tout afficher' }));
-      return screen.getByRole('dialog');
+      await user.click(showAllButton());
+      return screen.getByRole('dialog', { name: 'Expirations proches (7)' });
     };
 
     it('lists every service about to expire, sorts them, and closes', async () => {
@@ -583,7 +587,6 @@ describe('Overview tab', () => {
 
       const dialog = await showAll(user);
 
-      expect(within(dialog).getByText('Expirations proches (7)')).toBeInTheDocument();
       const table = within(dialog).getByRole('table');
       expect(rowsOf(table)).toEqual(allSeven);
 
@@ -595,9 +598,80 @@ describe('Overview tab', () => {
         'shared-files', 'staging-vps', 'vps-0a1b2c3d.vps.ovh.net',
       ]);
 
-      await user.click(within(dialog).getByRole('button', { name: 'Close' }));
+      await user.click(within(dialog).getByRole('button', { name: 'Fermer' }));
 
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      // Back on the button that opened it, though a header of its table took the focus (#236)
+      expect(showAllButton()).toHaveFocus();
+    });
+
+    // #236: from the header's badge, which leads to the card (#225), to the modal and back, with
+    // the keyboard alone, as the WAI-ARIA dialog pattern describes: the focus moves into the
+    // modal when it opens, onto its first control, and back to the button that opened it when it
+    // closes
+    it('takes the keyboard focus when it opens, and gives it back when it closes', async () => {
+      const { user } = await renderDashboard({ ...account, expiringServices: expiringSoon });
+      // The badge focuses the card, whose first control opens the modal
+      screen.getByRole('button', { name: /Expirations proches/ }).focus();
+      await user.keyboard('{Enter}');
+      await user.tab();
+      expect(showAllButton()).toHaveFocus();
+
+      await user.keyboard('{Enter}');
+
+      const dialog = screen.getByRole('dialog', { name: 'Expirations proches (7)' });
+      expect(within(dialog).getByRole('button', { name: 'CSV' })).toHaveFocus();
+
+      await user.keyboard('{Escape}');
+
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      expect(showAllButton()).toHaveFocus();
+    });
+
+    // #236: Tab and Shift+Tab go round the modal's controls, its buttons then the headers that
+    // sort its table, and never on to the page behind it, as the WAI-ARIA dialog pattern
+    // describes
+    it('keeps the keyboard focus within it while it is open', async () => {
+      const { user } = await renderDashboard({ ...account, expiringServices: expiringSoon });
+      const dialog = await showAll(user);
+      const control = (name) => within(dialog).getByRole('button', { name });
+      expect(control('CSV')).toHaveFocus();
+
+      // From its first control to its last, then round to its first
+      for (const name of ['Fermer', 'Type', 'Service', 'Expiration', 'CSV']) {
+        await user.tab();
+        expect(control(name)).toHaveFocus();
+      }
+      // And the other way round, from its first to its last
+      await user.tab({ shift: true });
+      expect(control('Expiration')).toHaveFocus();
+
+      // Even once a click on its table took the focus off its controls
+      await user.click(within(dialog).getByText('legacy-vps'));
+      await user.tab();
+      expect(control('CSV')).toHaveFocus();
+      await user.click(within(dialog).getByText('legacy-vps'));
+      await user.tab({ shift: true });
+      expect(control('Expiration')).toHaveFocus();
+    });
+
+    // #236: the modal moves the focus when it opens and when it closes only, and not whenever the
+    // page renders it again, as when the user sorts its table
+    it('leaves the focus on the header that sorts its table from the keyboard', async () => {
+      const { user } = await renderDashboard({ ...account, expiringServices: expiringSoon });
+      const dialog = await showAll(user);
+      const table = within(dialog).getByRole('table');
+      // From its first control: its close button, the header of the types, then the services'
+      await user.tab();
+      await user.tab();
+      await user.tab();
+      expect(sortButton(table, 'Service')).toHaveFocus();
+
+      await user.keyboard('{Enter}');
+
+      // From A to Z (#146), the header keeping the focus
+      expect(rowsOf(table)[1][1]).toBe('archives-nas');
+      expect(sortButton(table, 'Service')).toHaveFocus();
     });
 
     // In the order the server lists them, whatever the order shown, as the other lists (#146)
@@ -643,9 +717,8 @@ describe('Overview tab', () => {
       await user.click(
         within(expirationCard('Expiring soon')).getByRole('button', { name: 'Show all' }),
       );
-      const dialog = screen.getByRole('dialog');
+      const dialog = screen.getByRole('dialog', { name: 'Expiring soon (7)' });
 
-      expect(within(dialog).getByText('Expiring soon (7)')).toBeInTheDocument();
       expect(rowsOf(within(dialog).getByRole('table')).slice(0, 3)).toEqual([
         ['Type○', 'Service○', 'Expiration○'],
         ['VPS', 'legacy-vps', 'Expired 5 days ago'],
@@ -657,6 +730,12 @@ describe('Overview tab', () => {
 
       expect((await downloadedFiles())[0].content.split('\n')[0])
         .toEqual(`${BOM}"Name";"ID";"Type";"Expiration date"`);
+
+      // Its close button, which shows a cross, says what it does in the page's language, as
+      // « Fermer » in French (#236)
+      await user.click(within(dialog).getByRole('button', { name: 'Close' }));
+
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     });
 
     it('is offered only when the card cannot list every service', async () => {

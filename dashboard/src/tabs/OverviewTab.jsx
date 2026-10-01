@@ -527,6 +527,7 @@ const OverviewTabModals = ({
     <Modal
       open={showAllExpiring}
       onClose={() => setShowAllExpiring(false)}
+      t={t}
       title={`${t('expiringSoon')} (${services.length})`}
       actions={
         <TableActions

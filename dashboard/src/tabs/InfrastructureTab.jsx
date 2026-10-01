@@ -436,6 +436,7 @@ const InfrastructureTabModals = ({
     <Modal
       open={showAllServers}
       onClose={() => setShowAllServers(false)}
+      t={t}
       maxWidth="max-w-6xl"
       title={`${t('dedicatedServers')} (${servers.length})`}
       actions={
