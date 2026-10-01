@@ -29,12 +29,15 @@ const FILE_STORAGE = 'Enterprise File Storage 1 TB - 1 mois';
 
 // What the versions before #246 stored of an account's bills of August and September: the lines
 // of its Logs Data Platform service, the rental of its account and the storage of its streams,
-// typed as storage, and those of its NetApp file storage, which are storage. Every identifier and
-// amount is made up; the charges are those of an invoice's DBAAS-LOGS lines.
+// typed as storage, and those of its NetApp file storage, which are storage. And a bill of July
+// that no account claimed, the Unknown account's, with the rental of the same service. Every
+// identifier and amount is made up; the charges are those of an invoice's DBAAS-LOGS lines.
 function seedAsBefore246(db) {
+  bill(db, 'FR0001', '2026-07-05', null);
   bill(db, 'FR1001', '2026-08-05', LYON);
   bill(db, 'FR1002', '2026-09-05', LYON);
   db.details.insertMany([
+    line('FR0001-1', 'FR0001', LDP, 'storage', ACCOUNT_RENTAL, 30),
     line('FR1001-1', 'FR1001', LDP, 'storage', ACCOUNT_RENTAL, 30),
     line('FR1001-2', 'FR1001', LDP, 'storage', HOT_STORAGE, 12.5),
     line('FR1001-3', 'FR1001', NETAPP, 'storage', FILE_STORAGE, 64.8),
@@ -99,6 +102,28 @@ describe('the Logs Data Platform lines that the versions before #246 stored as s
       status: 200,
       body: [{ domain: NETAPP, description: FILE_STORAGE, total: 64.8, line_count: 1 }],
     });
+  });
+
+  // Stored before OCM told accounts apart, and claimed by no account since (ADR 0002)
+  test("include the Unknown account's", async () => {
+    expect(await costsByResourceType('from=2026-07-01&to=2026-07-31&account=unknown')).toEqual({
+      status: 200,
+      body: [['logs_data_platform', 30, 1, 1]],
+    });
+  });
+
+  // Each line's service type, resource type and description, the export's header left out
+  test('are of their own resource type in the export of the bill lines', async () => {
+    const { status, body } = await ocm.getText(
+      '/api/export/details?from=2026-08-01&to=2026-08-31',
+    );
+
+    expect(status).toBe(200);
+    expect(body.split('\n').slice(1).map((row) => row.split(';').slice(3, 6))).toEqual([
+      ['"Database"', '"logs_data_platform"', `"${ACCOUNT_RENTAL}"`],
+      ['"Database"', '"logs_data_platform"', `"${HOT_STORAGE}"`],
+      ['"Storage"', '"storage"', `"${FILE_STORAGE}"`],
+    ]);
   });
 
   // OVHcloud bills Logs Data Platform as « DBAAS-LOGS »: only its resource type changes
