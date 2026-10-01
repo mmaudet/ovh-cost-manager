@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { screen, within } from '@testing-library/react';
 import {
-  LDP_CHARGES, account, everyResourceType, logsDataPlatformBilled, septemberInProgress,
-  threeBilledProjects,
+  LDP_CHARGES, account, everyResourceType, logsDataPlatformBilled, logsDataPlatformCharges,
+  septemberInProgress, threeBilledProjects,
 } from './fixtures/account.js';
 import {
   COLD_ARCHIVE, DB_1_PLAN, billedProducts, bucketStorage, hourlyUse,
@@ -1266,6 +1266,46 @@ describe('Compare tab', () => {
         [ACCOUNT_RENTAL, '60,00€', '30,00€', '-50,0 %'],
         [HOT_STORAGE, '18,40€', '12,50€', '-32,1 %'],
         [COLD_STORAGE, '2,10€', '0,00€', '-100,0 %'],
+      ]);
+    });
+
+    // A month whose only Logs Data Platform line is a refund: the route keeps its charge below
+    // 0 €, as the Infrastructure tab's table shows it, so that the row unfolds into it, whereas a
+    // row of services, whose services cost more than 0 €, has none to unfold into, such as the
+    // storage refunded alone in the same month
+    it('unfold a month whose only charge is a refund, below 0 €, unlike services', async () => {
+      // The costs of a resource type in July, as the routes by resource type give them
+      const refundedInJuly = (name, type, color, value) => ({
+        name, resource_type: type, color, value, detailsCount: 1, serviceCount: 1,
+      });
+      const { user } = await renderDashboard({
+        ...account,
+        byResourceType: {
+          ...account.byResourceType,
+          '2026-07': [
+            ...account.byResourceType['2026-07'],
+            refundedInJuly('Storage', 'storage', '#10b981', -10),
+            refundedInJuly(LOGS_DATA_PLATFORM, 'logs_data_platform', '#65a30d', -4.6),
+          ],
+        },
+        logsDataPlatform: { '2026-07': logsDataPlatformCharges(-4.6, [[HOT_STORAGE, -4.6]]) },
+      });
+      await openTab(user, 'Comparaison');
+      // July as month A, and September, which billed neither
+      await pickMonth(user, 'Août 2026', 'Juillet 2026');
+      await openComparison(user, INFRASTRUCTURE);
+
+      expect(infrastructureRows()[2]).toEqual(['Stockage', '-10,00€', '0,00€', '—']);
+      expect(within(comparisonTable(INFRASTRUCTURE))
+        .queryByRole('button', { name: 'Services : Stockage' })).not.toBeInTheDocument();
+
+      await toggleCharges(user, INFRASTRUCTURE, LOGS_DATA_PLATFORM);
+
+      // No variation to compute from below 0 € (#65)
+      expect(infrastructureRows().slice(6, 9)).toEqual([
+        [LOGS_DATA_PLATFORM, '-4,60€', '0,00€', '—'],
+        [HOT_STORAGE, '-4,60€', '0,00€', '—'],
+        ['Hôtes Private Cloud', '0,00€', '0,00€', '—'],
       ]);
     });
 
