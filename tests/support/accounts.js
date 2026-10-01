@@ -4,8 +4,8 @@
  * accounts that the server lists (#114) and of their budgets (#117), what records them as an
  * import does, and the credentials of their entries of config.json. And, for the tests of the
  * account parameter of the server's routes (#115), the accounts of the database they seed,
- * the value that selects the Unknown account, the writers of their rows, and what the server
- * answers to an account it refuses.
+ * the value that selects the Unknown account, the writers of their rows, what the server
+ * answers to an account it refuses, and the answer of a route for an account.
  */
 
 // The value that selects the Unknown account, from the data layer's module that has no side
@@ -164,8 +164,23 @@ const REFUSED = {
     + UNKNOWN_ACCOUNT,
 };
 
+/**
+ * The answer of a route of the server that a test started, for the account that the account
+ * parameter names, or for every account without one, as the tests of the projection of the month
+ * in progress ask for it (#219, #248).
+ * @param {{ get: function(string): Promise }} ocm - The server (support/ocm-server.js)
+ * @param {string} route - The route's path, such as '/api/analysis/by-project'
+ * @param {string} parameters - The other parameters of its query, such as its period
+ * @param {string} [account] - The value of the account parameter: a NIC handle, or
+ *   UNKNOWN_ACCOUNT; none for every account
+ * @returns {Promise<{ status: number, body: * }>} Its status and its JSON body
+ */
+const answerOf = (ocm, route, parameters, account) => ocm.get(
+  `${route}?${parameters}${account === undefined ? '' : `&account=${account}`}`,
+);
+
 module.exports = {
   ACCOUNT, SQLITE_TIME, LYON, PARIS, NEW_ACCOUNT, UNKNOWN_ACCOUNT, recordAccounts, credentials,
-  project, bill, REFUSED, consumption, projectForecast, consumptionMonth, snapshot, historyEntry,
-  balance, movement, server, vps, storage,
+  project, bill, REFUSED, answerOf, consumption, projectForecast, consumptionMonth, snapshot,
+  historyEntry, balance, movement, server, vps, storage,
 };

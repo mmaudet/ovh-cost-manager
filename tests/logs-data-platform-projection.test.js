@@ -9,7 +9,7 @@
  * as before. The bills are dated from the real date (see support/month-in-progress.js).
  */
 
-const { LYON, PARIS, UNKNOWN_ACCOUNT } = require('./support/accounts');
+const { LYON, PARIS, answerOf } = require('./support/accounts');
 const { LDP_CHARGES } = require('./support/logs-data-platform');
 const {
   ALL_ACCOUNTS, LYON_BILLED_LATE, MONTH_BEFORE, MONTH_OF_TODAY, MONTHS_BEFORE, OF_BOTH_MONTHS,
@@ -79,12 +79,9 @@ afterAll(async () => {
 
 const ROUTE = '/api/analysis/logs-data-platform';
 
-// The answer of a route for a period, with the parameters given besides, and for the account that
+// The route's answer for a period, with the parameters given besides, and for the account that
 // the parameter names, or for every account without one
-const answerOf = (route, parameters, account) => ocm.get(
-  `${route}?${parameters}${account === undefined ? '' : `&account=${account}`}`,
-);
-const chargesOf = (parameters, account) => answerOf(ROUTE, parameters, account);
+const chargesOf = (parameters, account) => answerOf(ocm, ROUTE, parameters, account);
 // The route's answer with projected=true: what the charges cost in all and its projected part,
 // each charge as [charge, cost, projected part], the most expensive first
 const projectedCharges = ([total, projected], charges) => ({
@@ -169,7 +166,7 @@ describe('GET /api/analysis/logs-data-platform with projected=true (#248)', () =
     async (_, account) => {
       const { body: { total, projected } } = await chargesOf(`${OF_TODAY}&projected=true`, account);
       const { body: resourceTypes } = await answerOf(
-        '/api/analysis/by-resource-type', `${OF_TODAY}&projected=true`, account,
+        ocm, '/api/analysis/by-resource-type', `${OF_TODAY}&projected=true`, account,
       );
 
       expect(resourceTypes.find((row) => row.resource_type === 'logs_data_platform'))
