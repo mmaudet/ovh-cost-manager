@@ -12,6 +12,22 @@ sections were written afterwards from the git history.
 
 <!-- scripts/release.sh inserts each new version above the first version heading. -->
 
+## 3.5.0 - 2026-10-01
+
+<!-- Upgrade notes and highlights of this release, if any. -->
+
+### New features
+* feat: give Logs Data Platform its own resource type, the bills already imported included by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/256
+* feat: tell apart and project the month before while the month of today has no bill by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/260
+* feat: list the month's Logs Data Platform charges in the Infrastructure tab by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/261
+* feat: unfold the Compare tab's Logs Data Platform row into its charges by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/262
+### Bug fixes
+* fix: give the "show all" modals keyboard focus, a name and a translated close button by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/251
+### Maintenance
+* docs: widen the glossary's month in progress to the turn of the month by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/259
+
+**Full Changelog**: https://github.com/mmaudet/ovh-cost-manager/compare/v3.4.1...v3.5.0
+
 ## 3.4.1 - 2026-10-01
 
 A sync no longer blocks the dashboard (#250).
