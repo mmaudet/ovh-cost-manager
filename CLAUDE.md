@@ -79,12 +79,16 @@ OVH API ──> data/import.js ──> SQLite (ovh-bills.db) ──> server/inde
     project's other services, and the products of a project that the Compare tab compares
     month by month (#181). Each line has one; those without a card of their own go to the
     other services, so that the cards and the credit add up to the month's cloud total (#145).
-    And the charge of a line (`chargeOf()`, `CONTEXT.md`): its description without the period
-    that ends it in brackets on some accounts' bills, its apostrophes straight, so that the
-    lines of one charge name it alike in every month; each product gives its charges, what its
-    lines add up to by charge, which the Compare tab unfolds the product into (#195). The
-    credit has none. **Products and charges are read when the server reads the bills**, like
-    the ties: changing the rules needs no re-import.
+    Each product gives its charges, what its lines add up to by charge (`chargesOf()`), which
+    the Compare tab unfolds the product into (#195). The credit has none. **Products and
+    charges are read when the server reads the bills**, like the ties: changing the rules needs
+    no re-import.
+  - `charges.js` — pure: the charge of a bill line (`chargeOf()`, `CONTEXT.md`), its
+    description without the period that ends it in brackets on some accounts' bills, its
+    apostrophes straight, so that the lines of one charge name it alike in every month; and what
+    lines add up to by charge (`chargesOf()`), those at 0 € left out and those below kept, for a
+    Public Cloud product (#195) and the Logs Data Platform services (#247). With the helpers of
+    the amounts that these modules share: `toCents()`, `sumOf()` and `nonZeroByCost()`.
   - `ai-endpoints.js` — pure: the AI Endpoints model of a bill line (`CONTEXT.md`), read from
     its charge (`chargeOf()`), and what the line counts, the model's input or output tokens or
     its cost only, and what lines add up to by model (`modelFigures()`), for

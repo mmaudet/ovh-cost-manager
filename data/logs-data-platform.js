@@ -11,8 +11,8 @@
  * re-import. This module has no side effect.
  */
 
+const { chargeOf, toCents } = require('./charges');
 const { LOGS_DATA_PLATFORM } = require('./classify');
-const { chargeOf } = require('./public-cloud-products');
 
 /**
  * The condition that narrows a query's bill lines down to those of the Logs Data Platform
@@ -25,8 +25,6 @@ const { chargeOf } = require('./public-cloud-products');
 function logsDataPlatformLineCondition(column) {
   return { sql: `${column} = ?`, params: [LOGS_DATA_PLATFORM.resourceType] };
 }
-
-const toCents = (amount) => Math.round(amount * 100) / 100;
 
 /**
  * What the bill lines of Logs Data Platform services add up to, by charge (chargeOf()): the lines
