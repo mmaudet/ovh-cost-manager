@@ -144,9 +144,9 @@ OVH API ──> data/import.js ──> SQLite (ovh-bills.db) ──> server/inde
   The routes of the Trends and Compare tabs take `projected=true` (`projectedParameter`,
   #214): the monthly trends, the summary, the costs by service type, resource type and
   project, a resource type's services, the Veeam backups and their services, a project's
-  products, and the Logs Data Platform charges (#248). With it, when their period covers the month in progress, they count its
-  projected cost, and each row gives its projected part, `projected` (`projectedPartOf()`);
-  without it, they answer as before.
+  products, and the Logs Data Platform charges (#248). With it, when their period covers the
+  month in progress, they count its projected cost, and each row gives its projected part,
+  `projected` (`projectedPartOf()`); without it, they answer as before.
   The consumption and forecast cards read `/api/consumption/current` and `/forecast`, which
   `consumption.js` answers from an account's Public Cloud projects whenever they consumed in
   the month of its current consumption, as OVH's Public Cloud page does (#224): their
@@ -165,19 +165,21 @@ OVH API ──> data/import.js ──> SQLite (ovh-bills.db) ──> server/inde
   (#146): a `SortableHeader` per column, `sortRows()` for the rows, by their raw values,
   and the order in the tab's hook, with `useTableSorts()`; a table keeps its own order
   until a header is clicked, and its CSV export keeps it whatever the order shown.
-  The Compare tab's rows unfold into what they add up, their services or a product's
-  charges (#189), through `src/components/UnfoldingRow.jsx`: `UnfoldingRow` draws a row
-  whose chevron unfolds it, `DetailRow` each service or charge under it, `sortUnfolded()`
-  orders those within their row, and `useUnfoldedRows()`, in the tab's hook, holds the rows
-  unfolded. In `CompareTab.jsx`, `drawUnfoldingRow()` draws a row of the infrastructure,
-  Private Cloud or backup comparison. `drawServicesRow()` unfolds it into its services, which
+  The Compare tab's rows unfold into what they add up, their services or charges: a
+  product's, or the Logs Data Platform row's (#189, #248), through
+  `src/components/UnfoldingRow.jsx`: `UnfoldingRow` draws a row whose chevron unfolds it,
+  `DetailRow` each service or charge under it, `sortUnfolded()` orders those within their
+  row, and `useUnfoldedRows()`, in the tab's hook, holds the rows unfolded. In
+  `CompareTab.jsx`, `drawUnfoldingRow()` draws a row of the infrastructure, Private Cloud or
+  backup comparison. `drawServicesRow()` unfolds it into its services, which
   `UnfoldedRowServices.jsx` loads from the query of a month that its `servicesQueryOf` prop
   gives, run once the row unfolds. `drawChargesRow()` unfolds the Logs Data Platform row into
   its charges, which `UnfoldedRowCharges.jsx` loads the same way (#248).
   `ProjectProductComparison.jsx` unfolds a product into its charges, which come with the
-  products. Both show the charges with `ComparedCharges` (`UnfoldingRow.jsx`). `src/utils/monthComparison.js` pairs what months A and B gave
-  (`pairMonths()`), a service by its identifier and its account (`byNameAndAccount()`), and
-  gives the value of a row in the columns that sort it (`comparisonValues()`).
+  products. Both show the charges with `ComparedCharges` (`UnfoldingRow.jsx`).
+  `src/utils/monthComparison.js` pairs what months A and B gave (`pairMonths()`), a service
+  by its identifier and its account (`byNameAndAccount()`), and gives the value of a row in
+  the columns that sort it (`comparisonValues()`).
 
 ### Accounts
 
