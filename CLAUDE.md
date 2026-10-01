@@ -46,6 +46,10 @@ OVH API ──> data/import.js ──> SQLite (ovh-bills.db) ──> server/inde
     description to a service type. **Classification runs at import time** and the result is
     stored in `bill_details.service_type`; the server reads the stored value, it does not
     re-classify. Changing classification rules requires a re-import to take effect on old data.
+    But a rule that a service's identifier alone decides may migrate the stored lines at
+    startup rather than wait for a re-import, as Logs Data Platform's did (#246): the identifier
+    rule (`classifyResourceTypeFromDomain()`) gives `ldp-` services `logs_data_platform`, and
+    `getDb()` gives it to the lines stored as storage, through `migrateWhenNeeded()`.
   - `carbon-footprint.js` — pure functions reading the file that OVHcloud's carbon
     calculator generates (`readFootprintFile()`), and the 24 months that each import asks
     for again (`footprintMonths()`). The import stores its lines in

@@ -53,7 +53,7 @@ New in version 3.1.0.
 
 ### Cost Analysis
 - **Service Breakdown**: Costs by service type (Compute, Storage, Network, Database, AI/ML, Licenses, Backup, Support)
-- **Resource Type Classification**: Automatic categorization (Public Cloud, Dedicated Servers, VPS, Storage, Load Balancers, IP, Domains, Private Cloud Hosts, Private Cloud Datastores, Licenses, Backup, Telephony)
+- **Resource Type Classification**: Automatic categorization (Public Cloud, Dedicated Servers, VPS, Storage, Logs Data Platform, Load Balancers, IP, Domains, Private Cloud Hosts, Private Cloud Datastores, Licenses, Backup, Telephony). Since version 3.5.0, Logs Data Platform is a resource type of its own rather than Storage, with its own row in the Overview's breakdown and in the Compare tab, its own line in the Trends tab, and its own card in the Infrastructure tab; its service type stays Database. The bills already imported show it too, without a new import: the server reclassifies their Logs Data Platform lines as it starts
 - **Resource Type Detail**: Expandable cost breakdown per individual service within each category
 - **GPU Cost Consolidation**: Dedicated view for GPU costs by model (NVIDIA L4, L40S, A100, H100) and by project
 - **AI Endpoints Models** (new in version 3.3.0): each AI Endpoints model that the month's bills name, with its input tokens, its output tokens and its cost, in the Public Cloud tab, and its monthly cost in the Trends tab (see [AI Endpoints Models](#ai-endpoints-models))
@@ -516,7 +516,7 @@ The Compare tab compares two months, month A and month B, from their bills: it o
 
 Since version 3.3.0, each row that adds up several services or charges unfolds into them, month A against month B, one row each, in the columns of the row it details:
 
-- **Infrastructure and Private Cloud comparisons**: each resource type (dedicated servers, VPS, storage, load balancers, IP addresses, domains, Private Cloud hosts and datastores) unfolds into its services, named as the Infrastructure tab names them: by their identifier and the description of their most expensive bill line, month B's when month B billed them, cut to its column, whole on hover. The Dedicated Servers row no longer lists the servers that the inventory holds today, which have nothing to do with months A and B: it unfolds into the servers that either month billed, and the Infrastructure tab keeps listing the inventory.
+- **Infrastructure and Private Cloud comparisons**: each resource type (dedicated servers, VPS, storage, load balancers, IP addresses, domains, Logs Data Platform, Private Cloud hosts and datastores) unfolds into its services, named as the Infrastructure tab names them: by their identifier and the description of their most expensive bill line, month B's when month B billed them, cut to its column, whole on hover. The Dedicated Servers row no longer lists the servers that the inventory holds today, which have nothing to do with months A and B: it unfolds into the servers that either month billed, and the Infrastructure tab keeps listing the inventory.
 - **Backup comparison**: the row of the Veeam VMs unfolds into each VM backed up, and that of the Enterprise licenses into each license. Folded, each keeps its number of services and its amount, and it unfolds into as many services, but in three cases: a VM that a refund brings to 0 € or less is counted, but not listed; a line without an identifier is listed, but not counted; and, while the lists name each row's account, a VM that two accounts billed is counted once, but listed once for each account.
 - **A project's comparison**: each product unfolds into its charges. The Public Cloud credit that the bills used pays for no product, and does not unfold.
 
@@ -634,7 +634,7 @@ LemonLDAP-NG is the OIDC provider and the only way in to OCM: open http://ocm.lo
 
 > **Upgrading from 2.2.0 or earlier**: `ocm-data` used to be mounted on `/app/data`, where the image also ships the data-layer code. Docker copied that code into the volume on first start, so later image updates never reached it. Both compose files now mount the volume on `/data` and set `DATA_DIR=/data`: the existing volume and its database are picked up as is, just recreate the container as for any update. If you run the image with `docker run` or your own compose file, make the same change.
 >
-> Bill lines are classified at import time, so classification fixes only apply to bills imported afterwards. To reclassify past bills, re-import a period: `docker exec ovh-cost-manager node /app/data/import.js --from 2025-01-01 --all`. A `--diff` import skips bills already in the database, and `--full` clears it first.
+> Bill lines are classified at import time, so classification fixes only apply to bills imported afterwards. To reclassify past bills, re-import a period: `docker exec ovh-cost-manager node /app/data/import.js --from 2025-01-01 --all`. A `--diff` import skips bills already in the database, and `--full` clears it first. Logs Data Platform's resource type, new in version 3.5.0, needs no re-import: the server gives it to the bills already imported as it starts.
 
 ### Production Deployment
 
