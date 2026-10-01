@@ -77,8 +77,11 @@ export const translations = {
     // label (#192)
     servicesOf: 'Services :',
     servicesFailed: 'Impossible de charger les services de cette ligne.',
-    // The chevron of a product of a project's comparison, which unfolds into its charges (#195)
+    // The chevron of a product of a project's comparison, which unfolds into its charges (#195),
+    // and of the Logs Data Platform row, which unfolds into its charges too, and what that row
+    // says when the charges of a month could not load (#248)
     chargesOf: 'Charges :',
+    chargesFailed: 'Impossible de charger les charges de cette ligne.',
 
     // What a click on the header of a column that sorts its table does (#146)
     sortAscending: 'Trier par ordre croissant',
@@ -415,8 +418,11 @@ export const translations = {
     // label (#192)
     servicesOf: 'Services:',
     servicesFailed: 'The services of this row could not be loaded.',
-    // The chevron of a product of a project's comparison, which unfolds into its charges (#195)
+    // The chevron of a product of a project's comparison, which unfolds into its charges (#195),
+    // and of the Logs Data Platform row, which unfolds into its charges too, and what that row
+    // says when the charges of a month could not load (#248)
     chargesOf: 'Charges:',
+    chargesFailed: 'The charges of this row could not be loaded.',
 
     // What a click on the header of a column that sorts its table does (#146)
     sortAscending: 'Sort in ascending order',

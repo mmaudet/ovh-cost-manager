@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { screen, within } from '@testing-library/react';
 import {
-  account, everyResourceType, logsDataPlatformBilled, septemberInProgress, threeBilledProjects,
+  LDP_CHARGES, account, everyResourceType, logsDataPlatformBilled, septemberInProgress,
+  threeBilledProjects,
 } from './fixtures/account.js';
 import {
   COLD_ARCHIVE, DB_1_PLAN, billedProducts, bucketStorage, hourlyUse,
@@ -12,7 +13,7 @@ import {
 import { enterpriseLicence } from './fixtures/backup.js';
 import { months } from './fixtures/calendar.js';
 import {
-  serverAndBackupsBilledLate, stagingBilledLate, unnamedBilledLate,
+  logsDataPlatformBilledLate, serverAndBackupsBilledLate, stagingBilledLate, unnamedBilledLate,
 } from './fixtures/compare.js';
 import { api, failFor, holdBack } from './support/api.js';
 import {
@@ -1167,19 +1168,27 @@ describe('Compare tab', () => {
 
   // Logs Data Platform, a resource type of its own since #246, apart from the storage that
   // counted it before: a row of the infrastructure comparison, before the Private Cloud's rows,
-  // which unfolds into its services as they do. See fixtures/account.js.
-  describe('Logs Data Platform (#246)', () => {
-    // Its row, and the services under it once unfolded
-    const logsDataPlatformRows = [
-      // (80,50 - 42,50) / 42,50
-      ['Logs Data Platform', '42,50€', '80,50€', '+89,4 %'],
-      // (50,50 - 42,50) / 42,50, then the service new in September
-      ['ldp-ab-12345', 'Logs - Account rental for 1 month', '42,50€', '50,50€', '+18,8 %'],
-      ['ldp-cd-67890', 'Logs - Account rental for 1 month', '0,00€', '30,00€', '—'],
-    ];
+  // which unfolds into its charges, the services together, as a product of a project does, rather
+  // than into its services (#248). See fixtures/account.js: two services in September, whose
+  // rentals add up, and one in August, the hot and the cold storage of its streams.
+  describe('Logs Data Platform (#246, #248)', () => {
+    const withLogsDataPlatform = { ...account, ...logsDataPlatformBilled };
+    const LOGS_DATA_PLATFORM = 'Logs Data Platform';
+    // The charges of the bills, as they word them
+    const {
+      accountRental: ACCOUNT_RENTAL, hotStorage: HOT_STORAGE, coldStorage: COLD_STORAGE,
+    } = LDP_CHARGES;
+    // Its row, folded: (80,50 - 42,50) / 42,50
+    const logsDataPlatformRow = [LOGS_DATA_PLATFORM, '42,50€', '80,50€', '+89,4 %'];
+    // Unfolds or folds the row into its charges with a click on its chevron, as the user does,
+    // which names them as a product's chevron does (#195), in either language
+    const toggleCharges = (user, title) => toggleProduct(user, title, LOGS_DATA_PLATFORM);
+    // The row of a charge of the infrastructure comparison, found by the charge
+    const chargeRow = (charge) => within(comparisonTable(INFRASTRUCTURE))
+      .getByText(charge).closest('tr');
 
-    it('is compared in a row of its own, which unfolds into its services', async () => {
-      const { user } = await renderDashboard({ ...account, ...logsDataPlatformBilled });
+    it('is compared in a row of its own, which unfolds into its charges', async () => {
+      const { user } = await renderDashboard(withLogsDataPlatform);
       await openTab(user, 'Comparaison');
 
       await openComparison(user, INFRASTRUCTURE);
@@ -1192,40 +1201,270 @@ describe('Compare tab', () => {
         ['Load Balancer', '0,00€', '0,00€', '—'],
         ['Adresses IP', '0,00€', '0,00€', '—'],
         ['Noms de domaine', '30,00€', '35,00€', '+16,7 %'],
-        logsDataPlatformRows[0],
+        logsDataPlatformRow,
         ['Hôtes Private Cloud', '0,00€', '0,00€', '—'],
         ['Datastores Private Cloud', '0,00€', '0,00€', '—'],
       ]);
+      // Folded, and nothing asked for before it unfolds
+      expect(productChevron(INFRASTRUCTURE, LOGS_DATA_PLATFORM))
+        .toHaveAttribute('aria-expanded', 'false');
+      expect(api.fetchLogsDataPlatform).not.toHaveBeenCalled();
 
-      await toggleRow(user, INFRASTRUCTURE, 'Logs Data Platform');
+      await toggleCharges(user, INFRASTRUCTURE);
 
-      // Those that the Infrastructure tab lists under its card, of each month
+      // Those that the Infrastructure tab lists for each month, for all accounts (null), as the
+      // instance knows a single one, rather than its services
       for (const { from, to } of [months[1], months[0]]) {
-        expect(api.fetchResourceTypeDetails)
-          .toHaveBeenCalledWith('logs_data_platform', from, to, null);
+        expect(api.fetchLogsDataPlatform).toHaveBeenCalledWith(from, to, null);
       }
-      expect(infrastructureRows().slice(6, 10)).toEqual([
-        ...logsDataPlatformRows, ['Hôtes Private Cloud', '0,00€', '0,00€', '—'],
+      expect(api.fetchResourceTypeDetails).not.toHaveBeenCalled();
+      expect(productChevron(INFRASTRUCTURE, LOGS_DATA_PLATFORM))
+        .toHaveAttribute('aria-expanded', 'true');
+      // Each charge under the row, by month A, the most expensive first: its cost in months A and
+      // B, which add up to the row's, and the variation
+      expect(infrastructureRows().slice(6, 11)).toEqual([
+        logsDataPlatformRow,
+        // (60 - 30) / 30: the rentals of both services in September
+        [ACCOUNT_RENTAL, '30,00€', '60,00€', '+100,0 %'],
+        // (18,40 - 12,50) / 12,50
+        [HOT_STORAGE, '12,50€', '18,40€', '+47,2 %'],
+        [COLD_STORAGE, '0,00€', '2,10€', '—'],
+        ['Hôtes Private Cloud', '0,00€', '0,00€', '—'],
+      ]);
+
+      await toggleCharges(user, INFRASTRUCTURE);
+
+      expect(infrastructureRows().slice(6, 8)).toEqual([
+        logsDataPlatformRow, ['Hôtes Private Cloud', '0,00€', '0,00€', '—'],
       ]);
     });
 
-    // The descriptions stay those of the bills
+    // As the services and a product's charges do: the cold storage of September's streams
+    it('compare a charge that one month billed alone from 0 € in the other', async () => {
+      const { user } = await renderDashboard(withLogsDataPlatform);
+      await openTab(user, 'Comparaison');
+      await openComparison(user, INFRASTRUCTURE);
+      await toggleCharges(user, INFRASTRUCTURE);
+
+      // From nothing in August: no variation to compute (#65), and a tooltip that says why
+      expect(texts(chargeRow(COLD_STORAGE))).toEqual([COLD_STORAGE, '0,00€', '2,10€', '—']);
+      expect(within(chargeRow(COLD_STORAGE))
+        .getByTitle('non calculable : mois A à 0 € ou moins')).toHaveTextContent('—');
+
+      // September as month A, and August as month B
+      await pickMonth(user, 'Septembre 2026', 'Juillet 2026');
+      await pickMonth(user, 'Août 2026', 'Septembre 2026');
+      await pickMonth(user, 'Juillet 2026', 'Août 2026');
+
+      // Down to nothing in August, still unfolded
+      expect(infrastructureRows().slice(6, 10)).toEqual([
+        // (42,50 - 80,50) / 80,50
+        [LOGS_DATA_PLATFORM, '80,50€', '42,50€', '-47,2 %'],
+        [ACCOUNT_RENTAL, '60,00€', '30,00€', '-50,0 %'],
+        [HOT_STORAGE, '18,40€', '12,50€', '-32,1 %'],
+        [COLD_STORAGE, '2,10€', '0,00€', '-100,0 %'],
+      ]);
+    });
+
+    // By the same columns as the rows, the charges under their own row (#146), as the services of
+    // the other rows
+    it('sort the charges within their row as the table, by any column, each way in turn',
+      async () => {
+        const { user } = await renderDashboard(withLogsDataPlatform);
+        await openTab(user, 'Comparaison');
+        await openComparison(user, INFRASTRUCTURE);
+        await toggleCharges(user, INFRASTRUCTURE);
+        const sortBy = (column) => sortTable(user, comparisonTable(INFRASTRUCTURE), column);
+        // The rows of the table by their labels, and the charges right under the row
+        const labels = () => infrastructureRows().map(([label]) => label);
+        const charges = () => {
+          const row = labels().indexOf(LOGS_DATA_PLATFORM);
+          return labels().slice(row + 1, row + 4);
+        };
+
+        await sortBy(/^Variation/);
+
+        // +89,4 % for the row, first; within it, +100,0 %, +47,2 %, then the variation that
+        // cannot be computed, last either way
+        expect(labels().slice(0, 4))
+          .toEqual([LOGS_DATA_PLATFORM, ACCOUNT_RENTAL, HOT_STORAGE, COLD_STORAGE]);
+
+        await sortBy(/^Variation/);
+
+        expect(charges()).toEqual([HOT_STORAGE, ACCOUNT_RENTAL, COLD_STORAGE]);
+
+        // By the charges themselves, from A to Z first
+        await sortBy(/^Type/);
+
+        expect(charges()).toEqual([ACCOUNT_RENTAL, COLD_STORAGE, HOT_STORAGE]);
+
+        await sortBy(/^Type/);
+
+        expect(charges()).toEqual([HOT_STORAGE, COLD_STORAGE, ACCOUNT_RENTAL]);
+
+        await sortBy(/^Septembre 2026/);
+
+        expect(charges()).toEqual([ACCOUNT_RENTAL, HOT_STORAGE, COLD_STORAGE]);
+
+        await sortBy(/^Septembre 2026/);
+
+        expect(charges()).toEqual([COLD_STORAGE, HOT_STORAGE, ACCOUNT_RENTAL]);
+      });
+
+    // Rather than charges at 0 € in a month whose answer has yet to arrive, or could not
+    it('say that the charges load until both months have answered, or that they could not load',
+      async () => {
+        const { user } = await renderDashboard(withLogsDataPlatform);
+        await openTab(user, 'Comparaison');
+        await openComparison(user, INFRASTRUCTURE);
+        const release = holdBack(api.fetchLogsDataPlatform, (from) => from === '2026-09-01');
+
+        await user.click(productChevron(INFRASTRUCTURE, LOGS_DATA_PLATFORM));
+
+        expect(infrastructureRows().slice(6, 9)).toEqual([
+          logsDataPlatformRow,
+          ['Chargement des données...'],
+          ['Hôtes Private Cloud', '0,00€', '0,00€', '—'],
+        ]);
+
+        release();
+        await settle();
+
+        expect(infrastructureRows().slice(7, 10).map(([label]) => label))
+          .toEqual([ACCOUNT_RENTAL, HOT_STORAGE, COLD_STORAGE]);
+
+        // July, whose answer fails
+        failFor(api.fetchLogsDataPlatform, (from) => from === '2026-07-01');
+        await pickMonth(user, 'Août 2026', 'Juillet 2026');
+
+        expect(infrastructureRows().slice(6, 9)).toEqual([
+          [LOGS_DATA_PLATFORM, '0,00€', '80,50€', '—'],
+          ['Impossible de charger les charges de cette ligne.'],
+          ['Hôtes Private Cloud', '0,00€', '0,00€', '—'],
+        ]);
+      });
+
+    // The PDF export prints the page: the row prints unfolded, with its charges, and without its
+    // chevron, as the other rows (#192)
+    it('prints unfolded, without its chevron', async () => {
+      const { user } = await renderDashboard(withLogsDataPlatform);
+      await openTab(user, 'Comparaison');
+      await openComparison(user, INFRASTRUCTURE);
+      await toggleCharges(user, INFRASTRUCTURE);
+      // Found while it shows: the comparison's title prints without its button either
+      const table = comparisonTable(INFRASTRUCTURE);
+      const folding = productChevron(INFRASTRUCTURE, LOGS_DATA_PLATFORM);
+
+      layOutForPrint();
+
+      expect(folding).not.toBeVisible();
+      for (const charge of [ACCOUNT_RENTAL, HOT_STORAGE, COLD_STORAGE]) {
+        expect(within(table).getByText(charge).closest('tr')).toBeVisible();
+      }
+    });
+
+    // The month in progress at its projected cost, while the page projects it: see
+    // fixtures/compare.js, where September has not billed one of the services yet, whose bill
+    // comes late in the month, but has billed the other
+    describe('with the projection of the month in progress', () => {
+      const billedLate = {
+        ...withLogsDataPlatform, ...septemberInProgress, ...logsDataPlatformBilledLate,
+      };
+      const SEPTEMBER = ['2026-09-01', '2026-09-30', null];
+      const AUGUST = ['2026-08-01', '2026-08-31', null];
+      const PROJECTED = { projected: true };
+      // The row and its charges, as September billed them so far: no variation (#216)
+      const billedSoFar = [
+        [LOGS_DATA_PLATFORM, '42,50€', '30,00€', '—'],
+        [ACCOUNT_RENTAL, '30,00€', '30,00€', '—'],
+        [HOT_STORAGE, '12,50€', '0,00€', '—'],
+      ];
+
+      // Rather than compare what September billed so far with a complete month
+      it('shows the charges at the projected cost while ticked, marked so, with variations',
+        async () => {
+          const { user } = await renderDashboard(billedLate);
+          await openTab(user, 'Comparaison');
+          await openComparison(user, INFRASTRUCTURE);
+          await toggleCharges(user, INFRASTRUCTURE);
+          expect(infrastructureRows().slice(6, 9)).toEqual(billedSoFar);
+          expect(within(chargeRow(HOT_STORAGE)).getByTitle('non calculable : mois en cours'))
+            .toHaveTextContent('—');
+
+          await toggleProjection(user);
+
+          // The service not billed yet at its rental and hot storage of August, and the variations
+          // on the projected cost: (72,50 - 42,50) / 42,50
+          expect(infrastructureRows().slice(6, 9)).toEqual([
+            [LOGS_DATA_PLATFORM, '42,50€', '72,50€', 'projeté', '+70,6 %'],
+            // The rental of both services, one of them projected: (60 - 30) / 30
+            [ACCOUNT_RENTAL, '30,00€', '60,00€', 'projeté', '+100,0 %'],
+            // Which only the projection brings
+            [HOT_STORAGE, '12,50€', '12,50€', 'projeté', '0,0 %'],
+          ]);
+          const rental = within(chargeRow(ACCOUNT_RENTAL))
+            .getByTitle('facturé 30,00€, projeté 60,00€');
+          expect(rental).toHaveTextContent('60,00€ projeté');
+          expect(inItalics(within(rental).getByText('60,00€'))).toBe(true);
+          const hotStorage = within(chargeRow(HOT_STORAGE))
+            .getByTitle('facturé 0,00€, projeté 12,50€');
+          expect(hotStorage).toHaveTextContent('12,50€ projeté');
+          // August, complete, as it was
+          const [inAugust] = within(chargeRow(HOT_STORAGE)).getAllByText('12,50€');
+          expect(inItalics(inAugust)).toBe(false);
+          // The charges of September projected, those of August as before
+          expect(api.fetchLogsDataPlatform).toHaveBeenCalledWith(...SEPTEMBER, PROJECTED);
+          expect(api.fetchLogsDataPlatform).toHaveBeenCalledWith(...AUGUST);
+          expect(api.fetchLogsDataPlatform).not.toHaveBeenCalledWith(...AUGUST, PROJECTED);
+
+          await toggleProjection(user);
+
+          expect(infrastructureRows().slice(6, 9)).toEqual(billedSoFar);
+        });
+
+      // The Infrastructure tab never projects (#214): what September billed, the rental of the
+      // service that its bill charged, while the Compare tab's row shows them projected
+      it("leaves the Infrastructure tab's charges at what September billed", async () => {
+        const { user } = await renderDashboard(billedLate);
+        await openTab(user, 'Comparaison');
+        await openComparison(user, INFRASTRUCTURE);
+        await toggleProjection(user);
+        await toggleCharges(user, INFRASTRUCTURE);
+        expect(texts(chargeRow(HOT_STORAGE)))
+          .toEqual([HOT_STORAGE, '12,50€', '12,50€', 'projeté', '0,0 %']);
+
+        await openTab(user, 'Infrastructure');
+
+        const charges = within(cardOf(screen.getByRole('heading', {
+          name: /^Logs Data Platform par charge/,
+        }))).getByRole('table');
+        expect(rowsOf(charges)).toEqual([
+          ['Charge○', 'Coût▼'],
+          [ACCOUNT_RENTAL, '30,00€'],
+          ['Total Logs Data Platform', '30,00€'],
+        ]);
+        expect(api.fetchLogsDataPlatform).toHaveBeenLastCalledWith(...SEPTEMBER);
+      });
+    });
+
+    // The charges stay as the bills word them
     it('speaks English when the page does', async () => {
-      const { user } = await renderDashboard({ ...account, ...logsDataPlatformBilled });
+      const { user } = await renderDashboard(withLogsDataPlatform);
       await selectLanguage(user, 'en');
       await openTab(user, 'Compare');
       const title = /^Infrastructure Comparison/;
       await openComparison(user, title);
 
       await user.click(within(comparisonTable(title))
-        .getByRole('button', { name: 'Services: Logs Data Platform' }));
+        .getByRole('button', { name: 'Charges: Logs Data Platform' }));
       await settle();
 
       // After the header and the six rows before it
-      expect(rowTextsOf(comparisonTable(title)).slice(7, 10)).toEqual([
+      expect(rowTextsOf(comparisonTable(title)).slice(7, 11)).toEqual([
         ['Logs Data Platform', '42.50€', '80.50€', '+89.4%'],
-        ['ldp-ab-12345', 'Logs - Account rental for 1 month', '42.50€', '50.50€', '+18.8%'],
-        ['ldp-cd-67890', 'Logs - Account rental for 1 month', '0.00€', '30.00€', '—'],
+        [ACCOUNT_RENTAL, '30.00€', '60.00€', '+100.0%'],
+        [HOT_STORAGE, '12.50€', '18.40€', '+47.2%'],
+        [COLD_STORAGE, '0.00€', '2.10€', '—'],
       ]);
     });
   });
