@@ -176,7 +176,7 @@ OVH API ──> data/import.js ──> SQLite (ovh-bills.db) ──> server/inde
   gives, run once the row unfolds. `drawChargesRow()` unfolds the Logs Data Platform row into
   its charges, which `UnfoldedRowCharges.jsx` loads the same way (#248).
   `ProjectProductComparison.jsx` unfolds a product into its charges, which come with the
-  products. Both show the charges with `ComparedCharges` (`UnfoldingRow.jsx`).
+  products. Both show the charges with `ComparedCharges` (`UnfoldedRowCharges.jsx`).
   `src/utils/monthComparison.js` pairs what months A and B gave (`pairMonths()`), a service
   by its identifier and its account (`byNameAndAccount()`), and gives the value of a row in
   the columns that sort it (`comparisonValues()`).
