@@ -12,6 +12,17 @@ sections were written afterwards from the git history.
 
 <!-- scripts/release.sh inserts each new version above the first version heading. -->
 
+## 3.4.1 - 2026-10-01
+
+<!-- Upgrade notes and highlights of this release, if any. -->
+
+### Bug fixes
+* fix: let the dashboard's own requests through the default API rate limit by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/253
+### Maintenance
+* docs: add Logs Data Platform to the glossary's resource types by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/249
+
+**Full Changelog**: https://github.com/mmaudet/ovh-cost-manager/compare/v3.4.0...v3.4.1
+
 ## 3.4.0 - 2026-10-01
 
 The month in progress, projected. OVHcloud bills some accounts late in the month, so the month of today may still lack services that every month bills. 3.3.3 marked that month as in progress; 3.4.0 can also count its projected cost:
