@@ -42,6 +42,8 @@
 #                                  # front of the relay (docs/deployment.md#https). It
 #                                  # overrides rateLimit.trustProxy of config.json
 #   ALLOWED_HOSTS=                 # Hosts the server answers, against DNS rebinding
+#   TZ=Europe/Paris                # The time zone of the month of today, and so of the
+#                                  # month in progress (README.md#month-in-progress)
 #   IMPORT_ENABLED, IMPORT_INTERVAL, IMPORT_FLAGS
 #                                  # The container's imports
 #                                  # (docs/deployment.md#3-import-billing-data)
@@ -76,6 +78,9 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=3001
+      # The time zone of the server's clock, which gives the month of today and
+      # so the month in progress: the container runs in UTC without it
+      - TZ=${TZ:-Europe/Paris}
       # Database lives in a dedicated dir mounted as a volume, kept separate
       # from the application code under /app/data (which ships in the image).
       - DATA_DIR=/data

@@ -562,6 +562,8 @@ The words are those of the [glossary](CONTEXT.md):
 
 OCM tells them when the server reads the bills: the bills already imported show them, without a new import. A yearly renewal or a one-off purchase is not a recurring service, and keeps no month in progress.
 
+The month of today is that of the server's clock, in its time zone. The Docker image runs in UTC unless `TZ` is set, and the compose files set it to `Europe/Paris` by default: `TZ=America/Montreal` in `.env`, for instance, sets another. A Kubernetes deployment sets `TZ` in its environment.
+
 ### How the Page Marks It
 
 - **Header**: the « Coût total du mois » card says « en cours », and its variation against the month before reads « — », with a tooltip that says why. The header's month selector shows no mark, for the room it would take.

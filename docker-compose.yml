@@ -52,6 +52,9 @@ services:
       - RATE_LIMIT_AUTH_MAX=${RATE_LIMIT_AUTH_MAX:-}
       - RATE_LIMIT_AUTH_WINDOW_MS=${RATE_LIMIT_AUTH_WINDOW_MS:-}
       - PORT=3001
+      # The time zone of the server's clock, which gives the month of today and
+      # so the month in progress: the container runs in UTC without it
+      - TZ=${TZ:-Europe/Paris}
       # Database lives in a dedicated dir mounted as a volume, kept separate
       # from the application code under /app/data (which ships in the image).
       - DATA_DIR=/data
