@@ -136,6 +136,7 @@ Open http://localhost:3001
 | `COOKIE_SECURE`             | With OIDC, the `Secure` flag of the session cookie: `true`, `false` or `auto` (see [OIDC settings](#oidc-settings)) | `auto` |
 | `NODE_ENV`                  | Node environment                     | `production`      |
 | `DATA_DIR`                  | Directory of the SQLite database, where the compose files mount the `ocm-data` volume | `/data` |
+| `TZ`                        | Time zone of the server's clock, which gives the month of today, and so the [month in progress](../README.md#month-in-progress): without it, the container runs in UTC, and the month turns at 2 a.m. in Paris in summer. Set it in a Kubernetes deployment too | `Europe/Paris` |
 | `TRUST_PROXY`               | The number of proxies in front of OCM whose X-Forwarded-For it trusts, from 1 to 10, `true` for one, `false` for none (required for K8s/reverse proxy, see [Rate Limiting](#rate-limiting-for-kubernetesreverse-proxy)). With one or more, it also trusts X-Forwarded-Host for the CORS check and `ALLOWED_HOSTS`, and X-Forwarded-Proto for the CORS check. Leave it unset while port 3001 is published directly: the `TRUST_PROXY=2` that the [HTTPS](#https) steps put in `.env` is the SSO stack's, and `docker-compose.yml` reads that `.env` too | `false` |
 | `RATE_LIMIT_ENABLED`        | Enable rate limiting                 | `true`            |
 | `RATE_LIMIT_API_MAX`        | Max API requests per IP per window   | `100`             |
