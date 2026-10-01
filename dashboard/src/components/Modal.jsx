@@ -1,16 +1,18 @@
 import { useEffect, useId, useRef } from 'react';
 
-// What the keyboard reaches with Tab, as browsers do: the links, the form controls but those
-// disabled, and the elements that a tabindex of 0 or more puts in the order of the page
-const FOCUSABLE = 'a[href], button, input:not([type="hidden"]), select, textarea, [tabindex]';
+// What may be a control that Tab reaches in a dialog (#236): the links, the form controls and the
+// elements with a tabindex, disabled ones and those that a tabindex of -1 keeps out of the order
+// of the page included, which controlsOf() leaves out
+const TABBABLE_CANDIDATES =
+  'a[href], button, input:not([type="hidden"]), select, textarea, [tabindex]';
 
 /**
- * The controls of an element that Tab reaches, in the order of the page, which no positive
- * tabindex changes in the modals.
+ * The controls of an element that Tab reaches, as browsers do, in the order of the page, which
+ * no positive tabindex changes in the modals.
  * @param {HTMLElement} element
  * @returns {HTMLElement[]}
  */
-const controlsOf = (element) => [...element.querySelectorAll(FOCUSABLE)]
+const controlsOf = (element) => [...element.querySelectorAll(TABBABLE_CANDIDATES)]
   .filter((control) => control.tabIndex >= 0 && !control.disabled);
 
 /**
@@ -24,10 +26,12 @@ const controlsOf = (element) => [...element.querySelectorAll(FOCUSABLE)]
 const keepFocusIn = (event, dialog) => {
   const controls = controlsOf(dialog);
   const [first, last] = [controls[0], controls[controls.length - 1]];
+  // The control from which the key would leave the dialog, and the one it goes round to instead
+  const [edge, wrapTo] = event.shiftKey ? [first, last] : [last, first];
   const focused = document.activeElement;
-  if (focused === (event.shiftKey ? first : last) || !controls.includes(focused)) {
+  if (focused === edge || !controls.includes(focused)) {
     event.preventDefault();
-    (event.shiftKey ? last : first).focus();
+    wrapTo.focus();
   }
 };
 

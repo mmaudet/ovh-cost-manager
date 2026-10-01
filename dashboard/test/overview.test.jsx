@@ -618,6 +618,25 @@ describe('Overview tab', () => {
       expect(control('Expiration')).toHaveFocus();
     });
 
+    // #236: the modal moves the focus when it opens and when it closes only, and not whenever the
+    // page renders it again, as when the user sorts its table
+    it('leaves the focus on the header that sorts its table from the keyboard', async () => {
+      const { user } = await renderDashboard({ ...account, expiringServices: expiringSoon });
+      const dialog = await showAll(user);
+      const table = within(dialog).getByRole('table');
+      // From its first control: its close button, the header of the types, then the services'
+      await user.tab();
+      await user.tab();
+      await user.tab();
+      expect(sortButton(table, 'Service')).toHaveFocus();
+
+      await user.keyboard('{Enter}');
+
+      // From A to Z (#146), the header keeping the focus
+      expect(rowsOf(table)[1][1]).toBe('archives-nas');
+      expect(sortButton(table, 'Service')).toHaveFocus();
+    });
+
     // In the order the server lists them, whatever the order shown, as the other lists (#146)
     it('downloads every service about to expire as CSV, from the card and from the modal',
       async () => {
