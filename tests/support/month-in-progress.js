@@ -1,9 +1,10 @@
 /**
- * What the tests of the month in progress share (CONTEXT.md): the months list's mark (#216) and
- * the projection of the trends (#217) and of the Compare tab (#218, #219). The server tells the
- * month of today from its local date, so the bills are dated from the real date, the month of
- * today and the three months before, as the Infrastructure tab's tests date the services about to
- * expire.
+ * What the tests of the month in progress share (CONTEXT.md): the months list's mark (#216), the
+ * projection of the trends (#217) and of the Compare tab (#218, #219), and the turn of the month,
+ * when the month before is the candidate month until the month of today has a bill (#258). The
+ * server tells the month of today from its local date, so the bills are dated from the real date,
+ * the month of today and the four months before, as the Infrastructure tab's tests date the
+ * services about to expire.
  */
 
 const {
@@ -16,10 +17,11 @@ const { monthBounds, shiftMonth } = require('../../data/months');
 const today = new Date();
 const MONTH_OF_TODAY = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
 const DAY_OF_TODAY = `${MONTH_OF_TODAY}-${String(today.getDate()).padStart(2, '0')}`;
-// The three months before it, the latest first
-const [MONTH_BEFORE, TWO_MONTHS_BEFORE, THREE_MONTHS_BEFORE] = [1, 2, 3]
+// The four months before it, the latest first: the three months before a month make its
+// recurring services, and the fourth those of the month before (#258)
+const [MONTH_BEFORE, TWO_MONTHS_BEFORE, THREE_MONTHS_BEFORE, FOUR_MONTHS_BEFORE] = [1, 2, 3, 4]
   .map((months) => shiftMonth(MONTH_OF_TODAY, -months));
-// And the earliest first
+// And the three months before it, the earliest first
 const MONTHS_BEFORE = [THREE_MONTHS_BEFORE, TWO_MONTHS_BEFORE, MONTH_BEFORE];
 
 // The month of today and the month before, as the Compare tab asks for them (#218, #219): their
@@ -64,6 +66,6 @@ function billOf(db, id, account, date, charges) {
 
 module.exports = {
   MONTH_OF_TODAY, DAY_OF_TODAY, MONTH_BEFORE, TWO_MONTHS_BEFORE, THREE_MONTHS_BEFORE,
-  MONTHS_BEFORE, MONTH_IN_PROGRESS, COMPLETE_MONTH, OF_TODAY, OF_MONTH_BEFORE, OF_BOTH_MONTHS,
-  LYON_BILLED_LATE, PARIS_BILLED, UNKNOWN_BILLED_LATE, ALL_ACCOUNTS, billOf,
+  FOUR_MONTHS_BEFORE, MONTHS_BEFORE, MONTH_IN_PROGRESS, COMPLETE_MONTH, OF_TODAY, OF_MONTH_BEFORE,
+  OF_BOTH_MONTHS, LYON_BILLED_LATE, PARIS_BILLED, UNKNOWN_BILLED_LATE, ALL_ACCOUNTS, billOf,
 };

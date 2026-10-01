@@ -11,7 +11,9 @@ const { storageClassLabel } = require('./storage-classes');
 const {
   monthBounds, monthOfDate, monthsOfWindow, shiftMonth,
 } = require('./months');
-const { recurrenceWindow, recurringServicesNotBilled } = require('./month-in-progress');
+const {
+  chooseCandidateMonth, recurrenceWindow, recurringServicesNotBilled,
+} = require('./month-in-progress');
 const ownership = require('./ownership');
 // The conditions of the queries that keep one account's rows (#115), a list of ids, or the
 // bill lines of the Veeam backups (#197)
@@ -167,18 +169,40 @@ function servicesOfLines(linesOf, fromDate, toDate, account, byAccount, {
 }
 
 /**
- * The recurring services (CONTEXT.md) that the month of today has not billed yet, as
+ * The candidate month of an account (#258), the one month that can be in progress, as
+ * data/month-in-progress.js chooses it (chooseCandidateMonth()): the month of today, as the
+ * server's local date gives it (monthOfDate()), once the account has a bill in it, and the month
+ * before until then, which may still lack its late bills. A bill of the account counts, as the
+ * months list lists its months (see accountCondition()): for one account, its bills; for the
+ * Unknown account, the bills without an account; and for every account, any bill.
+ * @param {?string} account - The account shown: null for every account
+ * @returns {string} YYYY-MM
+ */
+function candidateMonthOf(account) {
+  const monthOfToday = monthOfDate(new Date());
+  const { from, to } = monthBounds(monthOfToday);
+  const ofAccount = accountCondition(account, 'b.account');
+  const billedInIt = getDb().prepare(`
+    SELECT EXISTS (
+      SELECT 1 FROM bills b WHERE b.date >= ? AND b.date <= ? AND ${ofAccount.sql}
+    )
+  `).pluck().get(from, to, ...ofAccount.params) === 1;
+  return chooseCandidateMonth(monthOfToday, billedInIt);
+}
+
+/**
+ * The recurring services (CONTEXT.md) that the candidate month has not billed yet, as
  * data/month-in-progress.js tells them from the bills as they are, each with its projected lines:
- * the month of today is in progress while there are any (#216), and its projection counts those
- * lines (#217).
- * @param {string} monthOfToday - YYYY-MM, as the server's local date gives it (monthOfDate())
+ * the candidate month is in progress while there are any (#216, #258), and its projection counts
+ * those lines (#217).
+ * @param {string} candidateMonth - YYYY-MM, as candidateMonthOf() gives it for the account
  * @param {?string} account - The account whose recurring services count (see
  *   accountCondition()): null for every account
  * @returns {Array<{ service: string, account: ?string, lines: string[] }>}
  */
-function servicesNotBilledYet(monthOfToday, account) {
+function servicesNotBilledYet(candidateMonth, account) {
   return recurringServicesNotBilled(
-    detailOps.getBilledServices(monthOfToday, account), monthOfToday,
+    detailOps.getBilledServices(candidateMonth, account), candidateMonth,
   );
 }
 
@@ -486,16 +510,18 @@ const billOps = {
   },
 
   /**
-   * The month in progress (CONTEXT.md, #216): the month of today, as the server's local date
-   * gives it, while a recurring service has no bill line in it (data/month-in-progress.js), read
-   * from the bills as they are.
-   * @param {?string} [account] - The account whose recurring services count (see
-   *   accountCondition()): every account's by default, any of which keeps the month in progress
-   * @returns {?string} The month of today, YYYY-MM, while it is in progress; null otherwise
+   * The month in progress (CONTEXT.md, #216): the candidate month of the account (#258), the
+   * month of today once the account has a bill in it and the month before until then
+   * (candidateMonthOf()), while a recurring service has no bill line in it
+   * (data/month-in-progress.js), read from the bills as they are.
+   * @param {?string} [account] - The account whose bills tell the candidate month, and whose
+   *   recurring services count (see accountCondition()): every account's by default, any of
+   *   which keeps the month in progress
+   * @returns {?string} The candidate month, YYYY-MM, while it is in progress; null otherwise
    */
   getMonthInProgress: (account = null) => {
-    const monthOfToday = monthOfDate(new Date());
-    return servicesNotBilledYet(monthOfToday, account).length > 0 ? monthOfToday : null;
+    const candidateMonth = candidateMonthOf(account);
+    return servicesNotBilledYet(candidateMonth, account).length > 0 ? candidateMonth : null;
   },
 
   exists: (id) => {
@@ -540,22 +566,22 @@ const detailOps = {
   },
 
   /**
-   * The services that the bills of the month of today and of the three months before charged
-   * (recurrenceWindow()), which data/month-in-progress.js tells the recurring services not billed
-   * yet from (#216): each service that bill lines name, once for each account and month of their
-   * bills, with the ids of those lines, which a projection of the month in progress repeats
+   * The services that the bills of the candidate month (#258) and of the three months before it
+   * charged (recurrenceWindow()), which data/month-in-progress.js tells the recurring services not
+   * billed yet from (#216): each service that bill lines name, once for each account and month of
+   * their bills, with the ids of those lines, which a projection of the month in progress repeats
    * (#214). Those of the months before are the account's, whose recurring services they tell;
-   * those of the month of today are every account's, as any account's bill of the month of today
-   * bills a service that it names, such as one moved from an account to another (#214).
-   * @param {string} monthOfToday - YYYY-MM
+   * those of the candidate month are every account's, as any account's bill of the candidate
+   * month bills a service that it names, such as one moved from an account to another (#214).
+   * @param {string} candidateMonth - YYYY-MM (candidateMonthOf())
    * @param {?string} [account] - The account whose bills of the months before count (see
    *   accountCondition()): every account's by default
    * @returns {Array<{ service: string, account: ?string, month: string, lines: string[] }>} Each
    *   with the NIC handle of its bills' account, null for the Unknown account, and their month,
    *   YYYY-MM
    */
-  getBilledServices: (monthOfToday, account = null) => {
-    const { from, to } = recurrenceWindow(monthOfToday);
+  getBilledServices: (candidateMonth, account = null) => {
+    const { from, to } = recurrenceWindow(candidateMonth);
     const ofAccount = accountCondition(account, 'b.account');
     return getDb().prepare(`
       SELECT d.domain AS service, b.account AS account, strftime('%Y-%m', b.date) AS month,
@@ -565,7 +591,7 @@ const detailOps = {
       WHERE b.date >= ? AND b.date <= ? AND d.domain IS NOT NULL
         AND (strftime('%Y-%m', b.date) = ? OR ${ofAccount.sql})
       GROUP BY d.domain, b.account, month
-    `).all(from, to, monthOfToday, ...ofAccount.params)
+    `).all(from, to, candidateMonth, ...ofAccount.params)
       .map((row) => ({ ...row, lines: JSON.parse(row.lines) }));
   },
 
