@@ -30,6 +30,9 @@ const VISITS = [
   ['compare', 'compare-after-infrastructure'], ['backup'], ['overview'],
 ].map(([id, name = id]) => ({ tab: TABS.find((tab) => tab.id === id), name }));
 const SHOW_ALL = { fr: 'Tout afficher', en: 'Show all' };
+// The close button of a "show all" modal: « Fermer » on a French page since #236, and "Close" in
+// English, as in either language before, which a base older than #236 shows
+const CLOSE = /^(Fermer|Close)$/;
 const LOCALES = { fr: 'fr-FR', en: 'en-US' };
 const LANGUAGE_KEY = 'ovh-dashboard-language';
 const VIEWPORT = { width: 1440, height: 900 };
@@ -333,7 +336,7 @@ class Walker {
     const name = text.split('\n')[0].split(' (')[0].trim() || 'untitled';
     const modalKey = this.capture.add(`${key}/modal:${name}`, text);
     await this.captureExports(dialog, modalKey);
-    await dialog.getByRole('button', { name: 'Close', exact: true }).click();
+    await dialog.getByRole('button', { name: CLOSE }).click();
     await dialog.waitFor({ state: 'detached' });
     await this.settle();
   }
