@@ -12,6 +12,43 @@ sections were written afterwards from the git history.
 
 <!-- scripts/release.sh inserts each new version above the first version heading. -->
 
+## 3.4.0 - 2026-10-01
+
+The month in progress, projected. OVHcloud bills some accounts late in the month, so the month of today may still lack services that every month bills. 3.3.3 marked that month as in progress; 3.4.0 can also count its projected cost:
+
+- **« Projeter le mois en cours »** (#212, #214). A checkbox in the Trends and Compare tabs counts each recurring service that the month in progress has not billed yet at its cost of the month before.
+  - It changes the Trends tab's line charts and cards.
+  - In the Compare tab, it changes the totals, the service type chart, the infrastructure, Private Cloud, backup and project comparisons, and their services, products and charges.
+  - They then show the month at its projected cost, in italics and marked « projeté ».
+  - It is off by default, one setting for the whole page, which the browser remembers. The header's cards and the other tabs never project.
+- **The services about to expire** (#225).
+  - The header's « Expirations proches » badge now leads to their card in the Overview.
+  - The card's title counts them all.
+  - Its « Tout afficher » lists every one of them in a table that sorts and exports as CSV.
+- **The budget card on a phone** (#235) sets the budget apart from the consumed amount, which ran together.
+- **The month turns at local midnight** (#243). The compose files run the container on Paris time: in UTC, the month of today, and with it the month in progress, turned at 2 a.m. in Paris.
+
+### Upgrade notes
+
+- **No migration and no re-import.** The projection reads the bills already imported, when the server reads them.
+- **Time zone.** The compose files now set `TZ`, `Europe/Paris` by default, so the container's clock follows Paris time. Set `TZ` in `.env` to keep another time zone, such as `TZ=UTC`. A Kubernetes deployment sets `TZ` in its environment.
+- **API.** The routes of the Trends and Compare tabs take `projected=true`, which gives each row its projected part. Without it, they answer as before: see the README's API section.
+- **Issues.** New issues go through a bug report or a feature request form, and are triaged together about once a week: see CONTRIBUTING.md.
+
+### New features
+* feat: project the month in progress in the Trends tab by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/233
+* feat: lead from the header's badge to the services about to expire by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/234
+* feat: project the month in progress in the Compare tab's totals, infrastructure and backup by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/238
+* feat: project the month in progress in the Compare tab's projects and their products by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/240
+### Bug fixes
+* fix: set the budget apart from the consumed amount on a phone by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/239
+* fix: run the containers on Paris time, so that the month turns at local midnight by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/243
+### Maintenance
+* docs: add issue forms and describe how issues are handled by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/237
+* docs: document the month in progress and its projection by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/241
+
+**Full Changelog**: https://github.com/mmaudet/ovh-cost-manager/compare/v3.3.3...v3.4.0
+
 ## 3.3.3 - 2026-09-30
 
 Three fixes that a user of 3.3.2 reported, and the month in progress told apart:
