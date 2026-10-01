@@ -16,8 +16,7 @@ const BY_COST = { column: 'total', kind: 'number', direction: 'desc' };
 
 /**
  * The inventory and the bill lines of the account shown (#123), for the Infrastructure tab, and
- * the query of the charges of its Logs Data Platform services in the month selected, which the
- * table of the charges runs (#247).
+ * the charges of its Logs Data Platform services in the month selected (#247).
  * @param {object} shell - What the shell holds for the whole page (ADR 0001)
  * @param {?object} shell.selectedMonth - The month of the header
  * @param {boolean} shell.holdsSelectedMonth - Whether the months of the account shown hold
@@ -71,18 +70,15 @@ const useInfrastructureTab = ({
     selectedAccount, accountColumn, selectedResourceType, selectedMonth, servicesEnabled,
   ));
 
-  // The options of the query of the charges of the Logs Data Platform services in the month
-  // selected (#247), for useQuery: the services together, as the figures of the month, those of
-  // the account shown, and all accounts' added up when all are shown, whatever the Account
-  // column of the lists, as the table names no account. What the month billed, never projected.
-  // The table runs it once the tab shows it, as the Compare tab's rows run theirs once unfolded:
-  // the page opens with the queries it had. On the tab only, as the inventory, for a month of
-  // the months list.
-  const logsDataPlatformQuery = accountQuery(selectedAccount, {
+  // The charges of the Logs Data Platform services in the month selected (#247), the services
+  // together, as the figures of the month: those of the account shown, and all accounts' added
+  // up when all are shown, whatever the Account column of the lists, as the table names no
+  // account. What the month billed, never projected. Once the tab opens, as its inventory.
+  const { data: logsDataPlatform } = useQuery(accountQuery(selectedAccount, {
     key: ['logsDataPlatform', selectedMonth?.from, selectedMonth?.to],
     fetch: (account) => fetchLogsDataPlatform(selectedMonth.from, selectedMonth.to, account),
     enabled: holdsSelectedMonth && activeTab === 'infrastructure',
-  });
+  }));
 
   return {
     sortingOf,
@@ -90,7 +86,7 @@ const useInfrastructureTab = ({
     inventoryVps,
     inventoryStorage,
     resourceTypeDetails,
-    logsDataPlatformQuery,
+    logsDataPlatform,
     showAllServers,
     setShowAllServers,
   };

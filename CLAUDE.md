@@ -168,10 +168,7 @@ OVH API ──> data/import.js ──> SQLite (ovh-bills.db) ──> server/inde
   row unfolds; `ProjectProductComparison.jsx` unfolds a product into its charges, which come
   with the products. `src/utils/monthComparison.js` pairs what months A and B gave
   (`pairMonths()`), a service by its identifier and its account (`byNameAndAccount()`), and
-  gives the value of a row in the columns that sort it (`comparisonValues()`). Likewise, the
-  Infrastructure tab's table of the month's Logs Data Platform charges,
-  `src/components/LogsDataPlatformCharges.jsx`, runs the query that the tab's hook defines,
-  `logsDataPlatformQuery`, once the tab shows it (#247): the page opens with the queries it had.
+  gives the value of a row in the columns that sort it (`comparisonValues()`).
 
 ### Accounts
 

@@ -109,11 +109,9 @@ const BillLinesTable = ({ services, sorting, accountColumn, language, t, fmt }) 
 // costs by resource type, which load at page start, and the resource type whose bill lines are
 // open, with its setter: shared state, see
 // docs/adr/0001-tab-state-lives-in-the-dashboard-shell.md. Its lists name the account of each
-// service in the Account column of the shell (accountColumn), when it shows one (#123). Its
-// table of the month's Logs Data Platform charges runs the query that the hook gives it
-// (logsDataPlatformQuery, #247).
+// service in the Account column of the shell (accountColumn), when it shows one (#123).
 const InfrastructureTab = ({
-  inventoryServers, inventoryVps, inventoryStorage, resourceTypeDetails, logsDataPlatformQuery,
+  inventoryServers, inventoryVps, inventoryStorage, resourceTypeDetails, logsDataPlatform,
   setShowAllServers, sortingOf, accountColumn, language, t, fmt, selectedMonth, byResourceType,
   selectedResourceType, setSelectedResourceType,
 }) => {
@@ -234,11 +232,13 @@ const InfrastructureTab = ({
       )}
 
       {/* The month's Logs Data Platform cost by charge, a detail of its costs, before the
-          inventory, which is what exists now (#247) */}
-      <LogsDataPlatformCharges
-        query={logsDataPlatformQuery} sorting={sortingOf('logsDataPlatform')}
-        selectedMonth={selectedMonth} language={language} t={t} fmt={fmt}
-      />
+          inventory, which is what exists now: for a month with a charge (#247) */}
+      {logsDataPlatform?.charges.length > 0 && (
+        <LogsDataPlatformCharges
+          logsDataPlatform={logsDataPlatform} sorting={sortingOf('logsDataPlatform')}
+          selectedMonth={selectedMonth} language={language} t={t} fmt={fmt}
+        />
+      )}
 
       {/* Dedicated Servers Table */}
       {servers.length > 0 && (
