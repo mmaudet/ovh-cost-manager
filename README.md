@@ -568,9 +568,9 @@ The month of today is that of the server's clock, in its time zone. The Docker i
 
 On the first days of a month, before its first bill, the month of today has no bill, and OCM does not list it yet. The month before may still lack the bills that land once the month has begun: until the month of today has a bill, the month before is the month in progress while it lacks one of its recurring services, those that the bills of each of the three months before it charged. The page marks and projects it as it would the month of today: on October 1st, before any October bill, September is « en cours » while it lacks a recurring service, dashed in the Trends tab, its variations « — », and projected when the checkbox is ticked.
 
-As soon as the month of today has a bill, it takes over: it is the month in progress while it lacks a recurring service, and the month before shows as complete, even if it still lacks a late bill. One month only is ever in progress, the latest month listed. An account billed early in the month sees no change: its month before is complete when the month of today begins, so no month is in progress until the month of today has a bill.
+As soon as the month of today has a bill, it takes over: it is the month in progress while it lacks a recurring service, and the month before shows as complete, even if it still lacks a late bill. One month only is ever in progress, the latest month listed. An account billed early in the month sees no change: its month before is complete when the month of today begins, so no month is in progress until the month of today has a bill. An account without a bill in either month, such as one removed from the configuration or whose imports stalled, has no month in progress: the month in progress always has bills.
 
-The limit: OCM cannot tell a late bill from a service that was cancelled. A recurring service that was cancelled keeps the month in progress, at most until the month ends or, for the month before, until the month of today has a bill. The next month no longer counts it among its recurring services, as the month before it did not bill it.
+The limit: OCM cannot tell a late bill from a service that was cancelled. A recurring service that was cancelled keeps the month in progress, at most until the month ends or, for the month before, until the month of today has a bill or ends. The next month no longer counts it among its recurring services, as the month before it did not bill it.
 
 ### How the Page Marks It
 
@@ -596,7 +596,7 @@ A service not billed yet counts as its bill lines of the month before, with thei
 
 ### Several Accounts
 
-Each account's recurring services are its own, and so is its month of today, which begins with its own first bill: the Unknown account's, with its first bill without an account. With all accounts shown, the month of today begins as soon as any account has a bill in it, as the months list then lists it; the month is in progress while any account lacks one of its recurring services in it, and the projection adds up what each account lacks in it. A service that another account billed this month, such as one moved from an account to another, is not missing.
+Each account's recurring services are its own, and so is its month of today, which begins with its own first bill. The Unknown account's bills stopped with the accounts, as every bill imported since has its account: it has a month in progress only while its last month is the month before and lacks a recurring service. With all accounts shown, the month of today begins as soon as any account has a bill in it, as the months list then lists it; the month is in progress while any account lacks one of its recurring services in it, and the projection adds up what each account lacks in it. A service that another account billed this month, such as one moved from an account to another, is not missing.
 
 ## Docker Deployment
 
