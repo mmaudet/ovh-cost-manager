@@ -535,9 +535,10 @@ describe('Overview tab', () => {
       ['VPS', 'staging-vps', 'Expire dans 27 jours'],
       ['Stockage', 'shared-files', 'Expire dans 29 jours'],
     ];
+    // The modal, which a screen reader names by its title (#236)
     const showAll = async (user) => {
       await user.click(within(expirationCard()).getByRole('button', { name: 'Tout afficher' }));
-      return screen.getByRole('dialog');
+      return screen.getByRole('dialog', { name: 'Expirations proches (7)' });
     };
 
     it('lists every service about to expire, sorts them, and closes', async () => {
@@ -605,7 +606,7 @@ describe('Overview tab', () => {
       await user.click(
         within(expirationCard('Expiring soon')).getByRole('button', { name: 'Show all' }),
       );
-      const dialog = screen.getByRole('dialog');
+      const dialog = screen.getByRole('dialog', { name: 'Expiring soon (7)' });
 
       expect(within(dialog).getByText('Expiring soon (7)')).toBeInTheDocument();
       expect(rowsOf(within(dialog).getByRole('table')).slice(0, 3)).toEqual([

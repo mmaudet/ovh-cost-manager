@@ -71,9 +71,11 @@ const resourceTable = (kind) => within(resourcePanel(kind)).getByRole('table');
 // The name of each row of a table, in the order shown: the first text of its first cell
 const namesIn = (table) => rowTextsOf(table).slice(1).map(([name]) => name);
 const resourceButton = (kind, name) => within(resourcePanel(kind)).getByRole('button', { name });
+// The "show all" modal of a resource table, which a screen reader names by its title: the
+// resources, their count, and what it gives of them, such as their cost (#236)
 const showAll = async (user, kind) => {
   await user.click(resourceButton(kind, 'Tout afficher'));
-  return screen.getByRole('dialog');
+  return screen.getByRole('dialog', { name: new RegExp(`^${kind} \\(`) });
 };
 const openProduction = async () => {
   const { user } = await renderDashboard();

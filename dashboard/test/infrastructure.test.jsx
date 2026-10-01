@@ -248,9 +248,10 @@ describe('Infrastructure tab', () => {
     });
 
     describe('"show all" modal', () => {
+      // The modal, which a screen reader names by its title (#236)
       const showAll = async (user) => {
         await user.click(serversButton('Tout afficher'));
-        return screen.getByRole('dialog');
+        return screen.getByRole('dialog', { name: 'Serveurs dédiés (2)' });
       };
 
       it('shows every server, and closes with its button', async () => {

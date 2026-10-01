@@ -163,9 +163,11 @@ describe('Web Cloud tab', () => {
   });
 
   describe('"show all" modal', () => {
+    // The modal, which a screen reader names by its title: the family, its count and its cost
+    // (#236)
     const showAll = async (user, family) => {
       await user.click(familyButton(family, 'Tout afficher'));
-      return screen.getByRole('dialog');
+      return screen.getByRole('dialog', { name: new RegExp(`^${family} \\(`) });
     };
 
     it('shows every service of the family, and closes with its button', async () => {
