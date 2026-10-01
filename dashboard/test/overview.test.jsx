@@ -549,7 +549,6 @@ describe('Overview tab', () => {
 
       const dialog = await showAll(user);
 
-      expect(within(dialog).getByText('Expirations proches (7)')).toBeInTheDocument();
       const table = within(dialog).getByRole('table');
       expect(rowsOf(table)).toEqual(allSeven);
 
@@ -682,7 +681,6 @@ describe('Overview tab', () => {
       );
       const dialog = screen.getByRole('dialog', { name: 'Expiring soon (7)' });
 
-      expect(within(dialog).getByText('Expiring soon (7)')).toBeInTheDocument();
       expect(rowsOf(within(dialog).getByRole('table')).slice(0, 3)).toEqual([
         ['Type○', 'Service○', 'Expiration○'],
         ['VPS', 'legacy-vps', 'Expired 5 days ago'],

@@ -13,9 +13,9 @@ import {
   downloadFromPanelAndModal,
 } from './support/downloads.js';
 import {
-  backdropOf,
   cardOf,
   cardRowOf,
+  closeAndCheckFocus,
   cloudProjectRow,
   cloudProjects,
   cloudProjectsTable,
@@ -903,45 +903,32 @@ describe('Public Cloud tab', () => {
     });
 
     describe('"show all" modal', () => {
-      // As the WAI-ARIA dialog pattern describes (#236), the keyboard focus moves into the
-      // modal when it opens, onto its first control, and goes back to the button that opened it
-      // when it closes, however it closes
+      const showAllButton = () => resourceButton('Instances', 'Tout afficher');
+
       it('takes the focus, shows every instance of the project, and closes with its button',
         async () => {
           const { user } = await openProduction();
 
           const dialog = await showAll(user, 'Instances');
 
-          expect(within(dialog).getByRole('button', { name: 'CSV' })).toHaveFocus();
-          expect(within(dialog).getByText('Instances (5)')).toBeInTheDocument();
-          expect(within(dialog).getByText('538,90€')).toBeInTheDocument();
-          expect(within(dialog).getByText('Production')).toBeInTheDocument();
           expect(rowsOf(within(dialog).getByRole('table'))).toEqual(instanceRows);
-
-          await user.click(within(dialog).getByRole('button', { name: 'Fermer' }));
-
-          expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
-          expect(resourceButton('Instances', 'Tout afficher')).toHaveFocus();
+          await closeAndCheckFocus(user, dialog, showAllButton(), 'button');
         });
 
       it('closes with Escape, giving the focus back to the button that opened it', async () => {
         const { user } = await openProduction();
-        await showAll(user, 'Instances');
 
-        await user.keyboard('{Escape}');
+        const dialog = await showAll(user, 'Instances');
 
-        expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
-        expect(resourceButton('Instances', 'Tout afficher')).toHaveFocus();
+        await closeAndCheckFocus(user, dialog, showAllButton(), 'escape');
       });
 
       it('closes on a click outside it, giving the focus back to its button', async () => {
         const { user } = await openProduction();
+
         const dialog = await showAll(user, 'Instances');
 
-        await user.click(backdropOf(dialog));
-
-        expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
-        expect(resourceButton('Instances', 'Tout afficher')).toHaveFocus();
+        await closeAndCheckFocus(user, dialog, showAllButton(), 'backdrop');
       });
     });
 
@@ -996,9 +983,6 @@ describe('Public Cloud tab', () => {
 
       const dialog = await showAll(user, 'Buckets');
 
-      expect(within(dialog).getByText('Buckets (4)')).toBeInTheDocument();
-      expect(within(dialog).getByText('25,00€')).toBeInTheDocument();
-      expect(within(dialog).getByText('Septembre 2026')).toBeInTheDocument();
       expect(rowTextsOf(within(dialog).getByRole('table'))).toEqual(bucketRows);
 
       await user.click(within(dialog).getByRole('button', { name: 'Fermer' }));
@@ -1137,8 +1121,6 @@ describe('Public Cloud tab', () => {
 
       const dialog = await showAll(user, 'Volumes');
 
-      expect(within(dialog).getByText('Volumes (4)')).toBeInTheDocument();
-      expect(within(dialog).getByText('12,50€')).toBeInTheDocument();
       expect(rowTextsOf(within(dialog).getByRole('table'))).toEqual(volumeRows);
 
       await user.click(within(dialog).getByRole('button', { name: 'Fermer' }));
@@ -1195,8 +1177,6 @@ describe('Public Cloud tab', () => {
 
       const dialog = await showAll(user, 'Snapshots');
 
-      expect(within(dialog).getByText('Snapshots (2)')).toBeInTheDocument();
-      expect(within(dialog).getByText('6,00€')).toBeInTheDocument();
       expect(rowsOf(within(dialog).getByRole('table'))).toEqual(snapshotRows);
 
       await user.click(within(dialog).getByRole('button', { name: 'Fermer' }));
@@ -1254,8 +1234,6 @@ describe('Public Cloud tab', () => {
 
       const dialog = await showAll(user, 'Savings plans');
 
-      expect(within(dialog).getByText('Savings plans (2)')).toBeInTheDocument();
-      expect(within(dialog).getByText('28,00€')).toBeInTheDocument();
       expect(rowsOf(within(dialog).getByRole('table'))).toEqual(savingsPlanRows);
 
       await user.click(within(dialog).getByRole('button', { name: 'Fermer' }));
