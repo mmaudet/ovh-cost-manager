@@ -4,7 +4,7 @@
  * service, one that the bills of each of the three months before charged, has no bill line in
  * it. OVHcloud bills some accounts early in the month, others late: the mark goes as soon as the
  * import stores the bill of each recurring service. The bills are dated from the real date (see
- * support/month-in-progress.js).
+ * support/month-in-progress.js). And the pure function that chooses the candidate month (#258).
  */
 
 const {
@@ -14,6 +14,23 @@ const {
   DAY_OF_TODAY, MONTH_BEFORE, MONTH_OF_TODAY, MONTHS_BEFORE, TWO_MONTHS_BEFORE, billOf,
 } = require('./support/month-in-progress');
 const { startOcm } = require('./support/ocm-server');
+const { chooseCandidateMonth } = require('../data/month-in-progress');
+
+// The one month that can be in progress (#258): the month of today once the account shown has a
+// bill in it, and until then the month before, as some bills of a month land once the next one
+// has begun
+describe('chooseCandidateMonth (#258)', () => {
+  test('chooses the month of today once the account shown has a bill in it', () => {
+    expect(chooseCandidateMonth('2026-10', true)).toBe('2026-10');
+    expect(chooseCandidateMonth('2027-01', true)).toBe('2027-01');
+  });
+
+  test('chooses the month before while the month of today has no bill', () => {
+    expect(chooseCandidateMonth('2026-10', false)).toBe('2026-09');
+    // In January, December of the year before
+    expect(chooseCandidateMonth('2027-01', false)).toBe('2026-12');
+  });
+});
 
 // The months of an answer of /api/months, the latest first, and the months that it marks in
 // progress, with their mark
