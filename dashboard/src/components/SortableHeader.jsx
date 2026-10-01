@@ -106,6 +106,12 @@ const SortableHeader = ({
   );
 };
 
+// The sort of a table that sorts by its `total` column from the start, the most expensive first,
+// until the user sorts it by another column, which useTableSorts() takes as its default: the
+// Overview's breakdown by project, the AI Endpoints models (#193) and the Logs Data Platform
+// charges (#247)
+const BY_TOTAL = { column: 'total', kind: 'number', direction: 'desc' };
+
 /**
  * The sorts of the tables of a tab, which the hook of the tab holds (see above).
  * @param {Object<string, object>} [defaults] - By table, the sort of the tables that sort by
@@ -122,4 +128,4 @@ const useTableSorts = (defaults = {}) => {
   });
 };
 
-export { SortableHeader, sortRows, useTableSorts };
+export { BY_TOTAL, SortableHeader, sortRows, useTableSorts };

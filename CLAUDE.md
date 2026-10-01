@@ -79,18 +79,30 @@ OVH API ──> data/import.js ──> SQLite (ovh-bills.db) ──> server/inde
     project's other services, and the products of a project that the Compare tab compares
     month by month (#181). Each line has one; those without a card of their own go to the
     other services, so that the cards and the credit add up to the month's cloud total (#145).
-    And the charge of a line (`chargeOf()`, `CONTEXT.md`): its description without the period
-    that ends it in brackets on some accounts' bills, its apostrophes straight, so that the
-    lines of one charge name it alike in every month; each product gives its charges, what its
-    lines add up to by charge, which the Compare tab unfolds the product into (#195). The
-    credit has none. **Products and charges are read when the server reads the bills**, like
-    the ties: changing the rules needs no re-import.
+    Each product gives its charges, what its lines add up to by charge (`chargesOf()`), which
+    the Compare tab unfolds the product into (#195). The credit has none. **Products and
+    charges are read when the server reads the bills**, like the ties: changing the rules needs
+    no re-import.
+  - `charges.js` — pure: the charge of a bill line (`chargeOf()`, `CONTEXT.md`), its
+    description without the period that ends it in brackets on some accounts' bills, its
+    apostrophes straight, so that the lines of one charge name it alike in every month; and what
+    lines add up to by charge (`chargesOf()`), those at 0 € left out and those below kept, for a
+    Public Cloud product (#195) and the Logs Data Platform services (#247). With the helpers of
+    the amounts that these modules share: `toCents()`, `sumOf()` and `nonZeroByCost()`.
   - `ai-endpoints.js` — pure: the AI Endpoints model of a bill line (`CONTEXT.md`), read from
     its charge (`chargeOf()`), and what the line counts, the model's input or output tokens or
     its cost only, and what lines add up to by model (`modelFigures()`), for
     `/api/analysis/ai-endpoints` and the Public Cloud tab's table of the models (#193), and
     month by month, for the Trends tab's chart (#196). **Models are read when the server reads
     the bills**, like the products: no re-import.
+  - `logs-data-platform.js` — pure: what the bill lines of the Logs Data Platform services add
+    up to by charge (`chargeFigures()`, through `chargesOf()`), the services and accounts
+    together, and in all: those at 0 € left out, as the free tier of the hot storage, and those
+    that a refund brings below kept, so that the total is the month's Logs Data Platform cost.
+    `db.analysis.logsDataPlatform()` selects the lines by the resource type of
+    `LOGS_DATA_PLATFORM`, for `/api/analysis/logs-data-platform` and the Infrastructure tab's
+    table of the charges (#247). **Charges are read when the server reads the bills**, like the
+    products: no re-import.
   - `month-in-progress.js` — pure: the month in progress (`CONTEXT.md`, #216), the candidate
     month while a recurring service of it, one that bills of each of the three months before
     it charged, by identifier and account, has no bill line in it that any account's bill

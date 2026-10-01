@@ -1,7 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import { screen, within } from '@testing-library/react';
-import { account, everyResourceType, logsDataPlatformBilled } from './fixtures/account.js';
-import { lyonAccount, removedAccount, severalAccounts } from './fixtures/accounts.js';
+import {
+  LDP_CHARGES, account, everyResourceType, logsDataPlatformBilled, logsDataPlatformCharges,
+  septemberInProgress,
+} from './fixtures/account.js';
+import {
+  lyonAccount, removedAccount, severalAccounts, severalAccountsWithLogsDataPlatform,
+} from './fixtures/accounts.js';
 import { api } from './support/api.js';
 import {
   BOM,
@@ -13,8 +18,10 @@ import {
   cardOf,
   cardRowOf,
   closeAndCheckFocus,
+  columnHeader,
   firstColumnOf,
   headerOf,
+  layOutForPrint,
   openTab,
   renderDashboard,
   rowsOf,
@@ -22,8 +29,10 @@ import {
   selectLanguage,
   selectMonth,
   settle,
+  sortButton,
   sortTable,
   texts,
+  toggleProjection,
 } from './support/render.jsx';
 
 // The KPI cards of the tab: one per resource type
@@ -491,6 +500,270 @@ describe('Infrastructure tab', () => {
     expect(file.content.split('\n')[0]).toBe(
       `${BOM}"Name";"ID";"Datacenter";"CPU";"RAM (MB)";"OS";"State";"Expiration date";"Renewal"`,
     );
+  });
+
+  // The charges of the Logs Data Platform services that the month shown billed, the services
+  // together, as the bills name them (#247): see fixtures/account.js and fixtures/accounts.js
+  describe('Logs Data Platform charges', () => {
+    // The synthetic account, billed for two Logs Data Platform services in September, and one
+    // in August, besides a file storage
+    const withLogsDataPlatform = { ...account, ...logsDataPlatformBilled };
+    const LOGS_DATA_PLATFORM = /^(Logs Data Platform par charge|Logs Data Platform by charge)/;
+    // The heading of the table of the charges, which ends with the month, null without it
+    const chargesHeading = () => screen.queryByRole('heading', { name: LOGS_DATA_PLATFORM });
+    const chargesTable = () => within(cardOf(chargesHeading())).getByRole('table');
+    // The charges of the bills, as they word them
+    const {
+      accountRental: ACCOUNT_RENTAL, hotStorage: HOT_STORAGE, coldStorage: COLD_STORAGE,
+      dashboards: DASHBOARDS, inputInstances: INPUT_INSTANCES,
+      hotStorageOver101Gb: HOT_STORAGE_OVER_101_GB,
+    } = LDP_CHARGES;
+
+    it('load for the month shown once the tab opens, not before', async () => {
+      const { user } = await renderDashboard(withLogsDataPlatform);
+      expect(api.fetchLogsDataPlatform).not.toHaveBeenCalled();
+
+      await openTab(user, 'Infrastructure');
+
+      // For all accounts
+      expect(api.fetchLogsDataPlatform).toHaveBeenCalledWith('2026-09-01', '2026-09-30', null);
+    });
+
+    // The rental of both services adds up, and the free tier of the hot storage, which costs
+    // nothing, is not among them: the server leaves it out
+    it('are listed with their cost, the most expensive first, and add up to the month\'s Logs '
+      + 'Data Platform cost', async () => {
+      const { user } = await renderDashboard(withLogsDataPlatform);
+
+      await openTab(user, 'Infrastructure');
+
+      expect(texts(chargesHeading()))
+        .toEqual(['Logs Data Platform par charge', '(Septembre 2026)']);
+      expect(rowsOf(chargesTable())).toEqual([
+        ['Charge○', 'Coût▼'],
+        [ACCOUNT_RENTAL, '60,00€'],
+        [HOT_STORAGE, '18,40€'],
+        [COLD_STORAGE, '2,10€'],
+        ['Total Logs Data Platform', '80,50€'],
+      ]);
+      // That of its card, which its bill lines add up to
+      expect(texts(cardOf(within(resourceTypeCards()).getByText('Logs Data Platform'))))
+        .toEqual(['Logs Data Platform', '2', '80,50€']);
+    });
+
+    // As every table (#146)
+    it('sort by charge or by cost, their total under them', async () => {
+      const { user } = await renderDashboard(withLogsDataPlatform);
+      await openTab(user, 'Infrastructure');
+
+      await sortTable(user, chargesTable(), /^Charge/);
+
+      expect(headerOf(chargesTable())).toEqual(['Charge▲', 'Coût○']);
+      expect(firstColumnOf(chargesTable())).toEqual([ACCOUNT_RENTAL, COLD_STORAGE, HOT_STORAGE]);
+
+      await sortTable(user, chargesTable(), /^Charge/);
+
+      expect(firstColumnOf(chargesTable())).toEqual([HOT_STORAGE, COLD_STORAGE, ACCOUNT_RENTAL]);
+
+      await sortTable(user, chargesTable(), /^Coût/);
+
+      // The most expensive first again
+      expect(headerOf(chargesTable())).toEqual(['Charge○', 'Coût▼']);
+      expect(firstColumnOf(chargesTable())).toEqual([ACCOUNT_RENTAL, HOT_STORAGE, COLD_STORAGE]);
+
+      await sortTable(user, chargesTable(), /^Coût/);
+
+      expect(firstColumnOf(chargesTable())).toEqual([COLD_STORAGE, HOT_STORAGE, ACCOUNT_RENTAL]);
+      expect(texts(chargesTable().tFoot)).toEqual(['Total Logs Data Platform', '80,50€']);
+    });
+
+    it('follow the month selected', async () => {
+      const { user } = await renderDashboard(withLogsDataPlatform);
+      await openTab(user, 'Infrastructure');
+
+      await selectMonth(user, 'Août 2026');
+
+      expect(api.fetchLogsDataPlatform).toHaveBeenCalledWith('2026-08-01', '2026-08-31', null);
+      expect(texts(chargesHeading())).toEqual(['Logs Data Platform par charge', '(Août 2026)']);
+      expect(rowsOf(chargesTable()).slice(1)).toEqual([
+        [ACCOUNT_RENTAL, '30,00€'],
+        [HOT_STORAGE, '12,50€'],
+        ['Total Logs Data Platform', '42,50€'],
+      ]);
+    });
+
+    // So that the tab does not grow for a product that the month did not bill. A month whose
+    // Logs Data Platform lines all cost nothing, such as a rental that costs nothing and a free
+    // tier, has no charge either: the server leaves the charges at 0 € out.
+    it('show no table for a month without a charge', async () => {
+      const { user } = await renderDashboard({
+        ...withLogsDataPlatform,
+        logsDataPlatform: {
+          ...logsDataPlatformBilled.logsDataPlatform, '2026-07': { total: 0, charges: [] },
+        },
+      });
+      await openTab(user, 'Infrastructure');
+
+      await selectMonth(user, 'Juillet 2026');
+
+      expect(api.fetchLogsDataPlatform).toHaveBeenCalledWith('2026-07-01', '2026-07-31', null);
+      expect(chargesHeading()).not.toBeInTheDocument();
+    });
+
+    // The server keeps a charge that a refund brings below 0 €, as a product's, so that the total
+    // is the month's Logs Data Platform cost: a month whose only line is a refund shows it
+    it('show a charge that a refund brings below 0 €, even alone in its month', async () => {
+      const { user } = await renderDashboard({
+        ...withLogsDataPlatform,
+        logsDataPlatform: {
+          ...logsDataPlatformBilled.logsDataPlatform,
+          '2026-07': logsDataPlatformCharges(-4.6, [[HOT_STORAGE, -4.6]]),
+        },
+      });
+      await openTab(user, 'Infrastructure');
+
+      await selectMonth(user, 'Juillet 2026');
+
+      expect(rowsOf(chargesTable())).toEqual([
+        ['Charge○', 'Coût▼'],
+        [HOT_STORAGE, '-4,60€'],
+        ['Total Logs Data Platform', '-4,60€'],
+      ]);
+    });
+
+    it('show no table for an account that Logs Data Platform never billed', async () => {
+      const { user } = await renderDashboard();
+
+      await openTab(user, 'Infrastructure');
+
+      expect(api.fetchLogsDataPlatform).toHaveBeenCalledWith('2026-09-01', '2026-09-30', null);
+      expect(chargesHeading()).not.toBeInTheDocument();
+    });
+
+    // A detail of the month's costs: after the costs by resource type, and before the inventory
+    it('show under the costs by resource type, before the dedicated servers', async () => {
+      const { user } = await renderDashboard(withLogsDataPlatform);
+
+      await openTab(user, 'Infrastructure');
+
+      const parts = [...costsByResourceType().parentElement.children];
+      expect(parts.indexOf(cardOf(chargesHeading())))
+        .toBe(parts.indexOf(costsByResourceType()) + 1);
+      expect(parts.indexOf(serversPanel())).toBe(parts.indexOf(cardOf(chargesHeading())) + 1);
+    });
+
+    // What the month billed, as the rest of the tab, while the Compare tab projects the month in
+    // progress (#214)
+    it('never count the projected cost of the month in progress', async () => {
+      const { user } = await renderDashboard({ ...withLogsDataPlatform, ...septemberInProgress });
+      await openTab(user, 'Comparaison');
+      await toggleProjection(user);
+
+      await openTab(user, 'Infrastructure');
+
+      expect(api.fetchLogsDataPlatform.mock.calls).toEqual([['2026-09-01', '2026-09-30', null]]);
+      expect(texts(chargesTable().tFoot)).toEqual(['Total Logs Data Platform', '80,50€']);
+    });
+
+    // The PDF export prints the page: the table prints as the other tables, its headers without
+    // their sort marks (#146)
+    it('print as the other tables', async () => {
+      const { user } = await renderDashboard(withLogsDataPlatform);
+      await openTab(user, 'Infrastructure');
+
+      layOutForPrint();
+
+      expect(chargesHeading()).toBeVisible();
+      expect(sortButton(chargesTable(), 'Charge')).toBeVisible();
+      expect(sortButton(chargesTable(), 'Coût')).toBeVisible();
+      expect(within(columnHeader(chargesTable(), 'Coût')).getByText('▼')).not.toBeVisible();
+      for (const charge of [ACCOUNT_RENTAL, HOT_STORAGE, COLD_STORAGE]) {
+        expect(within(chargesTable()).getByText(charge)).toBeVisible();
+      }
+      expect(within(chargesTable()).getByText('80,50€')).toBeVisible();
+    });
+
+    // The charges stay as the bills word them
+    it('speak English when the page does', async () => {
+      const { user } = await renderDashboard(withLogsDataPlatform);
+      await selectLanguage(user, 'en');
+
+      await openTab(user, 'Infrastructure');
+
+      expect(texts(chargesHeading())).toEqual(['Logs Data Platform by charge', '(September 2026)']);
+      expect(rowsOf(chargesTable())).toEqual([
+        ['Charge○', 'Cost▼'],
+        [ACCOUNT_RENTAL, '60.00€'],
+        [HOT_STORAGE, '18.40€'],
+        [COLD_STORAGE, '2.10€'],
+        ['Logs Data Platform Total', '80.50€'],
+      ]);
+    });
+
+    // As the cards of the tab: each charge once, every account's lines added up when all are
+    // shown, without an Account column, which the lists then show
+    it('are those of the account selected', async () => {
+      const { user } = await renderDashboard(severalAccountsWithLogsDataPlatform);
+      await openTab(user, 'Infrastructure');
+
+      expect(rowsOf(chargesTable())).toEqual([
+        ['Charge○', 'Coût▼'],
+        [ACCOUNT_RENTAL, '90,00€'],
+        [DASHBOARDS, '24,00€'],
+        [HOT_STORAGE, '18,40€'],
+        [INPUT_INSTANCES, '12,00€'],
+        [HOT_STORAGE_OVER_101_GB, '7,25€'],
+        [COLD_STORAGE, '2,10€'],
+        ['Total Logs Data Platform', '153,75€'],
+      ]);
+
+      await selectAccount(user, 'Lyon subsidiary');
+
+      expect(api.fetchLogsDataPlatform)
+        .toHaveBeenCalledWith('2026-09-01', '2026-09-30', lyonAccount.id);
+      expect(rowsOf(chargesTable()).slice(1)).toEqual([
+        [ACCOUNT_RENTAL, '60,00€'],
+        [HOT_STORAGE, '18,40€'],
+        [COLD_STORAGE, '2,10€'],
+        ['Total Logs Data Platform', '80,50€'],
+      ]);
+
+      await selectAccount(user, 'yy2222-ovh');
+
+      expect(rowsOf(chargesTable()).slice(1)).toEqual([
+        [ACCOUNT_RENTAL, '30,00€'],
+        [DASHBOARDS, '24,00€'],
+        [INPUT_INSTANCES, '12,00€'],
+        [HOT_STORAGE_OVER_101_GB, '7,25€'],
+        ['Total Logs Data Platform', '73,25€'],
+      ]);
+
+      // In July, its only month, which the header then selects
+      await selectAccount(user, 'Compte inconnu');
+
+      expect(api.fetchLogsDataPlatform)
+        .toHaveBeenCalledWith('2026-07-01', '2026-07-31', 'unknown');
+      expect(rowsOf(chargesTable()).slice(1)).toEqual([
+        [ACCOUNT_RENTAL, '30,00€'],
+        ['Total Logs Data Platform', '30,00€'],
+      ]);
+    });
+
+    // The month selected stays until the months list of the account loads, and says it lacks
+    // it: the header then selects the account's latest month, August (#115, #120)
+    it('ask for none of a month that the account selected lacks', async () => {
+      const { user } = await renderDashboard(severalAccountsWithLogsDataPlatform);
+      await openTab(user, 'Infrastructure');
+
+      await selectAccount(user, 'zz3333-ovh (non configuré)');
+
+      expect(api.fetchLogsDataPlatform)
+        .not.toHaveBeenCalledWith('2026-09-01', '2026-09-30', removedAccount.id);
+      expect(api.fetchLogsDataPlatform)
+        .toHaveBeenCalledWith('2026-08-01', '2026-08-31', removedAccount.id);
+      // Never billed for Logs Data Platform
+      expect(chargesHeading()).not.toBeInTheDocument();
+    });
   });
 });
 

@@ -6,6 +6,7 @@ const {
 const { aiEndpointsLineCondition, modelFigures } = require('./ai-endpoints');
 const { tieFootprint } = require('./carbon-ties');
 const { MONTHLY_KINDS } = require('./cloud-usage');
+const { chargeFigures } = require('./logs-data-platform');
 const { productFigures } = require('./public-cloud-products');
 const { storageClassLabel } = require('./storage-classes');
 const {
@@ -1034,6 +1035,28 @@ const analysisOps = {
         AND ${ofAiEndpointsLines.sql}
         AND ${ofBills.sql}
     `).all(fromDate, toDate, ...ofAiEndpointsLines.params, ...ofBills.params));
+  },
+
+  /**
+   * The charges of the Logs Data Platform services that the bills between two dates charged
+   * (#247), the services together: the lines of the bills of the account (see
+   * accountCondition()), every account's by default, of the resource type that the
+   * classification gives these services, as chargeFigures() adds them up, each in the month of
+   * its bill, although what a service consumed covers the month before. Read when the server
+   * reads the bills: no re-import.
+   * @param {string} fromDate
+   * @param {string} toDate
+   * @param {?string} [account]
+   * @returns {{total: number, charges: {charge: string, total: number}[]}} What the charges cost
+   *   in all, and each charge with its cost (see chargeFigures())
+   */
+  logsDataPlatform: (fromDate, toDate, account = null) => {
+    const lines = linesOfPeriod(fromDate, toDate, account);
+    return chargeFigures(getDb().prepare(`
+      SELECT l.description, l.total_price
+      FROM (${lines.sql}) l
+      WHERE l.resource_type = ?
+    `).all(...lines.params, LOGS_DATA_PLATFORM.resourceType));
   },
 
   billsByProject: (projectNameOrId, fromDate, toDate) => {

@@ -3,15 +3,16 @@
 
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { useTableSorts } from '../components/SortableHeader.jsx';
+import { BY_TOTAL, useTableSorts } from '../components/SortableHeader.jsx';
 import {
-  fetchInventoryServers, fetchInventoryVps, fetchInventoryStorage,
+  fetchInventoryServers, fetchInventoryVps, fetchInventoryStorage, fetchLogsDataPlatform,
 } from '../services/api.js';
 import { accountQuery } from '../utils/accounts.js';
 import { resourceTypeServicesQuery } from './resourceTypeServicesQueries.js';
 
 /**
- * The inventory and the bill lines of the account shown (#123), for the Infrastructure tab.
+ * The inventory and the bill lines of the account shown (#123), for the Infrastructure tab, and
+ * the charges of its Logs Data Platform services in the month selected (#247).
  * @param {object} shell - What the shell holds for the whole page (ADR 0001)
  * @param {?object} shell.selectedMonth - The month of the header
  * @param {boolean} shell.holdsSelectedMonth - Whether the months of the account shown hold
@@ -32,8 +33,9 @@ const useInfrastructureTab = ({
 }) => {
   const [showAllServers, setShowAllServers] = useState(false);
   // The sort order of its tables, by table (#146): that of the servers is shared by their
-  // panel and their "show all" modal
-  const sortingOf = useTableSorts();
+  // panel and their "show all" modal; the table of the Logs Data Platform charges by cost, the
+  // most expensive first, until the user sorts it by another column (#247)
+  const sortingOf = useTableSorts({ logsDataPlatform: BY_TOTAL });
 
   // The inventory of the account shown: the servers, VPS and storage services that exist now,
   // whatever the month, which the tab lists once open. The Compare tab no longer lists the
@@ -65,12 +67,23 @@ const useInfrastructureTab = ({
     selectedAccount, accountColumn, selectedResourceType, selectedMonth, servicesEnabled,
   ));
 
+  // The charges of the Logs Data Platform services in the month selected (#247), the services
+  // together, as the figures of the month: those of the account shown, and all accounts' added
+  // up when all are shown, whatever the Account column of the lists, as the table names no
+  // account. What the month billed, never projected. Once the tab opens, as its inventory.
+  const { data: logsDataPlatform } = useQuery(accountQuery(selectedAccount, {
+    key: ['logsDataPlatform', selectedMonth?.from, selectedMonth?.to],
+    fetch: (account) => fetchLogsDataPlatform(selectedMonth.from, selectedMonth.to, account),
+    enabled: holdsSelectedMonth && activeTab === 'infrastructure',
+  }));
+
   return {
     sortingOf,
     inventoryServers,
     inventoryVps,
     inventoryStorage,
     resourceTypeDetails,
+    logsDataPlatform,
     showAllServers,
     setShowAllServers,
   };

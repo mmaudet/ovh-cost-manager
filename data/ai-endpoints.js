@@ -12,7 +12,7 @@
  * no side effect.
  */
 
-const { chargeOf } = require('./public-cloud-products');
+const { chargeOf, toCents } = require('./charges');
 
 // The charges of a model's tokens, by what their lines' quantity counts, its input or its output
 // tokens: in French, which end with the model, and in English, as OVHcloud's public order catalog
@@ -66,8 +66,6 @@ function readAiEndpointsLine(description) {
 function aiEndpointsLineCondition(column) {
   return { sql: `${column} LIKE ?`, params: ['%AI Endpoints%'] };
 }
-
-const toCents = (amount) => Math.round(amount * 100) / 100;
 
 // The entry of a key in a map, which `create` makes the first time
 const entryOf = (map, key, create) => {

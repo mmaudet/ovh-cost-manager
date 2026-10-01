@@ -108,12 +108,15 @@ describe('query keys', () => {
       ['webCloudSummary', '2025-10-01', '2026-09-30'],
       ['webCloudItems', undefined, undefined],
       ['webCloudItems', '2025-10-01', '2026-09-30'],
-      // The Infrastructure tab's, while no resource type is open
+      // The Infrastructure tab's, while no resource type is open, and its Logs Data Platform
+      // charges of the month (#247), which only run on the tab
       ['inventoryServers'],
       ['inventoryVps'],
       ['inventoryStorage'],
       ['resourceTypeDetails', null, undefined, undefined],
       ['resourceTypeDetails', null, '2026-09-01', '2026-09-30'],
+      ['logsDataPlatform', undefined, undefined],
+      ['logsDataPlatform', '2026-09-01', '2026-09-30'],
       // The Backup tab's
       ['backupStats', undefined, undefined],
       ['backupStats', '2026-09-01', '2026-09-30'],
@@ -203,11 +206,12 @@ describe('query keys', () => {
         ['webCloudSummary', '2025-10-01', '2026-09-30', 'xx1111-ovh'],
         ['webCloudItems', '2025-10-01', '2026-09-30', 'xx1111-ovh'],
         // The Infrastructure tab's inventory and bill lines (#123), which wait for the tab and
-        // for a resource type to open
+        // for a resource type to open, and its Logs Data Platform charges of the month (#247)
         ['inventoryServers', 'xx1111-ovh'],
         ['inventoryVps', 'xx1111-ovh'],
         ['inventoryStorage', 'xx1111-ovh'],
         ['resourceTypeDetails', null, '2026-09-01', '2026-09-30', 'xx1111-ovh'],
+        ['logsDataPlatform', '2026-09-01', '2026-09-30', 'xx1111-ovh'],
         // The Carbon tab's footprint of the month, which waits for the tab (#147), and its
         // trend, which waits for the month that the tab shows (#154)
         ['carbonFootprint', '2026-09', 'xx1111-ovh'],

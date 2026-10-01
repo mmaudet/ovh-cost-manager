@@ -1,3 +1,4 @@
+import { LogsDataPlatformCharges } from '../components/LogsDataPlatformCharges.jsx';
 import Modal from '../components/Modal.jsx';
 import TableActions from '../components/TableActions.jsx';
 import { SortableHeader, sortRows } from '../components/SortableHeader.jsx';
@@ -110,8 +111,8 @@ const BillLinesTable = ({ services, sorting, accountColumn, language, t, fmt }) 
 // docs/adr/0001-tab-state-lives-in-the-dashboard-shell.md. Its lists name the account of each
 // service in the Account column of the shell (accountColumn), when it shows one (#123).
 const InfrastructureTab = ({
-  inventoryServers, inventoryVps, inventoryStorage, resourceTypeDetails, setShowAllServers,
-  sortingOf, accountColumn, language, t, fmt, selectedMonth, byResourceType,
+  inventoryServers, inventoryVps, inventoryStorage, resourceTypeDetails, logsDataPlatform,
+  setShowAllServers, sortingOf, accountColumn, language, t, fmt, selectedMonth, byResourceType,
   selectedResourceType, setSelectedResourceType,
 }) => {
   const servers = withAccountNames(inventoryServers, accountColumn);
@@ -228,6 +229,15 @@ const InfrastructureTab = ({
             })}
           </div>
         </div>
+      )}
+
+      {/* The month's Logs Data Platform cost by charge, a detail of its costs, before the
+          inventory, which is what exists now: for a month with a charge (#247) */}
+      {logsDataPlatform?.charges.length > 0 && (
+        <LogsDataPlatformCharges
+          logsDataPlatform={logsDataPlatform} sorting={sortingOf('logsDataPlatform')}
+          selectedMonth={selectedMonth} language={language} t={t} fmt={fmt}
+        />
       )}
 
       {/* Dedicated Servers Table */}

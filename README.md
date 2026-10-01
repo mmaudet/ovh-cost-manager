@@ -57,6 +57,7 @@ New in version 3.1.0.
 - **Resource Type Detail**: Expandable cost breakdown per individual service within each category
 - **GPU Cost Consolidation**: Dedicated view for GPU costs by model (NVIDIA L4, L40S, A100, H100) and by project
 - **AI Endpoints Models** (new in version 3.3.0): each AI Endpoints model that the month's bills name, with its input tokens, its output tokens and its cost, in the Public Cloud tab, and its monthly cost in the Trends tab (see [AI Endpoints Models](#ai-endpoints-models))
+- **Logs Data Platform Charges** (new in version 3.5.0): each charge that the month's bills give the Logs Data Platform services, such as their account's rental or their streams' hot storage, with its cost, in the Infrastructure tab (see [Logs Data Platform](#logs-data-platform))
 - **Month Comparison**: Side-by-side comparison between two months with variation tracking, including infrastructure, backup, Private Cloud, and per-project product breakdowns, whose rows unfold into their services and charges since version 3.3.0 (see [Month Comparison](#month-comparison))
 - **Trend Analysis**: Historical trends with configurable period (3-36 months), and GPU and AI Endpoints evolution charts
 - **Month in Progress** (marked since version 3.3.3, projected since 3.4.0): the month whose bills still lack a service billed every month is marked in progress rather than compared as a complete month, and a checkbox projects its cost in the Trends and Compare tabs. Since version 3.5.0, that can be the month before, until the month of today has a bill (see [Month in Progress](#month-in-progress))
@@ -508,6 +509,21 @@ The table sorts by cost, the most expensive first, until a header is clicked, an
 
 The **AI Endpoints cost evolution by model** chart gives each model's cost month by month, over the tab's period up to the month selected in the header: a stacked bar per month of the bills, one color per model, with a legend of the models, the most expensive over the period first, and a tooltip that gives each model's cost in the month. A model keeps its color from one period or account to the next, though two models may share one. As the GPU chart, it shows once two months of the period have AI Endpoints lines.
 
+## Logs Data Platform
+
+OVHcloud bills each Logs Data Platform service, `ldp-` and a code, under its « DBAAS-LOGS » heading, on a line per charge: the rental of its account, « Logs - Account rental for 1 month », the hot storage of its streams, in three tiers, a free one among them, their cold storage, its input instances and its hosted OpenSearch Dashboards instances. Since version 3.5.0, Logs Data Platform is a resource type of its own, and OCM reads the charge of each of its lines when the server reads the bills: the bills already imported show them, without a new import.
+
+The account rental covers the month of its bill, while the other charges, what the service consumed, cover the month before. OCM counts them all by the month of their bill, as it counts the lines of the Public Cloud projects, which also cover the month before: a month shows its own rental, and what the services consumed the month before.
+
+### What the Infrastructure Tab Shows
+
+Under the costs by resource type, the **Logs Data Platform by charge** table lists the charges that the bills of the month selected in the header give the Logs Data Platform services, one row per charge, the services together:
+
+- **Charge**: as the bills name it, in their wording whatever the page's language, without the period that ends it on some accounts' bills, such as « (01/08/2026-31/08/2026) », so that a charge reads alike from one month to the next.
+- **Cost**: what its lines cost in the month, every service's together.
+
+The table sorts by cost, the most expensive first, until a header is clicked, and its last row gives what the charges cost in all: the month's Logs Data Platform cost, which its card gives too. A charge that costs nothing, such as the free tier of the hot storage, is left out, as a product's are in the Compare tab, while a charge that a refund brings below 0 € shows, with its negative amount, so that the charges add up to that cost. The table shows only for a month with a charge, a refund alone included. It follows the account selected in the header, and adds up the accounts' charges when all are shown, without an Account column. It shows what the month billed, never its projected cost, and prints with the page; it has no CSV export, as the export of the bill lines holds every line.
+
 ## Month Comparison
 
 The Compare tab compares two months, month A and month B, from their bills: it opens on the two latest months that have bills, and the user picks others. It compares their totals, their costs by service type and by project, their costs by resource type in the infrastructure and Private Cloud comparisons, their Veeam backups, and each Public Cloud project's products. Each row gives the amount of month A, the amount of month B and the variation from one to the other, in red when it grows and in green when it shrinks. The tab follows the account selected in the header.
@@ -679,6 +695,7 @@ The route lists the accounts that the imports recorded: those that the configura
 | `GET /api/analysis/resource-type-details?type=&from=&to=` | Detail for a specific resource type           |
 | `GET /api/analysis/public-cloud-stats?from=&to=`          | Public Cloud cards, `other` included          |
 | `GET /api/analysis/ai-endpoints?from=&to=`                | Cost and tokens of each AI Endpoints model    |
+| `GET /api/analysis/logs-data-platform?from=&to=`          | Cost of each Logs Data Platform charge        |
 | `GET /api/analysis/backup-stats?from=&to=`                | Backup stats (Veeam VMs, Enterprise licenses) |
 | `GET /api/analysis/backup-services?from=&to=`             | Each Veeam VM and Enterprise license          |
 | `GET /api/analysis/daily-trend?from=&to=&account=`        | Daily cost trend                              |
@@ -717,6 +734,15 @@ tokens, and its `total`, the most expensive first. `monthlyTrend` gives each
 `month`, `YYYY-MM`, of the period whose bills name a model, by the month of its
 bills, the earliest first, with the `costs` of every model of the period in it,
 at 0 for a model that the month did not bill. Amounts are to the cent.
+
+`/api/analysis/logs-data-platform` gives the charges that the bills of the
+period give the Logs Data Platform services, the services together, which the
+Infrastructure tab shows (see [Logs Data Platform](#logs-data-platform)):
+`total`, what they cost in all, and `charges`, each with its `charge`, as the
+bills name it without its period, and its `total`, the most expensive first.
+A charge that costs nothing is left out, one that a refund brings below 0 is
+kept, and a period without any gives an empty list. Each line counts in the month of its bill. Amounts are to
+the cent.
 
 `/api/analysis/backup-services` gives the services of the Veeam backups that
 the bills of the period charged, which the Compare tab's backup comparison
