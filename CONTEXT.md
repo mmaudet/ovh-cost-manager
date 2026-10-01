@@ -111,12 +111,15 @@ Cloud project, which OVHcloud bills after use, and the month of its bill for the
 _Avoid_: usage month, billing month
 
 **Month in progress**:
-The calendar month of today, while it has not billed each recurring service yet: its cost so
-far lacks theirs. OVHcloud bills some accounts early in the month, others late.
+The latest month with bills, while it has not billed each of its recurring services yet: its
+cost so far lacks theirs. It is the calendar month of today or, until the month of today has a
+bill, the month before: OVHcloud bills some accounts early in the month, others late, and some
+bills of a month land once the next one has begun.
 _Avoid_: current month (the Public Cloud's current consumption is another thing), open month
 
 **Recurring service**:
-A service that the bills of each of the three months before the month of today charged.
+A service of a month that the bills of each of the three months before it charged, so that it
+too should bill it.
 _Avoid_: regular service, subscription
 
 **Projected cost**:
