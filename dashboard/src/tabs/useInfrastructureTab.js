@@ -3,16 +3,12 @@
 
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { useTableSorts } from '../components/SortableHeader.jsx';
+import { BY_TOTAL, useTableSorts } from '../components/SortableHeader.jsx';
 import {
   fetchInventoryServers, fetchInventoryVps, fetchInventoryStorage, fetchLogsDataPlatform,
 } from '../services/api.js';
 import { accountQuery } from '../utils/accounts.js';
 import { resourceTypeServicesQuery } from './resourceTypeServicesQueries.js';
-
-// The table of the Logs Data Platform charges sorts by cost, the most expensive first, until the
-// user sorts it by another column (#146, #247)
-const BY_COST = { column: 'total', kind: 'number', direction: 'desc' };
 
 /**
  * The inventory and the bill lines of the account shown (#123), for the Infrastructure tab, and
@@ -37,8 +33,9 @@ const useInfrastructureTab = ({
 }) => {
   const [showAllServers, setShowAllServers] = useState(false);
   // The sort order of its tables, by table (#146): that of the servers is shared by their
-  // panel and their "show all" modal
-  const sortingOf = useTableSorts({ logsDataPlatform: BY_COST });
+  // panel and their "show all" modal; the table of the Logs Data Platform charges by cost, the
+  // most expensive first, until the user sorts it by another column (#247)
+  const sortingOf = useTableSorts({ logsDataPlatform: BY_TOTAL });
 
   // The inventory of the account shown: the servers, VPS and storage services that exist now,
   // whatever the month, which the tab lists once open. The Compare tab no longer lists the

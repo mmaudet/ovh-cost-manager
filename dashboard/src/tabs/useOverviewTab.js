@@ -13,19 +13,16 @@
 
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { useTableSorts } from '../components/SortableHeader.jsx';
+import { BY_TOTAL, useTableSorts } from '../components/SortableHeader.jsx';
 import { gpuProjectsByAccountQuery, projectsByAccountQuery } from './projectsByAccountQueries.js';
-
-// The breakdown by project sorts by amount, the most expensive first, until the user sorts it
-// by another column (#146)
-const BY_AMOUNT = { column: 'total', kind: 'number', direction: 'desc' };
 
 // selectedMonth: the month of the header, which the months of the account shown hold when
 // holdsSelectedMonth says so, as the shell checks it. accountColumn: the Account column of
 // the lists (accountColumnOf()), null when they name no account.
 const useOverviewTab = ({ selectedMonth, holdsSelectedMonth, accountColumn }) => {
-  // The sort order of its tables, by table (#146)
-  const sortingOf = useTableSorts({ projects: BY_AMOUNT });
+  // The sort order of its tables, by table (#146): the breakdown by project by amount, the most
+  // expensive first, until the user sorts it by another column
+  const sortingOf = useTableSorts({ projects: BY_TOTAL });
   // Whether the "show all" modal of the services about to expire is open (#225)
   const [showAllExpiring, setShowAllExpiring] = useState(false);
 

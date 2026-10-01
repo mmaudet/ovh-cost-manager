@@ -3,7 +3,7 @@
 
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { useTableSorts } from '../components/SortableHeader.jsx';
+import { BY_TOTAL, useTableSorts } from '../components/SortableHeader.jsx';
 import {
   fetchProjectsEnriched, fetchProjectConsumption, fetchProjectInstances, fetchProjectQuotas,
   fetchProjectVolumes, fetchProjectSnapshots, fetchProjectSavingsPlans, fetchProjectBuckets,
@@ -22,16 +22,14 @@ import { accountQuery } from '../utils/accounts.js';
 // What a project's detail shows of its other services until they load
 const NO_OTHER_SERVICES = { total: 0, products: [], credits: 0 };
 
-// The table of the AI Endpoints models sorts by cost, the most expensive first, until the user
-// sorts it by another column (#146, #193)
-const BY_COST = { column: 'total', kind: 'number', direction: 'desc' };
-
 const usePublicCloudTab = ({
   selectedMonth, holdsSelectedMonth, activeTab, selectedProject, selectedAccount,
 }) => {
   // The sort order of its tables, by table (#146): those of the open project's resources are
-  // shared by their panel and their "show all" modal, and stay when another project opens
-  const sortingOf = useTableSorts({ aiEndpoints: BY_COST });
+  // shared by their panel and their "show all" modal, and stay when another project opens; the
+  // table of the AI Endpoints models by cost, the most expensive first, until the user sorts it
+  // by another column (#193)
+  const sortingOf = useTableSorts({ aiEndpoints: BY_TOTAL });
   const [showAllBuckets, setShowAllBuckets] = useState(false);
   const [showAllInstances, setShowAllInstances] = useState(false);
   const [showAllVolumes, setShowAllVolumes] = useState(false);
