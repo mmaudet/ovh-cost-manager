@@ -81,7 +81,7 @@ export const translations = {
     // and of the Logs Data Platform row, which unfolds into its charges too, and what that row
     // says when the charges of a month could not load (#248)
     chargesOf: 'Charges :',
-    chargesFailed: 'Impossible de charger les charges de cette ligne.',
+    chargesFailed: 'Impossible d\'obtenir les charges de cette ligne.',
 
     // What a click on the header of a column that sorts its table does (#146)
     sortAscending: 'Trier par ordre croissant',

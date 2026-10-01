@@ -1342,7 +1342,7 @@ describe('Compare tab', () => {
 
         expect(infrastructureRows().slice(6, 9)).toEqual([
           [LOGS_DATA_PLATFORM, '0,00€', '80,50€', '—'],
-          ['Impossible de charger les charges de cette ligne.'],
+          ['Impossible d\'obtenir les charges de cette ligne.'],
           ['Hôtes Private Cloud', '0,00€', '0,00€', '—'],
         ]);
       });
@@ -1465,6 +1465,24 @@ describe('Compare tab', () => {
         [ACCOUNT_RENTAL, '30.00€', '60.00€', '+100.0%'],
         [HOT_STORAGE, '12.50€', '18.40€', '+47.2%'],
         [COLD_STORAGE, '0.00€', '2.10€', '—'],
+      ]);
+    });
+
+    // Rather than a month at 0 €, whose charges could not load
+    it('says in English when the charges of a month could not load', async () => {
+      const { user } = await renderDashboard(withLogsDataPlatform);
+      await selectLanguage(user, 'en');
+      await openTab(user, 'Compare');
+      const title = /^Infrastructure Comparison/;
+      await openComparison(user, title);
+      failFor(api.fetchLogsDataPlatform, (from) => from === '2026-08-01');
+
+      await toggleCharges(user, title, LOGS_DATA_PLATFORM);
+
+      expect(rowTextsOf(comparisonTable(title)).slice(7, 10)).toEqual([
+        ['Logs Data Platform', '42.50€', '80.50€', '+89.4%'],
+        ['The charges of this row could not be loaded.'],
+        ['Private Cloud Hosts', '0.00€', '0.00€', '—'],
       ]);
     });
   });
