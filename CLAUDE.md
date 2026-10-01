@@ -101,8 +101,9 @@ OVH API ──> data/import.js ──> SQLite (ovh-bills.db) ──> server/inde
     that a refund brings below kept, so that the total is the month's Logs Data Platform cost.
     `db.analysis.logsDataPlatform()` selects the lines by the resource type of
     `LOGS_DATA_PLATFORM`, for `/api/analysis/logs-data-platform` and the Infrastructure tab's
-    table of the charges (#247). **Charges are read when the server reads the bills**, like the
-    products: no re-import.
+    table of the charges (#247), and the charges that the Compare tab's Logs Data Platform row
+    unfolds into, with their projected parts on request (#248). **Charges are read when the
+    server reads the bills**, like the products: no re-import.
   - `month-in-progress.js` — pure: the month in progress (`CONTEXT.md`, #216), the candidate
     month while a recurring service of it, one that bills of each of the three months before
     it charged, by identifier and account, has no bill line in it that any account's bill
@@ -142,8 +143,8 @@ OVH API ──> data/import.js ──> SQLite (ovh-bills.db) ──> server/inde
   and a project's products with their charges, `/api/projects/:id/products` (#181, #195).
   The routes of the Trends and Compare tabs take `projected=true` (`projectedParameter`,
   #214): the monthly trends, the summary, the costs by service type, resource type and
-  project, a resource type's services, the Veeam backups and their services, and a project's
-  products. With it, when their period covers the month in progress, they count its
+  project, a resource type's services, the Veeam backups and their services, a project's
+  products, and the Logs Data Platform charges (#248). With it, when their period covers the month in progress, they count its
   projected cost, and each row gives its projected part, `projected` (`projectedPartOf()`);
   without it, they answer as before.
   The consumption and forecast cards read `/api/consumption/current` and `/forecast`, which
@@ -168,11 +169,13 @@ OVH API ──> data/import.js ──> SQLite (ovh-bills.db) ──> server/inde
   charges (#189), through `src/components/UnfoldingRow.jsx`: `UnfoldingRow` draws a row
   whose chevron unfolds it, `DetailRow` each service or charge under it, `sortUnfolded()`
   orders those within their row, and `useUnfoldedRows()`, in the tab's hook, holds the rows
-  unfolded. In `CompareTab.jsx`, `drawServicesRow()` draws a row of the infrastructure,
-  Private Cloud or backup comparison, which `UnfoldedRowServices.jsx` unfolds into its
-  services, from the query of a month that its `servicesQueryOf` prop gives, run once the
-  row unfolds; `ProjectProductComparison.jsx` unfolds a product into its charges, which come
-  with the products. `src/utils/monthComparison.js` pairs what months A and B gave
+  unfolded. In `CompareTab.jsx`, `drawUnfoldingRow()` draws a row of the infrastructure,
+  Private Cloud or backup comparison. `drawServicesRow()` unfolds it into its services, which
+  `UnfoldedRowServices.jsx` loads from the query of a month that its `servicesQueryOf` prop
+  gives, run once the row unfolds. `drawChargesRow()` unfolds the Logs Data Platform row into
+  its charges, which `UnfoldedRowCharges.jsx` loads the same way (#248).
+  `ProjectProductComparison.jsx` unfolds a product into its charges, which come with the
+  products. Both show the charges with `ComparedCharges` (`UnfoldingRow.jsx`). `src/utils/monthComparison.js` pairs what months A and B gave
   (`pairMonths()`), a service by its identifier and its account (`byNameAndAccount()`), and
   gives the value of a row in the columns that sort it (`comparisonValues()`).
 
