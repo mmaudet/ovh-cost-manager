@@ -1,5 +1,5 @@
 const Database = require('better-sqlite3');
-const { classifyWebCloud, WEB_CLOUD_FAMILIES } = require('./classify');
+const { classifyWebCloud, LOGS_DATA_PLATFORM, WEB_CLOUD_FAMILIES } = require('./classify');
 const {
   instanceLineCondition, readInstanceLine, readVolumeLine,
 } = require('./public-cloud-lines');
@@ -294,6 +294,25 @@ function getDb() {
       migrateWhenNeeded(db, () => keyLacks(db, table, 'account'),
         () => rekeyTable(db, schema, table));
     }
+    // The bill lines of the Logs Data Platform services, which the imports before #246 typed as
+    // storage, the Unknown account's included: they take the resource type of their own that
+    // the classification gives them now, so that the bills already imported show it without a
+    // new import. Their identifier alone decides it, which the stored lines keep, and no
+    // inventory types these services, whose type the import would prefer: a re-import types
+    // them alike (#246). The condition takes the classification's prefix and type, which a
+    // change of its rule changes here too; GLOB, as the rule, tells upper and lower case apart.
+    // Once no such line remains, the check reads, and finds none.
+    const ofLdpLinesUnderStorage = {
+      sql: "resource_type = 'storage' AND domain GLOB (? || '*')",
+      params: [LOGS_DATA_PLATFORM.prefix],
+    };
+    migrateWhenNeeded(db,
+      () => db.prepare(`SELECT 1 FROM bill_details WHERE ${ofLdpLinesUnderStorage.sql} LIMIT 1`)
+        .get(...ofLdpLinesUnderStorage.params) !== undefined,
+      // A statement of its own, as exec() cannot bind the type and the prefix
+      () => db.prepare(`
+        UPDATE bill_details SET resource_type = ? WHERE ${ofLdpLinesUnderStorage.sql}
+      `).run(LOGS_DATA_PLATFORM.resourceType, ...ofLdpLinesUnderStorage.params));
   }
   return db;
 }

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { screen, within } from '@testing-library/react';
-import { account, threeBilledProjects } from './fixtures/account.js';
+import { account, logsDataPlatformBilled, threeBilledProjects } from './fixtures/account.js';
 import {
   lyonAccount, removedAccount, severalAccounts, unknownAccount, unnamedAccount,
 } from './fixtures/accounts.js';
@@ -27,6 +27,7 @@ import {
   settle,
   sortButton,
   sortTable,
+  swatchOf,
   texts,
 } from './support/render.jsx';
 
@@ -142,6 +143,43 @@ describe('Overview tab', () => {
       'Voir le détail infrastructure →',
       'Voir le détail Web Cloud (domaines) →',
     ]);
+  });
+
+  // A row of its own, as the server names it in both languages, in its own colour, apart from the
+  // storage that counted it before #246
+  describe('Logs Data Platform (#246)', () => {
+    // A line of the legend of the resource types, found by the resource type it names
+    const legendLine = (name) => within(resourceTypes()).getByText(name).closest('li');
+
+    it('is a resource type of its own in the breakdown', async () => {
+      await renderDashboard({ ...account, ...logsDataPlatformBilled });
+
+      expect(texts(resourceTypes())).toEqual([
+        'Répartition par type de ressource',
+        'Public Cloud', '830,40€',
+        'Dedicated Servers', '270,00€',
+        'Backup', '90,00€',
+        'Logs Data Platform', '80,50€',
+        'Storage', '64,80€',
+        'Domains', '35,00€',
+        'Licenses', '25,00€',
+        'Voir le détail infrastructure →',
+        'Voir le détail Web Cloud (domaines) →',
+      ]);
+      expect(swatchOf(legendLine('Logs Data Platform')))
+        .toHaveStyle({ backgroundColor: '#65a30d' });
+      expect(swatchOf(legendLine('Storage'))).toHaveStyle({ backgroundColor: '#10b981' });
+    });
+
+    it('is named alike in English', async () => {
+      const { user } = await renderDashboard({ ...account, ...logsDataPlatformBilled });
+
+      await selectLanguage(user, 'en');
+
+      expect(texts(resourceTypes('Breakdown by resource type')).slice(7, 11)).toEqual([
+        'Logs Data Platform', '80.50€', 'Storage', '64.80€',
+      ]);
+    });
   });
 
   it('follows the month selector', async () => {

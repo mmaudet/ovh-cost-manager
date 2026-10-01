@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { screen, within } from '@testing-library/react';
 import {
-  account, everyResourceType, septemberInProgress, threeBilledProjects,
+  account, everyResourceType, logsDataPlatformBilled, septemberInProgress, threeBilledProjects,
 } from './fixtures/account.js';
 import {
   COLD_ARCHIVE, DB_1_PLAN, billedProducts, bucketStorage, hourlyUse,
@@ -497,6 +497,7 @@ describe('Compare tab', () => {
         ['Adresses IP', '0,00€', '0,00€', '—'],
         // (35 - 30) / 30
         ['Noms de domaine', '30,00€', '35,00€', '+16,7 %'],
+        ['Logs Data Platform', '0,00€', '0,00€', '—'],
         ['Hôtes Private Cloud', '0,00€', '0,00€', '—'],
         ['Datastores Private Cloud', '0,00€', '0,00€', '—'],
       ]);
@@ -538,6 +539,7 @@ describe('Compare tab', () => {
         ['Adresses IP', '6,00€', '0,00€', '-100,0 %'],
         // (30 - 35) / 35
         ['Noms de domaine', '35,00€', '30,00€', '-14,3 %'],
+        ['Logs Data Platform', '80,50€', '0,00€', '-100,0 %'],
         ['Hôtes Private Cloud', '1 450,00€', '0,00€', '-100,0 %'],
         ['Datastores Private Cloud', '380,00€', '0,00€', '-100,0 %'],
       ]);
@@ -567,15 +569,15 @@ describe('Compare tab', () => {
         .toEqual(['Type○', 'Août 2026○', 'Septembre 2026○', 'Variation▼']);
       // +16,7 %, 0,0 %, then the resource types at 0 € in month A
       expect(types()).toEqual([
-        'Noms de domaine', 'Serveurs dédiés', 'VPS', 'Stockage',
-        'Load Balancer', 'Adresses IP', 'Hôtes Private Cloud', 'Datastores Private Cloud',
+        'Noms de domaine', 'Serveurs dédiés', 'VPS', 'Stockage', 'Load Balancer', 'Adresses IP',
+        'Logs Data Platform', 'Hôtes Private Cloud', 'Datastores Private Cloud',
       ]);
 
       await sortTable(user, comparisonTable(INFRASTRUCTURE), /^Type/);
 
       expect(types()).toEqual([
         'Adresses IP', 'Datastores Private Cloud', 'Hôtes Private Cloud', 'Load Balancer',
-        'Noms de domaine', 'Serveurs dédiés', 'Stockage', 'VPS',
+        'Logs Data Platform', 'Noms de domaine', 'Serveurs dédiés', 'Stockage', 'VPS',
       ]);
       // The Backup and Private Cloud comparisons have two rows each: nothing to sort, no header
       // that sorts, whatever buttons their rows have to unfold (#197)
@@ -707,7 +709,7 @@ describe('Compare tab', () => {
               '0,00€', '18,00€', '—'],
             ['example.com', '(yy2222-ovh)', 'Option DNSSEC example.com - 1 an',
               '0,00€', '7,00€', '—'],
-            ['Hôtes Private Cloud', '0,00€', '0,00€', '—'],
+            ['Logs Data Platform', '0,00€', '0,00€', '—'],
           ]);
         });
 
@@ -850,7 +852,7 @@ describe('Compare tab', () => {
         // Right under the row of the domains: example.com and example.org cost 15 € each in
         // August, example.com the more in September, then example.net, from nothing in August
         expect(infrastructureRows().slice(5, 10).map(([label]) => label)).toEqual([
-          'Noms de domaine', 'example.com', 'example.org', 'example.net', 'Hôtes Private Cloud',
+          'Noms de domaine', 'example.com', 'example.org', 'example.net', 'Logs Data Platform',
         ]);
       });
 
@@ -873,8 +875,8 @@ describe('Compare tab', () => {
         const SERVER = 'ns3000001.ip-203-0-113.eu';
         // The rows that neither month billed, in the table's order
         const NOTHING_BILLED = [
-          'VPS', 'Stockage', 'Load Balancer', 'Adresses IP', 'Hôtes Private Cloud',
-          'Datastores Private Cloud',
+          'VPS', 'Stockage', 'Load Balancer', 'Adresses IP', 'Logs Data Platform',
+          'Hôtes Private Cloud', 'Datastores Private Cloud',
         ];
 
         await sortBy(/^Variation/);
@@ -940,7 +942,7 @@ describe('Compare tab', () => {
             '30,00€', '0,00€', '-100,0 %'],
           ['example.net', 'Création du domaine example.net - 1 an', '0,00€', '18,00€', '—'],
           ['example.com', 'Option DNS Anycast example.com - 1 an', '0,00€', '17,00€', '—'],
-          ['Hôtes Private Cloud', '0,00€', '0,00€', '—'],
+          ['Logs Data Platform', '0,00€', '0,00€', '—'],
         ];
         expect(infrastructureRows().slice(5, 10)).toEqual(julyAndSeptember);
 
@@ -966,7 +968,7 @@ describe('Compare tab', () => {
       expect(infrastructureRows().slice(5, 8)).toEqual([
         ['Noms de domaine', '30,00€', '35,00€', '+16,7 %'],
         ['Chargement des données...'],
-        ['Hôtes Private Cloud', '0,00€', '0,00€', '—'],
+        ['Logs Data Platform', '0,00€', '0,00€', '—'],
       ]);
 
       release();
@@ -988,7 +990,7 @@ describe('Compare tab', () => {
       expect(infrastructureRows().slice(5, 8)).toEqual([
         ['Noms de domaine', '30,00€', '35,00€', '+16,7 %'],
         ['Impossible de charger les services de cette ligne.'],
-        ['Hôtes Private Cloud', '0,00€', '0,00€', '—'],
+        ['Logs Data Platform', '0,00€', '0,00€', '—'],
       ]);
     });
 
@@ -1160,6 +1162,71 @@ describe('Compare tab', () => {
       ]);
       expect(within(within(comparisonTable(title)).getByText('example.net').closest('tr'))
         .getByTitle('cannot be computed: month A at €0 or below')).toHaveTextContent('—');
+    });
+  });
+
+  // Logs Data Platform, a resource type of its own since #246, apart from the storage that
+  // counted it before: a row of the infrastructure comparison, before the Private Cloud's rows,
+  // which unfolds into its services as they do. See fixtures/account.js.
+  describe('Logs Data Platform (#246)', () => {
+    // Its row, and the services under it once unfolded
+    const logsDataPlatformRows = [
+      // (80,50 - 42,50) / 42,50
+      ['Logs Data Platform', '42,50€', '80,50€', '+89,4 %'],
+      // (50,50 - 42,50) / 42,50, then the service new in September
+      ['ldp-ab-12345', 'Logs - Account rental for 1 month', '42,50€', '50,50€', '+18,8 %'],
+      ['ldp-cd-67890', 'Logs - Account rental for 1 month', '0,00€', '30,00€', '—'],
+    ];
+
+    it('is compared in a row of its own, which unfolds into its services', async () => {
+      const { user } = await renderDashboard({ ...account, ...logsDataPlatformBilled });
+      await openTab(user, 'Comparaison');
+
+      await openComparison(user, INFRASTRUCTURE);
+
+      // The file storage alone in the row of the storage
+      expect(infrastructureRows()).toEqual([
+        ['Serveurs dédiés', '270,00€', '270,00€', '0,0 %'],
+        ['VPS', '0,00€', '0,00€', '—'],
+        ['Stockage', '64,80€', '64,80€', '0,0 %'],
+        ['Load Balancer', '0,00€', '0,00€', '—'],
+        ['Adresses IP', '0,00€', '0,00€', '—'],
+        ['Noms de domaine', '30,00€', '35,00€', '+16,7 %'],
+        logsDataPlatformRows[0],
+        ['Hôtes Private Cloud', '0,00€', '0,00€', '—'],
+        ['Datastores Private Cloud', '0,00€', '0,00€', '—'],
+      ]);
+
+      await toggleRow(user, INFRASTRUCTURE, 'Logs Data Platform');
+
+      // Those that the Infrastructure tab lists under its card, of each month
+      for (const { from, to } of [months[1], months[0]]) {
+        expect(api.fetchResourceTypeDetails)
+          .toHaveBeenCalledWith('logs_data_platform', from, to, null);
+      }
+      expect(infrastructureRows().slice(6, 10)).toEqual([
+        ...logsDataPlatformRows, ['Hôtes Private Cloud', '0,00€', '0,00€', '—'],
+      ]);
+    });
+
+    // The descriptions stay those of the bills
+    it('speaks English when the page does', async () => {
+      const { user } = await renderDashboard({ ...account, ...logsDataPlatformBilled });
+      await selectLanguage(user, 'en');
+      await openTab(user, 'Compare');
+      const title = /^Infrastructure Comparison/;
+      await openComparison(user, title);
+
+      await user.click(within(comparisonTable(title))
+        .getByRole('button', { name: 'Services: Logs Data Platform' }));
+      await settle();
+
+      // After the header and the six rows before it
+      expect(rowTextsOf(comparisonTable(title)).slice(7, 10)).toEqual([
+        ['Logs Data Platform', '42.50€', '80.50€', '+89.4%'],
+        ['ldp-ab-12345', 'Logs - Account rental for 1 month', '42.50€', '50.50€', '+18.8%'],
+        ['ldp-cd-67890', 'Logs - Account rental for 1 month', '0.00€', '30.00€', '—'],
+      ]);
     });
   });
 
@@ -1939,6 +2006,7 @@ describe('Compare tab', () => {
           ['-30,00€', '35,00€', '—'],
           ['0,00€', '0,00€', '—'],
           ['0,00€', '0,00€', '—'],
+          ['0,00€', '0,00€', '—'],
         ]);
       // Nothing backed up in July
       expect(rowsOf(comparisonTable(BACKUP))).toEqual([
@@ -2027,6 +2095,7 @@ describe('Compare tab', () => {
         ['30,00€', '35,00€', '—'],
         ['0,00€', '0,00€', '—'],
         ['0,00€', '0,00€', '—'],
+        ['0,00€', '0,00€', '—'],
       ]);
       // The VMs backed up: not +125,0 %
       expect(rowsOf(comparisonTable(BACKUP))).toEqual([
@@ -2104,7 +2173,7 @@ describe('Compare tab', () => {
       // Not the domains first, which cost more in September
       expect(firstColumnOf(comparisonTable(INFRASTRUCTURE))).toEqual([
         'Serveurs dédiés', 'VPS', 'Stockage', 'Load Balancer', 'Adresses IP', 'Noms de domaine',
-        'Hôtes Private Cloud', 'Datastores Private Cloud',
+        'Logs Data Platform', 'Hôtes Private Cloud', 'Datastores Private Cloud',
       ]);
       // Nor the object storage before the savings plans
       expect(firstColumnOf(comparisonTable(PRODUCTION_PRODUCTS))).toEqual([
@@ -2229,6 +2298,7 @@ describe('Compare tab', () => {
           ['Load Balancer', '0,00€', '0,00€', '—'],
           ['Adresses IP', '0,00€', '0,00€', '—'],
           ['Noms de domaine', '30,00€', '35,00€', '+16,7 %'],
+          ['Logs Data Platform', '0,00€', '0,00€', '—'],
           ['Hôtes Private Cloud', '0,00€', '0,00€', '—'],
           ['Datastores Private Cloud', '0,00€', '0,00€', '—'],
         ]);
@@ -2339,14 +2409,14 @@ describe('Compare tab', () => {
       // The domains, +16,7 %, the servers, 0,0 %, then the rows without a variation
       expect(firstColumnOf(comparisonTable(INFRASTRUCTURE))).toEqual([
         'Noms de domaine', 'Serveurs dédiés', 'VPS', 'Stockage', 'Load Balancer', 'Adresses IP',
-        'Hôtes Private Cloud', 'Datastores Private Cloud',
+        'Logs Data Platform', 'Hôtes Private Cloud', 'Datastores Private Cloud',
       ]);
 
       await toggleProjection(user);
 
       expect(firstColumnOf(comparisonTable(INFRASTRUCTURE))).toEqual([
         'Serveurs dédiés', 'VPS', 'Stockage', 'Load Balancer', 'Adresses IP', 'Noms de domaine',
-        'Hôtes Private Cloud', 'Datastores Private Cloud',
+        'Logs Data Platform', 'Hôtes Private Cloud', 'Datastores Private Cloud',
       ]);
     });
 
@@ -2819,7 +2889,7 @@ describe('Compare tab', () => {
     expect(infrastructureTypes).toEqual([
       'Type',
       'Dedicated Servers',
-      'VPS', 'Storage', 'Load Balancer', 'IP Addresses', 'Domains',
+      'VPS', 'Storage', 'Load Balancer', 'IP Addresses', 'Domains', 'Logs Data Platform',
       'Private Cloud Hosts', 'Private Cloud Datastores',
     ]);
     // The Veeam backups of months A and B (#32), none to compute a variation
@@ -2957,6 +3027,7 @@ describe('Compare tab', () => {
           nothingIn('Adresses IP'),
           // (10 - 30) / 30
           ['Noms de domaine', '30,00€', '10,00€', '-66,7 %'],
+          nothingIn('Logs Data Platform'),
           nothingIn('Hôtes Private Cloud'),
           nothingIn('Datastores Private Cloud'),
         ]);
@@ -2988,6 +3059,7 @@ describe('Compare tab', () => {
           nothingIn('Load Balancer'),
           nothingIn('Adresses IP'),
           ['Noms de domaine', '0,00€', '25,00€', '—'],
+          nothingIn('Logs Data Platform'),
           nothingIn('Hôtes Private Cloud'),
           nothingIn('Datastores Private Cloud'),
         ]);

@@ -3,7 +3,8 @@
  * go through its routes: Jest cannot load openid-client, an ES module, while
  * the server's own Node can. It runs with a throwaway HOME and DATA_DIR, and
  * reads neither the developer's config.json nor data: only the config.json a
- * test gives it, if any, and the rows a test seeds its database with.
+ * test gives it, if any, and the rows a test seeds its database with. A test
+ * may start it again over the same HOME and DATA_DIR, as after an upgrade.
  *
  * Also a minimal browser, which keeps the cookies the server sets and follows
  * no redirect, so that a test sees each step of a sign-in.
@@ -14,6 +15,7 @@ const fs = require('fs');
 const net = require('net');
 const os = require('os');
 const path = require('path');
+const { holdWriteLock } = require('./write-lock');
 
 const SERVER = path.resolve(__dirname, '..', '..', 'server', 'index.js');
 const HIDE_REPO_CONFIG = path.resolve(__dirname, 'hide-repo-config.js');
@@ -64,19 +66,26 @@ async function waitFor(check, what, output, timeout = 15000) {
   throw new Error(`the server never ${what}:\n${output()}`);
 }
 
-// The server in a child process, with a throwaway HOME, which holds config
-// in my-ovh-bills/config.json when it is given, and DATA_DIR, whose database
-// seed writes to when it is given
-async function spawnOcm(envOf, config, seed) {
+// The DATA_DIR of a throwaway HOME
+const dataDirOf = (home) => path.join(home, 'data');
+
+// A throwaway HOME, which holds config in my-ovh-bills/config.json when it is
+// given, and DATA_DIR, whose database seed writes to when it is given
+function throwawayHome(config, seed) {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'ocm-test-'));
   if (config !== undefined) {
     fs.mkdirSync(path.join(home, 'my-ovh-bills'));
     fs.writeFileSync(path.join(home, 'my-ovh-bills', 'config.json'), JSON.stringify(config));
   }
-  const dataDir = path.join(home, 'data');
   if (seed !== undefined) {
-    writeDatabase(dataDir, seed);
+    writeDatabase(dataDirOf(home), seed);
   }
+  return home;
+}
+
+// The server in a child process, over a throwaway HOME and its DATA_DIR, on a
+// port of its own
+async function spawnOcm(envOf, home) {
   const port = await freePort();
   const url = `http://127.0.0.1:${port}`;
   const env = envOf(url);
@@ -84,7 +93,7 @@ async function spawnOcm(envOf, config, seed) {
     env: {
       PATH: process.env.PATH,
       HOME: home,
-      DATA_DIR: dataDir,
+      DATA_DIR: dataDirOf(home),
       PORT: String(port),
       NODE_ENV: 'production',
       IMPORT_ENABLED: 'false',
@@ -101,7 +110,20 @@ async function spawnOcm(envOf, config, seed) {
     output += chunk;
   });
   const exited = new Promise((resolve) => child.on('exit', resolve));
-  return { home, dataDir, url, env, child, exited, output: () => output };
+  return { url, env, child, exited, output: () => output };
+}
+
+// Waits until a server that spawnOcm() started answers, and, with OIDC, until
+// it has discovered the provider
+async function untilReady({ url, env, output }) {
+  await waitFor(async () => (await fetch(`${url}/api/health`)).ok, 'answered', output);
+  if (env.OIDC_ENABLED === 'true') {
+    await waitFor(
+      async () => (await fetch(`${url}/auth/login`, { redirect: 'manual' })).status === 302,
+      'discovered the provider',
+      output
+    );
+  }
 }
 
 /**
@@ -117,30 +139,38 @@ async function spawnOcm(envOf, config, seed) {
  * @returns {Promise<{ url: string, output: function(): string,
  *   logged: function(string): Promise, get: function(string): Promise,
  *   getText: function(string): Promise, write: function(function(object)),
+ *   holdWriteLock: function(): function, restart: function(): Promise,
  *   stop: function }>}
  */
 async function startOcm(envOf, { config, seed } = {}) {
-  const {
-    home, dataDir, url, env, child, exited, output,
-  } = await spawnOcm(envOf, config, seed);
+  const home = throwawayHome(config, seed);
+  // The server that runs, which a restart replaces
+  let running = await spawnOcm(envOf, home);
+  const kill = async () => {
+    running.child.kill();
+    await running.exited;
+  };
 
   const server = {
-    url,
-    output,
+    url: running.url,
+    output: () => running.output(),
     // Writes to its database while it runs, as an import run does, through the data layer
     // (data/db.js) that it hands to `writeRows`, at once: the server reads the database at each
     // request
-    write: (writeRows) => writeDatabase(dataDir, writeRows),
+    write: (writeRows) => writeDatabase(dataDirOf(home), writeRows),
+    // Holds the write lock of its database, as an import does while it stores a bill, until the
+    // function that it returns releases it
+    holdWriteLock: () => holdWriteLock(dataDirOf(home)),
     // Resolves with the status and the JSON body of the server's answer to a path
     get: async (path) => {
-      const res = await fetch(`${url}${path}`);
+      const res = await fetch(`${server.url}${path}`);
       return { status: res.status, body: await res.json() };
     },
     // Resolves with the status, the headers and the body of the server's answer to a path, as
     // the text of its bytes, such as a CSV export's: Response.text() would drop the byte order
     // mark that starts one
     getText: async (path) => {
-      const res = await fetch(`${url}${path}`);
+      const res = await fetch(`${server.url}${path}`);
       return {
         status: res.status,
         headers: res.headers,
@@ -151,23 +181,24 @@ async function startOcm(envOf, { config, seed } = {}) {
     // test apart from the answers, and may come after them. Rejects, with the
     // output, after a wait shorter than Jest's default timeout.
     logged: (text) => waitFor(
-      async () => output().includes(text), `logged ${text}`, output, 3000
+      async () => server.output().includes(text), `logged ${text}`, server.output, 3000
     ),
+    // Stops the server, and starts it again over its config.json and its database as it left
+    // them, as after an upgrade or a reboot. Resolves once it answers, at its new url; rejects,
+    // with its output, when it never does.
+    restart: async () => {
+      await kill();
+      running = await spawnOcm(envOf, home);
+      server.url = running.url;
+      await untilReady(running);
+    },
     stop: async () => {
-      child.kill();
-      await exited;
+      await kill();
       fs.rmSync(home, { recursive: true, force: true });
     },
   };
   try {
-    await waitFor(async () => (await fetch(`${url}/api/health`)).ok, 'answered', server.output);
-    if (env.OIDC_ENABLED === 'true') {
-      await waitFor(
-        async () => (await fetch(`${url}/auth/login`, { redirect: 'manual' })).status === 302,
-        'discovered the provider',
-        server.output
-      );
-    }
+    await untilReady(running);
   } catch (err) {
     await server.stop();
     throw err;
@@ -186,7 +217,8 @@ async function startOcm(envOf, { config, seed } = {}) {
  *   null when it had to be stopped, and its output
  */
 async function runOcmUntilExit(env, { config } = {}) {
-  const { home, child, exited, output } = await spawnOcm(() => env, config);
+  const home = throwawayHome(config);
+  const { child, exited, output } = await spawnOcm(() => env, home);
   const timer = setTimeout(() => child.kill(), 15000);
   const code = await exited;
   clearTimeout(timer);

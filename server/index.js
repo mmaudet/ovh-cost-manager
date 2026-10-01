@@ -132,6 +132,8 @@ const RESOURCE_TYPE_COLORS = {
   'dedicated_server': '#ef4444',
   'vps': '#f59e0b',
   'storage': '#10b981',
+  // Lime, which no other colour comes close to, and which reads on white (#246)
+  'logs_data_platform': '#65a30d',
   'load_balancer': '#06b6d4',
   'domain': '#8b5cf6',
   'ip_service': '#ec4899',
@@ -152,6 +154,8 @@ const RESOURCE_TYPE_LABELS = {
   'dedicated_server': 'Dedicated Servers',
   'vps': 'VPS',
   'storage': 'Storage',
+  // As OVHcloud names the product, in both languages (#246)
+  'logs_data_platform': 'Logs Data Platform',
   'load_balancer': 'Load Balancers',
   'domain': 'Domains',
   'ip_service': 'IP',
