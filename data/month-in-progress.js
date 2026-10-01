@@ -2,12 +2,12 @@
 // services has no bill line in it. OVHcloud bills some accounts early in the month and others late,
 // and some bills of a month land once the next one has begun: until the bill of a service that
 // comes every month arrives, the month's cost lacks it. The one month that can be in progress, the
-// candidate month, is the month of today once the account shown has a bill in it, and the month
-// before until then (chooseCandidateMonth(), #258). Pure: data/db.js reads the services that the
-// bills charged (getBilledServices()), which this module tells the recurring services not billed
-// yet from, when the server reads the bills, so that changing the rule needs no re-import. The
-// projection of the month in progress repeats those services' bill lines of the month before,
-// their projected lines (#217).
+// candidate month, is the month of today once the account shown has a bill in it, and until then
+// the month before, if the account shown has a bill in it (chooseCandidateMonth(), #258). Pure:
+// data/db.js reads the services that the bills charged (getBilledServices()), which this module
+// tells the recurring services not billed yet from, when the server reads the bills, so that
+// changing the rule needs no re-import. The projection of the month in progress repeats those
+// services' bill lines of the month before, their projected lines (#217).
 
 const { monthsOfWindow, shiftMonth, trendWindow } = require('./months');
 
@@ -16,20 +16,24 @@ const { monthsOfWindow, shiftMonth, trendWindow } = require('./months');
 const RECURRENCE_MONTHS = 3;
 
 /**
- * The candidate month (#258), the one month that can be in progress: the month of today once the
- * account shown has a bill in it, and until then the month before, which may still lack its late
- * bills, as some bills of a month land once the next one has begun. One month only is ever in
- * progress, the latest month listed: once the month of today has a bill, it takes over, even
- * while the month before lacks a late bill.
+ * The candidate month (#258), the one month that can be in progress, chosen among the months that
+ * the bills of the account shown fall in: the month of today once the account shown has a bill in
+ * it, and until then the month before, if the account shown has a bill in it, which may still
+ * lack its late bills, as some bills of a month land once the next one has begun. One month only
+ * is ever in progress, the latest month listed: once the month of today has a bill, it takes over,
+ * even while the month before lacks a late bill. An account with a bill in neither, such as one
+ * whose imports stopped, has none, and no month is in progress: a month without a bill of it would
+ * count its recurring services alone.
  * @param {string} monthOfToday - YYYY-MM, as the server's local date gives it (monthOfDate() in
  *   data/months.js)
- * @param {boolean} billedInIt - Whether the account shown has a bill in the month of today: one
- *   of its bills for an account, one of the bills without an account for the Unknown account,
- *   any bill for every account
- * @returns {string} YYYY-MM
+ * @param {string[]} monthsBilled - The months that the bills of the account shown fall in, YYYY-MM,
+ *   as the months list lists them (getMonths() in data/db.js): for one account, those of its bills;
+ *   for the Unknown account, those of the bills without an account; for every account, any bill's
+ * @returns {?string} YYYY-MM, one of `monthsBilled`; null when neither month is
  */
-function chooseCandidateMonth(monthOfToday, billedInIt) {
-  return billedInIt ? monthOfToday : shiftMonth(monthOfToday, -1);
+function chooseCandidateMonth(monthOfToday, monthsBilled) {
+  return [monthOfToday, shiftMonth(monthOfToday, -1)]
+    .find((month) => monthsBilled.includes(month)) ?? null;
 }
 
 /**

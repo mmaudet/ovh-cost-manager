@@ -14,9 +14,10 @@ const {
   LYON, PARIS, UNKNOWN_ACCOUNT, project,
 } = require('./support/accounts');
 const {
-  ALL_ACCOUNTS, FOUR_MONTHS_UP_TO_MONTH_BEFORE, LYON_BILLED_LATE, MONTH_BEFORE, MONTH_OF_TODAY,
-  MONTHS_BEFORE, OF_BOTH_MONTHS, OF_MONTH_BEFORE, OF_TODAY, PARIS_BILLED, PERIOD_OF_MONTH_BEFORE,
-  PERIOD_OF_TODAY, TWO_MONTHS_BEFORE, UNKNOWN_BILLED_LATE, billOf,
+  ALL_ACCOUNTS, FOUR_MONTHS_BEFORE, FOUR_MONTHS_UP_TO_MONTH_BEFORE, LYON_BILLED_LATE, MONTH_BEFORE,
+  MONTH_OF_TODAY, MONTHS_BEFORE, OF_BOTH_MONTHS, OF_MONTH_BEFORE, OF_TODAY, PARIS_BILLED,
+  PERIOD_OF_MONTH_BEFORE, PERIOD_OF_TODAY, THREE_MONTHS_BEFORE, TWO_MONTHS_BEFORE,
+  UNKNOWN_BILLED_LATE, billOf,
 } = require('./support/month-in-progress');
 const { startOcm } = require('./support/ocm-server');
 
@@ -617,13 +618,13 @@ describe('the routes of the Compare tab with projected=true and several accounts
   });
 });
 
-// Until the month of today has a bill, the month before is the candidate month (#258): while it
-// lacks a recurring service, one that the bills of each of the three months before it charged,
-// the routes of the Compare tab project it with projected=true, as they project the month of today
-// once it has a bill. The seed bills the months before the month of today only, which leaves it
-// without a bill.
-describe('the routes of the Compare tab with projected=true at the turn of the month (#258)',
-  () => {
+// Until the month of today has a bill, the month before is the candidate month (#258), if the
+// account shown has a bill in it: while it lacks a recurring service, one that the bills of each of
+// the three months before it charged, the routes of the Compare tab project it with projected=true,
+// as they project the month of today once it has a bill. The seeds bill the months before the month
+// of today only, which leaves it without a bill.
+describe('the routes of the Compare tab at the turn of the month (#258)', () => {
+  describe('with a single account billed late', () => {
     let ocm;
 
     // A single account, billed on the first day of each month for its Production project, and
@@ -730,3 +731,53 @@ describe('the routes of the Compare tab with projected=true at the turn of the m
         .toMatchObject({ total: 910, projected: 310, billsCount: 1 });
     });
   });
+
+  // An account whose bills stopped two months before the month of today, such as one removed from
+  // the configuration, or whose imports stalled: it has a bill in neither the month of today nor
+  // the month before, so that no month can be its month in progress
+  describe('with an account billed up to two months before', () => {
+    let ocm;
+
+    // Billed for its Production project and its dedicated server in each of the three months up
+    // to two months before the month of today, which make them recurring services of the month
+    // before, and never since
+    function seedBillsStopped(db) {
+      db.accounts.upsert({ nic: LYON, currency: 'EUR' });
+      project(db, PRODUCTION, 'Production', LYON);
+      [FOUR_MONTHS_BEFORE, THREE_MONTHS_BEFORE, TWO_MONTHS_BEFORE].forEach((yearMonth, index) => {
+        billOf(db, `FR10${index}1`, LYON, `${yearMonth}-01`, [
+          [PRODUCTION, 'cloud_project', 600, COMPUTE],
+          [SERVER, 'dedicated_server', 200,
+            { description: SERVER_RENTAL, serviceType: 'Compute' }],
+        ]);
+      });
+    }
+
+    beforeAll(async () => {
+      ocm = await startOcm(() => ({}), { seed: seedBillsStopped });
+    }, 30000);
+
+    afterAll(async () => {
+      await ocm?.stop();
+    });
+
+    // Without a bill of the account, the month before is not in progress: its recurring services
+    // are not projected in it, which would count them alone, without any bill
+    test('project nothing over the month before, which has no bill', async () => {
+      expect(await ocm.get(`/api/summary?${OF_MONTH_BEFORE}&projected=true`)).toEqual({
+        status: 200,
+        body: {
+          period: PERIOD_OF_MONTH_BEFORE,
+          total: 0,
+          projected: 0,
+          cloudTotal: 0,
+          nonCloudTotal: 0,
+          dailyAverage: 0,
+          billsCount: 0,
+          projectsCount: 0,
+          topProjects: [],
+        },
+      });
+    });
+  });
+});

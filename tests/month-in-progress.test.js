@@ -17,19 +17,27 @@ const {
 const { startOcm } = require('./support/ocm-server');
 const { chooseCandidateMonth } = require('../data/month-in-progress');
 
-// The one month that can be in progress (#258): the month of today once the account shown has a
-// bill in it, and until then the month before, as some bills of a month land once the next one
-// has begun
+// The one month that can be in progress (#258), from the months that the bills of the account shown
+// fall in, as the months list lists them: the month of today once the account shown has a bill in
+// it, and until then the month before, as some bills of a month land once the next one has begun,
+// if the account shown has a bill in it
 describe('chooseCandidateMonth (#258)', () => {
   test('chooses the month of today once the account shown has a bill in it', () => {
-    expect(chooseCandidateMonth('2026-10', true)).toBe('2026-10');
-    expect(chooseCandidateMonth('2027-01', true)).toBe('2027-01');
+    expect(chooseCandidateMonth('2026-10', ['2026-10', '2026-09', '2026-08'])).toBe('2026-10');
+    expect(chooseCandidateMonth('2026-10', ['2026-10', '2026-08'])).toBe('2026-10');
+    expect(chooseCandidateMonth('2027-01', ['2027-01', '2026-12'])).toBe('2027-01');
   });
 
   test('chooses the month before while the month of today has no bill', () => {
-    expect(chooseCandidateMonth('2026-10', false)).toBe('2026-09');
+    expect(chooseCandidateMonth('2026-10', ['2026-09', '2026-08'])).toBe('2026-09');
     // In January, December of the year before
-    expect(chooseCandidateMonth('2027-01', false)).toBe('2026-12');
+    expect(chooseCandidateMonth('2027-01', ['2026-12', '2026-11'])).toBe('2026-12');
+  });
+
+  // Such as an account removed from the configuration, whose imports stopped
+  test('chooses no month while the account shown has a bill in neither', () => {
+    expect(chooseCandidateMonth('2026-10', ['2026-08', '2026-07'])).toBeNull();
+    expect(chooseCandidateMonth('2026-10', [])).toBeNull();
   });
 });
 
