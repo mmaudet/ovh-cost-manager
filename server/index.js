@@ -1479,6 +1479,22 @@ function registerRoutes() {
     }
   });
 
+  // The charges of the Logs Data Platform services that the bills of a period charged (#247),
+  // which the Infrastructure tab lists for the month it shows: each charge as the bills name it,
+  // without its period, with its cost, the most expensive first, those that cost nothing left
+  // out, and what they cost in all. Those of the bills of the account the request asks for, or
+  // of every account without one, the services together.
+  app.get('/api/analysis/logs-data-platform', accountParameter, (req, res) => {
+    try {
+      const { from, to } = req.query;
+      const validation = validateDateRange(from, to);
+      if (!validation.valid) return res.status(400).json({ error: validation.error });
+      res.json(db.analysis.logsDataPlatform(from, to, req.account));
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   // The Veeam backups of a month: those of the account the request asks for, or of every
   // account without one (#119), as the Compare and Backup tabs show them. With projected=true,
   // the month in progress counts its projected lines too, and each kind gives its projected part

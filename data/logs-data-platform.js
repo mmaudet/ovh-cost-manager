@@ -6,11 +6,25 @@
  * the month of its bill, and what it consumed in the month before, such as the hot storage of its
  * streams, « Logs - Streams - Hot Storage 1 to 100 GB ».
  *
- * data/db.js selects the lines of a period, and chargeFigures() adds them up, when the server
- * reads the bills: no re-import. This module has no side effect.
+ * data/db.js selects the lines of a period, which logsDataPlatformLineCondition() narrows down to
+ * those of these services, and chargeFigures() adds them up, when the server reads the bills: no
+ * re-import. This module has no side effect.
  */
 
+const { LOGS_DATA_PLATFORM } = require('./classify');
 const { chargeOf } = require('./public-cloud-products');
+
+/**
+ * The condition that narrows a query's bill lines down to those of the Logs Data Platform
+ * services, to join with AND to its WHERE clause, with its parameters, as the conditions of
+ * data/sql-conditions.js: those of the resource type that the classification gives them, which
+ * the lines that the imports before #246 stored as storage took when the database opened.
+ * @param {string} column - The column of the query that holds the lines' resource types
+ * @returns {{sql: string, params: string[]}}
+ */
+function logsDataPlatformLineCondition(column) {
+  return { sql: `${column} = ?`, params: [LOGS_DATA_PLATFORM.resourceType] };
+}
 
 const toCents = (amount) => Math.round(amount * 100) / 100;
 
@@ -39,4 +53,4 @@ function chargeFigures(lines) {
   return { total: toCents(charges.reduce((sum, { total }) => sum + total, 0)), charges };
 }
 
-module.exports = { chargeFigures };
+module.exports = { chargeFigures, logsDataPlatformLineCondition };
