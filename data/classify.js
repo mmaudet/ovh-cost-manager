@@ -97,8 +97,9 @@ function classifyService(description) {
 /**
  * Classify a billing line's resource_type based on its domain field.
  * Returns one of: private_cloud, private_cloud_host, private_cloud_datastore,
- * telecom, web_cloud, ip_service, storage, support, dedicated_server, domain,
- * license, backup, load_balancer, vps, cloud_project, other.
+ * telecom, web_cloud, ip_service, storage, logs_data_platform, support,
+ * dedicated_server, domain, license, backup, load_balancer, vps, cloud_project,
+ * other.
  */
 function classifyResourceTypeFromDomain(domain, description = '') {
   if (!domain) return 'other';
@@ -131,8 +132,8 @@ function classifyResourceTypeFromDomain(domain, description = '') {
   if (/^sms-/.test(domain)) return 'telecom';
   // Backup VM: vm-NNNNNN
   if (/^vm-\d+$/.test(domain)) return 'backup';
-  // Logs Data Platform: ldp-...
-  if (/^ldp-/.test(domain)) return 'storage';
+  // Logs Data Platform: ldp-..., a resource type of its own, which is not storage (#246)
+  if (/^ldp-/.test(domain)) return 'logs_data_platform';
   // Premium support: premium.support....
   if (/^premium\.support\./.test(domain)) return 'support';
 

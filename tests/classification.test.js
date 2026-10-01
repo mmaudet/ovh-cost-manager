@@ -126,6 +126,22 @@ describe('classifyService', () => {
     test('classifies LDP logs streams as Database', () => {
       expect(classifyService('Logs - Streams - Hot Storage 1 to 100 GB')).toBe('Database');
     });
+
+    // OVHcloud bills Logs Data Platform as « DBAAS-LOGS »: each of its charges stays Database,
+    // its resource type of its own included (#246). The charges of an invoice's DBAAS-LOGS lines.
+    test('keeps every charge of Logs Data Platform as Database (#246)', () => {
+      for (const charge of [
+        'Logs - Account rental for 1 month',
+        'Logs - Streams - Hot Storage 1 to 100 GB',
+        'Logs - Streams - Hot Storage > 101 GB',
+        'Logs - Streams - Hot Storage Free tier',
+        'Logs - Streams - Cold Storage Standard',
+        'Logs - Input instances',
+        'Logs - Hosted OpenSearch Dashboards instances',
+      ]) {
+        expect(classifyService(charge)).toBe('Database');
+      }
+    });
   });
 
   describe('Private Cloud / vSphere classification', () => {
@@ -217,6 +233,19 @@ describe('classifyResourceTypeFromDomain', () => {
       expect(classifyResourceTypeFromDomain(UUID, 'Windows Server 2019 License')).toBe('license');
       expect(classifyResourceTypeFromDomain(UUID, '')).toBe('license');
       expect(classifyResourceTypeFromDomain(UUID)).toBe('license');
+    });
+  });
+
+  // A Logs Data Platform service is billed under its own identifier, `ldp-` and a code: it is
+  // not storage, though its streams' hot and cold storage are among its charges (CONTEXT.md)
+  describe('Logs Data Platform (#246)', () => {
+    test('gives a service of an ldp- identifier a resource type of its own', () => {
+      expect(classifyResourceTypeFromDomain('ldp-ab-12345', 'Logs - Account rental for 1 month'))
+        .toBe('logs_data_platform');
+      expect(classifyResourceTypeFromDomain(
+        'ldp-ab-12345', 'Logs - Streams - Hot Storage 1 to 100 GB',
+      )).toBe('logs_data_platform');
+      expect(classifyResourceTypeFromDomain('ldp-cd-67890')).toBe('logs_data_platform');
     });
   });
 
