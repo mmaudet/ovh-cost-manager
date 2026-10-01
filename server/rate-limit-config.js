@@ -12,7 +12,10 @@ const {
 const DEFAULTS = {
   enabled: true,
   trustProxy: 0,
-  api: { windowMs: 15 * 60 * 1000, max: 100 },
+  // 1000 requests every 15 minutes per address: the dashboard's own requests stay well within
+  // it, which 100 did not, as a page sends about 30 as it loads, and reloads what it shows once
+  // an import is over (#250); a flood from one address is still cut
+  api: { windowMs: 15 * 60 * 1000, max: 1000 },
   auth: { windowMs: 15 * 60 * 1000, max: 20 },
 };
 

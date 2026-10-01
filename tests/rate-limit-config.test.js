@@ -11,11 +11,13 @@ const { buildRateLimitConfig } = require('../server/rate-limit-config');
 const SOURCE = '/etc/ocm/config.json';
 
 describe('buildRateLimitConfig', () => {
+  // The API's default lets the dashboard's own requests through: a page sends about 30 as it
+  // loads, and reloads what it shows once an import is over, so that 100 blocked it (#250)
   test('gives the defaults without settings', () => {
     expect(buildRateLimitConfig({}, {})).toEqual({
       enabled: true,
       trustProxy: 0,
-      api: { windowMs: 900000, max: 100 },
+      api: { windowMs: 900000, max: 1000 },
       auth: { windowMs: 900000, max: 20 },
     });
   });

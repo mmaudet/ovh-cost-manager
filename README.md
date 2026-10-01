@@ -268,7 +268,7 @@ The API server includes rate limiting to protect against DoS attacks and brute-f
 
 | Endpoint  | Limit        | Window     | Per        |
 | --------- | ------------ | ---------- | ---------- |
-| `/api/*`  | 100 requests | 15 minutes | IP address |
+| `/api/*`  | 1000 requests | 15 minutes | IP address |
 | `/auth/*` | 20 requests  | 15 minutes | IP address |
 
 ### Configuration via config.json
@@ -284,7 +284,7 @@ Add a `rateLimit` section to your `config.json`, as in [config.example.json](con
     "trustProxy": false,
     "api": {
       "windowMs": 900000,
-      "max": 100
+      "max": 1000
     },
     "auth": {
       "windowMs": 900000,
@@ -298,7 +298,7 @@ Add a `rateLimit` section to your `config.json`, as in [config.example.json](con
 - `enabled`: Enable/disable globally (default: `true`)
 - `trustProxy`: The number of proxies in front of OCM whose `X-Forwarded-For` it trusts, from 1 to 10, `true` for one, `false` for none; with one or more, it also trusts `X-Forwarded-Host` for the CORS check and `ALLOWED_HOSTS`, and `X-Forwarded-Proto` for the CORS check (default: `false`)
 - `api.windowMs`: Window duration in milliseconds (default: `900000` = 15 min)
-- `api.max`: Maximum API requests per IP per window (default: `100`)
+- `api.max`: Maximum API requests per IP per window (default: `1000`). A page of the dashboard sends about 30 as it loads, and reloads what it shows once an import is over: below a few hundred, browsing the page soon blocks it
 - `auth.windowMs`: Window duration for authentication endpoints (default: `900000`)
 - `auth.max`: Maximum authentication requests per IP (default: `20`)
 
@@ -315,7 +315,7 @@ TRUST_PROXY=true|false|<number of proxies, 1 to 10>
 
 # API limits
 RATE_LIMIT_API_WINDOW_MS=900000    # 15 minutes
-RATE_LIMIT_API_MAX=100             # 100 requests
+RATE_LIMIT_API_MAX=1000            # 1000 requests
 
 # Authentication limits
 RATE_LIMIT_AUTH_WINDOW_MS=900000   # 15 minutes
