@@ -11,8 +11,8 @@ const {
   LYON, PARIS, UNKNOWN_ACCOUNT, project,
 } = require('./support/accounts');
 const {
-  DAY_OF_TODAY, FOUR_MONTHS_BEFORE, MONTH_BEFORE, MONTH_OF_TODAY, MONTHS_BEFORE,
-  THREE_MONTHS_BEFORE, TWO_MONTHS_BEFORE, billOf,
+  DAY_OF_TODAY, FOUR_MONTHS_BEFORE, FOUR_MONTHS_UP_TO_MONTH_BEFORE, MONTH_BEFORE, MONTH_OF_TODAY,
+  MONTHS_BEFORE, THREE_MONTHS_BEFORE, TWO_MONTHS_BEFORE, VPS, billOf, seedAccountsAtTurnOfMonth,
 } = require('./support/month-in-progress');
 const { startOcm } = require('./support/ocm-server');
 const { chooseCandidateMonth } = require('../data/month-in-progress');
@@ -112,11 +112,11 @@ describe('GET /api/months: the month in progress (#216)', () => {
       });
       billOf(db, 'FR1012', LYON, `${TWO_MONTHS_BEFORE}-12`, [
         [SERVER, 'dedicated_server', 99],
-        ['vps-0a1b2c3d.vps.ovh.net', 'vps', 12],
+        [VPS, 'vps', 12],
       ]);
       billOf(db, 'FR1022', LYON, `${MONTH_BEFORE}-12`, [
         ['example.com', 'domain', 15],
-        ['vps-0a1b2c3d.vps.ovh.net', 'vps', 12],
+        [VPS, 'vps', 12],
       ]);
     }
 
@@ -286,17 +286,13 @@ describe('GET /api/months: the month in progress (#216)', () => {
 // has a bill, it takes over: one month only is ever in progress, the latest month listed. The
 // seeds bill the months before the month of today only, which leaves it without a bill.
 describe('GET /api/months: the month before, until the month of today has a bill (#258)', () => {
-  // The four months before the month of today, the earliest first
-  const FOUR_MONTHS = [FOUR_MONTHS_BEFORE, ...MONTHS_BEFORE];
-  const VPS = 'vps-0a1b2c3d.vps.ovh.net';
-
   // A single account, billed on the first day of each month for its Public Cloud project, on the
   // second for its VPS, and late for its dedicated server: the month of today has no bill yet,
   // and the bill of the month before that will charge the server has not come either
   function seedMonthBeforeLate(db) {
     db.accounts.upsert({ nic: LYON, currency: 'EUR' });
     project(db, PROJECT, 'Production', LYON);
-    FOUR_MONTHS.forEach((month, index) => {
+    FOUR_MONTHS_UP_TO_MONTH_BEFORE.forEach((month, index) => {
       billOf(db, `FR10${index}1`, LYON, `${month}-01`, [[PROJECT, 'cloud_project', 600]]);
       billOf(db, `FR10${index}2`, LYON, `${month}-02`, [[VPS, 'vps', 12]]);
       if (month === MONTH_BEFORE) return;
@@ -372,32 +368,11 @@ describe('GET /api/months: the month before, until the month of today has a bill
   describe('with several accounts', () => {
     let ocm;
 
-    // Lyon and the Unknown account, each billed on the first day of each month and late for its
-    // dedicated server, whose bills of the month of today have not come, and whose month before
-    // still lacks the bill of its server; Paris, whose bill of the month of today came, and
-    // charged each of its services
-    function seedAccounts(db) {
-      db.accounts.upsert({ nic: LYON, currency: 'EUR', name: 'Lyon subsidiary' });
-      db.accounts.upsert({ nic: PARIS, currency: 'EUR' });
-      project(db, 'project-lyon', 'Lyon', LYON);
-      project(db, 'project-paris', 'Paris', PARIS);
-      [...FOUR_MONTHS, MONTH_OF_TODAY].forEach((month, index) => {
-        billOf(db, `FR2${index}01`, PARIS, `${month}-01`, [
-          ['project-paris', 'cloud_project', 400],
-        ]);
-        if (month === MONTH_OF_TODAY) return;
-        billOf(db, `FR1${index}01`, LYON, `${month}-01`, [['project-lyon', 'cloud_project', 600]]);
-        billOf(db, `FR0${index}01`, null, `${month}-01`, [['example.com', 'domain', 15]]);
-        if (month === MONTH_BEFORE) return;
-        billOf(db, `FR1${index}02`, LYON, `${month}-25`, [[SERVER, 'dedicated_server', 200]]);
-        billOf(db, `FR0${index}02`, null, `${month}-25`, [
-          ['ns3000004.ip-203-0-113.eu', 'dedicated_server', 80],
-        ]);
-      });
-    }
-
+    // Lyon and the Unknown account, whose bills of the month of today have not come, and whose
+    // month before still lacks the bill of its dedicated server; Paris, whose bill of the month of
+    // today came, and charged each of its services (see support/month-in-progress.js)
     beforeAll(async () => {
-      ocm = await startOcm(() => ({}), { seed: seedAccounts });
+      ocm = await startOcm(() => ({}), { seed: seedAccountsAtTurnOfMonth });
     }, 30000);
 
     afterAll(async () => {

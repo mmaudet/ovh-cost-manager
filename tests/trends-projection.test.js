@@ -11,8 +11,8 @@ const {
   LYON, PARIS, UNKNOWN_ACCOUNT, project,
 } = require('./support/accounts');
 const {
-  FOUR_MONTHS_BEFORE, MONTH_BEFORE, MONTH_OF_TODAY, MONTHS_BEFORE, THREE_MONTHS_BEFORE,
-  TWO_MONTHS_BEFORE, billOf,
+  FOUR_MONTHS_UP_TO_MONTH_BEFORE, MONTH_BEFORE, MONTH_OF_TODAY, MONTHS_BEFORE, THREE_MONTHS_BEFORE,
+  TWO_MONTHS_BEFORE, VPS, billOf, seedAccountsAtTurnOfMonth,
 } = require('./support/month-in-progress');
 const { startOcm } = require('./support/ocm-server');
 
@@ -380,12 +380,9 @@ describe('GET /api/analysis/monthly-trend?projected=true with a service moved to
 describe('GET /api/analysis/monthly-trend?projected=true at the turn of the month (#258)', () => {
   // The month before and the month of today
   const FROM_MONTH_BEFORE = `months=2&end=${MONTH_OF_TODAY}`;
-  // The four months before the month of today, the earliest first
-  const FOUR_MONTHS = [FOUR_MONTHS_BEFORE, ...MONTHS_BEFORE];
 
   describe('with a single account billed late', () => {
     const trend = (parameters) => ocm.get(`/api/analysis/monthly-trend?${parameters}`);
-    const VPS = 'vps-0a1b2c3d.vps.ovh.net';
     let ocm;
 
     // A single account, billed on the first day of each month for its Public Cloud project, on the
@@ -395,7 +392,7 @@ describe('GET /api/analysis/monthly-trend?projected=true at the turn of the mont
     function seedMonthBeforeLate(db) {
       db.accounts.upsert({ nic: LYON, currency: 'EUR' });
       project(db, PROJECT, 'Production', LYON);
-      FOUR_MONTHS.forEach((yearMonth, index) => {
+      FOUR_MONTHS_UP_TO_MONTH_BEFORE.forEach((yearMonth, index) => {
         billOf(db, `FR10${index}1`, LYON, `${yearMonth}-01`, [[PROJECT, 'cloud_project', 600]]);
         billOf(db, `FR10${index}2`, LYON, `${yearMonth}-02`, [[VPS, 'vps', 20]]);
         if (yearMonth === MONTH_BEFORE) return;
@@ -468,34 +465,13 @@ describe('GET /api/analysis/monthly-trend?projected=true at the turn of the mont
     const trend = (parameters) => ocm.get(`/api/analysis/monthly-trend?${parameters}`);
     let ocm;
 
-    // Lyon and the Unknown account, each billed on the first day of each month and late for its
-    // dedicated server, whose bills of the month of today have not come, and whose month before
-    // still lacks the bill of its server; Paris, whose bill of the month of today came, and
-    // charged each of its services
-    function seedAccounts(db) {
-      db.accounts.upsert({ nic: LYON, currency: 'EUR', name: 'Lyon subsidiary' });
-      db.accounts.upsert({ nic: PARIS, currency: 'EUR' });
-      project(db, 'project-lyon', 'Lyon', LYON);
-      project(db, 'project-paris', 'Paris', PARIS);
-      [...FOUR_MONTHS, MONTH_OF_TODAY].forEach((yearMonth, index) => {
-        billOf(db, `FR2${index}01`, PARIS, `${yearMonth}-01`, [
-          ['project-paris', 'cloud_project', 400],
-        ]);
-        if (yearMonth === MONTH_OF_TODAY) return;
-        billOf(db, `FR1${index}01`, LYON, `${yearMonth}-01`, [
-          ['project-lyon', 'cloud_project', 600],
-        ]);
-        billOf(db, `FR0${index}01`, null, `${yearMonth}-01`, [['example.com', 'domain', 15]]);
-        if (yearMonth === MONTH_BEFORE) return;
-        billOf(db, `FR1${index}02`, LYON, `${yearMonth}-25`, [[SERVER, 'dedicated_server', 200]]);
-        billOf(db, `FR0${index}02`, null, `${yearMonth}-25`, [
-          ['ns3000004.ip-203-0-113.eu', 'dedicated_server', 80],
-        ]);
-      });
-    }
-
+    // Lyon, whose project costs 600 € a month, and the Unknown account, whose domain costs 15 €,
+    // each with a dedicated server billed late, of 200 € and 80 €: their bills of the month of
+    // today have not come, and their months before still lack the bills of their servers. Paris,
+    // whose project costs 400 €, and whose bill of the month of today came (see
+    // support/month-in-progress.js).
     beforeAll(async () => {
-      ocm = await startOcm(() => ({}), { seed: seedAccounts });
+      ocm = await startOcm(() => ({}), { seed: seedAccountsAtTurnOfMonth });
     }, 30000);
 
     afterAll(async () => {

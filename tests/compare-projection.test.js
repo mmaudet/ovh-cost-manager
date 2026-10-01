@@ -14,16 +14,17 @@ const {
   LYON, PARIS, UNKNOWN_ACCOUNT, project,
 } = require('./support/accounts');
 const {
-  ALL_ACCOUNTS, FOUR_MONTHS_BEFORE, LYON_BILLED_LATE, MONTH_BEFORE, MONTH_IN_PROGRESS,
-  MONTH_OF_TODAY, MONTHS_BEFORE, OF_BOTH_MONTHS, OF_MONTH_BEFORE, OF_TODAY, PARIS_BILLED,
-  TWO_MONTHS_BEFORE, UNKNOWN_BILLED_LATE, billOf,
+  ALL_ACCOUNTS, FOUR_MONTHS_UP_TO_MONTH_BEFORE, LYON_BILLED_LATE, MONTH_BEFORE, MONTH_OF_TODAY,
+  MONTHS_BEFORE, OF_BOTH_MONTHS, OF_MONTH_BEFORE, OF_TODAY, PARIS_BILLED, PERIOD_OF_MONTH_BEFORE,
+  PERIOD_OF_TODAY, TWO_MONTHS_BEFORE, UNKNOWN_BILLED_LATE, billOf,
 } = require('./support/month-in-progress');
 const { startOcm } = require('./support/ocm-server');
-const { monthBounds } = require('../data/months');
 
-// The days of the month of today, which the summary's daily average divides its total by
-const DAYS_OF_TODAY = Number(MONTH_IN_PROGRESS.to.slice(8));
-const dailyAverage = (total) => Math.round((total / DAYS_OF_TODAY) * 100) / 100;
+// The daily average that the summary gives the total of a month's period, the month of today's
+// by default: divided by the days of the month, the day of its last one
+const dailyAverage = (total, { to } = PERIOD_OF_TODAY) => (
+  Math.round((total / Number(to.slice(8))) * 100) / 100
+);
 
 // The six routes of the Compare tab that project the month in progress
 const ROUTES = [
@@ -113,7 +114,7 @@ describe('the routes of the Compare tab with projected=true (#218)', () => {
       expect(await summaryOf(`${OF_TODAY}&projected=true`)).toEqual({
         status: 200,
         body: {
-          period: MONTH_IN_PROGRESS,
+          period: PERIOD_OF_TODAY,
           total: BILLED + PROJECTED,
           projected: PROJECTED,
           cloudTotal: 710,
@@ -136,7 +137,7 @@ describe('the routes of the Compare tab with projected=true (#218)', () => {
       expect(await summaryOf(parameters)).toEqual({
         status: 200,
         body: {
-          period: MONTH_IN_PROGRESS,
+          period: PERIOD_OF_TODAY,
           total: BILLED,
           cloudTotal: 610,
           nonCloudTotal: 15,
@@ -623,8 +624,6 @@ describe('the routes of the Compare tab with projected=true and several accounts
 // without a bill.
 describe('the routes of the Compare tab with projected=true at the turn of the month (#258)',
   () => {
-    const PERIOD_OF_MONTH_BEFORE = monthBounds(MONTH_BEFORE);
-    const DAYS_OF_MONTH_BEFORE = Number(PERIOD_OF_MONTH_BEFORE.to.slice(8));
     let ocm;
 
     // A single account, billed on the first day of each month for its Production project, and
@@ -635,7 +634,7 @@ describe('the routes of the Compare tab with projected=true at the turn of the m
       db.accounts.upsert({ nic: LYON, currency: 'EUR' });
       project(db, PRODUCTION, 'Production', LYON);
       project(db, STAGING, 'Staging', LYON);
-      [FOUR_MONTHS_BEFORE, ...MONTHS_BEFORE].forEach((yearMonth, index) => {
+      FOUR_MONTHS_UP_TO_MONTH_BEFORE.forEach((yearMonth, index) => {
         billOf(db, `FR10${index}1`, LYON, `${yearMonth}-01`, [
           [PRODUCTION, 'cloud_project', 600, COMPUTE],
         ]);
@@ -667,7 +666,7 @@ describe('the routes of the Compare tab with projected=true at the turn of the m
           projected: 310,
           cloudTotal: 700,
           nonCloudTotal: 210,
-          dailyAverage: Math.round((910 / DAYS_OF_MONTH_BEFORE) * 100) / 100,
+          dailyAverage: dailyAverage(910, PERIOD_OF_MONTH_BEFORE),
           billsCount: 1,
           projectsCount: 2,
           topProjects: [
@@ -705,7 +704,7 @@ describe('the routes of the Compare tab with projected=true at the turn of the m
             total: 600,
             cloudTotal: 600,
             nonCloudTotal: 0,
-            dailyAverage: Math.round((600 / DAYS_OF_MONTH_BEFORE) * 100) / 100,
+            dailyAverage: dailyAverage(600, PERIOD_OF_MONTH_BEFORE),
             billsCount: 1,
             projectsCount: 1,
             topProjects: [{ name: 'Production', value: 600 }],
