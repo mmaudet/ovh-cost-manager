@@ -34,7 +34,10 @@ _Avoid_: wording, label
 
 **Resource type**:
 The kind of service a bill line pays for, derived from its service identifier:
-Public Cloud project, dedicated server, VPS, domain, Web Cloud, IP, storage, licence…
+Public Cloud project, dedicated server, VPS, domain, Web Cloud, IP, storage, licence,
+Logs Data Platform… A Logs Data Platform service (`ldp-…`), OVHcloud's log platform, is
+not storage: its charges pay for its account, its streams' hot and cold storage, its input
+instances and its OpenSearch Dashboards instances.
 _Avoid_: category
 
 **Service type**:
