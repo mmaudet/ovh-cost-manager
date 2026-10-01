@@ -184,7 +184,7 @@ describe('Web Cloud tab', () => {
         ['example.org', 'Avoir MX Plan example.org', '2026-09-01', '-3,00€'],
       ]);
 
-      await user.click(within(dialog).getByRole('button', { name: 'Close' }));
+      await user.click(within(dialog).getByRole('button', { name: 'Fermer' }));
 
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     });

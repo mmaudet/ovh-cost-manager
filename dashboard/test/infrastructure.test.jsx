@@ -263,7 +263,7 @@ describe('Infrastructure tab', () => {
         expect(within(dialog).getByText('Serveurs dédiés (2)')).toBeInTheDocument();
         expect(rowsOf(within(dialog).getByRole('table'))).toEqual(serverRows);
 
-        await user.click(within(dialog).getByRole('button', { name: 'Close' }));
+        await user.click(within(dialog).getByRole('button', { name: 'Fermer' }));
 
         expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
       });

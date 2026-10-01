@@ -905,7 +905,7 @@ describe('Public Cloud tab', () => {
         expect(within(dialog).getByText('Production')).toBeInTheDocument();
         expect(rowsOf(within(dialog).getByRole('table'))).toEqual(instanceRows);
 
-        await user.click(within(dialog).getByRole('button', { name: 'Close' }));
+        await user.click(within(dialog).getByRole('button', { name: 'Fermer' }));
 
         expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
       });
@@ -985,7 +985,7 @@ describe('Public Cloud tab', () => {
       expect(within(dialog).getByText('Septembre 2026')).toBeInTheDocument();
       expect(rowTextsOf(within(dialog).getByRole('table'))).toEqual(bucketRows);
 
-      await user.click(within(dialog).getByRole('button', { name: 'Close' }));
+      await user.click(within(dialog).getByRole('button', { name: 'Fermer' }));
 
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     });
@@ -1037,7 +1037,7 @@ describe('Public Cloud tab', () => {
       // From Z to A
       await sortTable(user, tableOfDialog(), /^Nom/);
       await sortTable(user, tableOfDialog(), /^Nom/);
-      await user.click(within(dialog).getByRole('button', { name: 'Close' }));
+      await user.click(within(dialog).getByRole('button', { name: 'Fermer' }));
 
       expect(headerOf(resourceTable('Buckets')))
         .toEqual(['Nom▼', 'Type○', 'Région○', 'Taille○', 'Coût○']);
@@ -1125,7 +1125,7 @@ describe('Public Cloud tab', () => {
       expect(within(dialog).getByText('12,50€')).toBeInTheDocument();
       expect(rowTextsOf(within(dialog).getByRole('table'))).toEqual(volumeRows);
 
-      await user.click(within(dialog).getByRole('button', { name: 'Close' }));
+      await user.click(within(dialog).getByRole('button', { name: 'Fermer' }));
 
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     });
@@ -1183,7 +1183,7 @@ describe('Public Cloud tab', () => {
       expect(within(dialog).getByText('6,00€')).toBeInTheDocument();
       expect(rowsOf(within(dialog).getByRole('table'))).toEqual(snapshotRows);
 
-      await user.click(within(dialog).getByRole('button', { name: 'Close' }));
+      await user.click(within(dialog).getByRole('button', { name: 'Fermer' }));
 
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     });
@@ -1242,7 +1242,7 @@ describe('Public Cloud tab', () => {
       expect(within(dialog).getByText('28,00€')).toBeInTheDocument();
       expect(rowsOf(within(dialog).getByRole('table'))).toEqual(savingsPlanRows);
 
-      await user.click(within(dialog).getByRole('button', { name: 'Close' }));
+      await user.click(within(dialog).getByRole('button', { name: 'Fermer' }));
 
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     });

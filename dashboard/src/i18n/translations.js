@@ -283,6 +283,9 @@ export const translations = {
     // The "show all" modal of the services about to expire (#225)
     service: 'Service',
     expiration: 'Expiration',
+    // The button that closes every "show all" modal, which shows a cross: what it does, as a
+    // screen reader names it (#236)
+    close: 'Fermer',
 
     // Cloud details (Phase 4)
     instances: 'Instances',
@@ -610,6 +613,9 @@ export const translations = {
     // The "show all" modal of the services about to expire (#225)
     service: 'Service',
     expiration: 'Expiration',
+    // The button that closes every "show all" modal, which shows a cross: what it does, as a
+    // screen reader names it (#236)
+    close: 'Close',
 
     // Cloud details (Phase 4)
     instances: 'Instances',

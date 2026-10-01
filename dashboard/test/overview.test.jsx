@@ -558,7 +558,7 @@ describe('Overview tab', () => {
         'shared-files', 'staging-vps', 'vps-0a1b2c3d.vps.ovh.net',
       ]);
 
-      await user.click(within(dialog).getByRole('button', { name: 'Close' }));
+      await user.click(within(dialog).getByRole('button', { name: 'Fermer' }));
 
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     });
@@ -620,6 +620,12 @@ describe('Overview tab', () => {
 
       expect((await downloadedFiles())[0].content.split('\n')[0])
         .toEqual(`${BOM}"Name";"ID";"Type";"Expiration date"`);
+
+      // Its close button, which shows a cross, says what it does in the page's language, as
+      // « Fermer » in French (#236)
+      await user.click(within(dialog).getByRole('button', { name: 'Close' }));
+
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     });
 
     it('is offered only when the card cannot list every service', async () => {

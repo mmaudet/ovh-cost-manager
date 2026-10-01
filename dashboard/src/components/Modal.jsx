@@ -8,15 +8,22 @@ import { useEffect, useId } from 'react';
  *
  * A screen reader names the dialog by its title, as the WAI-ARIA dialog pattern describes
  * (#236): the dialog points at the title's element, whatever the title holds, a string or nodes,
- * such as the count and the cost of the resources it lists.
+ * such as the count and the cost of the resources it lists. And it names the close button,
+ * which shows a cross, in the page's language: « Fermer » in French, "Close" in English. The
+ * language reaches the modal as it reaches the other components, with the `t` of the shell
+ * (ADR 0001), which the tab modules that render the modals pass on, rather than through
+ * useLanguage(), which only the shell calls.
  *
  * @param {boolean} open      render nothing when false
  * @param {Function} onClose  called on Escape / backdrop / close button
  * @param {ReactNode} title   header content (string or nodes), which names the dialog
  * @param {ReactNode} actions extra header controls, left of the close button
  * @param {string} maxWidth   Tailwind max-width class for the panel
+ * @param {function(string): string} t  the page's translations, which name the close button
  */
-export default function Modal({ open, onClose, title, actions, maxWidth = 'max-w-4xl', children }) {
+export default function Modal({
+  open, onClose, title, actions, maxWidth = 'max-w-4xl', t, children,
+}) {
   // The id of the title's element, which names the dialog
   const titleId = useId();
 
@@ -47,7 +54,7 @@ export default function Modal({ open, onClose, title, actions, maxWidth = 'max-w
           <button
             onClick={onClose}
             className="px-2 py-0.5 text-gray-400 hover:text-gray-700 text-xl leading-none"
-            aria-label="Close"
+            aria-label={t('close')}
           >
             ×
           </button>

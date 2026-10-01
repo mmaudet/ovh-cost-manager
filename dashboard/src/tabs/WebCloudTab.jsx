@@ -137,6 +137,7 @@ const WebCloudTabModals = ({
         <Modal
           open={!!cat}
           onClose={() => setShowAllWebCloud(null)}
+          t={t}
           maxWidth="max-w-5xl"
           title={cat ? (
             <>

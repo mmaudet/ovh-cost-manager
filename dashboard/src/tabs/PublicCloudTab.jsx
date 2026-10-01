@@ -689,6 +689,7 @@ const PublicCloudTabModals = ({
       <Modal
         open={showAllBuckets}
         onClose={() => setShowAllBuckets(false)}
+        t={t}
         maxWidth="max-w-5xl"
         title={
           <>
@@ -726,6 +727,7 @@ const PublicCloudTabModals = ({
       <Modal
         open={showAllInstances}
         onClose={() => setShowAllInstances(false)}
+        t={t}
         maxWidth="max-w-4xl"
         title={
           <>
@@ -759,6 +761,7 @@ const PublicCloudTabModals = ({
       <Modal
         open={showAllVolumes}
         onClose={() => setShowAllVolumes(false)}
+        t={t}
         maxWidth="max-w-5xl"
         title={
           <>
@@ -789,6 +792,7 @@ const PublicCloudTabModals = ({
       <Modal
         open={showAllSnapshots}
         onClose={() => setShowAllSnapshots(false)}
+        t={t}
         maxWidth="max-w-5xl"
         title={
           <>
@@ -819,6 +823,7 @@ const PublicCloudTabModals = ({
       <Modal
         open={showAllSavingsPlans}
         onClose={() => setShowAllSavingsPlans(false)}
+        t={t}
         maxWidth="max-w-4xl"
         title={
           <>
