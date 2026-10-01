@@ -14,10 +14,12 @@ const {
   LYON, PARIS, UNKNOWN_ACCOUNT, project,
 } = require('./support/accounts');
 const {
-  ALL_ACCOUNTS, LYON_BILLED_LATE, MONTH_BEFORE, MONTH_IN_PROGRESS, MONTH_OF_TODAY, MONTHS_BEFORE,
-  OF_BOTH_MONTHS, OF_MONTH_BEFORE, OF_TODAY, PARIS_BILLED, UNKNOWN_BILLED_LATE, billOf,
+  ALL_ACCOUNTS, FOUR_MONTHS_BEFORE, LYON_BILLED_LATE, MONTH_BEFORE, MONTH_IN_PROGRESS,
+  MONTH_OF_TODAY, MONTHS_BEFORE, OF_BOTH_MONTHS, OF_MONTH_BEFORE, OF_TODAY, PARIS_BILLED,
+  TWO_MONTHS_BEFORE, UNKNOWN_BILLED_LATE, billOf,
 } = require('./support/month-in-progress');
 const { startOcm } = require('./support/ocm-server');
+const { monthBounds } = require('../data/months');
 
 // The days of the month of today, which the summary's daily average divides its total by
 const DAYS_OF_TODAY = Number(MONTH_IN_PROGRESS.to.slice(8));
@@ -613,3 +615,119 @@ describe('the routes of the Compare tab with projected=true and several accounts
     });
   });
 });
+
+// Until the month of today has a bill, the month before is the candidate month (#258): while it
+// lacks a recurring service, one that the bills of each of the three months before it charged,
+// the routes of the Compare tab project it with projected=true, as they project the month of today
+// once it has a bill. The seed bills the months before the month of today only, which leaves it
+// without a bill.
+describe('the routes of the Compare tab with projected=true at the turn of the month (#258)',
+  () => {
+    const PERIOD_OF_MONTH_BEFORE = monthBounds(MONTH_BEFORE);
+    const DAYS_OF_MONTH_BEFORE = Number(PERIOD_OF_MONTH_BEFORE.to.slice(8));
+    let ocm;
+
+    // A single account, billed on the first day of each month for its Production project, and
+    // late in the month for its Staging project and its dedicated server, which cost more two
+    // months before the month of today than before: the month of today has no bill yet, and the
+    // bill of the month before that will charge Staging and the server has not come either
+    function seedMonthBeforeLate(db) {
+      db.accounts.upsert({ nic: LYON, currency: 'EUR' });
+      project(db, PRODUCTION, 'Production', LYON);
+      project(db, STAGING, 'Staging', LYON);
+      [FOUR_MONTHS_BEFORE, ...MONTHS_BEFORE].forEach((yearMonth, index) => {
+        billOf(db, `FR10${index}1`, LYON, `${yearMonth}-01`, [
+          [PRODUCTION, 'cloud_project', 600, COMPUTE],
+        ]);
+        if (yearMonth === MONTH_BEFORE) return;
+        billOf(db, `FR10${index}2`, LYON, `${yearMonth}-25`, [
+          [STAGING, 'cloud_project', 100, COMPUTE],
+          [SERVER, 'dedicated_server', yearMonth === TWO_MONTHS_BEFORE ? 210 : 200,
+            { description: SERVER_RENTAL, serviceType: 'Compute' }],
+        ]);
+      });
+    }
+
+    beforeAll(async () => {
+      ocm = await startOcm(() => ({}), { seed: seedMonthBeforeLate });
+    }, 30000);
+
+    afterAll(async () => {
+      await ocm?.stop();
+    });
+
+    // What the month before billed so far: Production; and what its projected lines add, the
+    // lines of the month before it of the rest: Staging, 100 €, and the server, 210 €
+    test('project the month before in the summary, with Staging among its projects', async () => {
+      expect(await ocm.get(`/api/summary?${OF_MONTH_BEFORE}&projected=true`)).toEqual({
+        status: 200,
+        body: {
+          period: PERIOD_OF_MONTH_BEFORE,
+          total: 910,
+          projected: 310,
+          cloudTotal: 700,
+          nonCloudTotal: 210,
+          dailyAverage: Math.round((910 / DAYS_OF_MONTH_BEFORE) * 100) / 100,
+          billsCount: 1,
+          projectsCount: 2,
+          topProjects: [
+            { name: 'Production', value: 600, projected: 0 },
+            { name: 'Staging', value: 100, projected: 100 },
+          ],
+        },
+      });
+    });
+
+    // The dedicated servers, which only projected lines make, are listed too
+    test('project the month before in the costs by resource type', async () => {
+      expect(await ocm.get(`/api/analysis/by-resource-type?${OF_MONTH_BEFORE}&projected=true`))
+        .toEqual({
+          status: 200,
+          body: [
+            {
+              name: 'Public Cloud', resource_type: 'cloud_project', value: 700, color: '#3b82f6',
+              detailsCount: 2, serviceCount: 2, projected: 100,
+            },
+            {
+              name: 'Dedicated Servers', resource_type: 'dedicated_server', value: 210,
+              color: '#ef4444', detailsCount: 1, serviceCount: 1, projected: 210,
+            },
+          ],
+        });
+    });
+
+    test('answer as before without the parameter: what the month before billed so far',
+      async () => {
+        expect(await ocm.get(`/api/summary?${OF_MONTH_BEFORE}`)).toEqual({
+          status: 200,
+          body: {
+            period: PERIOD_OF_MONTH_BEFORE,
+            total: 600,
+            cloudTotal: 600,
+            nonCloudTotal: 0,
+            dailyAverage: Math.round((600 / DAYS_OF_MONTH_BEFORE) * 100) / 100,
+            billsCount: 1,
+            projectsCount: 1,
+            topProjects: [{ name: 'Production', value: 600 }],
+          },
+        });
+        expect(await ocm.get(`/api/analysis/by-resource-type?${OF_MONTH_BEFORE}`)).toEqual({
+          status: 200,
+          body: [{
+            name: 'Public Cloud', resource_type: 'cloud_project', value: 600, color: '#3b82f6',
+            detailsCount: 1, serviceCount: 1,
+          }],
+        });
+      });
+
+    // The projected lines are dated on the first day of the month before: over both months, they
+    // count once, in the month before
+    test('project nothing over the month of today, which has no bill', async () => {
+      expect((await ocm.get(`/api/summary?${OF_TODAY}&projected=true`)).body)
+        .toMatchObject({ total: 0, projected: 0, billsCount: 0, topProjects: [] });
+      expect(await ocm.get(`/api/analysis/by-resource-type?${OF_TODAY}&projected=true`))
+        .toEqual({ status: 200, body: [] });
+      expect((await ocm.get(`/api/summary?${OF_BOTH_MONTHS}&projected=true`)).body)
+        .toMatchObject({ total: 910, projected: 310, billsCount: 1 });
+    });
+  });

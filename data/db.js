@@ -210,15 +210,16 @@ function servicesNotBilledYet(candidateMonth, account) {
  * The bill lines that a query of the costs between two dates, both included, adds up, as a table
  * for its FROM clause, with its parameters: the lines of the bills of the account (see
  * accountCondition()), every account's by default. With the projected option, when the dates
- * cover the month in progress (CONTEXT.md), its projected lines too (#217): the bill lines of the
- * month before of each recurring service that the month of today has not billed yet
- * (data/month-in-progress.js), counted as they were, their classification included, and dated on
- * its first day. Each line has the columns of bill_details, the date and the account of its bill,
- * `date` and `account`, and its projected part, `projected`: its whole cost for a projected line,
- * 0 for a bill line.
+ * cover the account's candidate month (candidateMonthOf(), #258) while it is the month in progress
+ * (CONTEXT.md), its projected lines too (#217): the bill lines of the month before it of each
+ * recurring service that the candidate month has not billed yet (data/month-in-progress.js),
+ * counted as they were, their classification included, and dated on its first day. Each line has
+ * the columns of bill_details, the date and the account of its bill, `date` and `account`, and
+ * its projected part, `projected`: its whole cost for a projected line, 0 for a bill line.
  * @param {?string} fromDate - The first day, YYYY-MM-DD; null, as the last, for no period
  * @param {?string} toDate - The last day
- * @param {?string} [account] - The account whose lines count, as its recurring services
+ * @param {?string} [account] - The account whose lines count, as its bills tell its candidate
+ *   month and its recurring services
  * @param {object} [options]
  * @param {boolean} [options.projected] - Whether to add the projected lines of the month in
  *   progress
@@ -233,9 +234,10 @@ function linesOfPeriod(fromDate, toDate, account = null, { projected = false } =
       WHERE b.date >= ? AND b.date <= ? AND ${ofAccount.sql}`,
     params: [fromDate, toDate, ...ofAccount.params],
   };
-  const monthOfToday = monthOfDate(new Date());
-  if (!projected || !monthsOfWindow(fromDate, toDate).includes(monthOfToday)) return billLines;
-  const projectedLines = servicesNotBilledYet(monthOfToday, account)
+  if (!projected) return billLines;
+  const candidateMonth = candidateMonthOf(account);
+  if (!monthsOfWindow(fromDate, toDate).includes(candidateMonth)) return billLines;
+  const projectedLines = servicesNotBilledYet(candidateMonth, account)
     .flatMap(({ lines }) => lines);
   if (projectedLines.length === 0) return billLines;
   const ofProjectedLines = idInList('d.id', projectedLines);
@@ -246,7 +248,7 @@ function linesOfPeriod(fromDate, toDate, account = null, { projected = false } =
       FROM bill_details d
       JOIN bills b ON d.bill_id = b.id
       WHERE ${ofProjectedLines.sql}`,
-    params: [...billLines.params, monthBounds(monthOfToday).from, ...ofProjectedLines.params],
+    params: [...billLines.params, monthBounds(candidateMonth).from, ...ofProjectedLines.params],
   };
 }
 
