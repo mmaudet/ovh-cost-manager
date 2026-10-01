@@ -143,3 +143,25 @@ describe('the Logs Data Platform resource type', () => {
       });
   });
 });
+
+// Last, as it starts the server again. An import may hold the write lock while the server starts:
+// once the lines are reclassified, the server only reads whether any remains (#114).
+describe('the server started again over the reclassified bills', () => {
+  test('changes nothing, and starts while an import holds the write lock', async () => {
+    const release = ocm.holdWriteLock();
+    try {
+      await ocm.restart();
+    } finally {
+      release();
+    }
+
+    expect(await costsByResourceType(SEPTEMBER)).toEqual({
+      status: 200,
+      body: [['storage', 64.8, 1, 1], ['logs_data_platform', 50.5, 3, 1]],
+    });
+    expect(await servicesOf('logs_data_platform', SEPTEMBER)).toEqual({
+      status: 200,
+      body: [{ domain: LDP, description: ACCOUNT_RENTAL, total: 50.5, line_count: 3 }],
+    });
+  }, 30000);
+});
