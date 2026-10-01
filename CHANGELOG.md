@@ -14,7 +14,14 @@ sections were written afterwards from the git history.
 
 ## 3.4.1 - 2026-10-01
 
-<!-- Upgrade notes and highlights of this release, if any. -->
+A sync no longer blocks the dashboard (#250).
+
+The default API rate limit allowed 100 requests every 15 minutes per address. The dashboard alone went past that: a page sends about 30 API requests as it loads, more as tabs and months open, and reloads what it shows once an import is over. So a sync from the dashboard ended on `429 Too Many Requests` for minutes. The default is now 1000 requests every 15 minutes per address.
+
+### Upgrade notes
+
+- **A `config.json` copied from `config.example.json` keeps the old limit.** Its `rateLimit.api.max` sets 100 itself: raise it to 1000, or remove it to take the new default. So does `RATE_LIMIT_API_MAX=100` in the environment.
+- **Behind a reverse proxy or a Kubernetes ingress, set `TRUST_PROXY`** to the number of proxies in front of OCM. Otherwise every user shares the proxy's address, and one limit with it (docs/deployment.md).
 
 ### Bug fixes
 * fix: let the dashboard's own requests through the default API rate limit by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/253
