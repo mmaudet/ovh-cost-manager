@@ -535,9 +535,12 @@ describe('Overview tab', () => {
       ['VPS', 'staging-vps', 'Expire dans 27 jours'],
       ['Stockage', 'shared-files', 'Expire dans 29 jours'],
     ];
+    // The card's button that opens the modal
+    const showAllButton = () =>
+      within(expirationCard()).getByRole('button', { name: 'Tout afficher' });
     // The modal, which a screen reader names by its title (#236)
     const showAll = async (user) => {
-      await user.click(within(expirationCard()).getByRole('button', { name: 'Tout afficher' }));
+      await user.click(showAllButton());
       return screen.getByRole('dialog', { name: 'Expirations proches (7)' });
     };
 
@@ -561,6 +564,31 @@ describe('Overview tab', () => {
       await user.click(within(dialog).getByRole('button', { name: 'Fermer' }));
 
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      // Back on the button that opened it, though a header of its table took the focus (#236)
+      expect(showAllButton()).toHaveFocus();
+    });
+
+    // #236: from the header's badge, which leads to the card (#225), to the modal and back, with
+    // the keyboard alone, as the WAI-ARIA dialog pattern describes: the focus moves into the
+    // modal when it opens, onto its first control, and back to the button that opened it when it
+    // closes
+    it('takes the keyboard focus when it opens, and gives it back when it closes', async () => {
+      const { user } = await renderDashboard({ ...account, expiringServices: expiringSoon });
+      // The badge focuses the card, whose first control opens the modal
+      screen.getByRole('button', { name: /Expirations proches/ }).focus();
+      await user.keyboard('{Enter}');
+      await user.tab();
+      expect(showAllButton()).toHaveFocus();
+
+      await user.keyboard('{Enter}');
+
+      const dialog = screen.getByRole('dialog', { name: 'Expirations proches (7)' });
+      expect(within(dialog).getByRole('button', { name: 'CSV' })).toHaveFocus();
+
+      await user.keyboard('{Escape}');
+
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      expect(showAllButton()).toHaveFocus();
     });
 
     // In the order the server lists them, whatever the order shown, as the other lists (#146)

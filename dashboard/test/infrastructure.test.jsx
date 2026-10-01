@@ -254,21 +254,26 @@ describe('Infrastructure tab', () => {
         return screen.getByRole('dialog', { name: 'Serveurs dédiés (2)' });
       };
 
-      it('shows every server, and closes with its button', async () => {
+      // As the WAI-ARIA dialog pattern describes (#236), the keyboard focus moves into the
+      // modal when it opens, onto its first control, and goes back to the button that opened it
+      // when it closes, however it closes
+      it('takes the focus, shows every server, and closes with its button', async () => {
         const { user } = await renderDashboard();
         await openTab(user, 'Infrastructure');
 
         const dialog = await showAll(user);
 
+        expect(within(dialog).getByRole('button', { name: 'CSV' })).toHaveFocus();
         expect(within(dialog).getByText('Serveurs dédiés (2)')).toBeInTheDocument();
         expect(rowsOf(within(dialog).getByRole('table'))).toEqual(serverRows);
 
         await user.click(within(dialog).getByRole('button', { name: 'Fermer' }));
 
         expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+        expect(serversButton('Tout afficher')).toHaveFocus();
       });
 
-      it('closes with Escape', async () => {
+      it('closes with Escape, giving the focus back to the button that opened it', async () => {
         const { user } = await renderDashboard();
         await openTab(user, 'Infrastructure');
         await showAll(user);
@@ -276,9 +281,10 @@ describe('Infrastructure tab', () => {
         await user.keyboard('{Escape}');
 
         expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+        expect(serversButton('Tout afficher')).toHaveFocus();
       });
 
-      it('closes on a click outside it', async () => {
+      it('closes on a click outside it, giving the focus back to its button', async () => {
         const { user } = await renderDashboard();
         await openTab(user, 'Infrastructure');
         const dialog = await showAll(user);
@@ -286,6 +292,7 @@ describe('Infrastructure tab', () => {
         await user.click(backdropOf(dialog));
 
         expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+        expect(serversButton('Tout afficher')).toHaveFocus();
       });
     });
 

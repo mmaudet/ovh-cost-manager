@@ -895,37 +895,45 @@ describe('Public Cloud tab', () => {
     });
 
     describe('"show all" modal', () => {
-      it('shows every instance of the project, and closes with its button', async () => {
-        const { user } = await openProduction();
+      // As the WAI-ARIA dialog pattern describes (#236), the keyboard focus moves into the
+      // modal when it opens, onto its first control, and goes back to the button that opened it
+      // when it closes, however it closes
+      it('takes the focus, shows every instance of the project, and closes with its button',
+        async () => {
+          const { user } = await openProduction();
 
-        const dialog = await showAll(user, 'Instances');
+          const dialog = await showAll(user, 'Instances');
 
-        expect(within(dialog).getByText('Instances (5)')).toBeInTheDocument();
-        expect(within(dialog).getByText('538,90€')).toBeInTheDocument();
-        expect(within(dialog).getByText('Production')).toBeInTheDocument();
-        expect(rowsOf(within(dialog).getByRole('table'))).toEqual(instanceRows);
+          expect(within(dialog).getByRole('button', { name: 'CSV' })).toHaveFocus();
+          expect(within(dialog).getByText('Instances (5)')).toBeInTheDocument();
+          expect(within(dialog).getByText('538,90€')).toBeInTheDocument();
+          expect(within(dialog).getByText('Production')).toBeInTheDocument();
+          expect(rowsOf(within(dialog).getByRole('table'))).toEqual(instanceRows);
 
-        await user.click(within(dialog).getByRole('button', { name: 'Fermer' }));
+          await user.click(within(dialog).getByRole('button', { name: 'Fermer' }));
 
-        expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
-      });
+          expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+          expect(resourceButton('Instances', 'Tout afficher')).toHaveFocus();
+        });
 
-      it('closes with Escape', async () => {
+      it('closes with Escape, giving the focus back to the button that opened it', async () => {
         const { user } = await openProduction();
         await showAll(user, 'Instances');
 
         await user.keyboard('{Escape}');
 
         expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+        expect(resourceButton('Instances', 'Tout afficher')).toHaveFocus();
       });
 
-      it('closes on a click outside it', async () => {
+      it('closes on a click outside it, giving the focus back to its button', async () => {
         const { user } = await openProduction();
         const dialog = await showAll(user, 'Instances');
 
         await user.click(backdropOf(dialog));
 
         expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+        expect(resourceButton('Instances', 'Tout afficher')).toHaveFocus();
       });
     });
 

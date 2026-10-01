@@ -1,10 +1,26 @@
-import { useEffect, useId } from 'react';
+import { useEffect, useId, useRef } from 'react';
+
+// What the keyboard reaches with Tab, as browsers do: the links, the form controls but those
+// disabled, and the elements that a tabindex of 0 or more puts in the order of the page
+const FOCUSABLE = 'a[href], button, input:not([type="hidden"]), select, textarea, [tabindex]';
+
+/**
+ * The controls of an element that Tab reaches, in the order of the page, which no positive
+ * tabindex changes in the modals.
+ * @param {HTMLElement} element
+ * @returns {HTMLElement[]}
+ */
+const controlsOf = (element) => [...element.querySelectorAll(FOCUSABLE)]
+  .filter((control) => control.tabIndex >= 0 && !control.disabled);
 
 /**
  * Generic overlay dialog.
  *
  * Closes on Escape, on a backdrop click and on the header button. The body
  * scrolls on its own so long tables stay inside the viewport.
+ *
+ * It takes the keyboard focus as the WAI-ARIA dialog pattern describes (#236): onto its first
+ * control when it opens, and back to the button that opened it when it closes.
  *
  * A screen reader names the dialog by its title, as the WAI-ARIA dialog pattern describes
  * (#236): the dialog points at the title's element, whatever the title holds, a string or nodes,
@@ -26,6 +42,8 @@ export default function Modal({
 }) {
   // The id of the title's element, which names the dialog
   const titleId = useId();
+  // The dialog, which holds its controls
+  const dialog = useRef(null);
 
   useEffect(() => {
     if (!open) return;
@@ -33,6 +51,19 @@ export default function Modal({
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [open, onClose]);
+
+  // The keyboard focus (#236). When the dialog opens, it moves onto its first control, its close
+  // button at least, so that the next Tab goes on in the dialog rather than in the page behind
+  // it. When the dialog closes, it goes back to what had it, the button that opened the dialog,
+  // whatever closes it: Escape, the close button or a click on the backdrop. On these two
+  // changes only: onClose changes whenever the shell renders the modals, as when the user sorts
+  // the table of one, which would send the focus back and forth.
+  useEffect(() => {
+    if (!open) return;
+    const opener = document.activeElement;
+    controlsOf(dialog.current)[0].focus();
+    return () => opener?.focus();
+  }, [open]);
 
   if (!open) return null;
 
@@ -44,6 +75,7 @@ export default function Modal({
       <div
         className={`w-full ${maxWidth} max-h-[85vh] flex flex-col bg-white rounded-lg shadow-xl`}
         onClick={(e) => e.stopPropagation()}
+        ref={dialog}
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
