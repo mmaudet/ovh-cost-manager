@@ -3,14 +3,15 @@ import { act } from '@testing-library/react';
 import { translations } from '../../src/i18n/translations.js';
 import { useCompareTab } from '../../src/tabs/useCompareTab.js';
 import { accountColumnOf, accountsOf } from '../../src/utils/accounts.js';
-import { account } from '../fixtures/account.js';
+import { LDP_CHARGES, account, logsDataPlatformBilled } from '../fixtures/account.js';
 import { months } from '../fixtures/calendar.js';
 import {
-  lyonAccount, lyonBilledLate, removedAccount, severalAccounts, unknownAccount, unnamedAccount,
+  lyonAccount, lyonBilledLate, removedAccount, severalAccounts,
+  severalAccountsWithLogsDataPlatform, unknownAccount, unnamedAccount,
 } from '../fixtures/accounts.js';
 import { enterpriseLicence } from '../fixtures/backup.js';
 import {
-  serverAndBackupsBilledLate, stagingBilledLate, unnamedBilledLate,
+  logsDataPlatformBilledLate, serverAndBackupsBilledLate, stagingBilledLate, unnamedBilledLate,
 } from '../fixtures/compare.js';
 import { api } from '../support/api.js';
 import { renderTabHook, TAB_IDS, WAITING } from '../support/hooks.jsx';
@@ -233,6 +234,8 @@ describe('useCompareTab', () => {
       resourceTypeServicesQuery: expect.any(Function),
       // And that of a backup row's services (#197)
       backupServicesQuery: expect.any(Function),
+      // And that of the Logs Data Platform charges, which their row unfolds into (#248)
+      logsDataPlatformChargesQuery: expect.any(Function),
     });
     // The comparison by project by month A, the most expensive first, until the user sorts it
     expect(result.current.sortingOf('projects').sort)
@@ -584,6 +587,85 @@ describe('useCompareTab', () => {
       await rerender({ ...onCompare, selectedAccount: undefined });
 
       expect(result.current.backupServicesQuery('vms', august).enabled).toBe(false);
+    });
+  });
+
+  // The charges of the Logs Data Platform services in month A or B (#248): the query that the row
+  // of their resource type runs once unfolded, which the hook defines, under the key of the
+  // charges that the Infrastructure tab lists for the same month and account (ADR 0001)
+  describe('query of the Logs Data Platform charges', () => {
+    // The charges of an answer, as [charge, cost]
+    const chargesIn = ({ charges }) => charges.map(({ charge, total }) => [charge, total]);
+
+    it('asks for the charges of a month, and runs none itself', async () => {
+      const { result, keysOf } = await renderTabHook(useCompareTab, onCompare,
+        { ...account, ...logsDataPlatformBilled });
+      // Nothing is asked for before the row unfolds
+      expect(api.fetchLogsDataPlatform).not.toHaveBeenCalled();
+      expect(keysOf('logsDataPlatform')).toEqual([]);
+
+      const query = result.current.logsDataPlatformChargesQuery(august);
+
+      // For all accounts, its key names none, as its request does not
+      expect(query.queryKey).toEqual(['logsDataPlatform', '2026-08-01', '2026-08-31']);
+      expect(query.enabled).toBe(true);
+      expect(chargesIn(await query.queryFn()))
+        .toEqual([[LDP_CHARGES.accountRental, 30], [LDP_CHARGES.hotStorage, 12.5]]);
+      expect(api.fetchLogsDataPlatform).toHaveBeenCalledWith('2026-08-01', '2026-08-31', null);
+    });
+
+    it('asks for those of the account shown, under a key that names it last', async () => {
+      const { result } = await renderTabHook(useCompareTab,
+        { ...onCompare, selectedAccount: unnamedAccount.id }, severalAccountsWithLogsDataPlatform);
+
+      const query = result.current.logsDataPlatformChargesQuery(september);
+
+      expect(query.queryKey)
+        .toEqual(['logsDataPlatform', '2026-09-01', '2026-09-30', unnamedAccount.id]);
+      // The unnamed account's own service
+      expect(chargesIn(await query.queryFn())).toEqual([
+        [LDP_CHARGES.accountRental, 30], [LDP_CHARGES.dashboards, 24],
+        [LDP_CHARGES.inputInstances, 12], [LDP_CHARGES.hotStorageOver101Gb, 7.25],
+      ]);
+      expect(api.fetchLogsDataPlatform)
+        .toHaveBeenCalledWith('2026-09-01', '2026-09-30', unnamedAccount.id);
+    });
+
+    // As the row of their resource type adds up the costs of every account: the charges name no
+    // account, which the Infrastructure tab's table names neither
+    it("asks for every account's charges added up while the lists name the account of each",
+      async () => {
+        const { result } = await renderTabHook(useCompareTab, {
+          ...onCompare,
+          accountColumn: accountColumnOf(
+            accountsOf(severalAccounts.accounts), null, (key) => translations.fr[key],
+          ),
+        }, severalAccountsWithLogsDataPlatform);
+
+        const query = result.current.logsDataPlatformChargesQuery(september);
+
+        expect(query.queryKey).toEqual(['logsDataPlatform', '2026-09-01', '2026-09-30']);
+        await expect(query.queryFn()).resolves.toMatchObject({ total: 153.75 });
+        expect(api.fetchLogsDataPlatform).toHaveBeenCalledWith('2026-09-01', '2026-09-30', null);
+      });
+
+    // As the other figures of the tab: on the tab only, for a month of the months list, once
+    // the page knows the account shown
+    it('waits for the tab, for a month of the account shown, and for that account', async () => {
+      const { result, rerender } = await renderTabHook(useCompareTab,
+        { ...monthsArrive, activeTab: 'overview' });
+
+      expect(result.current.logsDataPlatformChargesQuery(august).enabled).toBe(false);
+
+      // An account not billed in July
+      await rerender({ ...onCompare, months: [september, august] });
+
+      expect(result.current.logsDataPlatformChargesQuery(july).enabled).toBe(false);
+      expect(result.current.logsDataPlatformChargesQuery(august).enabled).toBe(true);
+
+      await rerender({ ...onCompare, selectedAccount: undefined });
+
+      expect(result.current.logsDataPlatformChargesQuery(august).enabled).toBe(false);
     });
   });
 
@@ -987,6 +1069,25 @@ describe('useCompareTab', () => {
           expect.objectContaining({ projectName: 'Staging', total: 190, projected: 190 }),
         ]);
       });
+
+    // What the Logs Data Platform row runs once unfolded (#248): see fixtures/compare.js, where
+    // September has not billed a Logs Data Platform service yet. Under a key of its own, which the
+    // Infrastructure tab's charges of September, never projected, do not share (ADR 0001).
+    it('asks for the Logs Data Platform charges projected, under a key of their own', async () => {
+      const { result } = await renderTabHook(useCompareTab, projecting,
+        { ...account, ...logsDataPlatformBilled, ...logsDataPlatformBilledLate });
+
+      const charges = result.current.logsDataPlatformChargesQuery(september);
+
+      expect(charges.queryKey).toEqual(['logsDataPlatform', ...SEPTEMBER, 'projected']);
+      expect(charges.enabled).toBe(true);
+      // The service not billed yet at its rental and hot storage of August
+      await expect(charges.queryFn()).resolves.toMatchObject({ total: 72.5, projected: 42.5 });
+      expect(api.fetchLogsDataPlatform).toHaveBeenCalledWith(...SEPTEMBER, null, PROJECTED);
+      // Those of August, complete, as the Infrastructure tab asks for them
+      expect(result.current.logsDataPlatformChargesQuery(august).queryKey)
+        .toEqual(['logsDataPlatform', ...AUGUST]);
+    });
 
     // While the comparison names the account of each project, all accounts shown: under a key of
     // their own, which the Overview's projects by account of September, never projected, do not

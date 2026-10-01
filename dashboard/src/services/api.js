@@ -329,18 +329,26 @@ export const fetchAiEndpoints = async (from, to, account = null) => {
 
 /**
  * The charges of the Logs Data Platform services that the bills of a period charged (#247), the
- * services together, which the Infrastructure tab lists for the month it shows
+ * services together, which the Infrastructure tab lists for the month it shows, and the Compare
+ * tab's row of their resource type unfolds into, month A against month B (#248)
  * @param {string} from - The first day of the period, 'YYYY-MM-DD'
  * @param {string} to - Its last day
  * @param {?string} [account] - The account whose bills to read, as the functions above take
  *   it: null for all accounts
- * @returns {Promise<{ total: number, charges: { charge: string, total: number }[] }>} What the
- *   charges cost in all, and each charge, as the bills name it without its period, with its
- *   cost, total, the most expensive first: those that cost anything
+ * @param {object} [options]
+ * @param {boolean} [options.projected] - Whether to ask for the month in progress at its
+ *   projected cost, each charge with its projected part, those not billed yet included, and what
+ *   they cost in all with its own (#248)
+ * @returns {Promise<{ total: number, projected: (number|undefined), charges: { charge: string,
+ *   total: number, projected: (number|undefined) }[] }>} What the charges cost in all, and each
+ *   charge, as the bills name it without its period, with its cost, total, the most expensive
+ *   first: those that cost anything; with their projected parts when asked for
  */
-export const fetchLogsDataPlatform = async (from, to, account = null) => {
+export const fetchLogsDataPlatform = async (
+  from, to, account = null, { projected = false } = {},
+) => {
   const { data } = await api.get('/analysis/logs-data-platform', {
-    params: { from, to, ...accountParams(account) },
+    params: { from, to, ...accountParams(account), ...projectionParams(projected) },
   });
   return data;
 };
