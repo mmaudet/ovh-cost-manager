@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { screen, within } from '@testing-library/react';
 import {
-  account, everyResourceType, logsDataPlatformBilled, septemberInProgress,
+  LDP_CHARGES, account, everyResourceType, logsDataPlatformBilled, septemberInProgress,
 } from './fixtures/account.js';
 import {
   lyonAccount, removedAccount, severalAccounts, severalAccountsWithLogsDataPlatform,
@@ -512,9 +512,11 @@ describe('Infrastructure tab', () => {
     const chargesHeading = () => screen.queryByRole('heading', { name: LOGS_DATA_PLATFORM });
     const chargesTable = () => within(cardOf(chargesHeading())).getByRole('table');
     // The charges of the bills, as they word them
-    const ACCOUNT_RENTAL = 'Logs - Account rental for 1 month';
-    const HOT_STORAGE = 'Logs - Streams - Hot Storage 1 to 100 GB';
-    const COLD_STORAGE = 'Logs - Streams - Cold Storage Standard';
+    const {
+      accountRental: ACCOUNT_RENTAL, hotStorage: HOT_STORAGE, coldStorage: COLD_STORAGE,
+      dashboards: DASHBOARDS, inputInstances: INPUT_INSTANCES,
+      hotStorageOver101Gb: HOT_STORAGE_OVER_101_GB,
+    } = LDP_CHARGES;
 
     it('load for the month shown once the tab opens, not before', async () => {
       const { user } = await renderDashboard(withLogsDataPlatform);
@@ -685,10 +687,10 @@ describe('Infrastructure tab', () => {
       expect(rowsOf(chargesTable())).toEqual([
         ['Charge○', 'Coût▼'],
         [ACCOUNT_RENTAL, '90,00€'],
-        ['Logs - Hosted OpenSearch Dashboards instances', '24,00€'],
+        [DASHBOARDS, '24,00€'],
         [HOT_STORAGE, '18,40€'],
-        ['Logs - Input instances', '12,00€'],
-        ['Logs - Streams - Hot Storage > 101 GB', '7,25€'],
+        [INPUT_INSTANCES, '12,00€'],
+        [HOT_STORAGE_OVER_101_GB, '7,25€'],
         [COLD_STORAGE, '2,10€'],
         ['Total Logs Data Platform', '153,75€'],
       ]);
@@ -708,9 +710,9 @@ describe('Infrastructure tab', () => {
 
       expect(rowsOf(chargesTable()).slice(1)).toEqual([
         [ACCOUNT_RENTAL, '30,00€'],
-        ['Logs - Hosted OpenSearch Dashboards instances', '24,00€'],
-        ['Logs - Input instances', '12,00€'],
-        ['Logs - Streams - Hot Storage > 101 GB', '7,25€'],
+        [DASHBOARDS, '24,00€'],
+        [INPUT_INSTANCES, '12,00€'],
+        [HOT_STORAGE_OVER_101_GB, '7,25€'],
         ['Total Logs Data Platform', '73,25€'],
       ]);
 

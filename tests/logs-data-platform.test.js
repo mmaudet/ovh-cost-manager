@@ -7,27 +7,20 @@
  */
 
 const { chargeFigures } = require('../data/logs-data-platform');
+const { LDP_CHARGES, inAugust, inSeptember } = require('./support/logs-data-platform');
 
-// The charges of an invoice's DBAAS-LOGS lines, as OVHcloud words them: the account's rental,
-// which covers the month of its bill, and its consumption of the month before, the hot storage
-// of its streams in three tiers, a free one among them, their cold storage, its input instances
-// and its hosted OpenSearch Dashboards instances
-const ACCOUNT_RENTAL = 'Logs - Account rental for 1 month';
-const HOT_STORAGE = 'Logs - Streams - Hot Storage 1 to 100 GB';
-const HOT_STORAGE_OVER_101_GB = 'Logs - Streams - Hot Storage > 101 GB';
-const COLD_STORAGE = 'Logs - Streams - Cold Storage Standard';
-const INPUT_INSTANCES = 'Logs - Input instances';
-const DASHBOARDS = 'Logs - Hosted OpenSearch Dashboards instances';
+// The charges of an invoice's DBAAS-LOGS lines, as OVHcloud words them
+const {
+  accountRental: ACCOUNT_RENTAL, hotStorage: HOT_STORAGE,
+  hotStorageOver101Gb: HOT_STORAGE_OVER_101_GB, freeTier: FREE_TIER, coldStorage: COLD_STORAGE,
+  inputInstances: INPUT_INSTANCES, dashboards: DASHBOARDS,
+} = LDP_CHARGES;
 
 // A bill line of a Logs Data Platform service, as data/db.js reads it: its description and its
 // amount, and the service it bills, one by default
 const line = (description, price, service = 'ldp-ab-12345') => ({
   domain: service, description, total_price: price,
 });
-// The description of a line as some accounts' bills end it, with the period that it covers: the
-// month before its bill's for what the service consumed, the month of its bill for the rental
-const inAugust = (description) => `${description} (01/08/2026-31/08/2026)`;
-const inSeptember = (description) => `${description} (01/09/2026-30/09/2026)`;
 
 describe('chargeFigures', () => {
   test('adds up the lines of each charge, the most expensive first, and what they cost in all',
@@ -86,7 +79,7 @@ describe('chargeFigures', () => {
     () => {
       expect(chargeFigures([
         line(ACCOUNT_RENTAL, 30),
-        line(inAugust('Logs - Streams - Hot Storage Free tier'), 0),
+        line(inAugust(FREE_TIER), 0),
         line(INPUT_INSTANCES, 12),
         line(INPUT_INSTANCES, -12),
         line(COLD_STORAGE, -1.5),

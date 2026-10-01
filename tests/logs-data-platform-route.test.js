@@ -13,6 +13,7 @@
 const {
   LYON, PARIS, NEW_ACCOUNT, UNKNOWN_ACCOUNT, REFUSED, bill,
 } = require('./support/accounts');
+const { LDP_CHARGES, inAugust, inSeptember } = require('./support/logs-data-platform');
 const { startOcm } = require('./support/ocm-server');
 const { classifyService } = require('../data/classify');
 
@@ -28,18 +29,13 @@ const ldpLine = (id, billId, service, description, price) => line(
   id, billId, service, 'logs_data_platform', description, price,
 );
 
-// The charges of an invoice's DBAAS-LOGS lines, as OVHcloud words them
-const ACCOUNT_RENTAL = 'Logs - Account rental for 1 month';
-const HOT_STORAGE = 'Logs - Streams - Hot Storage 1 to 100 GB';
-const HOT_STORAGE_OVER_101_GB = 'Logs - Streams - Hot Storage > 101 GB';
-const FREE_TIER = 'Logs - Streams - Hot Storage Free tier';
-const COLD_STORAGE = 'Logs - Streams - Cold Storage Standard';
-const INPUT_INSTANCES = 'Logs - Input instances';
-const DASHBOARDS = 'Logs - Hosted OpenSearch Dashboards instances';
-// A description as the bills of Paris word it: ending with the period that the line covers, the
-// month of its bill for the account's rental, and the month before for what the service consumed
-const inAugust = (description) => `${description} (01/08/2026-31/08/2026)`;
-const inSeptember = (description) => `${description} (01/09/2026-30/09/2026)`;
+// The charges of an invoice's DBAAS-LOGS lines, as OVHcloud words them. The bills of Paris end
+// each description with its period (inAugust(), inSeptember()).
+const {
+  accountRental: ACCOUNT_RENTAL, hotStorage: HOT_STORAGE,
+  hotStorageOver101Gb: HOT_STORAGE_OVER_101_GB, freeTier: FREE_TIER, coldStorage: COLD_STORAGE,
+  inputInstances: INPUT_INSTANCES, dashboards: DASHBOARDS,
+} = LDP_CHARGES;
 
 // Two accounts whose Logs Data Platform services were billed in September, and a third, recorded
 // without a bill:

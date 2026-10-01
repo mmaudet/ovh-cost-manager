@@ -8,6 +8,7 @@
  */
 
 const { LYON, bill } = require('./support/accounts');
+const { LDP_CHARGES } = require('./support/logs-data-platform');
 const { startOcm } = require('./support/ocm-server');
 const { classifyService } = require('../data/classify');
 
@@ -22,9 +23,9 @@ const line = (id, billId, service, resourceType, description, price) => ({
 // The account's Logs Data Platform service, its NetApp file storage, and the lines of each
 const LDP = 'ldp-ab-12345';
 const NETAPP = 'netapp-5f2c9a1e';
-const ACCOUNT_RENTAL = 'Logs - Account rental for 1 month';
-const HOT_STORAGE = 'Logs - Streams - Hot Storage 1 to 100 GB';
-const COLD_STORAGE = 'Logs - Streams - Cold Storage Standard';
+const {
+  accountRental: ACCOUNT_RENTAL, hotStorage: HOT_STORAGE, coldStorage: COLD_STORAGE,
+} = LDP_CHARGES;
 const FILE_STORAGE = 'Enterprise File Storage 1 TB - 1 mois';
 
 // What the versions before #246 stored of an account's bills of August and September: the lines
