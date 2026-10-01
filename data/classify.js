@@ -132,7 +132,9 @@ function classifyResourceTypeFromDomain(domain, description = '') {
   if (/^sms-/.test(domain)) return 'telecom';
   // Backup VM: vm-NNNNNN
   if (/^vm-\d+$/.test(domain)) return 'backup';
-  // Logs Data Platform: ldp-..., a resource type of its own, which is not storage (#246)
+  // Logs Data Platform: ldp-..., a resource type of its own, which is not storage (#246). As the
+  // identifier alone decides it, data/db.js gives it to the lines that the imports before #246
+  // stored as storage, without a new import.
   if (/^ldp-/.test(domain)) return 'logs_data_platform';
   // Premium support: premium.support....
   if (/^premium\.support\./.test(domain)) return 'support';

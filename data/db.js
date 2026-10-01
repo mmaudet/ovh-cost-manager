@@ -294,6 +294,18 @@ function getDb() {
       migrateWhenNeeded(db, () => keyLacks(db, table, 'account'),
         () => rekeyTable(db, schema, table));
     }
+    // The bill lines of the Logs Data Platform services, whose identifiers start with `ldp-`,
+    // which the imports before #246 typed as storage: they take the resource type of their own
+    // that the classification gives them now (data/classify.js), so that the bills already
+    // imported show it without a new import. The identifier alone decides it, which the stored
+    // lines keep (CLAUDE.md). Once no such line remains, the check reads, and finds none.
+    const ldpLinesTypedStorage = "resource_type = 'storage' AND domain GLOB 'ldp-*'";
+    migrateWhenNeeded(db,
+      () => db.prepare(`SELECT 1 FROM bill_details WHERE ${ldpLinesTypedStorage} LIMIT 1`)
+        .get() !== undefined,
+      () => db.prepare(`
+        UPDATE bill_details SET resource_type = 'logs_data_platform' WHERE ${ldpLinesTypedStorage}
+      `).run());
   }
   return db;
 }
