@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { screen, within } from '@testing-library/react';
 import {
-  LDP_CHARGES, account, everyResourceType, logsDataPlatformBilled, septemberInProgress,
+  LDP_CHARGES, account, everyResourceType, logsDataPlatformBilled, logsDataPlatformCharges,
+  septemberInProgress,
 } from './fixtures/account.js';
 import {
   lyonAccount, removedAccount, severalAccounts, severalAccountsWithLogsDataPlatform,
@@ -593,8 +594,8 @@ describe('Infrastructure tab', () => {
 
     // So that the tab does not grow for a product that the month did not bill. A month whose
     // Logs Data Platform lines all cost nothing, such as a rental that costs nothing and a free
-    // tier, has no charge either: the server leaves them out.
-    it('show no table for a month without a charge that costs something', async () => {
+    // tier, has no charge either: the server leaves the charges at 0 € out.
+    it('show no table for a month without a charge', async () => {
       const { user } = await renderDashboard({
         ...withLogsDataPlatform,
         logsDataPlatform: {
@@ -607,6 +608,27 @@ describe('Infrastructure tab', () => {
 
       expect(api.fetchLogsDataPlatform).toHaveBeenCalledWith('2026-07-01', '2026-07-31', null);
       expect(chargesHeading()).not.toBeInTheDocument();
+    });
+
+    // The server keeps a charge that a refund brings below 0 €, as a product's, so that the total
+    // is the month's Logs Data Platform cost: a month whose only line is a refund shows it
+    it('show a charge that a refund brings below 0 €, even alone in its month', async () => {
+      const { user } = await renderDashboard({
+        ...withLogsDataPlatform,
+        logsDataPlatform: {
+          ...logsDataPlatformBilled.logsDataPlatform,
+          '2026-07': logsDataPlatformCharges(-4.6, [[HOT_STORAGE, -4.6]]),
+        },
+      });
+      await openTab(user, 'Infrastructure');
+
+      await selectMonth(user, 'Juillet 2026');
+
+      expect(rowsOf(chargesTable())).toEqual([
+        ['Charge○', 'Coût▼'],
+        [HOT_STORAGE, '-4,60€'],
+        ['Total Logs Data Platform', '-4,60€'],
+      ]);
     });
 
     it('show no table for an account that Logs Data Platform never billed', async () => {

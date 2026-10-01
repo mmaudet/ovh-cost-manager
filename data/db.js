@@ -6,7 +6,7 @@ const {
 const { aiEndpointsLineCondition, modelFigures } = require('./ai-endpoints');
 const { tieFootprint } = require('./carbon-ties');
 const { MONTHLY_KINDS } = require('./cloud-usage');
-const { chargeFigures, logsDataPlatformLineCondition } = require('./logs-data-platform');
+const { chargeFigures } = require('./logs-data-platform');
 const { productFigures } = require('./public-cloud-products');
 const { storageClassLabel } = require('./storage-classes');
 const {
@@ -1023,12 +1023,11 @@ const analysisOps = {
    */
   logsDataPlatform: (fromDate, toDate, account = null) => {
     const lines = linesOfPeriod(fromDate, toDate, account);
-    const ofLdpLines = logsDataPlatformLineCondition('l.resource_type');
     return chargeFigures(getDb().prepare(`
       SELECT l.description, l.total_price
       FROM (${lines.sql}) l
-      WHERE ${ofLdpLines.sql}
-    `).all(...lines.params, ...ofLdpLines.params));
+      WHERE l.resource_type = ?
+    `).all(...lines.params, LOGS_DATA_PLATFORM.resourceType));
   },
 
   billsByProject: (projectNameOrId, fromDate, toDate) => {

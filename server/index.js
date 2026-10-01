@@ -1481,9 +1481,9 @@ function registerRoutes() {
 
   // The charges of the Logs Data Platform services that the bills of a period charged (#247),
   // which the Infrastructure tab lists for the month it shows: each charge as the bills name it,
-  // without its period, with its cost, the most expensive first, those that cost nothing left
-  // out, and what they cost in all. Those of the bills of the account the request asks for, or
-  // of every account without one, the services together.
+  // without its period, with its cost, the most expensive first, those at 0 € left out and those
+  // that a refund brings below kept, and what they cost in all. Those of the bills of the account
+  // the request asks for, or of every account without one, the services together.
   app.get('/api/analysis/logs-data-platform', accountParameter, (req, res) => {
     try {
       const { from, to } = req.query;

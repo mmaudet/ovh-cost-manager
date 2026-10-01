@@ -96,13 +96,13 @@ OVH API ──> data/import.js ──> SQLite (ovh-bills.db) ──> server/inde
     month by month, for the Trends tab's chart (#196). **Models are read when the server reads
     the bills**, like the products: no re-import.
   - `logs-data-platform.js` — pure: what the bill lines of the Logs Data Platform services add
-    up to by charge (`chargeFigures()`), the charge that `chargeOf()` gives each, the services
-    and accounts together, those that cost nothing, or less, left out, as the free tier of the
-    hot storage; and the condition that selects these lines by the resource type of
-    `LOGS_DATA_PLATFORM` (`logsDataPlatformLineCondition()`). For
-    `/api/analysis/logs-data-platform` and the Infrastructure tab's table of the charges
-    (#247). **Charges are read when the server reads the bills**, like the products: no
-    re-import.
+    up to by charge (`chargeFigures()`, through `chargesOf()`), the services and accounts
+    together, and in all: those at 0 € left out, as the free tier of the hot storage, and those
+    that a refund brings below kept, so that the total is the month's Logs Data Platform cost.
+    `db.analysis.logsDataPlatform()` selects the lines by the resource type of
+    `LOGS_DATA_PLATFORM`, for `/api/analysis/logs-data-platform` and the Infrastructure tab's
+    table of the charges (#247). **Charges are read when the server reads the bills**, like the
+    products: no re-import.
   - `month-in-progress.js` — pure: the month in progress (`CONTEXT.md`, #216), the month of
     today, as the server's local date gives it (`monthOfDate()` in `months.js`), while a
     recurring service, one that bills of each of the three months before charged, by identifier

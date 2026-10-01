@@ -42,8 +42,8 @@ const {
 // - the Lyon subsidiary, whose descriptions carry no period: two services in September, one with
 //   every charge of the invoice, the free tier of the hot storage at 0 € among them, the other
 //   with its rental and some hot storage, besides a file storage, which is storage; in August,
-//   the first one's rental and hot storage; in July, a dedicated server alone; and in June, a
-//   rental and a free tier that cost nothing;
+//   the first one's rental and hot storage; in July, a dedicated server alone; in June, a rental
+//   and a free tier that cost nothing; and in May, a rental, and a refund of hot storage;
 // - Paris, whose descriptions end with their period: its rental, hot storage and input instances,
 //   and a free tier;
 // - and the Unknown account, imported before OCM told accounts apart: a rental and cold storage.
@@ -56,6 +56,7 @@ function seed(db) {
   bill(db, 'FR1002', '2026-08-05', LYON);
   bill(db, 'FR1003', '2026-07-05', LYON);
   bill(db, 'FR1004', '2026-06-05', LYON);
+  bill(db, 'FR1005', '2026-05-05', LYON);
   bill(db, 'FR2001', '2026-09-10', PARIS);
   // Claimed by no account since: the Unknown account's (ADR 0002)
   bill(db, 'FR0001', '2026-09-20', null);
@@ -78,6 +79,8 @@ function seed(db) {
       'Location du serveur RISE-1 ns3000001.ip-203-0-113.eu - 1 mois', 270),
     ldpLine('FR1004-1', 'FR1004', 'ldp-ab-12345', ACCOUNT_RENTAL, 0),
     ldpLine('FR1004-2', 'FR1004', 'ldp-ab-12345', FREE_TIER, 0),
+    ldpLine('FR1005-1', 'FR1005', 'ldp-ab-12345', ACCOUNT_RENTAL, 30),
+    ldpLine('FR1005-2', 'FR1005', 'ldp-ab-12345', HOT_STORAGE, -4.6),
     ldpLine('FR2001-1', 'FR2001', 'ldp-ef-24680', inSeptember(ACCOUNT_RENTAL), 30),
     ldpLine('FR2001-2', 'FR2001', 'ldp-ef-24680', inAugust(HOT_STORAGE), 9.2),
     ldpLine('FR2001-3', 'FR2001', 'ldp-ef-24680', inAugust(FREE_TIER), 0),
@@ -103,6 +106,7 @@ const SEPTEMBER = 'from=2026-09-01&to=2026-09-30';
 const AUGUST = 'from=2026-08-01&to=2026-08-31';
 const JULY = 'from=2026-07-01&to=2026-07-31';
 const JUNE = 'from=2026-06-01&to=2026-06-30';
+const MAY = 'from=2026-05-01&to=2026-05-31';
 
 // The route's answer for a period, for the account that the parameter names, or for every
 // account without one
@@ -155,6 +159,19 @@ describe('GET /api/analysis/logs-data-platform', () => {
   test('gives no charge for a period whose Logs Data Platform lines cost nothing', async () => {
     expect(await chargesOf(JUNE, LYON)).toEqual(NO_CHARGE);
   });
+
+  // As a product's charges keep theirs: so that the charges add up to what the lines cost, the
+  // month's Logs Data Platform cost, as its resource type gives it
+  test('keeps a charge that a refund brings below 0, the last, in what they cost in all',
+    async () => {
+      expect(await chargesOf(MAY, LYON)).toEqual(answer(25.4, [
+        charge(ACCOUNT_RENTAL, 30),
+        charge(HOT_STORAGE, -4.6),
+      ]));
+      const { body } = await ocm.get(`/api/analysis/by-resource-type?${MAY}&account=${LYON}`);
+      expect(body.map(({ resource_type: type, value }) => [type, value]))
+        .toEqual([['logs_data_platform', 25.4]]);
+    });
 
   test('refuses a request without its period, or with an invalid one', async () => {
     expect(await ocm.get(ROUTE)).toEqual({

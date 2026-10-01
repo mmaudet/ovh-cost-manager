@@ -16,8 +16,10 @@ const CHARGE_VALUES = {
  * table's foot. What the month billed, never projected, as the rest of the Infrastructure tab.
  * It runs the query of the charges that the tab's hook defines, once the tab shows it, as the
  * Compare tab's rows run theirs once unfolded, so that the page opens with the queries it had
- * (ADR 0001). It shows only for a month with a charge that costs something: nothing while the
- * charges load, nor for a month without any, such as one whose lines all cost nothing.
+ * (ADR 0001). It shows only for a month with a charge: nothing while the charges load, nor for a
+ * month without any, such as one whose lines all cost nothing. A charge that a refund brings below
+ * 0 € shows, as the server keeps it, so that the total is the month's Logs Data Platform cost: a
+ * month whose only line is a refund shows it.
  * @param {object} props
  * @param {object} props.query - The options of the query of the month's charges, for useQuery:
  *   useInfrastructureTab()'s logsDataPlatformQuery, which /api/analysis/logs-data-platform

@@ -522,7 +522,7 @@ Under the costs by resource type, the **Logs Data Platform by charge** table lis
 - **Charge**: as the bills name it, in their wording whatever the page's language, without the period that ends it on some accounts' bills, such as « (01/08/2026-31/08/2026) », so that a charge reads alike from one month to the next.
 - **Cost**: what its lines cost in the month, every service's together.
 
-The table sorts by cost, the most expensive first, until a header is clicked, and its last row gives what the charges cost in all: the month's Logs Data Platform cost, which its card gives too. A charge that costs nothing, such as the free tier of the hot storage, is left out, and so is one that a refund brings below 0 €: the card, which counts it, then gives less than the table. The table shows only for a month with a charge that costs something. It follows the account selected in the header, and adds up the accounts' charges when all are shown, without an Account column. It shows what the month billed, never its projected cost, and prints with the page; it has no CSV export, as the export of the bill lines holds every line.
+The table sorts by cost, the most expensive first, until a header is clicked, and its last row gives what the charges cost in all: the month's Logs Data Platform cost, which its card gives too. A charge that costs nothing, such as the free tier of the hot storage, is left out, as a product's are in the Compare tab, while a charge that a refund brings below 0 € shows, with its negative amount, so that the charges add up to that cost. The table shows only for a month with a charge, a refund alone included. It follows the account selected in the header, and adds up the accounts' charges when all are shown, without an Account column. It shows what the month billed, never its projected cost, and prints with the page; it has no CSV export, as the export of the bill lines holds every line.
 
 ## Month Comparison
 
@@ -732,8 +732,8 @@ period give the Logs Data Platform services, the services together, which the
 Infrastructure tab shows (see [Logs Data Platform](#logs-data-platform)):
 `total`, what they cost in all, and `charges`, each with its `charge`, as the
 bills name it without its period, and its `total`, the most expensive first.
-A charge that costs nothing, or less, is left out, and a period without any
-gives an empty list. Each line counts in the month of its bill. Amounts are to
+A charge that costs nothing is left out, one that a refund brings below 0 is
+kept, and a period without any gives an empty list. Each line counts in the month of its bill. Amounts are to
 the cent.
 
 `/api/analysis/backup-services` gives the services of the Veeam backups that

@@ -1,9 +1,10 @@
 /**
  * The charges of the Logs Data Platform services (#247): what their bill lines add up to, by
- * charge (see CONTEXT.md), as the Infrastructure tab lists them for the month it shows. The lines
- * are those that data/db.js reads, of the resource type that the classification gives these
- * services, `ldp-` and a code (#246). Their descriptions are those of an invoice's DBAAS-LOGS
- * lines, some ending with the period that they cover; every amount is made up.
+ * charge (see CONTEXT.md), and in all, as the Infrastructure tab lists them for the month it
+ * shows. The lines are those that data/db.js reads, of the resource type that the classification
+ * gives these services, `ldp-` and a code (#246). Their descriptions are those of an invoice's
+ * DBAAS-LOGS lines, some ending with the period that they cover; every amount is made up. How a
+ * charge is read from a description, and how the charges are ordered, tests/charges.test.js pins.
  */
 
 const { chargeFigures } = require('../data/logs-data-platform');
@@ -61,34 +62,26 @@ describe('chargeFigures', () => {
     });
   });
 
-  // A charge whose description holds an apostrophe, made up: the input instances in French, as
-  // some bills would write it curly, as they write « l’heure », and others straight
-  test("writes a charge's apostrophe straight, as some bills write it curly", () => {
+  // As a product's charges are: the free tier of the hot storage never shows, nor a charge that a
+  // refund cancels out, nor a line whose amount the bill does not give. A charge that a refund
+  // brings below 0 € shows, so that the charges add up to what the lines cost: the month's Logs
+  // Data Platform cost.
+  test('leaves out the charges at 0 €, and keeps those that a refund brings below', () => {
     expect(chargeFigures([
-      line('Logs - Instances d’entrée', 6),
-      line("Logs - Instances d'entrée", 4),
+      line(ACCOUNT_RENTAL, 30),
+      line(inAugust(FREE_TIER), 0),
+      line(INPUT_INSTANCES, 12),
+      line(INPUT_INSTANCES, -12),
+      line(COLD_STORAGE, -1.5),
+      line(DASHBOARDS, null),
     ])).toEqual({
-      total: 10,
-      charges: [{ charge: "Logs - Instances d'entrée", total: 10 }],
+      total: 28.5,
+      charges: [
+        { charge: ACCOUNT_RENTAL, total: 30 },
+        { charge: COLD_STORAGE, total: -1.5 },
+      ],
     });
   });
-
-  // As a product's charges are: the free tier of the hot storage never shows, nor a charge that
-  // a refund cancels out, or more, nor a line whose amount the bill does not give
-  test('leaves out the charges that cost nothing, or less, from the charges and their total',
-    () => {
-      expect(chargeFigures([
-        line(ACCOUNT_RENTAL, 30),
-        line(inAugust(FREE_TIER), 0),
-        line(INPUT_INSTANCES, 12),
-        line(INPUT_INSTANCES, -12),
-        line(COLD_STORAGE, -1.5),
-        line(DASHBOARDS, null),
-      ])).toEqual({
-        total: 30,
-        charges: [{ charge: ACCOUNT_RENTAL, total: 30 }],
-      });
-    });
 
   // Such as a month whose only lines are the free tier, or none
   test('gives no charge, at 0 in all, for lines that cost nothing, or none', () => {
@@ -129,14 +122,5 @@ describe('chargeFigures', () => {
         { charge: COLD_STORAGE, total: 0.01 },
       ],
     });
-  });
-
-  // So that the order does not depend on the order of the lines
-  test('orders the charges of the same cost by charge', () => {
-    expect(chargeFigures([
-      line(INPUT_INSTANCES, 12),
-      line(DASHBOARDS, 12),
-      line(COLD_STORAGE, 12),
-    ]).charges.map(({ charge }) => charge)).toEqual([DASHBOARDS, INPUT_INSTANCES, COLD_STORAGE]);
   });
 });
