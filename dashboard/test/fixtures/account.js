@@ -231,6 +231,29 @@ export const septemberInProgress = {
   )),
 };
 
+// The costs of the Logs Data Platform services of a month, as the routes by resource type give
+// them since #246: a resource type of their own, in a colour of its own, apart from the storage
+const logsDataPlatformCosts = (value, detailsCount, serviceCount) => ({
+  name: 'Logs Data Platform', resource_type: 'logs_data_platform', color: '#65a30d',
+  value, detailsCount, serviceCount,
+});
+// A NetApp file storage, which is the storage, without Logs Data Platform since #246
+const fileStorageCosts = {
+  name: 'Storage', resource_type: 'storage', color: '#10b981',
+  value: 64.8, detailsCount: 1, serviceCount: 1,
+};
+// A Logs Data Platform service, `ldp-` and a code, as its bill lines group by service: the
+// rental of its account, its most expensive line, as an invoice's DBAAS-LOGS lines name it
+const logsDataPlatformService = (domain, total, lineCount) => ({
+  domain, description: 'Logs - Account rental for 1 month', total, line_count: lineCount,
+});
+// The two Logs Data Platform services of September: the first, also billed in August, with the
+// hot and the cold storage of its streams, and a second, whose account rental is new
+const logsDataPlatformInSeptember = [
+  logsDataPlatformService('ldp-ab-12345', 50.5, 3),
+  logsDataPlatformService('ldp-cd-67890', 30, 1),
+];
+
 // The other resource types of the variant below, most expensive first. Public
 // Cloud and the Web Cloud services (domain, web_cloud) have tabs of their own,
 // the others show on the Infrastructure tab.
@@ -239,8 +262,8 @@ const otherResourceTypes = [
     value: 1450, detailsCount: 2, serviceCount: 2 },
   { name: 'Private Cloud Datastores', resource_type: 'private_cloud_datastore',
     color: '#a855f7', value: 380, detailsCount: 3, serviceCount: 3 },
-  { name: 'Storage', resource_type: 'storage', color: '#10b981',
-    value: 64.8, detailsCount: 1, serviceCount: 1 },
+  logsDataPlatformCosts(80.5, 4, 2),
+  fileStorageCosts,
   { name: 'Load Balancers', resource_type: 'load_balancer', color: '#06b6d4',
     value: 18, detailsCount: 2, serviceCount: 2 },
   { name: 'Web Cloud', resource_type: 'web_cloud', color: '#2563eb',
@@ -261,7 +284,8 @@ const privateCloudService = (domain, description, total) => ({
 // The account billed in September for every resource type the Infrastructure
 // tab has a card for, and a few more, on top of its own. Most expensive first,
 // as /api/analysis/by-resource-type answers. The services of its Private Cloud
-// hosts and datastores add up to their costs (#192).
+// hosts and datastores, and of its Logs Data Platform (#246), add up to their
+// costs (#192).
 export const everyResourceType = {
   byResourceType: {
     ...account.byResourceType,
@@ -270,6 +294,7 @@ export const everyResourceType = {
   },
   resourceTypeDetails: {
     ...account.resourceTypeDetails,
+    logs_data_platform: { '2026-09': logsDataPlatformInSeptember },
     private_cloud_host: {
       '2026-09': [
         privateCloudService('pcc-203-0-113-10/host/1234',
@@ -287,6 +312,30 @@ export const everyResourceType = {
         privateCloudService('pcc-203-0-113-10/ssd-4323',
           'Datastore SSD 1 To pcc-203-0-113-10 - 1 mois', 80),
       ],
+    },
+  },
+};
+
+// The account billed in August and September for a NetApp file storage and for Logs Data
+// Platform besides its own, as the routes by resource type give them since #246: Logs Data
+// Platform a resource type of its own, which the storage no longer counts. Most expensive
+// first, as /api/analysis/by-resource-type answers. Its services add up to its costs: 30 € of
+// account rental and 12,50 € of hot storage in August, then 50,50 € for that service and 30 €
+// for a second one in September.
+const withLogsDataPlatform = (month, costs) => [
+  ...account.byResourceType[month], fileStorageCosts, costs,
+].sort((a, b) => b.value - a.value);
+export const logsDataPlatformBilled = {
+  byResourceType: {
+    ...account.byResourceType,
+    '2026-09': withLogsDataPlatform('2026-09', logsDataPlatformCosts(80.5, 4, 2)),
+    '2026-08': withLogsDataPlatform('2026-08', logsDataPlatformCosts(42.5, 2, 1)),
+  },
+  resourceTypeDetails: {
+    ...account.resourceTypeDetails,
+    logs_data_platform: {
+      '2026-09': logsDataPlatformInSeptember,
+      '2026-08': [logsDataPlatformService('ldp-ab-12345', 42.5, 2)],
     },
   },
 };

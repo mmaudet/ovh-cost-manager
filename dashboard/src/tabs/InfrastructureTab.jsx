@@ -145,6 +145,12 @@ const InfrastructureTab = ({
             type: 'ip_service', label: language === 'en' ? 'IP Addresses' : 'Adresses IP',
             color: 'text-pink-600', ring: 'ring-pink-300',
           },
+          // Apart from the storage since #246, in the lime of its resource type, before the
+          // Private Cloud's cards, which end the row
+          {
+            type: 'logs_data_platform', label: t('logsDataPlatform'),
+            color: 'text-lime-600', ring: 'ring-lime-300',
+          },
           {
             type: 'private_cloud_host',
             label: language === 'en' ? 'Private Cloud Hosts' : 'Hôtes Private Cloud',

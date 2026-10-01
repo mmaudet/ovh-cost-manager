@@ -226,6 +226,9 @@ export const translations = {
     dedicatedServers: 'Serveurs dédiés',
     vpsInstances: 'VPS',
     storageServices: 'Stockage',
+    // The resource type of the Logs Data Platform services, as OVHcloud names the product in
+    // both languages (#246)
+    logsDataPlatform: 'Logs Data Platform',
     cloudProjects: 'Projets Cloud',
     billedAmountsFailed: 'Impossible de charger ce que le mois a facturé à chaque projet.',
     // The header of the column of the list of projects that gives what the bills of the month
@@ -553,6 +556,9 @@ export const translations = {
     dedicatedServers: 'Dedicated Servers',
     vpsInstances: 'VPS',
     storageServices: 'Storage',
+    // The resource type of the Logs Data Platform services, as OVHcloud names the product in
+    // both languages (#246)
+    logsDataPlatform: 'Logs Data Platform',
     cloudProjects: 'Cloud Projects',
     billedAmountsFailed: 'What the month billed each project could not be loaded.',
     // The header of the column of the list of projects that gives what the bills of the month

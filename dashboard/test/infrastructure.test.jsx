@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { screen, within } from '@testing-library/react';
-import { account, everyResourceType } from './fixtures/account.js';
+import { account, everyResourceType, logsDataPlatformBilled } from './fixtures/account.js';
 import { lyonAccount, removedAccount, severalAccounts } from './fixtures/accounts.js';
 import { api } from './support/api.js';
 import {
@@ -78,6 +78,7 @@ describe('Infrastructure tab', () => {
         'Stockage', '1', '64,80€',
         'Load Balancers', '2', '18,00€',
         'Adresses IP', '4', '6,00€',
+        'Logs Data Platform', '2', '80,50€',
         'Hôtes Private Cloud', '2', '1 450,00€',
         'Datastores Private Cloud', '3', '380,00€',
       ]);
@@ -95,8 +96,38 @@ describe('Infrastructure tab', () => {
         'Stockage', '0', '0,00€',
         'Load Balancers', '0', '0,00€',
         'Adresses IP', '0', '0,00€',
+        'Logs Data Platform', '0', '0,00€',
         'Hôtes Private Cloud', '0', '0,00€',
         'Datastores Private Cloud', '0', '0,00€',
+      ]);
+    });
+
+    // Apart from the storage, which counted it before #246. The server names it alike, in the
+    // costs by resource type under the cards: the card is found among the cards.
+    it('give Logs Data Platform a card of its own, which opens its bill lines', async () => {
+      const { user } = await renderDashboard({ ...account, ...logsDataPlatformBilled });
+      await openTab(user, 'Infrastructure');
+
+      expect(texts(resourceTypeCards())).toEqual([
+        'Serveurs dédiés', '1', '270,00€',
+        'VPS', '0', '0,00€',
+        'Stockage', '1', '64,80€',
+        'Load Balancers', '0', '0,00€',
+        'Adresses IP', '0', '0,00€',
+        'Logs Data Platform', '2', '80,50€',
+        'Hôtes Private Cloud', '0', '0,00€',
+        'Datastores Private Cloud', '0', '0,00€',
+      ]);
+
+      await user.click(cardOf(within(resourceTypeCards()).getByText('Logs Data Platform')));
+      await settle();
+
+      expect(api.fetchResourceTypeDetails)
+        .toHaveBeenCalledWith('logs_data_platform', '2026-09-01', '2026-09-30', null);
+      expect(rowsOf(billLines())).toEqual([
+        ['Service○', 'Description○', 'Montant○'],
+        ['ldp-ab-12345', 'Logs - Account rental for 1 month', '50,50€'],
+        ['ldp-cd-67890', 'Logs - Account rental for 1 month', '30,00€'],
       ]);
     });
 
@@ -135,6 +166,7 @@ describe('Infrastructure tab', () => {
         'Private Cloud Datastores', '380,00€', '▼',
         'Dedicated Servers', '270,00€', '▼',
         'Backup', '90,00€', '▼',
+        'Logs Data Platform', '80,50€', '▼',
         'Storage', '64,80€', '▼',
         'Licenses', '25,00€', '▼',
         'Load Balancers', '18,00€', '▼',
@@ -404,6 +436,7 @@ describe('Infrastructure tab', () => {
       'Stockage', '0', '0,00€',
       'Load Balancers', '0', '0,00€',
       'Adresses IP', '0', '0,00€',
+      'Logs Data Platform', '0', '0,00€',
       'Hôtes Private Cloud', '0', '0,00€',
       'Datastores Private Cloud', '0', '0,00€',
     ]);
@@ -423,6 +456,7 @@ describe('Infrastructure tab', () => {
       'Storage', '1', '64.80€',
       'Load Balancers', '2', '18.00€',
       'IP Addresses', '4', '6.00€',
+      'Logs Data Platform', '2', '80.50€',
       'Private Cloud Hosts', '2', '1,450.00€',
       'Private Cloud Datastores', '3', '380.00€',
     ]);
