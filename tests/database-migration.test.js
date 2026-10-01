@@ -10,6 +10,7 @@ const path = require('path');
 const Database = require('better-sqlite3');
 const migrations = require('../data/migrations');
 const { LYON } = require('./support/accounts');
+const { holdWriteLock } = require('./support/write-lock');
 
 const DATA_LAYER = path.resolve(__dirname, '..', 'data', 'db.js');
 
@@ -45,19 +46,10 @@ function openDatabase(use = () => {}) {
   });
 }
 
-// A connection that holds the write lock, as the import does while it writes a bill
-function holdWriteLock() {
-  const writer = new Database(path.join(dataDir, 'ovh-bills.db'));
-  writer.exec('BEGIN IMMEDIATE');
-  return () => {
-    writer.exec('ROLLBACK');
-    writer.close();
-  };
-}
-
 test('opens a database that it migrated before without taking the write lock', () => {
   openDatabase();
-  const release = holdWriteLock();
+  // As the import holds it while it writes a bill
+  const release = holdWriteLock(dataDir);
   try {
     expect(() => openDatabase()).not.toThrow();
   } finally {

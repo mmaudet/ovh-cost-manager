@@ -15,7 +15,7 @@ const fs = require('fs');
 const net = require('net');
 const os = require('os');
 const path = require('path');
-const Database = require('better-sqlite3');
+const { holdWriteLock } = require('./write-lock');
 
 const SERVER = path.resolve(__dirname, '..', '..', 'server', 'index.js');
 const HIDE_REPO_CONFIG = path.resolve(__dirname, 'hide-repo-config.js');
@@ -160,14 +160,7 @@ async function startOcm(envOf, { config, seed } = {}) {
     write: (writeRows) => writeDatabase(dataDirOf(home), writeRows),
     // Holds the write lock of its database, as an import does while it stores a bill, until the
     // function that it returns releases it
-    holdWriteLock: () => {
-      const writer = new Database(path.join(dataDirOf(home), 'ovh-bills.db'));
-      writer.exec('BEGIN IMMEDIATE');
-      return () => {
-        writer.exec('ROLLBACK');
-        writer.close();
-      };
-    },
+    holdWriteLock: () => holdWriteLock(dataDirOf(home)),
     // Resolves with the status and the JSON body of the server's answer to a path
     get: async (path) => {
       const res = await fetch(`${server.url}${path}`);
