@@ -111,3 +111,35 @@ describe('the Logs Data Platform lines that the versions before #246 stored as s
     ]);
   });
 });
+
+// The routes by resource type name it, and the dashboard's Overview and Trends tab show it as they
+// name it: as OVHcloud names the product, in both languages, and in a colour of its own, lime,
+// which no other resource type comes close to
+describe('the Logs Data Platform resource type', () => {
+  test('has its label and colour among the costs by resource type', async () => {
+    const { body } = await ocm.get(`/api/analysis/by-resource-type?${SEPTEMBER}`);
+
+    expect(body.map(({ name, resource_type: type, color }) => [name, type, color])).toEqual([
+      ['Storage', 'storage', '#10b981'],
+      ['Logs Data Platform', 'logs_data_platform', '#65a30d'],
+    ]);
+  });
+
+  test('has its label and colour in the trend by resource type, a line of its own', async () => {
+    expect(await ocm.get('/api/analysis/monthly-trend-by-category?months=2&end=2026-09'))
+      .toEqual({
+        status: 200,
+        body: {
+          // The storage first, which cost the more over the two months
+          categories: [
+            { key: 'storage', label: 'Storage', color: '#10b981' },
+            { key: 'logs_data_platform', label: 'Logs Data Platform', color: '#65a30d' },
+          ],
+          data: [
+            { yearMonth: '2026-08', storage: 64.8, logs_data_platform: 42.5 },
+            { yearMonth: '2026-09', storage: 64.8, logs_data_platform: 50.5 },
+          ],
+        },
+      });
+  });
+});
