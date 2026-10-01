@@ -79,8 +79,8 @@ function shiftMonth(yearMonth, months) {
 
 /**
  * The 'YYYY-MM' month of a date in local time, unlike the months above: for the date of today,
- * the month of today, which the server tells the month in progress by (#216). 23:30 UTC on
- * 30 September is in October on a server in Paris.
+ * the month of today, which the server chooses the candidate month of the month in progress from
+ * (#216, #258). 23:30 UTC on 30 September is in October on a server in Paris.
  * @param {Date} date
  * @returns {string}
  */

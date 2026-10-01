@@ -11,7 +11,9 @@ const { storageClassLabel } = require('./storage-classes');
 const {
   monthBounds, monthOfDate, monthsOfWindow, shiftMonth,
 } = require('./months');
-const { recurrenceWindow, recurringServicesNotBilled } = require('./month-in-progress');
+const {
+  chooseCandidateMonth, recurrenceWindow, recurringServicesNotBilled,
+} = require('./month-in-progress');
 const ownership = require('./ownership');
 // The conditions of the queries that keep one account's rows (#115), a list of ids, or the
 // bill lines of the Veeam backups (#197)
@@ -167,18 +169,35 @@ function servicesOfLines(linesOf, fromDate, toDate, account, byAccount, {
 }
 
 /**
- * The recurring services (CONTEXT.md) that the month of today has not billed yet, as
+ * The candidate month of an account (#258), the one month that can be in progress, as
+ * data/month-in-progress.js chooses it (chooseCandidateMonth()) among the months that the months
+ * list lists for the account (getMonths()): the month of today, as the server's local date gives
+ * it (monthOfDate()), once the account has a bill in it, and until then the month before, which
+ * may still lack its late bills, if the account has a bill in it. A bill of the account counts as
+ * the months list counts it (see accountCondition()): for one account, its bills; for the Unknown
+ * account, the bills without an account; and for every account, any bill.
+ * @param {?string} account - The account shown: null for every account
+ * @returns {?string} YYYY-MM; null when the account has a bill in neither month, as one whose
+ *   imports stopped: no month is in progress then
+ */
+function candidateMonthOf(account) {
+  return chooseCandidateMonth(monthOfDate(new Date()), billOps.getMonths(account));
+}
+
+/**
+ * The recurring services (CONTEXT.md) that the candidate month has not billed yet, as
  * data/month-in-progress.js tells them from the bills as they are, each with its projected lines:
- * the month of today is in progress while there are any (#216), and its projection counts those
- * lines (#217).
- * @param {string} monthOfToday - YYYY-MM, as the server's local date gives it (monthOfDate())
+ * the candidate month is in progress while there are any (#216, #258), and its projection counts
+ * those lines (#217).
+ * @param {string} candidateMonth - YYYY-MM, as candidateMonthOf() gives it for the account, when
+ *   it gives one
  * @param {?string} account - The account whose recurring services count (see
  *   accountCondition()): null for every account
  * @returns {Array<{ service: string, account: ?string, lines: string[] }>}
  */
-function servicesNotBilledYet(monthOfToday, account) {
+function servicesNotBilledYet(candidateMonth, account) {
   return recurringServicesNotBilled(
-    detailOps.getBilledServices(monthOfToday, account), monthOfToday,
+    detailOps.getBilledServices(candidateMonth, account), candidateMonth,
   );
 }
 
@@ -186,15 +205,16 @@ function servicesNotBilledYet(monthOfToday, account) {
  * The bill lines that a query of the costs between two dates, both included, adds up, as a table
  * for its FROM clause, with its parameters: the lines of the bills of the account (see
  * accountCondition()), every account's by default. With the projected option, when the dates
- * cover the month in progress (CONTEXT.md), its projected lines too (#217): the bill lines of the
- * month before of each recurring service that the month of today has not billed yet
- * (data/month-in-progress.js), counted as they were, their classification included, and dated on
- * its first day. Each line has the columns of bill_details, the date and the account of its bill,
- * `date` and `account`, and its projected part, `projected`: its whole cost for a projected line,
- * 0 for a bill line.
+ * cover the account's candidate month (candidateMonthOf(), #258) while it is the month in progress
+ * (CONTEXT.md), its projected lines too (#217): the bill lines of the month before it of each
+ * recurring service that the candidate month has not billed yet (data/month-in-progress.js),
+ * counted as they were, their classification included, and dated on its first day. Each line has
+ * the columns of bill_details, the date and the account of its bill, `date` and `account`, and
+ * its projected part, `projected`: its whole cost for a projected line, 0 for a bill line.
  * @param {?string} fromDate - The first day, YYYY-MM-DD; null, as the last, for no period
  * @param {?string} toDate - The last day
- * @param {?string} [account] - The account whose lines count, as its recurring services
+ * @param {?string} [account] - The account whose lines count, as its bills tell its candidate
+ *   month and its recurring services
  * @param {object} [options]
  * @param {boolean} [options.projected] - Whether to add the projected lines of the month in
  *   progress
@@ -209,9 +229,13 @@ function linesOfPeriod(fromDate, toDate, account = null, { projected = false } =
       WHERE b.date >= ? AND b.date <= ? AND ${ofAccount.sql}`,
     params: [fromDate, toDate, ...ofAccount.params],
   };
-  const monthOfToday = monthOfDate(new Date());
-  if (!projected || !monthsOfWindow(fromDate, toDate).includes(monthOfToday)) return billLines;
-  const projectedLines = servicesNotBilledYet(monthOfToday, account)
+  if (!projected) return billLines;
+  // None while the account has a bill in neither the month of today nor the month before
+  const candidateMonth = candidateMonthOf(account);
+  if (candidateMonth === null || !monthsOfWindow(fromDate, toDate).includes(candidateMonth)) {
+    return billLines;
+  }
+  const projectedLines = servicesNotBilledYet(candidateMonth, account)
     .flatMap(({ lines }) => lines);
   if (projectedLines.length === 0) return billLines;
   const ofProjectedLines = idInList('d.id', projectedLines);
@@ -222,7 +246,7 @@ function linesOfPeriod(fromDate, toDate, account = null, { projected = false } =
       FROM bill_details d
       JOIN bills b ON d.bill_id = b.id
       WHERE ${ofProjectedLines.sql}`,
-    params: [...billLines.params, monthBounds(monthOfToday).from, ...ofProjectedLines.params],
+    params: [...billLines.params, monthBounds(candidateMonth).from, ...ofProjectedLines.params],
   };
 }
 
@@ -486,16 +510,21 @@ const billOps = {
   },
 
   /**
-   * The month in progress (CONTEXT.md, #216): the month of today, as the server's local date
-   * gives it, while a recurring service has no bill line in it (data/month-in-progress.js), read
-   * from the bills as they are.
-   * @param {?string} [account] - The account whose recurring services count (see
-   *   accountCondition()): every account's by default, any of which keeps the month in progress
-   * @returns {?string} The month of today, YYYY-MM, while it is in progress; null otherwise
+   * The month in progress (CONTEXT.md, #216): the candidate month of the account (#258), the
+   * month of today once the account has a bill in it and until then the month before, if the
+   * account has a bill in it (candidateMonthOf()), while a recurring service has no bill line in
+   * it (data/month-in-progress.js), read from the bills as they are. So the month in progress is
+   * always one that the months list lists.
+   * @param {?string} [account] - The account whose bills tell the candidate month, and whose
+   *   recurring services count (see accountCondition()): every account's by default, any of
+   *   which keeps the month in progress
+   * @returns {?string} The candidate month, YYYY-MM, while it is in progress; null otherwise, as
+   *   when there is none
    */
   getMonthInProgress: (account = null) => {
-    const monthOfToday = monthOfDate(new Date());
-    return servicesNotBilledYet(monthOfToday, account).length > 0 ? monthOfToday : null;
+    const candidateMonth = candidateMonthOf(account);
+    if (candidateMonth === null) return null;
+    return servicesNotBilledYet(candidateMonth, account).length > 0 ? candidateMonth : null;
   },
 
   exists: (id) => {
@@ -540,22 +569,22 @@ const detailOps = {
   },
 
   /**
-   * The services that the bills of the month of today and of the three months before charged
-   * (recurrenceWindow()), which data/month-in-progress.js tells the recurring services not billed
-   * yet from (#216): each service that bill lines name, once for each account and month of their
-   * bills, with the ids of those lines, which a projection of the month in progress repeats
+   * The services that the bills of the candidate month (#258) and of the three months before it
+   * charged (recurrenceWindow()), which data/month-in-progress.js tells the recurring services not
+   * billed yet from (#216): each service that bill lines name, once for each account and month of
+   * their bills, with the ids of those lines, which a projection of the month in progress repeats
    * (#214). Those of the months before are the account's, whose recurring services they tell;
-   * those of the month of today are every account's, as any account's bill of the month of today
-   * bills a service that it names, such as one moved from an account to another (#214).
-   * @param {string} monthOfToday - YYYY-MM
+   * those of the candidate month are every account's, as any account's bill of the candidate
+   * month bills a service that it names, such as one moved from an account to another (#214).
+   * @param {string} candidateMonth - YYYY-MM (candidateMonthOf())
    * @param {?string} [account] - The account whose bills of the months before count (see
    *   accountCondition()): every account's by default
    * @returns {Array<{ service: string, account: ?string, month: string, lines: string[] }>} Each
    *   with the NIC handle of its bills' account, null for the Unknown account, and their month,
    *   YYYY-MM
    */
-  getBilledServices: (monthOfToday, account = null) => {
-    const { from, to } = recurrenceWindow(monthOfToday);
+  getBilledServices: (candidateMonth, account = null) => {
+    const { from, to } = recurrenceWindow(candidateMonth);
     const ofAccount = accountCondition(account, 'b.account');
     return getDb().prepare(`
       SELECT d.domain AS service, b.account AS account, strftime('%Y-%m', b.date) AS month,
@@ -565,7 +594,7 @@ const detailOps = {
       WHERE b.date >= ? AND b.date <= ? AND d.domain IS NOT NULL
         AND (strftime('%Y-%m', b.date) = ? OR ${ofAccount.sql})
       GROUP BY d.domain, b.account, month
-    `).all(from, to, monthOfToday, ...ofAccount.params)
+    `).all(from, to, candidateMonth, ...ofAccount.params)
       .map((row) => ({ ...row, lines: JSON.parse(row.lines) }));
   },
 

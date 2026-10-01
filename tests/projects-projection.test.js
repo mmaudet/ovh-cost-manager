@@ -55,8 +55,10 @@ const cloudLine = ([projectId], description, price) => [
 // bill of the month of today charged Production, a bit more than before, without a credit, and
 // the one that will charge Staging has not come yet. Staging's instances cost more in the month
 // before than in the two months before it. Paris, whose bill of the month of today came, and the
-// Unknown account, billed late for its Legacy project, word their lines with the period that they
-// cover. Every NIC handle, name, identifier and amount is made up; the descriptions are
+// Unknown account, billed late for its Legacy project, word the lines of their projects with the
+// period that they cover. The Unknown account's bill of the month of today came too, for its
+// domain, which it is billed for on the first day of each month: its month of today has begun
+// (#258). Every NIC handle, name, identifier and amount is made up; the descriptions are
 // OVHcloud's.
 function seed(db) {
   db.accounts.upsert({ nic: LYON, currency: 'EUR', name: 'Lyon subsidiary' });
@@ -75,6 +77,7 @@ function seed(db) {
     billOf(db, `FR2${index}01`, PARIS, `${yearMonth}-10`, [
       cloudLine(PARIS_PROJECT, endingWithPeriod(yearMonth, DISKS), 50),
     ]);
+    billOf(db, `FR0${index}01`, null, `${yearMonth}-01`, [['example.com', 'domain', 15]]);
   });
   MONTHS_BEFORE.forEach((yearMonth, index) => {
     billOf(db, `FR1${index}02`, LYON, `${yearMonth}-25`, [
