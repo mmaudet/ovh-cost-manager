@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { screen, within } from '@testing-library/react';
-import { account, septemberInProgress } from './fixtures/account.js';
+import { account, logsDataPlatformBilled, septemberInProgress } from './fixtures/account.js';
 import {
   lyonAccount, lyonBilledLate, removedAccount, severalAccounts, severalAccountsWithAiEndpoints,
   unnamedAccount,
@@ -284,6 +284,40 @@ describe('Trends tab', () => {
       await user.click(legendItem('Dedicated Servers'));
 
       expect(swatchOf(legendItem('Dedicated Servers'))).toHaveStyle({ backgroundColor: '#ef4444' });
+    });
+
+    // A line of its own, as the server names it in both languages, in its own colour, apart from
+    // the storage that counted it before #246, which the user hides as any other
+    it('gives Logs Data Platform a line of its own (#246)', async () => {
+      const { user } = await renderDashboard({ ...account, ...logsDataPlatformBilled });
+      await openTab(user, 'Tendances');
+
+      // By what they cost over the period, as the server orders them
+      expect(texts(cardOf('Évolution par catégorie'))).toEqual([
+        'Évolution par catégorie',
+        'Public Cloud', 'Dedicated Servers', 'Backup', 'Storage', 'Logs Data Platform', 'Domains',
+        'Licenses',
+      ]);
+      expect(swatchOf(legendItem('Logs Data Platform')))
+        .toHaveStyle({ backgroundColor: '#65a30d' });
+
+      await user.click(legendItem('Logs Data Platform'));
+
+      expect(swatchOf(legendItem('Logs Data Platform'))).toHaveStyle(hiddenSwatch);
+      expect(swatchOf(legendItem('Storage'))).toHaveStyle({ backgroundColor: '#10b981' });
+    });
+
+    it('names Logs Data Platform alike in English (#246)', async () => {
+      const { user } = await renderDashboard({ ...account, ...logsDataPlatformBilled });
+      await selectLanguage(user, 'en');
+
+      await openTab(user, 'Trends');
+
+      expect(texts(cardOf('Cost evolution by category'))).toEqual([
+        'Cost evolution by category',
+        'Public Cloud', 'Dedicated Servers', 'Backup', 'Storage', 'Logs Data Platform', 'Domains',
+        'Licenses',
+      ]);
     });
 
     it('keeps the period and the hidden resource types when the user comes back', async () => {

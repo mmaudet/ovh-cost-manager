@@ -231,11 +231,14 @@ export const septemberInProgress = {
   )),
 };
 
-// The costs of the Logs Data Platform services of a month, as the routes by resource type give
-// them since #246: a resource type of their own, in a colour of its own, apart from the storage
-const logsDataPlatformCosts = (value, detailsCount, serviceCount) => ({
+// The Logs Data Platform resource type, as the routes by resource type name it since #246, in
+// both languages, in a colour of its own, apart from the storage
+const LOGS_DATA_PLATFORM = {
   name: 'Logs Data Platform', resource_type: 'logs_data_platform', color: '#65a30d',
-  value, detailsCount, serviceCount,
+};
+// The costs of the Logs Data Platform services of a month, as those routes give them
+const logsDataPlatformCosts = (value, detailsCount, serviceCount) => ({
+  ...LOGS_DATA_PLATFORM, value, detailsCount, serviceCount,
 });
 // A NetApp file storage, which is the storage, without Logs Data Platform since #246
 const fileStorageCosts = {
@@ -325,6 +328,16 @@ export const everyResourceType = {
 const withLogsDataPlatform = (month, costs) => [
   ...account.byResourceType[month], fileStorageCosts, costs,
 ].sort((a, b) => b.value - a.value);
+// Its trend by resource type up to September, the account's with a line of their own for the
+// storage and for Logs Data Platform. As the route orders them, by what they cost over the three
+// months: 129,60 € and 123,00 €, between the backups' 130,00 € and the domains' 95,00 €.
+const trendUpToSeptember = account.monthlyTrendByCategory['2026-09'][3];
+const trendCategoryOf = ({ name, resource_type: key, color }) => ({ key, label: name, color });
+const storageAndLogsDataPlatformIn = {
+  '2026-07': { storage: 0, logs_data_platform: 0 },
+  '2026-08': { storage: 64.8, logs_data_platform: 42.5 },
+  '2026-09': { storage: 64.8, logs_data_platform: 80.5 },
+};
 export const logsDataPlatformBilled = {
   byResourceType: {
     ...account.byResourceType,
@@ -336,6 +349,22 @@ export const logsDataPlatformBilled = {
     logs_data_platform: {
       '2026-09': logsDataPlatformInSeptember,
       '2026-08': [logsDataPlatformService('ldp-ab-12345', 42.5, 2)],
+    },
+  },
+  monthlyTrendByCategory: {
+    ...account.monthlyTrendByCategory,
+    '2026-09': {
+      3: {
+        categories: [
+          ...trendUpToSeptember.categories.slice(0, 3),
+          trendCategoryOf(fileStorageCosts),
+          trendCategoryOf(LOGS_DATA_PLATFORM),
+          ...trendUpToSeptember.categories.slice(3),
+        ],
+        data: trendUpToSeptember.data.map((month) => ({
+          ...month, ...storageAndLogsDataPlatformIn[month.yearMonth],
+        })),
+      },
     },
   },
 };
