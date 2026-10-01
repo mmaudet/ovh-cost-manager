@@ -14,13 +14,32 @@ const controlsOf = (element) => [...element.querySelectorAll(FOCUSABLE)]
   .filter((control) => control.tabIndex >= 0 && !control.disabled);
 
 /**
+ * Keeps the keyboard focus within a dialog (#236): Tab from its last control goes round to its
+ * first, and Shift+Tab from its first to its last, rather than on to the page behind it. So
+ * does either key once the focus is off its controls, as after a click on its table, which
+ * gives the focus to the page.
+ * @param {KeyboardEvent} event - A press of Tab, with Shift or not
+ * @param {HTMLElement} dialog
+ */
+const keepFocusIn = (event, dialog) => {
+  const controls = controlsOf(dialog);
+  const [first, last] = [controls[0], controls[controls.length - 1]];
+  const focused = document.activeElement;
+  if (focused === (event.shiftKey ? first : last) || !controls.includes(focused)) {
+    event.preventDefault();
+    (event.shiftKey ? last : first).focus();
+  }
+};
+
+/**
  * Generic overlay dialog.
  *
  * Closes on Escape, on a backdrop click and on the header button. The body
  * scrolls on its own so long tables stay inside the viewport.
  *
  * It takes the keyboard focus as the WAI-ARIA dialog pattern describes (#236): onto its first
- * control when it opens, and back to the button that opened it when it closes.
+ * control when it opens, within it while it is open, where Tab and Shift+Tab go round its
+ * controls, and back to the button that opened it when it closes.
  *
  * A screen reader names the dialog by its title, as the WAI-ARIA dialog pattern describes
  * (#236): the dialog points at the title's element, whatever the title holds, a string or nodes,
@@ -45,9 +64,13 @@ export default function Modal({
   // The dialog, which holds its controls
   const dialog = useRef(null);
 
+  // Escape closes the dialog, and Tab keeps the focus within it (#236)
   useEffect(() => {
     if (!open) return;
-    const onKeyDown = (e) => { if (e.key === 'Escape') onClose(); };
+    const onKeyDown = (e) => {
+      if (e.key === 'Escape') onClose();
+      if (e.key === 'Tab') keepFocusIn(e, dialog.current);
+    };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [open, onClose]);

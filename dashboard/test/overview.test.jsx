@@ -591,6 +591,33 @@ describe('Overview tab', () => {
       expect(showAllButton()).toHaveFocus();
     });
 
+    // #236: Tab and Shift+Tab go round the modal's controls, its buttons then the headers that
+    // sort its table, and never on to the page behind it, as the WAI-ARIA dialog pattern
+    // describes
+    it('keeps the keyboard focus within it while it is open', async () => {
+      const { user } = await renderDashboard({ ...account, expiringServices: expiringSoon });
+      const dialog = await showAll(user);
+      const control = (name) => within(dialog).getByRole('button', { name });
+      expect(control('CSV')).toHaveFocus();
+
+      // From its first control to its last, then round to its first
+      for (const name of ['Fermer', 'Type', 'Service', 'Expiration', 'CSV']) {
+        await user.tab();
+        expect(control(name)).toHaveFocus();
+      }
+      // And the other way round, from its first to its last
+      await user.tab({ shift: true });
+      expect(control('Expiration')).toHaveFocus();
+
+      // Even once a click on its table took the focus off its controls
+      await user.click(within(dialog).getByText('legacy-vps'));
+      await user.tab();
+      expect(control('CSV')).toHaveFocus();
+      await user.click(within(dialog).getByText('legacy-vps'));
+      await user.tab({ shift: true });
+      expect(control('Expiration')).toHaveFocus();
+    });
+
     // In the order the server lists them, whatever the order shown, as the other lists (#146)
     it('downloads every service about to expire as CSV, from the card and from the modal',
       async () => {
