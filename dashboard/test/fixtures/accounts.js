@@ -1,4 +1,6 @@
-import { account, septemberInProgress } from './account.js';
+import {
+  LDP_CHARGES, account, logsDataPlatformBilled, logsDataPlatformCharges, septemberInProgress,
+} from './account.js';
 import { months } from './calendar.js';
 import { infrastructureOfSeveralAccounts } from './infrastructure.js';
 import {
@@ -433,6 +435,53 @@ export const severalAccountsWithAiEndpoints = {
         '2026-09': unnamedModelsInSeptember,
         // Its models of September alone
         '2026-07/2026-09': unnamedModelsInSeptember,
+      },
+    },
+  },
+};
+
+// The accounts, with the charges of their Logs Data Platform services (#247), which
+// severalAccounts leaves out: the Lyon subsidiary's, those of logsDataPlatformBilled, its two
+// services in September and one in August; the unnamed account's, a service of its own in
+// September, whose input and OpenSearch Dashboards instances and largest hot storage the others
+// lack; and the Unknown account's, a rental in July, its only month. All accounts' add them up,
+// each charge once.
+const lyonLogsDataPlatform = logsDataPlatformBilled.logsDataPlatform;
+export const severalAccountsWithLogsDataPlatform = {
+  ...severalAccounts,
+  logsDataPlatform: {
+    '2026-09': logsDataPlatformCharges(153.75, [
+      [LDP_CHARGES.accountRental, 90],
+      [LDP_CHARGES.dashboards, 24],
+      [LDP_CHARGES.hotStorage, 18.4],
+      [LDP_CHARGES.inputInstances, 12],
+      [LDP_CHARGES.hotStorageOver101Gb, 7.25],
+      [LDP_CHARGES.coldStorage, 2.1],
+    ]),
+    '2026-08': lyonLogsDataPlatform['2026-08'],
+    '2026-07': logsDataPlatformCharges(30, [[LDP_CHARGES.accountRental, 30]]),
+  },
+  ofAccount: {
+    ...severalAccounts.ofAccount,
+    [lyonAccount.id]: {
+      ...severalAccounts.ofAccount[lyonAccount.id],
+      logsDataPlatform: lyonLogsDataPlatform,
+    },
+    [unnamedAccount.id]: {
+      ...severalAccounts.ofAccount[unnamedAccount.id],
+      logsDataPlatform: {
+        '2026-09': logsDataPlatformCharges(73.25, [
+          [LDP_CHARGES.accountRental, 30],
+          [LDP_CHARGES.dashboards, 24],
+          [LDP_CHARGES.inputInstances, 12],
+          [LDP_CHARGES.hotStorageOver101Gb, 7.25],
+        ]),
+      },
+    },
+    [unknownAccount.id]: {
+      ...severalAccounts.ofAccount[unknownAccount.id],
+      logsDataPlatform: {
+        '2026-07': logsDataPlatformCharges(30, [[LDP_CHARGES.accountRental, 30]]),
       },
     },
   },

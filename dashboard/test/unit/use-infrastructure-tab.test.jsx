@@ -3,7 +3,11 @@ import { act } from '@testing-library/react';
 import { translations } from '../../src/i18n/translations.js';
 import { useInfrastructureTab } from '../../src/tabs/useInfrastructureTab.js';
 import { accountColumnOf, accountsOf } from '../../src/utils/accounts.js';
-import { lyonAccount, removedAccount, severalAccounts } from '../fixtures/accounts.js';
+import { account, logsDataPlatformBilled } from '../fixtures/account.js';
+import {
+  lyonAccount, removedAccount, severalAccounts, severalAccountsWithLogsDataPlatform,
+  unknownAccount,
+} from '../fixtures/accounts.js';
 import { months } from '../fixtures/calendar.js';
 import { api } from '../support/api.js';
 import { renderTabHook, TAB_IDS, WAITING } from '../support/hooks.jsx';
@@ -79,13 +83,15 @@ describe('useInfrastructureTab', () => {
     const { result } = await renderTabHook(useInfrastructureTab, onInfrastructure);
 
     // What the shell spreads over the tab and its modal, and nothing else: the sort order of
-    // its tables too (#146)
+    // its tables too (#146), and the query of the month's Logs Data Platform charges, which
+    // their table runs (#247)
     expect(result.current).toEqual({
       sortingOf: expect.any(Function),
       inventoryServers: expect.any(Array),
       inventoryVps: expect.any(Array),
       inventoryStorage: expect.any(Array),
       resourceTypeDetails: [],
+      logsDataPlatformQuery: expect.any(Object),
       showAllServers: false,
       setShowAllServers: expect.any(Function),
     });
@@ -321,6 +327,111 @@ describe('useInfrastructureTab', () => {
         ['resourceTypeDetails', 'backup', '2026-09-01', '2026-09-30', undefined],
       )).toMatchObject(WAITING);
     });
+  });
+
+  // The charges of the Logs Data Platform services that the month selected billed (#247), the
+  // services together, as the figures of the month: the query that their table runs once the tab
+  // shows it, which the hook defines, so that the page opens with the queries it had (see
+  // fixtures/account.js and fixtures/accounts.js)
+  describe('query of the Logs Data Platform charges of the month', () => {
+    // The synthetic account, billed for Logs Data Platform in August and September
+    const withLogsDataPlatform = { ...account, ...logsDataPlatformBilled };
+    const ofAccount = (id) => severalAccountsWithLogsDataPlatform.ofAccount[id].logsDataPlatform;
+    const shown = (selectedAccount, props = {}) =>
+      ({ ...onInfrastructure, selectedAccount, ...props });
+
+    it('asks for the charges of the month selected, and runs none itself', async () => {
+      const { result, keysOf } = await renderTabHook(useInfrastructureTab, onInfrastructure,
+        withLogsDataPlatform);
+      // Nothing is asked for before the table shows
+      expect(api.fetchLogsDataPlatform).not.toHaveBeenCalled();
+      expect(keysOf('logsDataPlatform')).toEqual([]);
+
+      const query = result.current.logsDataPlatformQuery;
+
+      // For all accounts, its key names none, as its request does not (ADR 0001)
+      expect(query.queryKey).toEqual(['logsDataPlatform', '2026-09-01', '2026-09-30']);
+      expect(query.enabled).toBe(true);
+      await expect(query.queryFn())
+        .resolves.toEqual(logsDataPlatformBilled.logsDataPlatform['2026-09']);
+      expect(api.fetchLogsDataPlatform).toHaveBeenCalledWith('2026-09-01', '2026-09-30', null);
+    });
+
+    it('follows the selected month', async () => {
+      const { result, rerender } = await renderTabHook(useInfrastructureTab, onInfrastructure,
+        withLogsDataPlatform);
+
+      await rerender({ ...onInfrastructure, selectedMonth: august });
+
+      const query = result.current.logsDataPlatformQuery;
+      expect(query.queryKey).toEqual(['logsDataPlatform', '2026-08-01', '2026-08-31']);
+      await expect(query.queryFn())
+        .resolves.toEqual(logsDataPlatformBilled.logsDataPlatform['2026-08']);
+      expect(api.fetchLogsDataPlatform).toHaveBeenCalledWith('2026-08-01', '2026-08-31', null);
+    });
+
+    // As the inventory: on the tab only, for a month of the months list, once the page knows the
+    // account shown. A month that the account shown lacks would never show (#115, #120).
+    it('waits for the tab, for a month of the account shown, and for that account', async () => {
+      const { result, rerender } = await renderTabHook(useInfrastructureTab,
+        { ...onInfrastructure, activeTab: 'overview' }, withLogsDataPlatform);
+
+      expect(result.current.logsDataPlatformQuery.enabled).toBe(false);
+
+      await rerender({ ...onInfrastructure, selectedMonth: null, holdsSelectedMonth: false });
+
+      expect(result.current.logsDataPlatformQuery)
+        .toMatchObject({ queryKey: ['logsDataPlatform', undefined, undefined], enabled: false });
+
+      await rerender({ ...onInfrastructure, holdsSelectedMonth: false });
+
+      expect(result.current.logsDataPlatformQuery.enabled).toBe(false);
+
+      await rerender(shown(undefined));
+
+      expect(result.current.logsDataPlatformQuery.enabled).toBe(false);
+    });
+
+    it('asks for those of the account shown, under a key that names it', async () => {
+      const { result } = await renderTabHook(useInfrastructureTab, shown(lyonAccount.id),
+        severalAccountsWithLogsDataPlatform);
+
+      const query = result.current.logsDataPlatformQuery;
+
+      // The account after the other parts of the key, which stay those of all accounts
+      expect(query.queryKey)
+        .toEqual(['logsDataPlatform', '2026-09-01', '2026-09-30', 'xx1111-ovh']);
+      await expect(query.queryFn()).resolves.toEqual(ofAccount(lyonAccount.id)['2026-09']);
+      expect(api.fetchLogsDataPlatform)
+        .toHaveBeenCalledWith('2026-09-01', '2026-09-30', 'xx1111-ovh');
+    });
+
+    // Those that no account claimed, in July, its only month
+    it('asks for those of the Unknown account', async () => {
+      const [, , july] = months;
+      const { result } = await renderTabHook(useInfrastructureTab,
+        shown(unknownAccount.id, { selectedMonth: july }), severalAccountsWithLogsDataPlatform);
+
+      const query = result.current.logsDataPlatformQuery;
+
+      expect(query.queryKey).toEqual(['logsDataPlatform', '2026-07-01', '2026-07-31', 'unknown']);
+      await expect(query.queryFn()).resolves.toEqual(ofAccount(unknownAccount.id)['2026-07']);
+    });
+
+    // The table names no account: while the lists name the account of each row, it adds up all
+    // accounts' charges, under the key of all accounts, rather than ask for them by account
+    it('asks for those of all accounts while the lists name the account of each row',
+      async () => {
+        const { result } = await renderTabHook(useInfrastructureTab,
+          shown(null, { accountColumn }), severalAccountsWithLogsDataPlatform);
+
+        const query = result.current.logsDataPlatformQuery;
+
+        expect(query.queryKey).toEqual(['logsDataPlatform', '2026-09-01', '2026-09-30']);
+        await expect(query.queryFn())
+          .resolves.toEqual(severalAccountsWithLogsDataPlatform.logsDataPlatform['2026-09']);
+        expect(api.fetchLogsDataPlatform).toHaveBeenCalledWith('2026-09-01', '2026-09-30', null);
+      });
   });
 
   it('keeps the "show all" modal of the servers open when another tab opens', async () => {

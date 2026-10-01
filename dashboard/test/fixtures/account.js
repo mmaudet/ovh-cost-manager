@@ -319,12 +319,30 @@ export const everyResourceType = {
   },
 };
 
+// The charges of an invoice's DBAAS-LOGS lines, as the bills name them, without their period
+// (#247)
+export const LDP_CHARGES = {
+  accountRental: 'Logs - Account rental for 1 month',
+  hotStorage: 'Logs - Streams - Hot Storage 1 to 100 GB',
+  hotStorageOver101Gb: 'Logs - Streams - Hot Storage > 101 GB',
+  coldStorage: 'Logs - Streams - Cold Storage Standard',
+  inputInstances: 'Logs - Input instances',
+  dashboards: 'Logs - Hosted OpenSearch Dashboards instances',
+};
+// The Logs Data Platform charges of a period, as /api/analysis/logs-data-platform gives them
+// (#247): what they cost in all, and each as [charge, cost], the most expensive first, the
+// services together, those that cost nothing, such as the free tier of the hot storage, left out
+export const logsDataPlatformCharges = (total, charges) => ({
+  total, charges: charges.map(([charge, cost]) => ({ charge, total: cost })),
+});
+
 // The account billed in August and September for a NetApp file storage and for Logs Data
 // Platform besides its own, as the routes by resource type give them since #246: Logs Data
 // Platform a resource type of its own, which the storage no longer counts. Most expensive
 // first, as /api/analysis/by-resource-type answers. Its services add up to its costs: 30 € of
 // account rental and 12,50 € of hot storage in August, then 50,50 € for that service and 30 €
-// for a second one in September.
+// for a second one in September. Its charges add up the services (#247): in September, the
+// rental of both, 60 €, and the hot and the cold storage of the first one's streams.
 const withLogsDataPlatform = (month, costs) => [
   ...account.byResourceType[month], fileStorageCosts, costs,
 ].sort((a, b) => b.value - a.value);
@@ -350,6 +368,17 @@ export const logsDataPlatformBilled = {
       '2026-09': logsDataPlatformInSeptember,
       '2026-08': [logsDataPlatformService('ldp-ab-12345', 42.5, 2)],
     },
+  },
+  logsDataPlatform: {
+    '2026-09': logsDataPlatformCharges(80.5, [
+      [LDP_CHARGES.accountRental, 60],
+      [LDP_CHARGES.hotStorage, 18.4],
+      [LDP_CHARGES.coldStorage, 2.1],
+    ]),
+    '2026-08': logsDataPlatformCharges(42.5, [
+      [LDP_CHARGES.accountRental, 30],
+      [LDP_CHARGES.hotStorage, 12.5],
+    ]),
   },
   monthlyTrendByCategory: {
     ...account.monthlyTrendByCategory,

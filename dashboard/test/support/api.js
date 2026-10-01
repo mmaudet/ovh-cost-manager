@@ -70,6 +70,8 @@ const emptyAnswers = {
   backupServices: () => ({ vms: [], enterprise: [] }),
   // No AI Endpoints model over the period (#193), nor any month of them (#196)
   aiEndpoints: () => ({ total: 0, models: [], monthlyTrend: [] }),
+  // No Logs Data Platform charge that costs anything over the period (#247)
+  logsDataPlatform: () => ({ total: 0, charges: [] }),
   // Nothing billed to the project over the period (#181)
   projectProducts: () => ({ total: 0, products: [], credits: 0 }),
   // No carbon footprint for any of the 12 months that end on a month (#154)
@@ -243,6 +245,10 @@ const answers = {
   fetchPublicCloudStats: entryForPeriodOfAccount('publicCloudStats', emptyAnswers.publicCloudStats),
   // And its AI Endpoints models (#193)
   fetchAiEndpoints: entryForPeriodOfAccount('aiEndpoints', emptyAnswers.aiEndpoints),
+  // The Logs Data Platform charges of a period, of the account the page selects (#247)
+  fetchLogsDataPlatform: entryForPeriodOfAccount(
+    'logsDataPlatform', emptyAnswers.logsDataPlatform,
+  ),
   // And the Veeam backups of a month, which the Compare and Backup tabs show (#119)
   fetchBackupStats: projectableEntryForPeriodOfAccount(
     'backupStats', 'projectedBackupStats', emptyAnswers.backupStats,
