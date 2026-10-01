@@ -76,19 +76,25 @@ const toggleRow = async (user, title, row) => {
   await user.click(chevron(title, row));
   await settle();
 };
-// The chevron of a product of a project's comparison, found by the product that it names, in
-// either language (#195)
-const productChevron = (title, product) => within(comparisonTable(title)).getByRole('button', {
-  name: (name) => name === `Charges : ${product}` || name === `Charges: ${product}`,
+// The chevron of a row of a comparison that unfolds into its charges, found by the row that it
+// names, in either language: a product of a project's comparison (#195), or the Logs Data
+// Platform row of the infrastructure comparison (#248)
+const chargesChevron = (title, row) => within(comparisonTable(title)).getByRole('button', {
+  name: (name) => name === `Charges : ${row}` || name === `Charges: ${row}`,
 });
-// Unfolds or folds a product of a project's comparison into its charges with a click on its
-// chevron, as the user does
-const toggleProduct = async (user, title, product) => {
-  await user.click(productChevron(title, product));
+// Unfolds or folds such a row into its charges with a click on its chevron, as the user does
+const toggleCharges = async (user, title, row) => {
+  await user.click(chargesChevron(title, row));
   await settle();
 };
 // The rows of the infrastructure comparison, each as the texts it shows, header left out
 const infrastructureRows = () => rowTextsOf(comparisonTable(INFRASTRUCTURE)).slice(1);
+// The months that the tab asks for, as their requests name them, for all accounts, and what asks
+// for the projected cost of the month in progress after them (#218, #248)
+const SEPTEMBER = ['2026-09-01', '2026-09-30', null];
+const AUGUST = ['2026-08-01', '2026-08-31', null];
+const JULY = ['2026-07-01', '2026-07-31', null];
+const PROJECTED = { projected: true };
 
 describe('Compare tab', () => {
   it('loads the figures of month A when the tab opens, but its summary (#50)', async () => {
@@ -1180,9 +1186,6 @@ describe('Compare tab', () => {
     } = LDP_CHARGES;
     // Its row, folded: (80,50 - 42,50) / 42,50
     const logsDataPlatformRow = [LOGS_DATA_PLATFORM, '42,50€', '80,50€', '+89,4 %'];
-    // Unfolds or folds the row into its charges with a click on its chevron, as the user does,
-    // which names them as a product's chevron does (#195), in either language
-    const toggleCharges = (user, title) => toggleProduct(user, title, LOGS_DATA_PLATFORM);
     // The row of a charge of the infrastructure comparison, found by the charge
     const chargeRow = (charge) => within(comparisonTable(INFRASTRUCTURE))
       .getByText(charge).closest('tr');
@@ -1206,11 +1209,11 @@ describe('Compare tab', () => {
         ['Datastores Private Cloud', '0,00€', '0,00€', '—'],
       ]);
       // Folded, and nothing asked for before it unfolds
-      expect(productChevron(INFRASTRUCTURE, LOGS_DATA_PLATFORM))
+      expect(chargesChevron(INFRASTRUCTURE, LOGS_DATA_PLATFORM))
         .toHaveAttribute('aria-expanded', 'false');
       expect(api.fetchLogsDataPlatform).not.toHaveBeenCalled();
 
-      await toggleCharges(user, INFRASTRUCTURE);
+      await toggleCharges(user, INFRASTRUCTURE, LOGS_DATA_PLATFORM);
 
       // Those that the Infrastructure tab lists for each month, for all accounts (null), as the
       // instance knows a single one, rather than its services
@@ -1218,7 +1221,7 @@ describe('Compare tab', () => {
         expect(api.fetchLogsDataPlatform).toHaveBeenCalledWith(from, to, null);
       }
       expect(api.fetchResourceTypeDetails).not.toHaveBeenCalled();
-      expect(productChevron(INFRASTRUCTURE, LOGS_DATA_PLATFORM))
+      expect(chargesChevron(INFRASTRUCTURE, LOGS_DATA_PLATFORM))
         .toHaveAttribute('aria-expanded', 'true');
       // Each charge under the row, by month A, the most expensive first: its cost in months A and
       // B, which add up to the row's, and the variation
@@ -1232,7 +1235,7 @@ describe('Compare tab', () => {
         ['Hôtes Private Cloud', '0,00€', '0,00€', '—'],
       ]);
 
-      await toggleCharges(user, INFRASTRUCTURE);
+      await toggleCharges(user, INFRASTRUCTURE, LOGS_DATA_PLATFORM);
 
       expect(infrastructureRows().slice(6, 8)).toEqual([
         logsDataPlatformRow, ['Hôtes Private Cloud', '0,00€', '0,00€', '—'],
@@ -1244,7 +1247,7 @@ describe('Compare tab', () => {
       const { user } = await renderDashboard(withLogsDataPlatform);
       await openTab(user, 'Comparaison');
       await openComparison(user, INFRASTRUCTURE);
-      await toggleCharges(user, INFRASTRUCTURE);
+      await toggleCharges(user, INFRASTRUCTURE, LOGS_DATA_PLATFORM);
 
       // From nothing in August: no variation to compute (#65), and a tooltip that says why
       expect(texts(chargeRow(COLD_STORAGE))).toEqual([COLD_STORAGE, '0,00€', '2,10€', '—']);
@@ -1273,7 +1276,7 @@ describe('Compare tab', () => {
         const { user } = await renderDashboard(withLogsDataPlatform);
         await openTab(user, 'Comparaison');
         await openComparison(user, INFRASTRUCTURE);
-        await toggleCharges(user, INFRASTRUCTURE);
+        await toggleCharges(user, INFRASTRUCTURE, LOGS_DATA_PLATFORM);
         const sortBy = (column) => sortTable(user, comparisonTable(INFRASTRUCTURE), column);
         // The rows of the table by their labels, and the charges right under the row
         const labels = () => infrastructureRows().map(([label]) => label);
@@ -1319,7 +1322,7 @@ describe('Compare tab', () => {
         await openComparison(user, INFRASTRUCTURE);
         const release = holdBack(api.fetchLogsDataPlatform, (from) => from === '2026-09-01');
 
-        await user.click(productChevron(INFRASTRUCTURE, LOGS_DATA_PLATFORM));
+        await user.click(chargesChevron(INFRASTRUCTURE, LOGS_DATA_PLATFORM));
 
         expect(infrastructureRows().slice(6, 9)).toEqual([
           logsDataPlatformRow,
@@ -1350,10 +1353,10 @@ describe('Compare tab', () => {
       const { user } = await renderDashboard(withLogsDataPlatform);
       await openTab(user, 'Comparaison');
       await openComparison(user, INFRASTRUCTURE);
-      await toggleCharges(user, INFRASTRUCTURE);
+      await toggleCharges(user, INFRASTRUCTURE, LOGS_DATA_PLATFORM);
       // Found while it shows: the comparison's title prints without its button either
       const table = comparisonTable(INFRASTRUCTURE);
-      const folding = productChevron(INFRASTRUCTURE, LOGS_DATA_PLATFORM);
+      const folding = chargesChevron(INFRASTRUCTURE, LOGS_DATA_PLATFORM);
 
       layOutForPrint();
 
@@ -1370,9 +1373,6 @@ describe('Compare tab', () => {
       const billedLate = {
         ...withLogsDataPlatform, ...septemberInProgress, ...logsDataPlatformBilledLate,
       };
-      const SEPTEMBER = ['2026-09-01', '2026-09-30', null];
-      const AUGUST = ['2026-08-01', '2026-08-31', null];
-      const PROJECTED = { projected: true };
       // The row and its charges, as September billed them so far: no variation (#216)
       const billedSoFar = [
         [LOGS_DATA_PLATFORM, '42,50€', '30,00€', '—'],
@@ -1386,7 +1386,7 @@ describe('Compare tab', () => {
           const { user } = await renderDashboard(billedLate);
           await openTab(user, 'Comparaison');
           await openComparison(user, INFRASTRUCTURE);
-          await toggleCharges(user, INFRASTRUCTURE);
+          await toggleCharges(user, INFRASTRUCTURE, LOGS_DATA_PLATFORM);
           expect(infrastructureRows().slice(6, 9)).toEqual(billedSoFar);
           expect(within(chargeRow(HOT_STORAGE)).getByTitle('non calculable : mois en cours'))
             .toHaveTextContent('—');
@@ -1429,7 +1429,7 @@ describe('Compare tab', () => {
         await openTab(user, 'Comparaison');
         await openComparison(user, INFRASTRUCTURE);
         await toggleProjection(user);
-        await toggleCharges(user, INFRASTRUCTURE);
+        await toggleCharges(user, INFRASTRUCTURE, LOGS_DATA_PLATFORM);
         expect(texts(chargeRow(HOT_STORAGE)))
           .toEqual([HOT_STORAGE, '12,50€', '12,50€', 'projeté', '0,0 %']);
 
@@ -1884,7 +1884,7 @@ describe('Compare tab', () => {
         'Instances', 'Bases de données', 'Stockage objet', 'Savings plans', 'Volumes', 'Snapshots',
       ]);
       expect(productsThatUnfold(true)).toEqual([]);
-      expect(productChevron(PRODUCTION_PRODUCTS, 'Instances'))
+      expect(chargesChevron(PRODUCTION_PRODUCTS, 'Instances'))
         .toHaveAttribute('aria-expanded', 'false');
       // The credit pays for no product: it has no charge to unfold into
       const credit = within(comparisonTable(PRODUCTION_PRODUCTS))
@@ -1898,9 +1898,9 @@ describe('Compare tab', () => {
       await openTab(user, 'Comparaison');
       await openComparison(user, PRODUCTION_PRODUCTS);
 
-      await toggleProduct(user, PRODUCTION_PRODUCTS, 'Stockage objet');
+      await toggleCharges(user, PRODUCTION_PRODUCTS, 'Stockage objet');
 
-      expect(productChevron(PRODUCTION_PRODUCTS, 'Stockage objet'))
+      expect(chargesChevron(PRODUCTION_PRODUCTS, 'Stockage objet'))
         .toHaveAttribute('aria-expanded', 'true');
       // Each charge, its cost in months A and B, and the variation: (14 - 13.90) / 13.90
       expect(productRows().slice(2, 7)).toEqual([
@@ -1913,9 +1913,9 @@ describe('Compare tab', () => {
         ['Volumes', '12,50€', '12,50€', '0,0 %'],
       ]);
 
-      await toggleProduct(user, PRODUCTION_PRODUCTS, 'Stockage objet');
+      await toggleCharges(user, PRODUCTION_PRODUCTS, 'Stockage objet');
 
-      expect(productChevron(PRODUCTION_PRODUCTS, 'Stockage objet'))
+      expect(chargesChevron(PRODUCTION_PRODUCTS, 'Stockage objet'))
         .toHaveAttribute('aria-expanded', 'false');
       expect(productRows().slice(2, 4)).toEqual([
         ['Stockage objet', '24,90€', '25,00€', '+0,4 %'],
@@ -1930,7 +1930,7 @@ describe('Compare tab', () => {
         await openTab(user, 'Comparaison');
         await openComparison(user, PRODUCTION_PRODUCTS);
 
-        await toggleProduct(user, PRODUCTION_PRODUCTS, 'Instances');
+        await toggleCharges(user, PRODUCTION_PRODUCTS, 'Instances');
 
         // Billed in both months: (420.50 - 304.60) / 304.60
         expect(texts(chargeRow(hourlyUse('l4-90'))))
@@ -1952,7 +1952,7 @@ describe('Compare tab', () => {
         await openTab(user, 'Comparaison');
         await openComparison(user, PRODUCTION_PRODUCTS);
 
-        await toggleProduct(user, PRODUCTION_PRODUCTS, 'Instances');
+        await toggleCharges(user, PRODUCTION_PRODUCTS, 'Instances');
 
         // Right under the instances: db-1's monthly plan and the web instances' hourly use cost
         // 64 € each in August, the monthly plan the more in September; the b3-16's, from nothing
@@ -1969,8 +1969,8 @@ describe('Compare tab', () => {
         const { user } = await renderDashboard();
         await openTab(user, 'Comparaison');
         await openComparison(user, PRODUCTION_PRODUCTS);
-        await toggleProduct(user, PRODUCTION_PRODUCTS, 'Instances');
-        await toggleProduct(user, PRODUCTION_PRODUCTS, 'Stockage objet');
+        await toggleCharges(user, PRODUCTION_PRODUCTS, 'Instances');
+        await toggleCharges(user, PRODUCTION_PRODUCTS, 'Stockage objet');
         const sortBy = (column) => sortTable(user, comparisonTable(PRODUCTION_PRODUCTS), column);
         // The rows of the table by their names: the products, and their charges under them
         const names = () => productRows().map(([name]) => name);
@@ -2050,7 +2050,7 @@ describe('Compare tab', () => {
         const { user } = await renderDashboard();
         await openTab(user, 'Comparaison');
         await openComparison(user, PRODUCTION_PRODUCTS);
-        await toggleProduct(user, PRODUCTION_PRODUCTS, 'Instances');
+        await toggleCharges(user, PRODUCTION_PRODUCTS, 'Instances');
 
         await pickMonth(user, 'Août 2026', 'Juillet 2026');
 
@@ -2072,12 +2072,12 @@ describe('Compare tab', () => {
         // Closed again, as every comparison but the projects' when the tab opens
         await openComparison(user, PRODUCTION_PRODUCTS);
 
-        expect(productChevron(PRODUCTION_PRODUCTS, 'Instances'))
+        expect(chargesChevron(PRODUCTION_PRODUCTS, 'Instances'))
           .toHaveAttribute('aria-expanded', 'true');
         expect(productRows().slice(0, 7)).toEqual(julyAndSeptember);
         // Each project's products unfold on their own: Staging's instances stay folded
         await openComparison(user, /^Staging \(Projet\)/);
-        expect(productChevron(/^Staging \(Projet\)/, 'Instances'))
+        expect(chargesChevron(/^Staging \(Projet\)/, 'Instances'))
           .toHaveAttribute('aria-expanded', 'false');
       });
 
@@ -2091,7 +2091,7 @@ describe('Compare tab', () => {
         .reduce((count, request) => count + request.mock.calls.length, 0);
       const sent = requestsSent();
 
-      await toggleProduct(user, PRODUCTION_PRODUCTS, 'Instances');
+      await toggleCharges(user, PRODUCTION_PRODUCTS, 'Instances');
 
       expect(chargeRow(hourlyUse('l4-90'))).toBeInTheDocument();
       expect(requestsSent()).toBe(sent);
@@ -2103,11 +2103,11 @@ describe('Compare tab', () => {
       const { user } = await renderDashboard();
       await openTab(user, 'Comparaison');
       await openComparison(user, PRODUCTION_PRODUCTS);
-      await toggleProduct(user, PRODUCTION_PRODUCTS, 'Instances');
+      await toggleCharges(user, PRODUCTION_PRODUCTS, 'Instances');
       // Found while they show: the comparison's title prints without its button either
       const table = comparisonTable(PRODUCTION_PRODUCTS);
       const chevrons = ['Instances', 'Stockage objet']
-        .map((product) => productChevron(PRODUCTION_PRODUCTS, product));
+        .map((product) => chargesChevron(PRODUCTION_PRODUCTS, product));
 
       layOutForPrint();
 
@@ -2129,7 +2129,7 @@ describe('Compare tab', () => {
       const title = /^Production \(Project\)/;
       await openComparison(user, title);
 
-      await toggleProduct(user, title, 'Object storage');
+      await toggleCharges(user, title, 'Object storage');
 
       expect(rowsOf(comparisonTable(title)).slice(3, 8)).toEqual([
         ['Object storage', '24.90€', '25.00€', '+0.4%'],
@@ -2171,7 +2171,7 @@ describe('Compare tab', () => {
       const staging = /^Staging \(Projet\)/;
       await openComparison(user, staging);
 
-      await toggleProduct(user, staging, 'Instances');
+      await toggleCharges(user, staging, 'Instances');
 
       // Not the 150 € and 180 € that yy2222-ovh's bills charged it
       expect(rowsOf(comparisonTable(staging))).toEqual([
@@ -2363,7 +2363,7 @@ describe('Compare tab', () => {
         await openComparison(user, PRODUCTION_PRODUCTS);
 
         await toggleRow(user, INFRASTRUCTURE, 'Serveurs dédiés');
-        await toggleProduct(user, PRODUCTION_PRODUCTS, 'Stockage objet');
+        await toggleCharges(user, PRODUCTION_PRODUCTS, 'Stockage objet');
 
         // The server billed in August and September: not 0,0 %
         expect(infrastructureRows()[1]).toEqual([
@@ -2426,11 +2426,6 @@ describe('Compare tab', () => {
   // two VMs yet. One setting for the whole page, as the Trends tab's (#217).
   describe('projection of the month in progress (#218)', () => {
     const billedLate = { ...account, ...septemberInProgress, ...serverAndBackupsBilledLate };
-    // The months that the tab asks for, as their requests name them, for all accounts
-    const SEPTEMBER = ['2026-09-01', '2026-09-30', null];
-    const AUGUST = ['2026-08-01', '2026-08-31', null];
-    const JULY = ['2026-07-01', '2026-07-31', null];
-    const PROJECTED = { projected: true };
     // What the tab asks for each month: its totals, its service types, its projects, since #219,
     // its resource types and its Veeam backups
     const figures = () => [
@@ -2755,9 +2750,9 @@ describe('Compare tab', () => {
   // project yet, whose bill comes late in the month, and whose bills of August used a credit
   describe('projection of the month in progress in the projects and their products (#219)', () => {
     const stagingLate = { ...account, ...septemberInProgress, ...stagingBilledLate };
-    const SEPTEMBER = ['2026-09-01', '2026-09-30'];
-    const AUGUST = ['2026-08-01', '2026-08-31'];
-    const PROJECTED = { projected: true };
+    // Their first and last days, which the requests follow with the account
+    const SEPTEMBER_DAYS = ['2026-09-01', '2026-09-30'];
+    const AUGUST_DAYS = ['2026-08-01', '2026-08-31'];
     const STAGING = 'project-staging';
     // The comparison of the Staging project's products
     const STAGING_PRODUCTS = /^Staging \(Projet\)/;
@@ -2804,13 +2799,13 @@ describe('Compare tab', () => {
         await toggleProjection(user);
         await openComparison(user, STAGING_PRODUCTS);
 
-        expect(api.fetchByProject).toHaveBeenCalledWith(...SEPTEMBER, null, PROJECTED);
-        expect(api.fetchByProject).not.toHaveBeenCalledWith(...AUGUST, null, PROJECTED);
+        expect(api.fetchByProject).toHaveBeenCalledWith(...SEPTEMBER_DAYS, null, PROJECTED);
+        expect(api.fetchByProject).not.toHaveBeenCalledWith(...AUGUST_DAYS, null, PROJECTED);
         expect(api.fetchProjectProducts)
-          .toHaveBeenCalledWith(STAGING, ...SEPTEMBER, null, PROJECTED);
-        expect(api.fetchProjectProducts).toHaveBeenCalledWith(STAGING, ...AUGUST, null);
+          .toHaveBeenCalledWith(STAGING, ...SEPTEMBER_DAYS, null, PROJECTED);
+        expect(api.fetchProjectProducts).toHaveBeenCalledWith(STAGING, ...AUGUST_DAYS, null);
         expect(api.fetchProjectProducts)
-          .not.toHaveBeenCalledWith(STAGING, ...AUGUST, null, PROJECTED);
+          .not.toHaveBeenCalledWith(STAGING, ...AUGUST_DAYS, null, PROJECTED);
       });
 
     // Its instances, its registry, their charges and the credit that they used, all projected
@@ -2819,7 +2814,7 @@ describe('Compare tab', () => {
         const { user } = await renderDashboard(stagingLate);
         await openTab(user, 'Comparaison');
         await openComparison(user, STAGING_PRODUCTS);
-        await toggleProduct(user, STAGING_PRODUCTS, 'Instances');
+        await toggleCharges(user, STAGING_PRODUCTS, 'Instances');
         // Nothing billed yet in September, not even the credit
         expect(rowsOf(comparisonTable(STAGING_PRODUCTS)).slice(1)).toEqual([
           ['Instances', '170,00€', '0,00€', '—'],
@@ -2853,7 +2848,7 @@ describe('Compare tab', () => {
       await openComparison(user, PRODUCTION_PRODUCTS);
       await toggleProjection(user);
 
-      await toggleProduct(user, PRODUCTION_PRODUCTS, 'Stockage objet');
+      await toggleCharges(user, PRODUCTION_PRODUCTS, 'Stockage objet');
 
       // (538.90 - 440.60) / 440.60, and a bucket's (14 - 13.90) / 13.90
       expect(rowsOf(comparisonTable(PRODUCTION_PRODUCTS)).slice(1, 7)).toEqual([
@@ -2944,7 +2939,7 @@ describe('Compare tab', () => {
       await selectLanguage(user, 'en');
       // The charges of its instances, which projected lines alone make
       const stagingProducts = /^Staging \(Project\)/;
-      await toggleProduct(user, stagingProducts, 'Instances');
+      await toggleCharges(user, stagingProducts, 'Instances');
 
       expect(rowsOf(comparisonTable(/^Comparison by project/))[2])
         .toEqual(['Staging', '190.00€', '190.00€ projected', '0.0%']);
@@ -2978,8 +2973,8 @@ describe('Compare tab', () => {
             ['Production', 'Lyon subsidiary', '512,00€', '610,40€', '+19,2 %'],
             ['Staging', 'yy2222-ovh', '190,00€', '190,00€ projeté', '0,0 %'],
           ]);
-          expect(api.fetchProjectsByAccount).toHaveBeenCalledWith(...SEPTEMBER, PROJECTED);
-          expect(api.fetchProjectsByAccount).not.toHaveBeenCalledWith(...AUGUST, PROJECTED);
+          expect(api.fetchProjectsByAccount).toHaveBeenCalledWith(...SEPTEMBER_DAYS, PROJECTED);
+          expect(api.fetchProjectsByAccount).not.toHaveBeenCalledWith(...AUGUST_DAYS, PROJECTED);
         });
 
       // Which share the projects by account of September with the Compare tab while it does not
@@ -3023,9 +3018,9 @@ describe('Compare tab', () => {
             ['Staging', '190,00€', '190,00€ projeté', '0,0 %'],
           ]);
           expect(api.fetchByProject)
-            .toHaveBeenCalledWith(...SEPTEMBER, unnamedAccount.id, PROJECTED);
+            .toHaveBeenCalledWith(...SEPTEMBER_DAYS, unnamedAccount.id, PROJECTED);
           expect(api.fetchProjectProducts)
-            .toHaveBeenCalledWith(STAGING, ...SEPTEMBER, unnamedAccount.id, PROJECTED);
+            .toHaveBeenCalledWith(STAGING, ...SEPTEMBER_DAYS, unnamedAccount.id, PROJECTED);
           expect(rowsOf(comparisonTable(STAGING_PRODUCTS))[1])
             .toEqual(['Instances', '170,00€', '170,00€ projeté', '0,0 %']);
 
@@ -3033,9 +3028,9 @@ describe('Compare tab', () => {
           await selectAccount(user, 'Lyon subsidiary');
 
           expect(api.fetchByProject)
-            .toHaveBeenCalledWith(...SEPTEMBER, lyonAccount.id);
+            .toHaveBeenCalledWith(...SEPTEMBER_DAYS, lyonAccount.id);
           expect(api.fetchByProject)
-            .not.toHaveBeenCalledWith(...SEPTEMBER, lyonAccount.id, PROJECTED);
+            .not.toHaveBeenCalledWith(...SEPTEMBER_DAYS, lyonAccount.id, PROJECTED);
         });
     });
   });
