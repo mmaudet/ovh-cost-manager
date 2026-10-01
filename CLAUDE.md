@@ -91,6 +91,14 @@ OVH API ──> data/import.js ──> SQLite (ovh-bills.db) ──> server/inde
     `/api/analysis/ai-endpoints` and the Public Cloud tab's table of the models (#193), and
     month by month, for the Trends tab's chart (#196). **Models are read when the server reads
     the bills**, like the products: no re-import.
+  - `logs-data-platform.js` — pure: what the bill lines of the Logs Data Platform services add
+    up to by charge (`chargeFigures()`), the charge that `chargeOf()` gives each, the services
+    and accounts together, those that cost nothing, or less, left out, as the free tier of the
+    hot storage; and the condition that selects these lines by the resource type of
+    `LOGS_DATA_PLATFORM` (`logsDataPlatformLineCondition()`). For
+    `/api/analysis/logs-data-platform` and the Infrastructure tab's table of the charges
+    (#247). **Charges are read when the server reads the bills**, like the products: no
+    re-import.
   - `month-in-progress.js` — pure: the month in progress (`CONTEXT.md`, #216), the month of
     today, as the server's local date gives it (`monthOfDate()` in `months.js`), while a
     recurring service, one that bills of each of the three months before charged, by identifier
@@ -156,7 +164,10 @@ OVH API ──> data/import.js ──> SQLite (ovh-bills.db) ──> server/inde
   row unfolds; `ProjectProductComparison.jsx` unfolds a product into its charges, which come
   with the products. `src/utils/monthComparison.js` pairs what months A and B gave
   (`pairMonths()`), a service by its identifier and its account (`byNameAndAccount()`), and
-  gives the value of a row in the columns that sort it (`comparisonValues()`).
+  gives the value of a row in the columns that sort it (`comparisonValues()`). Likewise, the
+  Infrastructure tab's table of the month's Logs Data Platform charges,
+  `src/components/LogsDataPlatformCharges.jsx`, runs the query that the tab's hook defines,
+  `logsDataPlatformQuery`, once the tab shows it (#247): the page opens with the queries it had.
 
 ### Accounts
 
