@@ -1,7 +1,7 @@
 import { accountInBrackets } from '../utils/accounts.js';
 import { byNameAndAccount, pairMonths, valuesAsShown } from '../utils/monthComparison.js';
-import { MonthAnswersMessage, useMonthAnswers } from './MonthAnswers.jsx';
-import { DETAIL_PADDING, DetailRow, sortUnfolded } from './UnfoldingRow.jsx';
+import { MonthAnswersRow, useMonthAnswers } from './MonthAnswers.jsx';
+import { DetailRow, sortUnfolded } from './UnfoldingRow.jsx';
 
 // The services of months A and B, paired by their identifier, which the server gives as
 // `domain`, whatever the service, and by their account, which the server gives while the lists
@@ -66,11 +66,9 @@ const UnfoldedRowServices = ({
   // with the services
   if (status !== 'answered') {
     return (
-      <tr className="border-b">
-        <td colSpan={columnCount} className={`${DETAIL_PADDING} text-sm`}>
-          <MonthAnswersMessage status={status} failed={t('servicesFailed')} t={t} />
-        </td>
-      </tr>
+      <MonthAnswersRow
+        status={status} failed={t('servicesFailed')} columnCount={columnCount} t={t}
+      />
     );
   }
   return sortUnfolded(

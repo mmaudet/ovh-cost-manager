@@ -1,6 +1,6 @@
 import { comparisonValues, pairMonths, valuesAsShown } from '../utils/monthComparison.js';
-import { MonthAnswersMessage, useMonthAnswers } from './MonthAnswers.jsx';
-import { DETAIL_PADDING, DetailRow, sortUnfolded } from './UnfoldingRow.jsx';
+import { MonthAnswersRow, useMonthAnswers } from './MonthAnswers.jsx';
+import { DetailRow, sortUnfolded } from './UnfoldingRow.jsx';
 
 /**
  * The value of a charge in each column that sorts a comparison (#146), which sort the charges of
@@ -96,11 +96,9 @@ const UnfoldedRowCharges = ({
   // with the charges
   if (status !== 'answered') {
     return (
-      <tr className="border-b">
-        <td colSpan={columnCount} className={`${DETAIL_PADDING} text-sm`}>
-          <MonthAnswersMessage status={status} failed={t('chargesFailed')} t={t} />
-        </td>
-      </tr>
+      <MonthAnswersRow
+        status={status} failed={t('chargesFailed')} columnCount={columnCount} t={t}
+      />
     );
   }
   return (
