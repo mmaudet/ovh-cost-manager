@@ -1044,19 +1044,29 @@ const analysisOps = {
    * classification gives these services, as chargeFigures() adds them up, each in the month of
    * its bill, although what a service consumed covers the month before. Read when the server
    * reads the bills: no re-import.
+   *
+   * With the projected option, the month in progress, when the dates cover it, counts the
+   * projected lines of the resource type too, as inventory.byResourceType() counts them (#248):
+   * a charge that they alone make is listed, and the charges and what they cost in all give their
+   * projected parts, `projected`, 0 for none, which add up to the resource type's.
    * @param {string} fromDate
    * @param {string} toDate
    * @param {?string} [account]
-   * @returns {{total: number, charges: {charge: string, total: number}[]}} What the charges cost
-   *   in all, and each charge with its cost (see chargeFigures())
+   * @param {object} [options]
+   * @param {boolean} [options.projected] - Whether to add the projected lines of the month in
+   *   progress
+   * @returns {{total: number, projected: (number|undefined), charges: {charge: string,
+   *   total: number, projected: (number|undefined)}[]}} What the charges cost in all, and each
+   *   charge with its cost (see chargeFigures()), with their projected parts with the projected
+   *   option only
    */
-  logsDataPlatform: (fromDate, toDate, account = null) => {
-    const lines = linesOfPeriod(fromDate, toDate, account);
+  logsDataPlatform: (fromDate, toDate, account = null, { projected = false } = {}) => {
+    const lines = linesOfPeriod(fromDate, toDate, account, { projected });
     return chargeFigures(getDb().prepare(`
-      SELECT l.description, l.total_price
+      SELECT l.description, l.total_price, l.projected
       FROM (${lines.sql}) l
       WHERE l.resource_type = ?
-    `).all(...lines.params, LOGS_DATA_PLATFORM.resourceType));
+    `).all(...lines.params, LOGS_DATA_PLATFORM.resourceType), { projected });
   },
 
   billsByProject: (projectNameOrId, fromDate, toDate) => {
