@@ -83,6 +83,9 @@ export const translations = {
     // What a click on the header of a column that sorts its table does (#146)
     sortAscending: 'Trier par ordre croissant',
     sortDescending: 'Trier par ordre décroissant',
+    // The button that closes every "show all" modal, which shows a cross: what it does, as a
+    // screen reader names it (#236)
+    close: 'Fermer',
 
     // Trends
     evolutionOver: 'Évolution sur',
@@ -410,6 +413,9 @@ export const translations = {
     // What a click on the header of a column that sorts its table does (#146)
     sortAscending: 'Sort in ascending order',
     sortDescending: 'Sort in descending order',
+    // The button that closes every "show all" modal, which shows a cross: what it does, as a
+    // screen reader names it (#236)
+    close: 'Close',
 
     // Trends
     evolutionOver: 'Evolution over',

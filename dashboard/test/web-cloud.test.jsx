@@ -7,9 +7,9 @@ import {
   captureFileDownloads, csvFile, downloadFromPanelAndModal,
 } from './support/downloads.js';
 import {
-  backdropOf,
   cardOf,
   cardRowOf,
+  closeAndCheckFocus,
   headerOf,
   openTab,
   renderDashboard,
@@ -163,48 +163,47 @@ describe('Web Cloud tab', () => {
   });
 
   describe('"show all" modal', () => {
+    // The modal of a family, which a screen reader names by its whole title, its parts apart:
+    // the family, its count and its cost (#236)
+    const modalNames = { Emails: 'Emails (2) 44,52€', Domaines: 'Domaines (2) 28,48€' };
     const showAll = async (user, family) => {
       await user.click(familyButton(family, 'Tout afficher'));
-      return screen.getByRole('dialog');
+      return screen.getByRole('dialog', { name: modalNames[family] });
     };
 
-    it('shows every service of the family, and closes with its button', async () => {
+    it('takes the focus, shows every service of the family, and closes with its button',
+      async () => {
+        const { user } = await renderDashboard();
+        await openTab(user, 'Web Cloud');
+
+        const dialog = await showAll(user, 'Emails');
+
+        expect(rowsOf(within(dialog).getByRole('table'))).toEqual([
+          tableHeader,
+          ['example.com', 'Email Pro example.com - 2 comptes - 12 mois', '2026-09-01', '47,52€'],
+          ['example.org', 'Avoir MX Plan example.org', '2026-09-01', '-3,00€'],
+        ]);
+        await closeAndCheckFocus(user, dialog, familyButton('Emails', 'Tout afficher'), 'button');
+      });
+
+    it('closes with Escape, giving the focus back to the button that opened it', async () => {
       const { user } = await renderDashboard();
       await openTab(user, 'Web Cloud');
 
-      const dialog = await showAll(user, 'Emails');
-
-      expect(within(dialog).getByText('Emails (2)')).toBeInTheDocument();
-      expect(within(dialog).getByText('44,52€')).toBeInTheDocument();
-      expect(rowsOf(within(dialog).getByRole('table'))).toEqual([
-        tableHeader,
-        ['example.com', 'Email Pro example.com - 2 comptes - 12 mois', '2026-09-01', '47,52€'],
-        ['example.org', 'Avoir MX Plan example.org', '2026-09-01', '-3,00€'],
-      ]);
-
-      await user.click(within(dialog).getByRole('button', { name: 'Close' }));
-
-      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
-    });
-
-    it('closes with Escape', async () => {
-      const { user } = await renderDashboard();
-      await openTab(user, 'Web Cloud');
-      await showAll(user, 'Domaines');
-
-      await user.keyboard('{Escape}');
-
-      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
-    });
-
-    it('closes on a click outside it', async () => {
-      const { user } = await renderDashboard();
-      await openTab(user, 'Web Cloud');
       const dialog = await showAll(user, 'Domaines');
 
-      await user.click(backdropOf(dialog));
+      await closeAndCheckFocus(user, dialog, familyButton('Domaines', 'Tout afficher'), 'escape');
+    });
 
-      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    it('closes on a click outside it, giving the focus back to its button', async () => {
+      const { user } = await renderDashboard();
+      await openTab(user, 'Web Cloud');
+
+      const dialog = await showAll(user, 'Domaines');
+
+      await closeAndCheckFocus(
+        user, dialog, familyButton('Domaines', 'Tout afficher'), 'backdrop',
+      );
     });
   });
 

@@ -10,9 +10,9 @@ import {
   downloadFromPanelAndModal,
 } from './support/downloads.js';
 import {
-  backdropOf,
   cardOf,
   cardRowOf,
+  closeAndCheckFocus,
   firstColumnOf,
   headerOf,
   openTab,
@@ -248,43 +248,38 @@ describe('Infrastructure tab', () => {
     });
 
     describe('"show all" modal', () => {
+      // The modal, which a screen reader names by its title (#236)
       const showAll = async (user) => {
         await user.click(serversButton('Tout afficher'));
-        return screen.getByRole('dialog');
+        return screen.getByRole('dialog', { name: 'Serveurs dédiés (2)' });
       };
 
-      it('shows every server, and closes with its button', async () => {
+      it('takes the focus, shows every server, and closes with its button', async () => {
         const { user } = await renderDashboard();
         await openTab(user, 'Infrastructure');
 
         const dialog = await showAll(user);
 
-        expect(within(dialog).getByText('Serveurs dédiés (2)')).toBeInTheDocument();
         expect(rowsOf(within(dialog).getByRole('table'))).toEqual(serverRows);
-
-        await user.click(within(dialog).getByRole('button', { name: 'Close' }));
-
-        expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+        await closeAndCheckFocus(user, dialog, serversButton('Tout afficher'), 'button');
       });
 
-      it('closes with Escape', async () => {
+      it('closes with Escape, giving the focus back to the button that opened it', async () => {
         const { user } = await renderDashboard();
         await openTab(user, 'Infrastructure');
-        await showAll(user);
 
-        await user.keyboard('{Escape}');
-
-        expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
-      });
-
-      it('closes on a click outside it', async () => {
-        const { user } = await renderDashboard();
-        await openTab(user, 'Infrastructure');
         const dialog = await showAll(user);
 
-        await user.click(backdropOf(dialog));
+        await closeAndCheckFocus(user, dialog, serversButton('Tout afficher'), 'escape');
+      });
 
-        expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      it('closes on a click outside it, giving the focus back to its button', async () => {
+        const { user } = await renderDashboard();
+        await openTab(user, 'Infrastructure');
+
+        const dialog = await showAll(user);
+
+        await closeAndCheckFocus(user, dialog, serversButton('Tout afficher'), 'backdrop');
       });
     });
 
