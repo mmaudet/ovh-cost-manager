@@ -6,7 +6,8 @@ import { publicCloudProductLabel } from '../utils/publicCloudProducts.js';
 import { MonthAnswersMessage, useMonthAnswers } from './MonthAnswers.jsx';
 import { ComparedAmount } from './ProjectedAmount.jsx';
 import { SortableHeader, sortRows } from './SortableHeader.jsx';
-import { ComparedCharges, LABEL_PADDING, UnfoldingRow } from './UnfoldingRow.jsx';
+import { ComparedCharges, chargeValues } from './UnfoldedRowCharges.jsx';
+import { LABEL_PADDING, UnfoldingRow } from './UnfoldingRow.jsx';
 import { Variation } from './Variation.jsx';
 
 // What the server answers for a month whose bills charged the project nothing
@@ -32,7 +33,7 @@ const productValues = (t) => comparisonValues(
 
 // The value of a charge in the same columns, which sort the charges of each product as they sort
 // the products (#195): the charge itself, its cost in months A and B, and the variation
-const CHARGE_VALUES = comparisonValues('product', (row) => row.charge);
+const CHARGE_VALUES = chargeValues('product');
 
 // The rows of the comparison, from what the server answers for the products of months A and B,
 // each the most expensive first: those of month A, in its order, then those of month B only, in

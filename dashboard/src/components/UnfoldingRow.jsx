@@ -1,7 +1,5 @@
 import { useState } from 'react';
-import {
-  BY_MONTH_A, BY_MONTH_B, pairMonths, valuesAsShown,
-} from '../utils/monthComparison.js';
+import { BY_MONTH_A, BY_MONTH_B } from '../utils/monthComparison.js';
 import { ComparedAmount } from './ProjectedAmount.jsx';
 import { sortRows } from './SortableHeader.jsx';
 import { Variation } from './Variation.jsx';
@@ -126,54 +124,6 @@ const sortUnfolded = (rows, sort, values, language) => sortRows(
 );
 
 /**
- * The charges of months A and B under an unfolded row of a comparison, one row each, indented, in
- * the comparison's columns: each charge that either month gives, paired by charge, its cost in
- * each month, 0 € in a month that did not bill it, and the variation. Those of a product of a
- * Public Cloud project (#195). They follow the comparison's sort, within their row, and come by
- * month A, the most expensive first, then by month B, until the user sorts it (sortUnfolded()). A
- * charge's cost that projected lines make, that of the month in progress while the page projects
- * it, is marked so, as a charge that the month has not billed yet (#219).
- * @param {object} props
- * @param {{ charge: string, total: number, projected: (number|undefined) }[]} props.chargesA -
- *   The charges of month A, as the server gives them, the most expensive first, with their
- *   projected parts for the month in progress at its projected cost
- * @param {{ charge: string, total: number, projected: (number|undefined) }[]} props.chargesB -
- *   Those of month B
- * @param {?object} props.sort - The sort of the comparison, by its columns (see
- *   SortableHeader.jsx): null until the user sorts it
- * @param {Object<string, function(object): *>} props.values - The value of a charge in each
- *   column of the comparison, by the column's name, as comparisonValues() gives them: a charge
- *   has its name, `charge`, and its cost in each month, valA and valB. The charges sort by them
- *   as the comparison shows them (valuesAsShown())
- * @param {{ includesMonthInProgress: boolean, projected: boolean }} props.comparedMonths - What
- *   the comparison knows of months A and B (comparedMonthsOf()), which the variations of the
- *   charges and their sort read (#216)
- * @returns {JSX.Element[]} A row for each charge
- */
-const ComparedCharges = ({
-  chargesA, chargesB, sort, values, comparedMonths, fmt, language, t,
-}) => sortUnfolded(
-  pairMonths(chargesA, chargesB, ({ charge }) => charge)
-    .map(({
-      key, valA, valB, projectedA, projectedB,
-    }) => ({
-      charge: key, valA, valB, projectedA, projectedB,
-    })),
-  sort, valuesAsShown(comparedMonths, values), language,
-).map(({
-  charge, valA, valB, projectedA, projectedB,
-}) => (
-  <DetailRow
-    key={charge} valA={valA} valB={valB} projectedA={projectedA} projectedB={projectedB}
-    comparedMonths={comparedMonths} fmt={fmt} language={language} t={t}
-  >
-    {/* A long charge, such as an instance's monthly plan, which names the instance, wraps to the
-        column of the rows' labels */}
-    <div className="text-xs break-words">{charge}</div>
-  </DetailRow>
-));
-
-/**
  * The rows that the user unfolded in the comparisons of a tab (#189), which the hook of the tab
  * holds, so that they stay unfolded while another tab is open (ADR 0001), whatever the order of
  * the rows or the months compared.
@@ -193,6 +143,5 @@ const useUnfoldedRows = () => {
 };
 
 export {
-  ComparedCharges, DETAIL_PADDING, DetailRow, LABEL_PADDING, UnfoldingRow, sortUnfolded,
-  useUnfoldedRows,
+  DETAIL_PADDING, DetailRow, LABEL_PADDING, UnfoldingRow, sortUnfolded, useUnfoldedRows,
 };

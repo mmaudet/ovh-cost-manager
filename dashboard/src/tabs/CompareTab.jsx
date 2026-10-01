@@ -6,7 +6,7 @@ import { ComparedAmount } from '../components/ProjectedAmount.jsx';
 import { ProjectionCheckbox } from '../components/ProjectionCheckbox.jsx';
 import { SortableHeader, sortRows } from '../components/SortableHeader.jsx';
 import ProjectProductComparison from '../components/ProjectProductComparison.jsx';
-import { UnfoldedRowCharges } from '../components/UnfoldedRowCharges.jsx';
+import { UnfoldedRowCharges, chargeValues } from '../components/UnfoldedRowCharges.jsx';
 import { UnfoldedRowServices } from '../components/UnfoldedRowServices.jsx';
 import { UnfoldingRow } from '../components/UnfoldingRow.jsx';
 import { Variation } from '../components/Variation.jsx';
@@ -91,7 +91,7 @@ const SERVICE_VALUES = comparisonValues('type', (service) => service.identifier)
 
 // The value of a charge in the same columns, which sort the charges of the Logs Data Platform row
 // as they sort the rows (#248): the charge itself, its cost in each month, and the variation
-const CHARGE_VALUES = comparisonValues('type', (row) => row.charge);
+const CHARGE_VALUES = chargeValues('type');
 
 // The columns of the infrastructure, Private Cloud and backup comparisons: the row, the cost in
 // months A and B, and the variation
