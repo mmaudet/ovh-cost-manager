@@ -205,7 +205,8 @@ const CompareTab = ({
   ];
 
   // The rows of the infrastructure comparison, which ends with those of the Private Cloud
-  // comparison, in the order the user sorts them, in this order until then (#146)
+  // comparison, in the order the user sorts them, in this order until then (#146). Logs Data
+  // Platform, apart from the storage since #246, unfolds into its services as the others do.
   const infrastructureSorting = sortingOf('infrastructure');
   const infrastructureTypes = sortRows([
     { key: 'dedicated_server', label: t('dedicatedServers') },
@@ -214,6 +215,7 @@ const CompareTab = ({
     { key: 'load_balancer', label: language === 'en' ? 'Load Balancer' : 'Load Balancer' },
     { key: 'ip_service', label: language === 'en' ? 'IP Addresses' : 'Adresses IP' },
     { key: 'domain', label: language === 'en' ? 'Domains' : 'Noms de domaine' },
+    { key: 'logs_data_platform', label: t('logsDataPlatform') },
     ...privateCloudTypes,
   ], infrastructureSorting.sort, valuesAsShown(
     comparedMonths, resourceTypeValues(byResourceTypeA, byResourceTypeB),
