@@ -53,7 +53,7 @@ New in version 3.1.0.
 
 ### Cost Analysis
 - **Service Breakdown**: Costs by service type (Compute, Storage, Network, Database, AI/ML, Licenses, Backup, Support)
-- **Resource Type Classification**: Automatic categorization (Public Cloud, Dedicated Servers, VPS, Storage, Logs Data Platform, Load Balancers, IP, Domains, Private Cloud Hosts, Private Cloud Datastores, Licenses, Backup, Telephony). Since version 3.5.0, Logs Data Platform is a resource type of its own rather than Storage, with its own row in the Overview's breakdown and in the Compare tab, its own line in the Trends tab, and its own card in the Infrastructure tab; its service type stays Database. The bills already imported show it too, without a new import: the server reclassifies their Logs Data Platform lines as it starts
+- **Resource Type Classification**: Automatic categorization (Public Cloud, Dedicated Servers, VPS, Storage, Logs Data Platform, Load Balancers, IP, Domains, Private Cloud Hosts, Private Cloud Datastores, Licenses, Backup, Telephony). Since version 3.5.0, Logs Data Platform is a resource type of its own rather than Storage, with its own row in the Overview's breakdown and in the Compare tab, its own line in the Trends tab, and its own card in the Infrastructure tab; its service type stays Database. The bills already imported show it too, without a new import: OCM reclassifies their Logs Data Platform lines as it opens its database
 - **Resource Type Detail**: Expandable cost breakdown per individual service within each category
 - **GPU Cost Consolidation**: Dedicated view for GPU costs by model (NVIDIA L4, L40S, A100, H100) and by project
 - **AI Endpoints Models** (new in version 3.3.0): each AI Endpoints model that the month's bills name, with its input tokens, its output tokens and its cost, in the Public Cloud tab, and its monthly cost in the Trends tab (see [AI Endpoints Models](#ai-endpoints-models))
@@ -634,7 +634,7 @@ LemonLDAP-NG is the OIDC provider and the only way in to OCM: open http://ocm.lo
 
 > **Upgrading from 2.2.0 or earlier**: `ocm-data` used to be mounted on `/app/data`, where the image also ships the data-layer code. Docker copied that code into the volume on first start, so later image updates never reached it. Both compose files now mount the volume on `/data` and set `DATA_DIR=/data`: the existing volume and its database are picked up as is, just recreate the container as for any update. If you run the image with `docker run` or your own compose file, make the same change.
 >
-> Bill lines are classified at import time, so classification fixes only apply to bills imported afterwards. To reclassify past bills, re-import a period: `docker exec ovh-cost-manager node /app/data/import.js --from 2025-01-01 --all`. A `--diff` import skips bills already in the database, and `--full` clears it first. Logs Data Platform's resource type, new in version 3.5.0, needs no re-import: the server gives it to the bills already imported as it starts.
+> Bill lines are classified at import time, so classification fixes only apply to bills imported afterwards. To reclassify past bills, re-import a period: `docker exec ovh-cost-manager node /app/data/import.js --from 2025-01-01 --all`. A `--diff` import skips bills already in the database, and `--full` clears it first. Logs Data Platform's resource type, new in version 3.5.0, needs no re-import: OCM gives it to the bills already imported as it opens its database, when the container starts.
 
 ### Production Deployment
 

@@ -42,14 +42,19 @@ OVH API ──> data/import.js ──> SQLite (ovh-bills.db) ──> server/inde
     Veeam backups, `ofBackupLines`, the VMs backed up and the Enterprise licences, which
     `getBackupStats()` counts and `getBackupServices()` lists (#197). Without side effects:
     the tests load `UNKNOWN_ACCOUNT` from it without the database.
-  - `classify.js` — pure functions (`classifyService`, etc.) mapping a bill line's
-    description to a service type. **Classification runs at import time** and the result is
-    stored in `bill_details.service_type`; the server reads the stored value, it does not
-    re-classify. Changing classification rules requires a re-import to take effect on old data.
-    But a rule that a service's identifier alone decides may migrate the stored lines at
-    startup rather than wait for a re-import, as Logs Data Platform's did (#246): the identifier
-    rule (`classifyResourceTypeFromDomain()`) gives `ldp-` services `logs_data_platform`, and
-    `getDb()` gives it to the lines stored as storage, through `migrateWhenNeeded()`.
+  - `classify.js` — pure functions mapping a bill line's description to a service type
+    (`classifyService()`), and its service identifier to a resource type
+    (`classifyResourceTypeFromDomain()`), which the import takes only when no inventory types
+    the service. **Classification runs at import time** and the results are stored in
+    `bill_details.service_type` and `resource_type`; the server reads the stored values, and
+    classifies nothing as it reads them. Changing classification rules requires a re-import to
+    take effect on old data, but for a rule that a service's identifier alone decides, for
+    services that no inventory types: it may migrate the stored lines as `getDb()` opens the
+    database, so in the server, the import, `count-bills.js` and the CLI alike, through
+    `migrateWhenNeeded()`, as Logs Data Platform's did (#246), whose prefix and type
+    `LOGS_DATA_PLATFORM` gives both its rule and its migration. Where an inventory types the
+    services (Public Cloud projects, servers, VPS, NetApp, IPs, load balancers, Private
+    Cloud), a migration by identifier would disagree with a re-import.
   - `carbon-footprint.js` — pure functions reading the file that OVHcloud's carbon
     calculator generates (`readFootprintFile()`), and the 24 months that each import asks
     for again (`footprintMonths()`). The import stores its lines in
