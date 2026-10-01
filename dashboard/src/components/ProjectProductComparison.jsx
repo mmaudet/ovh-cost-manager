@@ -6,7 +6,7 @@ import { publicCloudProductLabel } from '../utils/publicCloudProducts.js';
 import { MonthAnswersMessage, useMonthAnswers } from './MonthAnswers.jsx';
 import { ComparedAmount } from './ProjectedAmount.jsx';
 import { SortableHeader, sortRows } from './SortableHeader.jsx';
-import { DetailRow, LABEL_PADDING, UnfoldingRow, sortUnfolded } from './UnfoldingRow.jsx';
+import { ComparedCharges, LABEL_PADDING, UnfoldingRow } from './UnfoldingRow.jsx';
 import { Variation } from './Variation.jsx';
 
 // What the server answers for a month whose bills charged the project nothing
@@ -46,51 +46,6 @@ const productRows = (answerA, answerB) => pairMonths(
   product: key, chargesA: rowA?.charges ?? [], chargesB: rowB?.charges ?? [], valA, valB,
   projectedA, projectedB,
 }));
-
-/**
- * The charges of a product in months A and B, right under its unfolded row in the comparison of
- * a project's products (#195), one row each, indented, in the comparison's columns: each charge
- * that the bills of either month charged the project, paired by charge, its cost in each month,
- * 0 € in a month whose bills did not charge it, and the variation. They follow the comparison's
- * sort, within their row, and come by month A, the most expensive first, then by month B, until
- * the user sorts it (sortUnfolded()). A charge's cost that projected lines make, that of the
- * month in progress while the page projects it, is marked so, as a charge that the month has not
- * billed yet (#219).
- * @param {object} props
- * @param {{ charge: string, total: number, projected: (number|undefined) }[]} props.chargesA -
- *   The product's charges in month A, as the server gives them, the most expensive first, with
- *   their projected parts for the month in progress at its projected cost
- * @param {{ charge: string, total: number, projected: (number|undefined) }[]} props.chargesB -
- *   Those of month B
- * @param {?object} props.sort - The sort of the comparison, by its columns (see
- *   SortableHeader.jsx): null until the user sorts it
- * @param {{ includesMonthInProgress: boolean, projected: boolean }} props.comparedMonths - What
- *   the comparison knows of months A and B (comparedMonthsOf()), which the variations of the
- *   charges and their sort read (#216)
- * @returns {JSX.Element[]} A row for each charge
- */
-const ProductCharges = ({
-  chargesA, chargesB, sort, comparedMonths, fmt, language, t,
-}) => sortUnfolded(
-  pairMonths(chargesA, chargesB, ({ charge }) => charge)
-    .map(({
-      key, valA, valB, projectedA, projectedB,
-    }) => ({
-      charge: key, valA, valB, projectedA, projectedB,
-    })),
-  sort, valuesAsShown(comparedMonths, CHARGE_VALUES), language,
-).map(({
-  charge, valA, valB, projectedA, projectedB,
-}) => (
-  <DetailRow
-    key={charge} valA={valA} valB={valB} projectedA={projectedA} projectedB={projectedB}
-    comparedMonths={comparedMonths} fmt={fmt} language={language} t={t}
-  >
-    {/* A long charge, such as an instance's monthly plan, which names the instance, wraps to the
-        column of the products */}
-    <div className="text-xs break-words">{charge}</div>
-  </DetailRow>
-));
 
 /**
  * The comparison of a Public Cloud project's products in months A and B, from the bills of each
@@ -190,9 +145,10 @@ export default function ProjectProductComparison({
               chevronLabel={`${t('chargesOf')} ${label}`}
               label={label}
               detail={(
-                <ProductCharges
+                <ComparedCharges
                   chargesA={chargesA} chargesB={chargesB} sort={sorting.sort}
-                  comparedMonths={comparedMonths} fmt={fmt} language={language} t={t}
+                  values={CHARGE_VALUES} comparedMonths={comparedMonths} fmt={fmt}
+                  language={language} t={t}
                 />
               )}
             >
