@@ -27,6 +27,10 @@ export const translations = {
     // The month in progress (#216), as the month selectors and the month's cost name it, and
     // why no variation of it is computed
     monthInProgress: 'en cours',
+    usageCostsNotice: 'Les coûts des comptes sans factures sont ceux de leur consommation Public '
+      + 'Cloud : prix publics hors taxes, avant remises et crédits Public Cloud. Leurs autres '
+      + 'services ne sont pas couverts.',
+    usageMonthsNotice: 'Les mois affichés sont ceux de la consommation.',
     variationMonthInProgress: 'non calculable : mois en cours',
     // The setting that counts it at its projected cost (#214), next to the Trends tab's period
     // selector (#217) and the Compare tab's months A and B (#218), and what the tooltips of their
@@ -368,6 +372,10 @@ export const translations = {
     // The month in progress (#216), as the month selectors and the month's cost name it, and
     // why no variation of it is computed
     monthInProgress: 'in progress',
+    usageCostsNotice: 'The costs of the accounts without bills are those of their Public Cloud '
+      + 'usage: public prices before tax, before any discount and Public Cloud credit. Their '
+      + 'other services are not covered.',
+    usageMonthsNotice: 'The months shown are those of the usage.',
     variationMonthInProgress: 'cannot be computed: month in progress',
     // The setting that counts it at its projected cost (#214), next to the Trends tab's period
     // selector (#217) and the Compare tab's months A and B (#218), and what the tooltips of their

@@ -109,11 +109,12 @@ const BillLinesTable = ({ services, sorting, accountColumn, language, t, fmt }) 
 // costs by resource type, which load at page start, and the resource type whose bill lines are
 // open, with its setter: shared state, see
 // docs/adr/0001-tab-state-lives-in-the-dashboard-shell.md. Its lists name the account of each
-// service in the Account column of the shell (accountColumn), when it shows one (#123).
+// service in the Account column of the shell (accountColumn), when it shows one (#123). The month
+// is named by the month of its usage while the shell says so (usageMonths, namesUsageMonths()).
 const InfrastructureTab = ({
   inventoryServers, inventoryVps, inventoryStorage, resourceTypeDetails, logsDataPlatform,
   setShowAllServers, sortingOf, accountColumn, language, t, fmt, selectedMonth, byResourceType,
-  selectedResourceType, setSelectedResourceType,
+  selectedResourceType, setSelectedResourceType, usageMonths = false,
 }) => {
   const servers = withAccountNames(inventoryServers, accountColumn);
   const vpsInstances = withAccountNames(inventoryVps, accountColumn);
@@ -193,7 +194,7 @@ const InfrastructureTab = ({
             {language === 'en' ? 'Costs by resource type' : 'Coûts par type de ressource'}
             {selectedMonth && (
               <span className="text-sm font-normal text-gray-400 ml-2">
-                ({formatMonthLabel(selectedMonth.value, language)})
+                ({formatMonthLabel(selectedMonth.value, language, { ofUsage: usageMonths })})
               </span>
             )}
           </h3>
@@ -237,6 +238,7 @@ const InfrastructureTab = ({
         <LogsDataPlatformCharges
           logsDataPlatform={logsDataPlatform} sorting={sortingOf('logsDataPlatform')}
           selectedMonth={selectedMonth} language={language} t={t} fmt={fmt}
+          usageMonths={usageMonths}
         />
       )}
 

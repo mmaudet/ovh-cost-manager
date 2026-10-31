@@ -62,6 +62,7 @@ New in version 3.1.0.
 - **Trend Analysis**: Historical trends with configurable period (3-36 months), and GPU and AI Endpoints evolution charts
 - **Month in Progress** (marked since version 3.3.3, projected since 3.4.0): the month whose bills still lack a service billed every month is marked in progress rather than compared as a complete month, and a checkbox projects its cost in the Trends and Compare tabs. Since version 3.5.0, that can be the month before, until the month of today has a bill (see [Month in Progress](#month-in-progress))
 - **Budget Tracking**: Visual budget consumption with configurable targets
+- **Accounts Without Bills**: an account whose bills a third party issues, which neither the API nor the control panel gives, is read from its Public Cloud projects' usage, month by month, with the same tabs (see [Accounts Without Bills](#accounts-without-bills))
 
 ### Real-time Monitoring
 - **Current Consumption**: What the Public Cloud projects consumed this month, as OVH's Public Cloud page gives it (`--include-cloud-details`, which `--all` includes), or else the account's consumption from `/me/consumption` (`--include-consumption`)
@@ -260,6 +261,40 @@ With several accounts:
 - **Removed accounts**: an account removed from `config.json` keeps its data, and shows as not configured. It is no longer imported.
 
 The [deployment guide](docs/deployment.md#several-ovh-accounts) details each point, and its [upgrade notes](docs/deployment.md#upgrading-to-several-accounts) what the first import after the upgrade does.
+
+### Accounts Without Bills
+
+Some organisations have their OVHcloud bills issued by a third party: neither the API nor the control panel gives them. Such an account takes `"costSource": "cloudUsage"`, and OCM reads its costs from the usage of its Public Cloud projects, which OVH gives for each project through `GET /cloud/project/{id}/usage/history`, rather than from bills:
+
+```json
+{
+  "accounts": [
+    {
+      "name": "Filiale Lyon",
+      "costSource": "cloudUsage",
+      "credentials": { ... }
+    }
+  ]
+}
+```
+
+- **`costSource`**, optional: `"bills"`, the default, or `"cloudUsage"`. A single account takes it at the top of the file, next to its `credentials` section. Any other value stops the server and the import, naming the setting, and so does a `costSource` at the top of a file that has an `accounts` section.
+- **API key**: the `GET /cloud/*` rule that every key needs covers the usage. No `/me/bill` call is made.
+
+What the import does for such an account:
+
+- **One usage bill per month**: each month of usage of the account's projects is stored on a bill of its own, dated on the first day of the next month, as OVHcloud bills a Public Cloud project's month. Its lines are worded as those of a bill (an hourly flavor in a region, a monthly instance, the disks of a type in a region, a bucket, a database plan, a model's tokens…), so that every tab reads them as it reads a bill's: the Public Cloud cards, the products and charges, the AI Endpoints models, the projects, the service and resource types.
+- **Seven months**: OVH gives the usage of the month of today and of the six months before. Each import fetches again the months that OVH updated since, and keeps the older ones, which OVH no longer gives: `--full` keeps them too, and fetches the others again. The history thus starts seven months before the first import.
+- **The month of today**: its usage bill is provisional, and each import rewrites it while the month runs.
+
+What the dashboard shows:
+
+- **Costs**: those of the Public Cloud projects alone, at public prices before tax, before any discount or Public Cloud credit: above what the third party bills. The account's other services have their inventory, with `--include-inventory`, and no cost. A banner says so.
+- **Months**: while the page shows only such accounts, it names each month by the month of its usage: « Octobre 2026 (en cours) » is the usage of October so far.
+- **Month in progress**: the month of today's usage. Its projection spreads each project's month-end forecast over the project's lines, which `--include-cloud-details` (or `--all`) imports: without it, the month shows its usage so far.
+- **Bills**: `/api/bills` and its CSV export list OVH's bills alone, none for such an account.
+
+Changing an account's cost source: run a `--full` import of it (`--full --account <NIC handle>`), which clears the costs of its former source, so that no month counts twice. [ADR 0004](docs/adr/0004-an-account-without-bills-is-read-from-usage-bills.md) gives the reasons.
 
 ## Rate Limiting
 
@@ -589,6 +624,8 @@ The words are those of the [glossary](CONTEXT.md):
 
 OCM tells them when the server reads the bills: the bills already imported show them, without a new import. A yearly renewal or a one-off purchase is not a recurring service, and keeps no month in progress.
 
+An account read from its Public Cloud usage (see [Accounts Without Bills](#accounts-without-bills)) has no recurring service: its month in progress is that of today's usage, whose usage bill each import rewrites, and its projected cost spreads each project's month-end forecast over its lines.
+
 The month of today is that of the server's clock, in its time zone. The Docker image runs in UTC unless `TZ` is set, and the compose files set it to `Europe/Paris` by default: `TZ=America/Montreal` in `.env`, for instance, sets another. A Kubernetes deployment sets `TZ` in its environment.
 
 ### The Turn of the Month
@@ -687,11 +724,11 @@ Any other value gets a 400. The routes of one bill or one project, such as `/api
 
 ### Accounts
 
-| Endpoint            | Description                                                                                                        |
-| ------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| `GET /api/accounts` | The accounts: `id`, `nic`, `name`, `currency`, `configured`, `unknown`, `lastImport`, `lastSuccessAt` and `budget` |
+| Endpoint            | Description                                                                                                                       |
+| ------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /api/accounts` | The accounts: `id`, `nic`, `name`, `currency`, `costSource`, `configured`, `unknown`, `lastImport`, `lastSuccessAt` and `budget` |
 
-The route lists the accounts that the imports recorded: those that the configuration of the last import listed, in its order, then the others, then the Unknown account while it holds data. `id` is the value of the `account` parameter: the NIC handle, `nic`, or `unknown` for the Unknown account, whose `nic`, `name` and `currency` are `null`. `name` is the configured name, as the account's last import recorded it, or else the NIC handle; `configured`, whether the configuration of the last import listed the account; `unknown`, whether it is the Unknown account. `lastImport` gives when the account's last import ended, with its `status` and `error`, or `null` until one has; `lastSuccessAt`, when its last successful import ended. `budget` is the account's own budget, or `null`. An empty database lists no account, and a database not imported since the upgrade the Unknown account alone.
+The route lists the accounts that the imports recorded: those that the configuration of the last import listed, in its order, then the others, then the Unknown account while it holds data. `id` is the value of the `account` parameter: the NIC handle, `nic`, or `unknown` for the Unknown account, whose `nic`, `name` and `currency` are `null`. `name` is the configured name, as the account's last import recorded it, or else the NIC handle; `configured`, whether the configuration of the last import listed the account; `unknown`, whether it is the Unknown account. `lastImport` gives when the account's last import ended, with its `status` and `error`, or `null` until one has; `lastSuccessAt`, when its last successful import ended. `budget` is the account's own budget, or `null`. `costSource` is where its costs come from, as its last import recorded it: `bills`, or `cloudUsage` for an account read from its Public Cloud usage (see [Accounts Without Bills](#accounts-without-bills)); `null` for the Unknown account. An empty database lists no account, and a database not imported since the upgrade the Unknown account alone.
 
 ### Billing & Analysis
 

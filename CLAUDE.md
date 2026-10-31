@@ -122,7 +122,20 @@ OVH API ──> data/import.js ──> SQLite (ovh-bills.db) ──> server/inde
     `linesOfPeriod()` in `db.js` adds, dated on the month's first day, to the lines that a
     query of costs adds up, when asked and when its period covers the month in progress: the
     projected cost (`CONTEXT.md`). **Read when the server reads the bills**, like the
-    products: no re-import.
+    products: no re-import. The recurring services are read from OVH's bills alone: an
+    account read from its usage has the month of its provisional usage bill in progress
+    (`provisionalMonthOf()` in `db.js`), whose projection, `usageProjectionOf()`, spreads each
+    project's month-end forecast over its lines.
+  - `usage-lines.js` — pure: the bill lines of a Public Cloud project's usage of a month, as
+    `usage/history/{id}` answers it (`usageLines()`), for an account whose cost source is its
+    Public Cloud usage (`CONTEXT.md`, ADR 0004): one per charge, its parts added up, worded as
+    the bill line of that charge (an hourly flavor in a region, a monthly instance, the disks
+    of a type in a region, a bucket, a database plan, a model's tokens…), so that the
+    classification, the products, the charges, the instances and the AI Endpoints models read
+    them as a bill's, and adding up to the month's total, what no part names on a line of its
+    own. And the usage bill of an account's month (`usageBillOf()`), dated on the first day of
+    the next month, as OVH bills a Public Cloud project's month. `tests/usage-lines.test.js`
+    pins each wording against a real answer, cut down (`tests/fixtures/`).
   - `storage-classes.js` — pure: the names of the storage classes that OVH gives the objects
     of a bucket, for the import and for the buckets an earlier import stored (#145).
 - **`server/`** — read-only Express API over the DB. `index.js` is the single ~1300-line
@@ -256,9 +269,11 @@ what they share is how values are checked: `data/strict-settings.js`, which
   server, naming the setting. The rate limiting settings are resolved in
   `server/rate-limit-config.js`.
 - **OVH accounts**: the `accounts` array (each entry an optional unique `name`, an
-  optional positive integer `budget`, and its `credentials`, `endpoint` included), or,
-  as before, the single `credentials` section or the legacy flat form, where `endpoint`
-  is optional; never `accounts` with either of those. They have no environment override:
+  optional positive integer `budget`, an optional `costSource`, `bills` by default or
+  `cloudUsage`, and its `credentials`, `endpoint` included), or, as before, the single
+  `credentials` section or the legacy flat form, where `endpoint` is optional and the
+  `costSource` is at the top of the file; never `accounts` with either of those, nor with a
+  `costSource` at the top. They have no environment override:
   their secrets stay in `config.json`, which the compose files mount read-only. One
   strict reader, `data/accounts-config.js`, serves the import, which reads them from the
   first config file that gives any, and the server, which only checks them at startup: it
@@ -314,6 +329,21 @@ keys (`data/ovh-accepting-request.js`, #179). It replaces those months and keeps
 ones, which OVHcloud no longer gives, `--full` included (ADR 0003). A key without the rule
 gets a warning; any other failure, a wait that runs out included, counts among the failed
 items, and replaces nothing.
+
+An account whose cost source is `cloudUsage` (`CONTEXT.md`, ADR 0004) is imported without its
+bills, which a third party issues: no `/me/bill` call. After its projects, `importCloudUsage()`
+lists each project's usage periods (`usage/history`, the month of today and the six before),
+fetches those that OVH updated since the last import, every one at `--full`, and stores their
+lines (`usage-lines.js`) on the usage bill of the account's month (`db.usage.replacePeriod()`),
+in the bills tables with `source = 'usage'`, those of the other projects kept. The table
+`project_usage_periods` keeps when OVH last updated each period. The usage bill of the month
+of today's usage is `provisional`. A period that OVH no longer lists stays: `--full` keeps the
+usage bills of such an account and clears its OVH bills, and those of an account billed clears
+its usage bills, so that no month counts twice once the cost source changes. The routes of the
+bills (`/api/bills`, its CSV export, `/api/bills/:id`) give OVH's bills alone. The dashboard
+names the months by the month of their usage while it shows only such accounts
+(`namesUsageMonths()` in `dashboard/src/utils/accounts.js`), and says where their costs come
+from (`showsUsageCosts()`).
 
 A run imports every configured account, one after the other, under one import log entry;
 each differential import starts from that account's own latest bill. An account that

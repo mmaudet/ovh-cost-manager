@@ -16,8 +16,10 @@ CREATE TABLE IF NOT EXISTS accounts (
                                  -- NULL when that one does not list it any more (#114)
   claimed_bills INTEGER NOT NULL DEFAULT 0, -- How many bills stored before the accounts it
                                  -- claimed, over every run (#114)
-  last_success_at DATETIME       -- When its last import that succeeded ended, NULL until one
+  last_success_at DATETIME,      -- When its last import that succeeded ended, NULL until one
                                  -- has: its data is as fresh as that import left it (#124)
+  cost_source TEXT               -- Where its costs come from at its last import: 'bills' or
+                                 -- 'cloudUsage' (CONTEXT.md), NULL before any, read as 'bills'
 );
 
 -- Cloud Projects
@@ -42,7 +44,11 @@ CREATE TABLE IF NOT EXISTS bills (
   pdf_url TEXT,
   html_url TEXT,
   imported_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-  account TEXT                   -- NIC handle of its account
+  account TEXT,                  -- NIC handle of its account
+  source TEXT,                   -- NULL for an OVH bill, 'usage' for a usage bill (CONTEXT.md),
+                                 -- which OCM makes of an account's Public Cloud usage of a month
+  provisional INTEGER NOT NULL DEFAULT 0 -- 1 for the usage bill of the month of today, which
+                                 -- each import rewrites while the month runs
 );
 
 -- Bill details (line items)
@@ -233,6 +239,21 @@ CREATE TABLE IF NOT EXISTS project_forecasts (
   project_id TEXT PRIMARY KEY,
   period_start DATE NOT NULL,       -- The first day of the month that it forecasts
   total_price REAL NOT NULL,        -- What OVH forecasts the project to cost in that month
+  FOREIGN KEY (project_id) REFERENCES projects(id)
+);
+
+-- The usage periods of each Public Cloud project that an import stored on a usage bill
+-- (CONTEXT.md), for an account whose cost source is its Public Cloud usage: GET
+-- /cloud/project/{id}/usage/history lists those of the month of today and of the six months
+-- before, each with when OVH last updated it. An import fetches again a period that OVH updated
+-- since, and keeps those that it no longer lists. A row reaches its account through its project.
+CREATE TABLE IF NOT EXISTS project_usage_periods (
+  project_id TEXT NOT NULL,
+  usage_id TEXT NOT NULL,           -- Its id, as usage/history lists it
+  month TEXT NOT NULL,              -- YYYY-MM, the month of its usage
+  last_update TEXT,                 -- When OVH last updated it, as it gives it
+  bill_id TEXT NOT NULL,            -- The usage bill of its lines
+  PRIMARY KEY (project_id, usage_id),
   FOREIGN KEY (project_id) REFERENCES projects(id)
 );
 

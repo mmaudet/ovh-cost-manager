@@ -49,26 +49,46 @@ const formatMonth = (yearMonth, language, { name, capitalised = false }) => {
   return capitalised ? label.charAt(0).toUpperCase() + label.slice(1) : label;
 };
 
+// The month whose usage a month of the bills holds, for the accounts whose cost source is their
+// Public Cloud usage (CONTEXT.md): the month before, as the usage bill of a month is dated on the
+// first day of the next one. What is not a 'YYYY-MM' month is left as it is.
+const usageMonthOf = (yearMonth) => {
+  const [year, month] = String(yearMonth ?? '').split('-').map(Number);
+  if (!year || !month) return yearMonth;
+  const before = new Date(year, month - 2, 1);
+  return `${before.getFullYear()}-${String(before.getMonth() + 1).padStart(2, '0')}`;
+};
+
+// A month of the bills as the page names it: the month whose usage it holds, ofUsage, while the
+// page shows only accounts whose cost source is their Public Cloud usage, or else itself
+const namedMonth = (yearMonth, ofUsage) => (ofUsage ? usageMonthOf(yearMonth) : yearMonth);
+
 // The short name of a 'YYYY-MM' month and its year, as the Trends and Web Cloud tabs show
-// it: sept. 2026 in French, Sep 2026 in English
-const formatYearMonth = (yearMonth, language = 'fr') => (
-  formatMonth(yearMonth, language, { name: 'short' })
+// it: sept. 2026 in French, Sep 2026 in English. A month of the bills is named by the month of
+// its usage with ofUsage (namedMonth()).
+const formatYearMonth = (yearMonth, language = 'fr', { ofUsage = false } = {}) => (
+  formatMonth(namedMonth(yearMonth, ofUsage), language, { name: 'short' })
 );
 
 // The long name of a 'YYYY-MM' month and its year, capitalised as in the label of
 // /api/months, which is always in French (#33): Septembre 2026 in French, September 2026
 // in English, as the month selectors and the report show it. The month in progress follows it
 // with what the page calls it, inProgressLabel, in brackets, where they give one (#216):
-// Septembre 2026 (en cours).
-const formatMonthLabel = (yearMonth, language = 'fr', { inProgressLabel = null } = {}) => {
-  const label = formatMonth(yearMonth, language, { name: 'long', capitalised: true });
+// Septembre 2026 (en cours). A month of the bills is named by the month of its usage with
+// ofUsage (namedMonth()).
+const formatMonthLabel = (yearMonth, language = 'fr', {
+  inProgressLabel = null, ofUsage = false,
+} = {}) => {
+  const label = formatMonth(namedMonth(yearMonth, ofUsage), language,
+    { name: 'long', capitalised: true });
   return label && inProgressLabel ? `${label} (${inProgressLabel})` : label;
 };
 
 // A 'YYYY-MM' month and its year as a sentence names it, by the month's long name: août 2026 in
-// French, August 2026 in English
-const formatMonthName = (yearMonth, language = 'fr') => (
-  formatMonth(yearMonth, language, { name: 'long' })
+// French, August 2026 in English. A month of the bills is named by the month of its usage with
+// ofUsage (namedMonth()).
+const formatMonthName = (yearMonth, language = 'fr', { ofUsage = false } = {}) => (
+  formatMonth(namedMonth(yearMonth, ofUsage), language, { name: 'long' })
 );
 
 // The month of a date as YYYY-MM, as the month formats above read it: in local time, as

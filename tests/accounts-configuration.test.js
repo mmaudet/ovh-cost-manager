@@ -66,6 +66,10 @@ async function importSeptember() {
 const recordedAccounts = () => db.accounts.getAll()
   .map(account => [account.nic, account.name, account.budget, account.last_import_status]);
 
+// The cost source of each account recorded, as [NIC handle, cost source]
+const recordedCostSources = () => db.accounts.getAll()
+  .map(account => [account.nic, account.cost_source]);
+
 // The bills stored, as [id, NIC handle of their account]
 const storedBills = () => db.getDb().prepare('SELECT id, account FROM bills ORDER BY id').all()
   .map(bill => [bill.id, bill.account]);
@@ -90,6 +94,25 @@ describe('the accounts section', () => {
       [PARIS.nic, null, null, 'success'],
     ]);
   });
+
+  // Its bills by default, as before the cost sources (CONTEXT.md)
+  test('gives each account a cost source, its bills by default, which the import records',
+    async () => {
+      const lyon = serveAccount(LYON);
+      const paris = serveAccount(PARIS);
+      serveNothing(lyon.routes);
+      serveNothing(paris.routes);
+      useConfig({
+        accounts: [
+          { costSource: 'cloudUsage', credentials: lyon.credentials },
+          { credentials: paris.credentials },
+        ],
+      });
+
+      await importSeptember();
+
+      expect(recordedCostSources()).toEqual([[LYON.nic, 'cloudUsage'], [PARIS.nic, 'bills']]);
+    });
 
   // The account is its NIC handle: an entry of config.json only names it
   test('takes a new name or budget at the next import, the account keeping its data',
@@ -145,6 +168,21 @@ describe('a single account without a name', () => {
 
     expect(clientCredentials).toEqual([credentials]);
     expect(recordedAccounts()).toEqual([[ACCOUNT.nic, null, null, 'success']]);
+  });
+
+  // The cost source of the single account is at the top of the file, as the account has no
+  // entry of its own
+  test.each([
+    ['the credentials section',
+      () => useConfig({ costSource: 'cloudUsage', credentials: CREDENTIALS })],
+    ['the legacy flat form', () => useConfig({ ...CREDENTIALS, costSource: 'cloudUsage' })],
+  ])('takes the cost source at the top of the file, with %s', async (_, configure) => {
+    configure();
+    serveNothing(routes);
+
+    await importSeptember();
+
+    expect(recordedCostSources()).toEqual([[ACCOUNT.nic, 'cloudUsage']]);
   });
 
   // As before: a config.json of other settings leaves the credentials to the next place
@@ -211,6 +249,16 @@ describe('a configuration that the import refuses', () => {
       `accounts[0].budget in ${FILE} must be a positive integer (a JSON number), not 0`],
     ['a budget with decimals', { accounts: [{ budget: 12.5, credentials }] },
       `accounts[0].budget in ${FILE} must be a positive integer (a JSON number), not 12.5`],
+    ['a cost source that is none', { accounts: [{ costSource: 'consumption', credentials }] },
+      `accounts[0].costSource in ${FILE} must be "bills" or "cloudUsage", not "consumption"`],
+    ['a cost source at the top of the file, with a single account',
+      { costSource: true, credentials },
+      `costSource in ${FILE} must be "bills" or "cloudUsage", not true`],
+    // It would be ambiguous which accounts it is the cost source of
+    ['a cost source at the top of the file, with the accounts section',
+      { costSource: 'cloudUsage', accounts: [{ credentials }] },
+      `costSource at the top of ${FILE} cannot be set with the accounts section: give each `
+        + 'account its own costSource'],
     ['an account without credentials', { accounts: [{ name: 'Lyon' }] },
       `accounts[0].credentials in ${FILE} is missing: it must be an object that holds appKey, `
         + 'appSecret, consumerKey and endpoint'],

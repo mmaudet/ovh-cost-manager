@@ -71,10 +71,13 @@ const productRows = (answerA, answerB) => pairMonths(
  * @param {function(string): { unfolded: boolean, onToggle: function() }} props.unfoldingOf -
  *   Whether a product is unfolded, by its name, and what folds or unfolds it, which the Compare
  *   tab's hook holds for each project (see useUnfoldedRows())
+ * @param {boolean} [props.usageMonths] - Whether the page names the months by the month of their
+ *   usage (namesUsageMonths())
  * @returns {JSX.Element}
  */
 export default function ProjectProductComparison({
   productsQueryOf, monthA, monthB, comparedMonths, sorting, unfoldingOf, fmt, language, t,
+  usageMonths = false,
 }) {
   const { status, dataA, dataB } = useMonthAnswers(productsQueryOf, monthA, monthB);
   // Until both months' answers arrive, rather than a month at 0 € or no product at all, or
@@ -114,13 +117,13 @@ export default function ProjectProductComparison({
             column="totalA" kind="number" sorting={sorting} t={t}
             className="p-3 font-medium text-right"
           >
-            {formatMonthLabel(monthA?.value, language)}
+            {formatMonthLabel(monthA?.value, language, { ofUsage: usageMonths })}
           </SortableHeader>
           <SortableHeader
             column="totalB" kind="number" sorting={sorting} t={t}
             className="p-3 font-medium text-right"
           >
-            {formatMonthLabel(monthB?.value, language)}
+            {formatMonthLabel(monthB?.value, language, { ofUsage: usageMonths })}
           </SortableHeader>
           <SortableHeader
             column="variation" kind="number" sorting={sorting} t={t}

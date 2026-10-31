@@ -257,25 +257,38 @@ function takeOverBilledRows(database, nic, listed) {
  * month-end forecasts, which the cards read with that consumption (#224), with the projects
  * they belong to. Another account's data, and the rows without an account, stay, with the
  * projects of this account whose lines are on another account's bills.
+ *
+ * The usage bills of an account whose cost source is its Public Cloud usage (CONTEXT.md) stay
+ * too, with the usage periods of its projects: OVH gives the usage of the last months only, which
+ * the import fetches again, and the older months are no longer given. Those of an account billed
+ * go, as its bills give the same costs.
  * @param {object} database - The database
  * @param {string} nic - The NIC handle of the account
+ * @param {object} [options]
+ * @param {boolean} [options.keepUsageBills] - Whether the account's cost source is its Public
+ *   Cloud usage, whose usage bills stay
  */
-function clearAccount(database, nic) {
-  const { sql, params } = accountCondition(nic, 'account');
+function clearAccount(database, nic, { keepUsageBills = false } = {}) {
+  const { sql: ofAccount, params } = accountCondition(nic, 'account');
+  const sql = keepUsageBills ? `${ofAccount} AND source IS NULL` : ofAccount;
   const run = (statement) => database.prepare(statement).run(...params);
   // First the rows that reference its bills and its projects
   run(`DELETE FROM bill_details WHERE bill_id IN (SELECT id FROM bills WHERE ${sql})`);
+  if (!keepUsageBills) {
+    run(`DELETE FROM project_usage_periods WHERE bill_id IN (SELECT id FROM bills WHERE ${sql})`);
+  }
   for (const table of PROJECT_RESOURCE_TABLES) {
-    run(`DELETE FROM ${table} WHERE project_id IN (SELECT id FROM projects WHERE ${sql})`);
+    run(`DELETE FROM ${table} WHERE project_id IN (SELECT id FROM projects WHERE ${ofAccount})`);
   }
   run(`DELETE FROM bills WHERE ${sql}`);
   run(`
-    DELETE FROM projects WHERE ${sql}
+    DELETE FROM projects WHERE ${ofAccount}
       AND id NOT IN (SELECT project_id FROM project_consumption)
       AND id NOT IN (SELECT project_id FROM project_forecasts)
+      AND id NOT IN (SELECT project_id FROM project_usage_periods)
       AND id NOT IN (SELECT project_id FROM bill_details WHERE project_id IS NOT NULL)
   `);
-  for (const table of REFETCHED_TABLES) run(`DELETE FROM ${table} WHERE ${sql}`);
+  for (const table of REFETCHED_TABLES) run(`DELETE FROM ${table} WHERE ${ofAccount}`);
 }
 
 module.exports = {

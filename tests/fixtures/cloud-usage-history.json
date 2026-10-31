@@ -1,0 +1,454 @@
+{
+  "id": "RUN2_202605",
+  "lastUpdate": "2026-06-01T09:00:43.228Z",
+  "period": {
+    "from": "2026-05-01T00:00:00.000Z",
+    "to": "2026-06-01T00:00:00.000Z"
+  },
+  "hourlyUsage": {
+    "instance": [
+      {
+        "details": [],
+        "quantity": { "unit": "Hour", "value": 6922 },
+        "reference": "b3-8.over-quota",
+        "region": "",
+        "savingsPlanIds": [
+          "00000000-0000-4000-8000-000000000001",
+          "00000000-0000-4000-8000-000000000003"
+        ],
+        "totalPrice": 354.4064
+      },
+      {
+        "deploymentMode": "REGION-1-AZ",
+        "details": [
+          {
+            "instanceId": "00000000-0000-4000-8000-000000000005",
+            "quantity": { "unit": "Hour", "value": 252 },
+            "resourceId": "00000000-0000-4000-8000-000000000005",
+            "totalPrice": 25.7796
+          },
+          {
+            "instanceId": "00000000-0000-4000-8000-000000000006",
+            "quantity": { "unit": "Hour", "value": 251 },
+            "resourceId": "00000000-0000-4000-8000-000000000006",
+            "totalPrice": 25.6773
+          }
+        ],
+        "quantity": { "unit": "Hour", "value": 503 },
+        "reference": "b3-16",
+        "region": "GRA9",
+        "totalPrice": 51.4569
+      }
+    ],
+    "instanceBandwidth": [],
+    "instanceOption": [],
+    "managedKubernetesService": [],
+    "quantum": { "notebook": [], "processingUnit": [] },
+    "rancher": [],
+    "snapshot": [
+      {
+        "deploymentMode": "REGION-1-AZ",
+        "instance": {
+          "quantity": { "unit": "GiBh", "value": 2792659.3760375977 },
+          "resourceIds": [
+            "00000000-0000-4000-8000-000000001268",
+            "00000000-0000-4000-8000-000000001269"
+          ],
+          "totalPrice": 41.889891
+        },
+        "region": "GRA9",
+        "totalPrice": 46.835035,
+        "volume": {
+          "quantity": { "unit": "GiBh", "value": 83816 },
+          "resourceIds": [
+            "00000000-0000-4000-8000-000000003202",
+            "00000000-0000-4000-8000-000000003203"
+          ],
+          "totalPrice": 4.945144
+        }
+      }
+    ],
+    "storage": [
+      {
+        "bucketName": "bucketName-1",
+        "deploymentMode": "REGION-1-AZ",
+        "incomingBandwidth": { "quantity": { "unit": "GiB", "value": 0 }, "resourceIds": [], "totalPrice": 0 },
+        "outgoingBandwidth": { "quantity": { "unit": "GiB", "value": 1.24797225e-7 }, "resourceIds": [], "totalPrice": 0 },
+        "region": "SBG",
+        "retrievalFees": {
+          "quantity": { "unit": "GiB", "value": 0 },
+          "resourceIds": [],
+          "totalPrice": { "currencyCode": "EUR", "priceInUcents": 0, "text": "0.00 EUR", "value": 0 }
+        },
+        "stored": { "quantity": { "unit": "GiBh", "value": 18.53504329919815 }, "resourceIds": [], "totalPrice": 0.000278 },
+        "totalPrice": 0.000278,
+        "type": "pcs"
+      },
+      {
+        "bucketName": "bucketName-1",
+        "deploymentMode": "REGION-1-AZ",
+        "incomingBandwidth": { "quantity": { "unit": "GiB", "value": 0 }, "resourceIds": [], "totalPrice": 0 },
+        "outgoingBandwidth": { "quantity": { "unit": "GiB", "value": 1.257285476e-7 }, "resourceIds": [], "totalPrice": 0 },
+        "region": "GRA",
+        "retrievalFees": {
+          "quantity": { "unit": "GiB", "value": 0 },
+          "resourceIds": [],
+          "totalPrice": { "currencyCode": "EUR", "priceInUcents": 0, "text": "0.00 EUR", "value": 0 }
+        },
+        "stored": { "quantity": { "unit": "GiBh", "value": 470.49667851626873 }, "resourceIds": [], "totalPrice": 0.007057 },
+        "totalPrice": 0.007057,
+        "type": "pcs"
+      }
+    ],
+    "volume": [
+      {
+        "deploymentMode": "REGION-1-AZ",
+        "details": [
+          {
+            "quantity": { "unit": "GiBh", "value": 74400 },
+            "resourceId": "00000000-0000-4000-8000-000000003277",
+            "totalPrice": 4.3896,
+            "volumeId": "00000000-0000-4000-8000-000000003277"
+          },
+          {
+            "quantity": { "unit": "GiBh", "value": 52080 },
+            "resourceId": "00000000-0000-4000-8000-000000003278",
+            "totalPrice": 3.07272,
+            "volumeId": "00000000-0000-4000-8000-000000003278"
+          }
+        ],
+        "quantity": { "unit": "GiBh", "value": 126480 },
+        "region": "GRA9",
+        "totalPrice": 7.46232,
+        "type": "classic"
+      },
+      {
+        "deploymentMode": "REGION-1-AZ",
+        "details": [
+          {
+            "quantity": { "unit": "GiBh", "value": 74400 },
+            "resourceId": "00000000-0000-4000-8000-000000003297",
+            "totalPrice": 8.8536,
+            "volumeId": "00000000-0000-4000-8000-000000003297"
+          },
+          {
+            "quantity": { "unit": "GiBh", "value": 186000 },
+            "resourceId": "00000000-0000-4000-8000-000000003307",
+            "totalPrice": 22.134,
+            "volumeId": "00000000-0000-4000-8000-000000003307"
+          }
+        ],
+        "quantity": { "unit": "GiBh", "value": 260400 },
+        "region": "GRA9",
+        "totalPrice": 30.9876,
+        "type": "high-speed"
+      }
+    ]
+  },
+  "monthlyUsage": {
+    "certification": [],
+    "instance": [
+      {
+        "deploymentMode": "REGION-1-AZ",
+        "details": [
+          {
+            "activation": "2023-02-27T00:00:00.000Z",
+            "instanceId": "00000000-0000-4000-8000-000000003470",
+            "resourceId": "00000000-0000-4000-8000-000000003470",
+            "totalPrice": 280.8
+          },
+          {
+            "activation": "2023-02-27T00:00:00.000Z",
+            "instanceId": "00000000-0000-4000-8000-000000003471",
+            "resourceId": "00000000-0000-4000-8000-000000003471",
+            "totalPrice": 280.8
+          }
+        ],
+        "reference": "c2-60",
+        "region": "GRA9",
+        "totalPrice": 561.6
+      },
+      {
+        "deploymentMode": "REGION-1-AZ",
+        "details": [
+          {
+            "activation": "2024-10-18T00:00:00.000Z",
+            "instanceId": "00000000-0000-4000-8000-000000003465",
+            "resourceId": "00000000-0000-4000-8000-000000003465",
+            "totalPrice": 25.17
+          }
+        ],
+        "reference": "b2-7",
+        "region": "SBG5",
+        "totalPrice": 25.17
+      }
+    ],
+    "instanceOption": [],
+    "savingsPlan": [
+      {
+        "details": [
+          {
+            "id": "00000000-0000-4000-8000-000000000001",
+            "period": { "from": "2026-05-01T00:00:00.000Z", "to": "2026-05-31T23:59:59.000Z" },
+            "planName": "a-k8s-nodes",
+            "size": 1,
+            "totalPrice": { "currencyCode": "EUR", "priceInUcents": 2803000000, "text": "28.03 EUR", "value": 28.03 },
+            "unitPrice": { "currencyCode": "EUR", "priceInUcents": 2803000000, "text": "28.03 EUR", "value": 28.03 }
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000003",
+            "period": { "from": "2026-05-01T00:00:00.000Z", "to": "2026-05-31T23:59:59.000Z" },
+            "planName": "b-k8s-nodes",
+            "size": 3,
+            "totalPrice": { "currencyCode": "EUR", "priceInUcents": 8409000000, "text": "84.09 EUR", "value": 84.09 },
+            "unitPrice": { "currencyCode": "EUR", "priceInUcents": 8409000000, "text": "84.09 EUR", "value": 84.09 }
+          }
+        ],
+        "totalPrice": { "currencyCode": "EUR", "priceInUcents": 11212000000, "text": "112.12 EUR", "value": 112.12 },
+        "flavor": "b3-8"
+      }
+    ]
+  },
+  "resourcesUsage": [
+    {
+      "resources": [
+        {
+          "components": [
+            {
+              "id": "00000000-0000-4000-8000-000000003472",
+              "name": "mistral-7b-instruct-v0-3-output_tokens",
+              "quantity": { "unit": "Unit", "value": 2123 },
+              "resourceId": "00000000-0000-4000-8000-000000003472",
+              "totalPrice": 0.000212
+            },
+            {
+              "id": "00000000-0000-4000-8000-000000003473",
+              "name": "bge-m3-input_tokens",
+              "quantity": { "unit": "Unit", "value": 7489 },
+              "resourceId": "00000000-0000-4000-8000-000000003473",
+              "totalPrice": 0.000075
+            },
+            {
+              "id": "00000000-0000-4000-8000-000000003474",
+              "name": "mistral-7b-instruct-v0-3-input_tokens",
+              "quantity": { "unit": "Unit", "value": 6262 },
+              "resourceId": "00000000-0000-4000-8000-000000003474",
+              "totalPrice": 0.000626
+            },
+            {
+              "id": "00000000-0000-4000-8000-000000003475",
+              "name": "gpt-oss-120b-input_tokens",
+              "quantity": { "unit": "Unit", "value": 7005 },
+              "resourceId": "00000000-0000-4000-8000-000000003475",
+              "totalPrice": 0.00056
+            },
+            {
+              "id": "00000000-0000-4000-8000-000000003476",
+              "name": "gpt-oss-120b-output_tokens",
+              "quantity": { "unit": "Unit", "value": 1581 },
+              "resourceId": "00000000-0000-4000-8000-000000003476",
+              "totalPrice": 0.000632
+            }
+          ],
+          "region": ""
+        }
+      ],
+      "totalPrice": 0.002106,
+      "type": "ai-endpoints"
+    },
+    {
+      "resources": [
+        {
+          "components": [
+            {
+              "id": "storage.00000000-0000-4000-8000-000000003477.00000000-0000-4000-8000-000000003478",
+              "name": "storage",
+              "quantity": { "unit": "GiBh", "value": 4793.6849130392075 },
+              "resourceId": "00000000-0000-4000-8000-000000003478",
+              "totalPrice": 0.071905
+            },
+            {
+              "id": "storage.00000000-0000-4000-8000-000000003479.00000000-0000-4000-8000-000000003480",
+              "name": "storage",
+              "quantity": { "unit": "GiBh", "value": 19.69244236126542 },
+              "resourceId": "00000000-0000-4000-8000-000000003480",
+              "totalPrice": 0.000295
+            }
+          ],
+          "deploymentMode": "REGION-1-AZ",
+          "region": "GRA9"
+        },
+        {
+          "components": [
+            {
+              "id": "storage.00000000-0000-4000-8000-000000005105.00000000-0000-4000-8000-000000005106",
+              "name": "storage",
+              "quantity": { "unit": "GiBh", "value": 2226.697454147972 },
+              "resourceId": "00000000-0000-4000-8000-000000005106",
+              "totalPrice": 0.0334
+            }
+          ],
+          "deploymentMode": "REGION-1-AZ",
+          "region": "SBG5"
+        }
+      ],
+      "totalPrice": 0.1056,
+      "type": "volume-backup"
+    },
+    {
+      "resources": [
+        {
+          "components": [
+            {
+              "id": "ip.00000000-0000-4000-8000-000000006011.00000000-0000-4000-8000-000000006012",
+              "name": "ip",
+              "quantity": { "unit": "Hour", "value": 1 },
+              "resourceId": "00000000-0000-4000-8000-000000006012",
+              "totalPrice": 0
+            },
+            {
+              "id": "ip.00000000-0000-4000-8000-000000006021.00000000-0000-4000-8000-000000006022",
+              "name": "ip",
+              "quantity": { "unit": "Hour", "value": 744 },
+              "resourceId": "00000000-0000-4000-8000-000000006022",
+              "totalPrice": 0
+            }
+          ],
+          "deploymentMode": "REGION-1-AZ",
+          "region": "GRA9"
+        }
+      ],
+      "totalPrice": 0,
+      "type": "publicip"
+    },
+    {
+      "resources": [
+        {
+          "components": [
+            {
+              "id": "floatingip.00000000-0000-4000-8000-000000006327.00000000-0000-4000-8000-000000006328",
+              "name": "floatingip",
+              "quantity": { "unit": "Hour", "value": 744 },
+              "resourceId": "00000000-0000-4000-8000-000000006328",
+              "totalPrice": 2.0088
+            }
+          ],
+          "deploymentMode": "REGION-1-AZ",
+          "region": "GRA9"
+        },
+        {
+          "components": [
+            {
+              "id": "floatingip.00000000-0000-4000-8000-000000006339.00000000-0000-4000-8000-000000006340",
+              "name": "floatingip",
+              "quantity": { "unit": "Hour", "value": 744 },
+              "resourceId": "00000000-0000-4000-8000-000000006340",
+              "totalPrice": 2.0088
+            }
+          ],
+          "deploymentMode": "REGION-1-AZ",
+          "region": "SBG5"
+        }
+      ],
+      "totalPrice": 4.0176,
+      "type": "floatingip"
+    },
+    {
+      "resources": [
+        {
+          "components": [
+            {
+              "id": "loadbalancer-s.00000000-0000-4000-8000-000000006355.00000000-0000-4000-8000-000000006356",
+              "name": "loadbalancer-s",
+              "quantity": { "unit": "Hour", "value": 744 },
+              "resourceId": "00000000-0000-4000-8000-000000006356",
+              "totalPrice": 6.1752
+            }
+          ],
+          "deploymentMode": "REGION-1-AZ",
+          "region": "GRA9"
+        }
+      ],
+      "totalPrice": 6.1752,
+      "type": "octavia-loadbalancer"
+    },
+    {
+      "resources": [
+        {
+          "components": [
+            {
+              "id": "s.00000000-0000-4000-8000-000000006379.00000000-0000-4000-8000-000000006380",
+              "name": "s",
+              "quantity": { "unit": "Hour", "value": 744 },
+              "resourceId": "00000000-0000-4000-8000-000000006380",
+              "totalPrice": 2.0832
+            }
+          ],
+          "deploymentMode": "REGION-1-AZ",
+          "region": "SBG5"
+        }
+      ],
+      "totalPrice": 2.0832,
+      "type": "gateway"
+    },
+    {
+      "resources": [
+        {
+          "components": [
+            {
+              "id": "postgresql-business-db1-4.00000000-0000-4000-8000-000000006391.00000000-0000-4000-8000-000000006392",
+              "name": "postgresql-business-db1-4",
+              "quantity": { "unit": "Hour", "value": 1488 },
+              "resourceId": "00000000-0000-4000-8000-000000006392",
+              "totalPrice": 141.2112
+            },
+            {
+              "id": "postgresql-business-additionnal-storage-gb.00000000-0000-4000-8000-000000006391.00000000-0000-4000-8000-000000006392",
+              "name": "postgresql-business-additionnal-storage-gb",
+              "quantity": { "unit": "Hour", "value": 238080 },
+              "resourceId": "00000000-0000-4000-8000-000000006392",
+              "totalPrice": 142.848
+            },
+            {
+              "id": "mongodb-production-b3-8.00000000-0000-4000-8000-000000006393.00000000-0000-4000-8000-000000006394",
+              "name": "mongodb-production-b3-8",
+              "quantity": { "unit": "Hour", "value": 2232 },
+              "resourceId": "00000000-0000-4000-8000-000000006394",
+              "totalPrice": 248.6448
+            },
+            {
+              "id": "mongodb-production-b3-8.00000000-0000-4000-8000-000000006395.00000000-0000-4000-8000-000000006396",
+              "name": "mongodb-production-b3-8",
+              "quantity": { "unit": "Hour", "value": 318 },
+              "resourceId": "00000000-0000-4000-8000-000000006396",
+              "totalPrice": 35.4252
+            }
+          ],
+          "deploymentMode": "REGION-1-AZ",
+          "region": "GRA"
+        },
+        {
+          "components": [
+            {
+              "id": "mysql-essential-db1-4.00000000-0000-4000-8000-000000006405.00000000-0000-4000-8000-000000006406",
+              "name": "mysql-essential-db1-4",
+              "quantity": { "unit": "Hour", "value": 744 },
+              "resourceId": "00000000-0000-4000-8000-000000006406",
+              "totalPrice": 55.5024
+            }
+          ],
+          "deploymentMode": "REGION-1-AZ",
+          "region": "SBG"
+        }
+      ],
+      "totalPrice": 623.6316,
+      "type": "databases"
+    }
+  ],
+  "totalPrice": {
+    "currencyCode": "EUR",
+    "priceInUcents": 182606089600,
+    "text": "1826.06 EUR",
+    "value": 1826.060896
+  }
+}

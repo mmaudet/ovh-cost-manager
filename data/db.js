@@ -203,15 +203,81 @@ function servicesNotBilledYet(candidateMonth, account) {
 }
 
 /**
+ * The month of the provisional usage bill (CONTEXT.md) of an account, whose cost source is its
+ * Public Cloud usage: the bill of the month of today's usage, which the imports rewrite while the
+ * month runs, the month in progress of the account. Of the latest, for every account.
+ * @param {?string} account - The account shown (see accountCondition()): null for every account
+ * @returns {?string} YYYY-MM, the month of the bill, as the months list lists it; null when the
+ *   account has none
+ */
+function provisionalMonthOf(account) {
+  const ofAccount = accountCondition(account, 'account');
+  return getDb().prepare(`
+    SELECT MAX(strftime('%Y-%m', date)) FROM bills WHERE provisional = 1 AND ${ofAccount.sql}
+  `).pluck().get(...ofAccount.params) ?? null;
+}
+
+/**
+ * The projected lines of the provisional usage bills (CONTEXT.md) between two dates, both
+ * included, of the account (see accountCondition()): what each project's month-end forecast
+ * (#224) adds to what it consumed so far, spread over its lines pro rata, so that the projection
+ * keeps their classification, product and charge. Each line of a project whose forecast exceeds
+ * what its lines add up to has one, of the same columns, which costs its share of the excess, and
+ * whose quantity is 0, as the tokens of a model are those consumed. A project without a forecast
+ * of the month, or which consumed nothing yet, has none. As a table for linesOfPeriod().
+ * @param {string} fromDate
+ * @param {string} toDate
+ * @param {?string} account
+ * @returns {{ sql: string, params: Array }}
+ */
+function usageProjectionOf(fromDate, toDate, account) {
+  const ofAccount = accountCondition(account, 'b.account');
+  return {
+    sql: `SELECT d.id, d.bill_id, d.project_id, d.domain, d.description, 0 AS quantity,
+        0 AS unit_price, d.total_price * f.factor AS total_price, d.service_type, d.resource_type,
+        b.date AS date, b.account AS account, d.total_price * f.factor AS projected
+      FROM bill_details d
+      JOIN bills b ON d.bill_id = b.id
+      JOIN (
+        SELECT c.bill_id, c.project_id, MAX(pf.total_price - c.consumed, 0) / c.consumed AS factor
+        FROM (
+          SELECT d2.bill_id, d2.project_id, b2.date AS bill_date,
+            SUM(d2.total_price) AS consumed
+          FROM bill_details d2
+          JOIN bills b2 ON d2.bill_id = b2.id
+          WHERE b2.provisional = 1 AND d2.project_id IS NOT NULL
+          GROUP BY d2.bill_id, d2.project_id
+        ) c
+        -- The forecast of the month of the usage, the month before that of its bill
+        JOIN project_forecasts pf ON pf.project_id = c.project_id
+          AND pf.period_start = date(c.bill_date, 'start of month', '-1 month')
+        WHERE c.consumed > 0
+      ) f ON f.bill_id = d.bill_id AND f.project_id = d.project_id
+      WHERE b.provisional = 1 AND b.date >= ? AND b.date <= ? AND ${ofAccount.sql}
+        AND f.factor > 0`,
+    params: [fromDate, toDate, ...ofAccount.params],
+  };
+}
+
+// The columns of a bill line, in the order of the bill_details table, which the tables of
+// linesOfPeriod() give alike
+const BILL_LINE_COLUMNS = [
+  'id', 'bill_id', 'project_id', 'domain', 'description', 'quantity', 'unit_price', 'total_price',
+  'service_type', 'resource_type',
+].map(column => `d.${column}`).join(', ');
+
+/**
  * The bill lines that a query of the costs between two dates, both included, adds up, as a table
  * for its FROM clause, with its parameters: the lines of the bills of the account (see
- * accountCondition()), every account's by default. With the projected option, when the dates
- * cover the account's candidate month (candidateMonthOf(), #258) while it is the month in progress
- * (CONTEXT.md), its projected lines too (#217): the bill lines of the month before it of each
- * recurring service that the candidate month has not billed yet (data/month-in-progress.js),
- * counted as they were, their classification included, and dated on its first day. Each line has
- * the columns of bill_details, the date and the account of its bill, `date` and `account`, and
- * its projected part, `projected`: its whole cost for a projected line, 0 for a bill line.
+ * accountCondition()), every account's by default, the usage bills (CONTEXT.md) included. With the
+ * projected option, when the dates cover the account's candidate month (candidateMonthOf(), #258)
+ * while it is the month in progress (CONTEXT.md), its projected lines too (#217): the bill lines of
+ * the month before it of each recurring service that the candidate month has not billed yet
+ * (data/month-in-progress.js), counted as they were, their classification included, and dated on
+ * its first day. And when they cover the month of a provisional usage bill, its projected lines
+ * (usageProjectionOf()). Each line has the columns of bill_details, the date and the account of its
+ * bill, `date` and `account`, and its projected part, `projected`: its whole cost for a projected
+ * line, 0 for a bill line.
  * @param {?string} fromDate - The first day, YYYY-MM-DD; null, as the last, for no period
  * @param {?string} toDate - The last day
  * @param {?string} [account] - The account whose lines count, as its bills tell its candidate
@@ -224,30 +290,39 @@ function servicesNotBilledYet(candidateMonth, account) {
 function linesOfPeriod(fromDate, toDate, account = null, { projected = false } = {}) {
   const ofAccount = accountCondition(account, 'b.account');
   const billLines = {
-    sql: `SELECT d.*, b.date AS date, b.account AS account, 0 AS projected
+    sql: `SELECT ${BILL_LINE_COLUMNS}, b.date AS date, b.account AS account, 0 AS projected
       FROM bill_details d
       JOIN bills b ON d.bill_id = b.id
       WHERE b.date >= ? AND b.date <= ? AND ${ofAccount.sql}`,
     params: [fromDate, toDate, ...ofAccount.params],
   };
   if (!projected) return billLines;
+  const tables = [billLines];
+  const monthsOfDates = monthsOfWindow(fromDate, toDate);
   // None while the account has a bill in neither the month of today nor the month before
   const candidateMonth = candidateMonthOf(account);
-  if (candidateMonth === null || !monthsOfWindow(fromDate, toDate).includes(candidateMonth)) {
-    return billLines;
+  if (candidateMonth !== null && monthsOfDates.includes(candidateMonth)) {
+    const projectedLines = servicesNotBilledYet(candidateMonth, account)
+      .flatMap(({ lines }) => lines);
+    if (projectedLines.length > 0) {
+      const ofProjectedLines = idInList('d.id', projectedLines);
+      tables.push({
+        sql: `SELECT ${BILL_LINE_COLUMNS}, ? AS date, b.account AS account,
+            d.total_price AS projected
+          FROM bill_details d
+          JOIN bills b ON d.bill_id = b.id
+          WHERE ${ofProjectedLines.sql}`,
+        params: [monthBounds(candidateMonth).from, ...ofProjectedLines.params],
+      });
+    }
   }
-  const projectedLines = servicesNotBilledYet(candidateMonth, account)
-    .flatMap(({ lines }) => lines);
-  if (projectedLines.length === 0) return billLines;
-  const ofProjectedLines = idInList('d.id', projectedLines);
+  const provisionalMonth = provisionalMonthOf(account);
+  if (provisionalMonth !== null && monthsOfDates.includes(provisionalMonth)) {
+    tables.push(usageProjectionOf(fromDate, toDate, account));
+  }
   return {
-    sql: `${billLines.sql}
-      UNION ALL
-      SELECT d.*, ? AS date, b.account AS account, d.total_price AS projected
-      FROM bill_details d
-      JOIN bills b ON d.bill_id = b.id
-      WHERE ${ofProjectedLines.sql}`,
-    params: [...billLines.params, monthBounds(candidateMonth).from, ...ofProjectedLines.params],
+    sql: tables.map(({ sql }) => sql).join('\n      UNION ALL\n      '),
+    params: tables.flatMap(({ params }) => params),
   };
 }
 
@@ -310,6 +385,12 @@ function getDb() {
         UPDATE accounts SET last_success_at = last_import_at WHERE last_import_status = 'success'
       `);
     });
+    // The cost source of each account's entry in config.json, which the next import records:
+    // NULL until then, read as its bills, the only source before. The bills stored then are
+    // OVH's, none of them a usage bill or provisional.
+    addColumnIfNotExists(db, 'accounts', 'cost_source', 'TEXT');
+    addColumnIfNotExists(db, 'bills', 'source', 'TEXT');
+    addColumnIfNotExists(db, 'bills', 'provisional', 'INTEGER NOT NULL DEFAULT 0');
     // What keeps the lock of a long import (#113)
     addColumnIfNotExists(db, 'import_log', 'heartbeat_at', 'DATETIME');
     // The credit movements keyed by their account too (#114): their ids, which join the name
@@ -351,6 +432,10 @@ function closeDb() {
     db = null;
   }
 }
+
+// An OVH bill as the bills table holds it, without what tells a usage bill (CONTEXT.md), which it
+// is not: the bills route gives it as before the usage bills
+const ovhBill = ({ source, provisional, ...bill }) => bill;
 
 // Project operations
 const projectOps = {
@@ -450,7 +535,9 @@ const billOps = {
   },
 
   /**
-   * The bills between two dates, each optional, the latest first
+   * The bills between two dates, each optional, the latest first: OVH's, as the bills route and
+   * the CSV export of the bills list them, without the usage bills (CONTEXT.md), which OCM makes
+   * of the Public Cloud usage of the accounts whose cost source it is
    * @param {?string} [fromDate] - The first day, none by default
    * @param {?string} [toDate] - The last day, none by default
    * @param {?string} [account] - The account whose bills to list (see accountCondition()):
@@ -459,7 +546,7 @@ const billOps = {
    */
   getAll: (fromDate, toDate, account = null) => {
     const ofAccount = accountCondition(account, 'account');
-    const conditions = [ofAccount.sql];
+    const conditions = [ofAccount.sql, 'source IS NULL'];
     const params = [...ofAccount.params];
     if (fromDate) {
       conditions.push('date >= ?');
@@ -471,12 +558,17 @@ const billOps = {
     }
     return getDb().prepare(`
       SELECT * FROM bills WHERE ${conditions.join(' AND ')} ORDER BY date DESC
-    `).all(...params);
+    `).all(...params).map(ovhBill);
   },
 
+  /**
+   * @param {string} id
+   * @returns {object|undefined} The OVH bill of that id; none for a usage bill (CONTEXT.md)
+   */
   getById: (id) => {
     const db = getDb();
-    return db.prepare('SELECT * FROM bills WHERE id = ?').get(id);
+    const bill = db.prepare('SELECT * FROM bills WHERE id = ? AND source IS NULL').get(id);
+    return bill && ovhBill(bill);
   },
 
   /**
@@ -515,14 +607,18 @@ const billOps = {
    * month of today once the account has a bill in it and until then the month before, if the
    * account has a bill in it (candidateMonthOf()), while a recurring service has no bill line in
    * it (data/month-in-progress.js), read from the bills as they are. So the month in progress is
-   * always one that the months list lists.
+   * always one that the months list lists. For an account whose cost source is its Public Cloud
+   * usage, the month of its provisional usage bill (provisionalMonthOf()), that of the month of
+   * today's usage, which takes over: one month only is ever in progress, and with every account,
+   * that of the latest provisional usage bill, while there is one.
    * @param {?string} [account] - The account whose bills tell the candidate month, and whose
    *   recurring services count (see accountCondition()): every account's by default, any of
    *   which keeps the month in progress
-   * @returns {?string} The candidate month, YYYY-MM, while it is in progress; null otherwise, as
-   *   when there is none
+   * @returns {?string} The month in progress, YYYY-MM; null when there is none
    */
   getMonthInProgress: (account = null) => {
+    const provisionalMonth = provisionalMonthOf(account);
+    if (provisionalMonth !== null) return provisionalMonth;
     const candidateMonth = candidateMonthOf(account);
     if (candidateMonth === null) return null;
     return servicesNotBilledYet(candidateMonth, account).length > 0 ? candidateMonth : null;
@@ -577,6 +673,8 @@ const detailOps = {
    * (#214). Those of the months before are the account's, whose recurring services they tell;
    * those of the candidate month are every account's, as any account's bill of the candidate
    * month bills a service that it names, such as one moved from an account to another (#214).
+   * OVH's bills alone: a usage bill (CONTEXT.md) holds a month's usage whole, or else is
+   * provisional, its month the account's month in progress (provisionalMonthOf()).
    * @param {string} candidateMonth - YYYY-MM (candidateMonthOf())
    * @param {?string} [account] - The account whose bills of the months before count (see
    *   accountCondition()): every account's by default
@@ -592,7 +690,7 @@ const detailOps = {
         json_group_array(d.id) AS lines
       FROM bill_details d
       JOIN bills b ON d.bill_id = b.id
-      WHERE b.date >= ? AND b.date <= ? AND d.domain IS NOT NULL
+      WHERE b.date >= ? AND b.date <= ? AND d.domain IS NOT NULL AND b.source IS NULL
         AND (strftime('%Y-%m', b.date) = ? OR ${ofAccount.sql})
       GROUP BY d.domain, b.account, month
     `).all(from, to, candidateMonth, ...ofAccount.params)
@@ -734,20 +832,25 @@ const importLogOps = {
 const accountsOps = {
   /**
    * Records an account that an import reads, or updates one it knows: its currency, and the
-   * name and budget of its entry in config.json, which only an import can match with the
-   * account (#113). A rename in config.json thus shows once the account is imported again.
+   * name, budget and cost source of its entry in config.json, which only an import can match
+   * with the account (#113). A rename in config.json thus shows once the account is imported
+   * again.
    * @param {object} account - As GET /me names it
    * @param {string} account.nic - Its NIC handle
    * @param {?string} account.currency - The code of the currency it bills in, such as EUR
    * @param {?string} [account.name] - The name of its entry, null when it has none
    * @param {?number} [account.budget] - The budget of its entry, null when it has none
+   * @param {string} [account.costSource] - The cost source of its entry (CONTEXT.md):
+   *   'bills', by default, or 'cloudUsage'
    */
-  upsert: ({ nic, currency, name = null, budget = null }) => {
+  upsert: ({ nic, currency, name = null, budget = null, costSource = 'bills' }) => {
     const db = getDb();
     return db.prepare(`
-      INSERT INTO accounts (nic, currency, name, budget) VALUES (@nic, @currency, @name, @budget)
-      ON CONFLICT(nic) DO UPDATE SET currency = @currency, name = @name, budget = @budget
-    `).run({ nic, currency, name, budget });
+      INSERT INTO accounts (nic, currency, name, budget, cost_source)
+      VALUES (@nic, @currency, @name, @budget, @costSource)
+      ON CONFLICT(nic) DO UPDATE SET
+        currency = @currency, name = @name, budget = @budget, cost_source = @costSource
+    `).run({ nic, currency, name, budget, costSource });
   },
 
   // Which account the rows belong to, and the rows that an import gives to an account,
@@ -841,11 +944,13 @@ const accountsOps = {
    * @returns {object[]} Every account recorded: those that the configuration of the last run
    *   lists, in its order, then the others by NIC handle. Each gives the accounts table's
    *   nic, currency, last_import_at, last_import_status, last_import_error, last_success_at,
-   *   name and budget, and `configured`, whether that configuration lists it.
+   *   name, budget and cost_source, 'bills' for an account recorded before the cost sources,
+   *   and `configured`, whether that configuration lists it.
    */
   getAll: () => getDb().prepare(`
     SELECT nic, currency, last_import_at, last_import_status, last_import_error,
-      last_success_at, name, budget, position IS NOT NULL AS configured
+      last_success_at, name, budget, COALESCE(cost_source, 'bills') AS cost_source,
+      position IS NOT NULL AS configured
     FROM accounts
     ORDER BY position IS NULL, position, nic
   `).all().map(account => ({ ...account, configured: account.configured === 1 }))
@@ -2531,11 +2636,14 @@ const cloudDetailOps = {
     db.prepare('DELETE FROM object_storage_buckets WHERE project_id = ?').run(projectId);
   },
 
-  // A project's instances and quotas: inventories, which each import replaces
-  clearProjectInventory: (projectId) => {
-    const db = getDb();
-    db.prepare('DELETE FROM cloud_instances WHERE project_id = ?').run(projectId);
-    db.prepare('DELETE FROM project_quotas WHERE project_id = ?').run(projectId);
+  // A project's instances, an inventory that each import replaces once it fetched it
+  clearInstancesByProject: (projectId) => {
+    getDb().prepare('DELETE FROM cloud_instances WHERE project_id = ?').run(projectId);
+  },
+
+  // A project's quotas, an inventory that each import replaces once it fetched it
+  clearQuotasByProject: (projectId) => {
+    getDb().prepare('DELETE FROM project_quotas WHERE project_id = ?').run(projectId);
   },
 
   // A project's consumption of the month that starts on `periodStart` (YYYY-MM-01). The
@@ -3082,6 +3190,75 @@ const carbonOps = {
   },
 };
 
+// The usage bills (CONTEXT.md) of the accounts whose cost source is their Public Cloud usage, and
+// the usage periods of their projects that they hold the lines of
+const usageOps = {
+  /**
+   * @param {string} projectId - A Public Cloud project
+   * @returns {Map<string, ?string>} The usage periods of the project stored, by id, each with
+   *   when OVH last updated it, as it gave it
+   */
+  getPeriods: (projectId) => new Map(getDb().prepare(`
+    SELECT usage_id, last_update FROM project_usage_periods WHERE project_id = ?
+  `).raw().all(projectId)),
+
+  /**
+   * Stores a project's usage period on the usage bill of its account and month, in one
+   * transaction: its lines replace those that an earlier import stored of the period, the other
+   * projects' lines stay, and the bill's cost is what all its lines add up to again.
+   * @param {object} period
+   * @param {{id: string, date: string, currency: string, account: string}} period.bill - The
+   *   usage bill, as usageBillOf() in data/usage-lines.js gives it, with its currency and the NIC
+   *   handle of its account
+   * @param {string} period.projectId - The project
+   * @param {string} period.usageId - The period's id, as usage/history lists it
+   * @param {string} period.month - The month of its usage, YYYY-MM
+   * @param {?string} period.lastUpdate - When OVH last updated it
+   * @param {object[]} period.lines - Its bill lines, classified, without their ids and bill
+   */
+  replacePeriod: ({ bill, projectId, usageId, month, lastUpdate, lines }) => {
+    const db = getDb();
+    // The ids of the period's lines, which tell them apart from the other periods' on the bill
+    const prefix = `${bill.id}_${projectId}_${usageId}_`;
+    db.transaction(() => {
+      db.prepare(`
+        INSERT INTO bills (id, date, price_without_tax, currency, imported_at, account, source)
+        VALUES (@id, @date, 0, @currency, CURRENT_TIMESTAMP, @account, 'usage')
+        ON CONFLICT(id) DO UPDATE SET
+          date = @date, currency = @currency, imported_at = CURRENT_TIMESTAMP,
+          account = @account, source = 'usage'
+      `).run(requireAccount('bills', bill));
+      db.prepare('DELETE FROM bill_details WHERE bill_id = ? AND substr(id, 1, ?) = ?')
+        .run(bill.id, prefix.length, prefix);
+      detailOps.insertMany(lines.map((line, index) => ({
+        ...line, id: `${prefix}${index + 1}`, bill_id: bill.id,
+      })));
+      db.prepare(`
+        INSERT INTO project_usage_periods (project_id, usage_id, month, last_update, bill_id)
+        VALUES (?, ?, ?, ?, ?)
+        ON CONFLICT(project_id, usage_id) DO UPDATE SET
+          month = excluded.month, last_update = excluded.last_update, bill_id = excluded.bill_id
+      `).run(projectId, usageId, month, lastUpdate ?? null, bill.id);
+      db.prepare(`
+        UPDATE bills SET price_without_tax = (
+          SELECT ROUND(COALESCE(SUM(total_price), 0), 2) FROM bill_details WHERE bill_id = ?
+        ) WHERE id = ?
+      `).run(bill.id, bill.id);
+    })();
+  },
+
+  /**
+   * Marks provisional the usage bills of an account dated from a day on, those of the month of
+   * today's usage, which the next imports rewrite while it runs, and the others not.
+   * @param {string} account - The NIC handle of the account
+   * @param {string} fromDate - The date of the usage bill of the month of today, YYYY-MM-DD
+   */
+  markProvisional: (account, fromDate) => getDb().prepare(`
+    UPDATE bills SET provisional = CASE WHEN date >= ? THEN 1 ELSE 0 END
+    WHERE account = ? AND source = 'usage'
+  `).run(fromDate, account),
+};
+
 module.exports = {
   getDb,
   closeDb,
@@ -3102,6 +3279,7 @@ module.exports = {
   balance: balanceOps,
   inventory: inventoryOps,
   cloudDetails: cloudDetailOps,
+  usage: usageOps,
   webCloud: webCloudOps,
   carbon: carbonOps,
 };

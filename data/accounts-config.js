@@ -12,6 +12,12 @@
  * - the credentials at the top of the file, in the legacy flat form of credentials.json.
  * The last two read as before: the OVH API client takes the API's host from an endpoint, or
  * a host, or else uses the EU one.
+ *
+ * Each account has a cost source (CONTEXT.md): `bills`, by default, or `cloudUsage`, for an
+ * account whose bills a third party issues, which neither the API nor the control panel gives:
+ * its costs are then its Public Cloud projects' usage. An entry of the accounts section gives
+ * it as its costSource; the single account of the other two forms, as the costSource at the top
+ * of the file.
  */
 
 const { parsePositiveInteger, readSection } = require('./strict-settings');
@@ -21,12 +27,17 @@ const KEYS = ['appKey', 'appSecret', 'consumerKey'];
 // Those of the accounts section, which names the endpoint of each account
 const ACCOUNT_KEYS = [...KEYS, 'endpoint'];
 
+// The cost sources that an account takes, the first by default: its bills, or its Public Cloud
+// projects' usage
+const COST_SOURCES = ['bills', 'cloudUsage'];
+
 /**
  * @typedef {object} ConfiguredAccount
  * @property {string} label - How the messages name it: its name, quoted, or else its place,
  *   such as accounts[1], or credentials for the single account of the other forms
  * @property {?string} name - Its name, null when it has none
  * @property {?number} budget - Its budget, null when it has none
+ * @property {string} costSource - Where its costs come from: 'bills' or 'cloudUsage'
  * @property {object} credentials - Its credentials as they are given, for the OVH API
  *   client: appKey, appSecret, consumerKey, an endpoint or a host, and whatever else the
  *   client takes
@@ -54,22 +65,39 @@ function readAccounts(config, source) {
     throw new Error(`accounts in ${source} cannot be set with the legacy credentials at the `
       + `top of the file (${legacyKeys.join(', ')}): list every account under accounts`);
   }
+  // It would be ambiguous which accounts it is the cost source of
+  if (config.accounts !== undefined && config.costSource !== undefined) {
+    throw new Error(`costSource at the top of ${source} cannot be set with the accounts `
+      + 'section: give each account its own costSource');
+  }
   if (config.accounts !== undefined) {
     return readAccountList(config.accounts, source);
   }
   if (config.credentials !== undefined) {
-    return [unnamed(readCredentials(config, 'credentials', 'credentials', source, KEYS))];
+    return [unnamed(readCredentials(config, 'credentials', 'credentials', source, KEYS),
+      readCostSource(config.costSource, 'costSource', source))];
   }
   // The legacy flat form, which the whole file is the credentials of
   if (legacyKeys.length > 0) {
-    return [unnamed(readCredentials(config, null, null, source, KEYS))];
+    return [unnamed(readCredentials(config, null, null, source, KEYS),
+      readCostSource(config.costSource, 'costSource', source))];
   }
   return [];
 }
 
 // The single account of the credentials section, or of the legacy flat form
-function unnamed(credentials) {
-  return { label: 'credentials', name: null, budget: null, credentials };
+function unnamed(credentials, costSource) {
+  return { label: 'credentials', name: null, budget: null, costSource, credentials };
+}
+
+// An optional cost source: one of COST_SOURCES, the first when absent
+function readCostSource(value, name, source) {
+  if (value === undefined) return COST_SOURCES[0];
+  if (!COST_SOURCES.includes(value)) {
+    const sources = COST_SOURCES.map(costSource => JSON.stringify(costSource)).join(' or ');
+    throw new Error(`${name} in ${source} must be ${sources}, not ${JSON.stringify(value)}`);
+  }
+  return value;
 }
 
 // The accounts of the accounts section
@@ -97,6 +125,7 @@ function readAccountList(list, source) {
       budget: parsePositiveInteger(entry.budget, {
         name: `${place}.budget in ${source}`, fromFile: true,
       }) ?? null,
+      costSource: readCostSource(entry.costSource, `${place}.costSource`, source),
       credentials: readCredentials(entry, 'credentials', `${place}.credentials`, source,
         ACCOUNT_KEYS),
     };
@@ -151,4 +180,4 @@ function kindOf(value) {
   return `a ${typeof value}`;
 }
 
-module.exports = { readAccounts };
+module.exports = { COST_SOURCES, readAccounts };

@@ -141,6 +141,58 @@ describe('volume and snapshot inventory import', () => {
   });
 });
 
+describe('instance and quota inventory import', () => {
+  const storedInstances = () => db.getDb()
+    .prepare('SELECT id FROM cloud_instances WHERE project_id = ? ORDER BY id').pluck().all(PROJECT);
+  const storedQuotas = () => db.getDb()
+    .prepare('SELECT region FROM project_quotas WHERE project_id = ?').pluck().all(PROJECT);
+
+  beforeEach(() => {
+    routes.set(`${BASE}/usage/current`, ok({
+      period: { from: '2026-09-01T00:00:00+02:00', to: '2026-09-15T00:00:00+02:00' },
+      totalPrice: 0,
+    }));
+    routes.set(`${BASE}/instance`, ok([{ id: 'inst-1', name: 'web', planCode: 'b3-8.consumption' }]));
+    routes.set(`${BASE}/quota`, ok([{ region: 'GRA11', instance: { maxCores: 20 } }]));
+  });
+
+  // As OVH may answer a project's instances with an internal error, while its usage answers
+  test('keeps the stored instances and quotas when their listing fails', async () => {
+    await importProject();
+    routes.set(`${BASE}/instance`, fail(500, 'Internal server error'));
+    routes.set(`${BASE}/quota`, fail(500, 'Internal server error'));
+
+    await importProject();
+
+    expect(storedInstances()).toEqual(['inst-1']);
+    expect(storedQuotas()).toEqual(['GRA11']);
+    expect(console.warn).toHaveBeenCalledWith(expect.stringContaining(
+      `Instance fetch of project ${PROJECT} failed, keeping the stored instances`,
+    ));
+    expect(console.warn).toHaveBeenCalledWith(expect.stringContaining('keeping the stored quotas'));
+  });
+
+  test('retries a listing that fails once', async () => {
+    let calls = 0;
+    routes.set(`${BASE}/instance`, () => (++calls === 1
+      ? Promise.reject({ error: 500, message: 'Internal server error' })
+      : Promise.resolve([{ id: 'inst-2', name: 'api' }])));
+
+    await importProject();
+
+    expect(storedInstances()).toEqual(['inst-2']);
+  });
+
+  test('replaces the stored instances once it fetched them', async () => {
+    await importProject();
+    routes.set(`${BASE}/instance`, ok([{ id: 'inst-3', name: 'worker' }]));
+
+    await importProject();
+
+    expect(storedInstances()).toEqual(['inst-3']);
+  });
+});
+
 describe('project consumption import', () => {
   // The hourly resources that usage/current details for a project that ran one instance
   const oneInstance = (flavor, totalPrice) => ({

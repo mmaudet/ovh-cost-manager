@@ -32,9 +32,11 @@ const colorOf = (model) => {
  * @param {string} props.language
  * @param {function(string): string} props.t
  * @param {function(number): string} props.fmt - The amount format of the page
+ * @param {boolean} [props.usageMonths] - Whether the page names the months by the month of their
+ *   usage (namesUsageMonths())
  * @returns {JSX.Element}
  */
-const AiEndpointsTrend = ({ aiEndpointsTrend, language, t, fmt }) => (
+const AiEndpointsTrend = ({ aiEndpointsTrend, language, t, fmt, usageMonths = false }) => (
   <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
     <h3 className="font-semibold text-gray-900 mb-4">{t('aiEndpointsTrend')}</h3>
     <ul className="flex flex-wrap gap-2 mb-4">
@@ -56,10 +58,13 @@ const AiEndpointsTrend = ({ aiEndpointsTrend, language, t, fmt }) => (
       <ResponsiveContainer width="100%" height="100%">
         <BarChart data={aiEndpointsTrend.monthlyTrend}>
           <CartesianGrid strokeDasharray="3 3" />
-          <XAxis dataKey="month" tickFormatter={(month) => formatYearMonth(month, language)} />
+          <XAxis
+            dataKey="month"
+            tickFormatter={(month) => formatYearMonth(month, language, { ofUsage: usageMonths })}
+          />
           <YAxis tickFormatter={(value) => `${value}€`} />
           <Tooltip
-            labelFormatter={(month) => formatYearMonth(month, language)}
+            labelFormatter={(month) => formatYearMonth(month, language, { ofUsage: usageMonths })}
             formatter={(value, model) => [`${fmt(value)}€`, model]}
           />
           {/* By a function: a text dataKey would read the dot of a model's name as a path */}

@@ -85,11 +85,15 @@ const MonthInProgressNote = ({ t }) => (
 );
 
 // The Trends tab, which the shell renders while it is active: what useTrendsTab() returns,
-// with the shell's language, translations (t) and amount format (fmt).
+// with the shell's language, translations (t) and amount format (fmt). The months are named by
+// the month of their usage while the shell says so (usageMonths, namesUsageMonths()).
 const TrendsTab = ({
   trendPeriod, monthlyTrend, trendByCategory, hiddenCategories, toggleCategory, gpuTrend,
   aiEndpointsTrend, monthInProgress, projected, periodMonths, language, t, fmt,
+  usageMonths = false,
 }) => {
+  // A month's short name on the axes and the cards
+  const shortMonth = (yearMonth) => formatYearMonth(yearMonth, language, { ofUsage: usageMonths });
   const currentPeriodLabel = (PERIOD_OPTIONS.find(o => o.months === trendPeriod) || {}).key;
   // What each line chart draws of the month in progress that the period covers (#217): the
   // parts of its series, and whether the trends project it
@@ -102,6 +106,7 @@ const TrendsTab = ({
   // as the month selectors of the Compare tab do
   const monthLabel = (yearMonth) => formatMonthLabel(yearMonth, language, {
     inProgressLabel: yearMonth === monthInProgress ? t('monthInProgress') : null,
+    ofUsage: usageMonths,
   });
   // The first and the last months of the period, as the trend gives them
   const firstMonth = monthlyTrend[0];
@@ -145,7 +150,7 @@ const TrendsTab = ({
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={monthlyTrend}>
                 <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="yearMonth" tickFormatter={(ym) => formatYearMonth(ym, language)} />
+                <XAxis dataKey="yearMonth" tickFormatter={shortMonth} />
                 <YAxis tickFormatter={(v) => `${v}€`} />
                 <Tooltip labelFormatter={monthLabel} payloadUniqBy={(entry) => entry.name} />
                 {seriesLines({
@@ -193,7 +198,7 @@ const TrendsTab = ({
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={trendByCategory.data}>
                   <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="yearMonth" tickFormatter={(ym) => formatYearMonth(ym, language)} />
+                  <XAxis dataKey="yearMonth" tickFormatter={shortMonth} />
                   <YAxis tickFormatter={(v) => `${v}€`} />
                   <Tooltip labelFormatter={monthLabel} payloadUniqBy={(entry) => entry.name} />
                   {trendByCategory.categories
@@ -244,6 +249,7 @@ const TrendsTab = ({
       {aiEndpointsTrend?.monthlyTrend.length > 1 && (
         <AiEndpointsTrend
           aiEndpointsTrend={aiEndpointsTrend} language={language} t={t} fmt={fmt}
+          usageMonths={usageMonths}
         />
       )}
 
@@ -272,7 +278,7 @@ const TrendsTab = ({
               ? 'text-red-600'
               : 'text-gray-400'}`}
           >
-            {mostExpensive ? formatYearMonth(mostExpensive.yearMonth, language) : 'N/A'}
+            {mostExpensive ? shortMonth(mostExpensive.yearMonth) : 'N/A'}
           </div>
           <p className="text-sm text-gray-500 mt-1">
             {mostExpensive && !mostExpensiveProjected && `${fmt(mostExpensive.cost)}€`}

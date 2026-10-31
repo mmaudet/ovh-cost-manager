@@ -18,6 +18,16 @@
         "consumerKey": "PARIS_CONSUMER_KEY",
         "endpoint": "ovh-eu"
       }
+    },
+    {
+      "name": "Filiale Nantes",
+      "costSource": "cloudUsage",
+      "credentials": {
+        "appKey": "NANTES_APP_KEY",
+        "appSecret": "NANTES_APP_SECRET",
+        "consumerKey": "NANTES_CONSUMER_KEY",
+        "endpoint": "ovh-eu"
+      }
     }
   ],
   "dashboard": {

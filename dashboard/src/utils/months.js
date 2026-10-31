@@ -52,8 +52,12 @@ export const monthInProgressWithin = (months, period) => {
  * @param {{ value: string, inProgress?: boolean }} month - A month as the list gives it
  * @param {string} language - The page's, 'fr' or 'en'
  * @param {function(string): string} t
+ * @param {object} [options]
+ * @param {boolean} [options.ofUsage] - Whether the page names the months of the bills by the
+ *   month of their usage (namesUsageMonths() in accounts.js)
  * @returns {string} Septembre 2026 (en cours), September 2026 (in progress), Août 2026…
  */
-export const monthLabel = (month, language, t) => formatMonthLabel(month.value, language, {
-  inProgressLabel: month.inProgress ? t('monthInProgress') : null,
-});
+export const monthLabel = (month, language, t, { ofUsage = false } = {}) => formatMonthLabel(
+  month.value, language,
+  { inProgressLabel: month.inProgress ? t('monthInProgress') : null, ofUsage },
+);

@@ -20,7 +20,7 @@ import { ResyncButton } from '../components/ResyncButton.jsx';
 import { SortableHeader, sortRows, useTableSorts } from '../components/SortableHeader.jsx';
 import {
   accountColumnOf, accountLabel, accountQuery, accountsOf, budgetOf, importStateOf,
-  offersAccounts, scopeLabel,
+  namesUsageMonths, offersAccounts, scopeLabel, showsUsageCosts,
 } from '../utils/accounts.js';
 import { FIGURE_CARD } from '../utils/figureCards.js';
 import { formatCurrency, formatMonthLabel, yearMonthOf } from '../utils/format.js';
@@ -154,6 +154,11 @@ export default function Dashboard() {
   // What the page shows, all accounts or the account selected, as the report's title names
   // it when the page offers several (#124): null when it names none
   const scope = scopeLabel(accounts, selectedAccount, t);
+  // Whether the page names the months of the bills by the month of their usage, while it shows
+  // only accounts whose cost source is their Public Cloud usage (CONTEXT.md), and whether it shows
+  // any, whose costs it then says are their Public Cloud usage's alone
+  const usageMonths = namesUsageMonths(accounts, selectedAccount);
+  const usageCosts = showsUsageCosts(accounts, selectedAccount);
   // Whether the page projects the month in progress (#214), page-wide, and what turns it on or
   // off: the Trends tab shows it next to its period selector, and its trends follow it (#217),
   // and the Compare tab next to its months A and B, and its figures follow it (#218)
@@ -504,6 +509,19 @@ export default function Dashboard() {
           </div>
         )}
 
+        {/* The costs of an account whose cost source is its Public Cloud usage (CONTEXT.md):
+            those of its Public Cloud projects alone, at public prices before tax and before any
+            discount or credit, the months named by their usage while the page shows only such
+            accounts */}
+        {usageCosts && (
+          <div
+            role="note"
+            className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-blue-800 text-sm"
+          >
+            {t('usageCostsNotice')}{usageMonths && ` ${t('usageMonthsNotice')}`}
+          </div>
+        )}
+
         {/* Header */}
         <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
           <div className="flex items-center gap-3 shrink-0">
@@ -581,7 +599,7 @@ export default function Dashboard() {
                 >
                   {months.map(m => (
                     <option key={m.value} value={m.value}>
-                      {formatMonthLabel(m.value, language)}
+                      {formatMonthLabel(m.value, language, { ofUsage: usageMonths })}
                     </option>
                   ))}
                 </HeaderSelect>
@@ -596,6 +614,7 @@ export default function Dashboard() {
                         summary, byService, byProject, selectedMonth, language, {
                           scope,
                           inProgressLabel: selectedMonthInProgress ? t('monthInProgress') : null,
+                          ofUsage: usageMonths,
                         },
                       );
                       const blob = new Blob([md], { type: 'text/markdown' });
@@ -820,13 +839,15 @@ export default function Dashboard() {
         {activeTab === 'compare' && (
           <CompareTab
             {...compareTab} {...projectionSetting} language={language} t={t} fmt={fmt}
-            months={months} accountColumn={accountColumn}
+            months={months} accountColumn={accountColumn} usageMonths={usageMonths}
           />
         )}
 
         {/* Tab Content - Trends */}
         {activeTab === 'trends' && (
-          <TrendsTab {...trendsTab} language={language} t={t} fmt={fmt} />
+          <TrendsTab
+            {...trendsTab} language={language} t={t} fmt={fmt} usageMonths={usageMonths}
+          />
         )}
 
         {/* Tab Content - Web Cloud */}
@@ -844,6 +865,7 @@ export default function Dashboard() {
             setSelectedProject={setSelectedProject} byResourceType={byResourceType}
             gpuSummary={gpuSummary} accountColumn={accountColumn} cloudTotal={summary?.cloudTotal}
             billedProjects={billedProjects} billedProjectsFailed={billedProjectsFailed}
+            usageMonths={usageMonths}
           />
         )}
 
@@ -851,7 +873,7 @@ export default function Dashboard() {
         {activeTab === 'infrastructure' && (
           <InfrastructureTab
             {...infrastructureTab} language={language} t={t} fmt={fmt}
-            accountColumn={accountColumn}
+            accountColumn={accountColumn} usageMonths={usageMonths}
             selectedMonth={selectedMonth} byResourceType={byResourceType}
             selectedResourceType={selectedResourceType}
             setSelectedResourceType={setSelectedResourceType}
@@ -863,6 +885,7 @@ export default function Dashboard() {
           <BackupTab
             {...backupTab} language={language} t={t} fmt={fmt}
             selectedMonth={selectedMonth} summary={summary} byResourceType={byResourceType}
+            usageMonths={usageMonths}
           />
         )}
 
@@ -998,7 +1021,7 @@ export default function Dashboard() {
 
       <PublicCloudTabModals
         {...publicCloudTab} language={language} t={t} fmt={fmt} locale={locale}
-        selectedMonth={selectedMonth} accountColumn={accountColumn}
+        selectedMonth={selectedMonth} accountColumn={accountColumn} usageMonths={usageMonths}
       />
 
       <InfrastructureTabModals

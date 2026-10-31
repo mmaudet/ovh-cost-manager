@@ -5,10 +5,11 @@ import { formatMonthLabel, formatPercent } from '../utils/format.js';
 // The Backup tab, which the shell renders while it is active: what useBackupTab() returns,
 // with the shell's language, translations (t), amount format (fmt) and selected month, and
 // two of its queries that load at page start: the month's summary and its costs by resource
-// type.
+// type. The month is named by the month of its usage while the shell says so (usageMonths,
+// namesUsageMonths()).
 const BackupTab = ({
   backupStats, loadingBackup, failedBackup,
-  language, t, fmt, selectedMonth, summary, byResourceType,
+  language, t, fmt, selectedMonth, summary, byResourceType, usageMonths = false,
 }) => {
   // Until the statistics arrive, the tab says it is loading, in the words of the page's
   // loading screen, as the Web Cloud tab does (#64)
@@ -85,7 +86,7 @@ const BackupTab = ({
           {language === 'en' ? 'Backup Resources' : 'Ressources Backup'}
           {selectedMonth && (
             <span className="text-sm font-normal text-gray-400 ml-2">
-              ({formatMonthLabel(selectedMonth.value, language)})
+              ({formatMonthLabel(selectedMonth.value, language, { ofUsage: usageMonths })})
             </span>
           )}
         </h3>

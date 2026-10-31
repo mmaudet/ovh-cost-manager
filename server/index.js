@@ -837,6 +837,7 @@ function registerRoutes() {
     name: null,
     budget: null,
     currency: null,
+    costSource: null,
     configured: false,
     unknown: true,
     lastImport: null,
@@ -857,7 +858,9 @@ function registerRoutes() {
   // accounts that the configuration of the last import lists come first, in its order, then
   // those it no longer lists, which keep their data but are no longer imported, and the
   // Unknown account, while it holds rows (#114). An account's id, its NIC handle, is the value
-  // that the account parameter of the other routes takes.
+  // that the account parameter of the other routes takes. Its cost source (CONTEXT.md),
+  // 'bills' or 'cloudUsage', is the one of its entry at its last import, for the dashboard to
+  // tell an account whose costs are its Public Cloud usage alone; the Unknown account has none.
   const listAccounts = () => {
     const accounts = db.accounts.getAll().map(account => ({
       id: account.nic,
@@ -865,6 +868,7 @@ function registerRoutes() {
       name: account.name ?? account.nic,
       budget: account.budget,
       currency: account.currency,
+      costSource: account.cost_source,
       configured: account.configured,
       unknown: false,
       lastImport: account.last_import_at === null ? null : {

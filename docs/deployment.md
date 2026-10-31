@@ -250,6 +250,7 @@ Each entry has:
 
 - `name`, optional: how the dashboard names the account, unique among the accounts. Without it, the dashboard shows the account's NIC handle.
 - `budget`, optional: the account's own budget, a positive integer, as a JSON number (see [Budgets](#budgets)).
+- `costSource`, optional: `"bills"`, the default, or `"cloudUsage"` for an account whose bills a third party issues, which OCM then reads from its Public Cloud projects' usage (see [Accounts Without Bills](../README.md#accounts-without-bills) in the README, and [ADR 0004](adr/0004-an-account-without-bills-is-read-from-usage-bills.md)). The single `credentials` section takes it at the top of the file. Run a `--full` import of an account whose cost source changes, so that no month counts twice.
 - `credentials`, required: the account's `appKey`, `appSecret`, `consumerKey` and `endpoint`, such as `ovh-eu`. The `endpoint` is required here, even where the single `credentials` section left it out: a section moved under `accounts` without it stops the server as it starts, with an error that names the setting.
 
 The single `credentials` section, and the legacy flat form of `credentials.json`, still work: they give one account, without a name or a budget, and `endpoint` stays optional there. `accounts` cannot be set with either of them. The import and the server check the section as strictly as the other settings: a value of the wrong type, a duplicate name or an empty list stops them, with an error that names the setting and the file. The server only checks the keys, and never uses them.

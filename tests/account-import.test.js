@@ -259,8 +259,8 @@ describe('an import', () => {
     await importSeptember();
 
     const accounts = db.accounts.getAll();
-    // The legacy credentials give it no name and no budget (#113), and it is configured
-    // (#114)
+    // The legacy credentials give it no name and no budget (#113), its bills as its cost
+    // source, and it is configured (#114)
     expect(accounts).toEqual([{
       nic: PARIS,
       currency: 'CAD',
@@ -270,6 +270,7 @@ describe('an import', () => {
       last_success_at: expect.stringMatching(SQLITE_TIME),
       name: null,
       budget: null,
+      cost_source: 'bills',
       configured: true,
     }]);
     // It ended during the import, and it succeeded: the last that did (#124)
@@ -294,6 +295,7 @@ describe('an import', () => {
       last_success_at: null,
       name: null,
       budget: null,
+      cost_source: 'bills',
       configured: true,
     }]);
   });

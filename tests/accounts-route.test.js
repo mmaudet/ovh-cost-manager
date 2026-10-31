@@ -11,10 +11,10 @@ const {
 const { asBefore114, asBefore124 } = require('./support/database-before');
 
 // The entry of the Unknown account (see CONTEXT.md): the rows that no account claims (#114),
-// which no entry of config.json gives a budget (#117)
+// which no entry of config.json gives a budget (#117) nor a cost source
 const UNKNOWN = {
-  id: UNKNOWN_ACCOUNT, nic: null, name: null, budget: null, currency: null, configured: false,
-  unknown: true, lastImport: null, lastSuccessAt: null,
+  id: UNKNOWN_ACCOUNT, nic: null, name: null, budget: null, currency: null, costSource: null,
+  configured: false, unknown: true, lastImport: null, lastSuccessAt: null,
 };
 
 // The accounts that the server lists, over a database that `seed` writes to, if given, with
@@ -54,6 +54,8 @@ test('lists the account that an import recorded, named by its NIC handle', async
     // Nor a budget of its own (#117)
     budget: null,
     currency: 'EUR',
+    // Its bills, by default
+    costSource: 'bills',
     configured: true,
     unknown: false,
     lastImport: { at: expect.stringMatching(SQLITE_TIME), status: 'success', error: null },
@@ -71,9 +73,22 @@ test('gives no last import while the first import of the account runs', async ()
   });
 
   expect(accounts).toEqual([{
-    id: LYON, nic: LYON, name: LYON, budget: null, currency: 'EUR', configured: true,
-    unknown: false, lastImport: null, lastSuccessAt: null,
+    id: LYON, nic: LYON, name: LYON, budget: null, currency: 'EUR', costSource: 'bills',
+    configured: true, unknown: false, lastImport: null, lastSuccessAt: null,
   }]);
+}, 30000);
+
+// The cost source of the account's entry at its last import (CONTEXT.md); an account recorded
+// before the cost sources, which had none, is read as billed
+test('gives the cost source of each account, its bills by default', async () => {
+  const accounts = await listAccounts((db) => {
+    recordAccounts(db, { nic: LYON, costSource: 'cloudUsage' }, { nic: PARIS });
+    db.getDb().prepare('UPDATE accounts SET cost_source = NULL WHERE nic = ?').run(PARIS);
+  });
+
+  expect(accounts.map(({ id, costSource }) => [id, costSource])).toEqual([
+    [LYON, 'cloudUsage'], [PARIS, 'bills'],
+  ]);
 }, 30000);
 
 test('gives why the last import of the account failed', async () => {
@@ -146,6 +161,7 @@ test('lists every account recorded, by its name, or else its NIC handle', async 
       name: 'Lyon subsidiary',
       budget: 20000,
       currency: 'EUR',
+      costSource: 'bills',
       configured: true,
       unknown: false,
       lastImport: { at: expect.stringMatching(SQLITE_TIME), status: 'success', error: null },
@@ -157,6 +173,7 @@ test('lists every account recorded, by its name, or else its NIC handle', async 
       name: PARIS,
       budget: null,
       currency: 'EUR',
+      costSource: 'bills',
       configured: true,
       unknown: false,
       lastImport: {

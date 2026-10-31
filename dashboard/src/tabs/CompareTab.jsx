@@ -123,18 +123,19 @@ const projectComparisonValues = (accountColumn) => ({
 // the month in progress at its projected cost, as the hook asks for them, and mark the amounts
 // that projected lines make; and so do the comparison by project and each project's products,
 // their charges and credit included (#219). What the hook knows of months A and B,
-// comparedMonths, decides the variations and the sort of the tables.
+// comparedMonths, decides the variations and the sort of the tables. The months are named by
+// the month of their usage while the shell says so (usageMonths, namesUsageMonths()).
 const CompareTab = ({
   compareMonthA, setCompareMonthA, compareMonthB, setCompareMonthB, comparedMonths,
   sortingOf, unfoldingOf, compareDataA, compareDataB, byServiceA, byServiceB, byProjectA,
   byProjectB, byResourceTypeA, byResourceTypeB, backupStatsA, backupStatsB, projectProductsQuery,
   resourceTypeServicesQuery, backupServicesQuery, logsDataPlatformChargesQuery,
   projectsMonthInProgress = false, setProjectsMonthInProgress, language, t, fmt, months,
-  accountColumn,
+  accountColumn, usageMonths = false,
 }) => {
   // Months A and B as the page names them, in its language (#33)
-  const monthALabel = formatMonthLabel(compareMonthA?.value, language);
-  const monthBLabel = formatMonthLabel(compareMonthB?.value, language);
+  const monthALabel = formatMonthLabel(compareMonthA?.value, language, { ofUsage: usageMonths });
+  const monthBLabel = formatMonthLabel(compareMonthB?.value, language, { ofUsage: usageMonths });
 
   // The projects of months A and B, paired by id (#55), and by account in the Account column
   // (#119), in the order the user sorts them, by month A until then (#146), and by the costs
@@ -344,7 +345,7 @@ const CompareTab = ({
             >
               {months.map(m => (
                 <option key={m.value} value={m.value}>
-                  {monthLabel(m, language, t)}
+                  {monthLabel(m, language, t, { ofUsage: usageMonths })}
                 </option>
               ))}
             </select>
@@ -362,7 +363,7 @@ const CompareTab = ({
             >
               {months.map(m => (
                 <option key={m.value} value={m.value}>
-                  {monthLabel(m, language, t)}
+                  {monthLabel(m, language, t, { ofUsage: usageMonths })}
                 </option>
               ))}
             </select>
@@ -607,7 +608,7 @@ const CompareTab = ({
               monthA={compareMonthA} monthB={compareMonthB} comparedMonths={comparedMonths}
               sorting={sortingOf(productsComparison)}
               unfoldingOf={(product) => unfoldingOf(productsComparison, product)}
-              fmt={fmt} language={language} t={t}
+              fmt={fmt} language={language} t={t} usageMonths={usageMonths}
             />
           </Accordion>
         );

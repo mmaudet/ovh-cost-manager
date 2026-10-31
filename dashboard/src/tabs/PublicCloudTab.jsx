@@ -91,7 +91,8 @@ const downloadResources = (openProjectAccount, rows, columns, filename) => {
 // the Overview's breakdown (#118), which the shell picks, undefined until they load, and
 // whether they could not (billedProjectsFailed). And the Account column of the lists, null when
 // they show none (#121), and the cloud total of the selected month, which the cards and the list
-// add up to (#145, #180).
+// add up to (#145, #180). While the shell names the months by the month of their usage
+// (usageMonths, namesUsageMonths()), the month is the month whose usage the costs are.
 const PublicCloudTab = ({
   projectsEnriched, projectsLoaded, publicCloudStats, projectConsumption, projectInstances,
   instanceCount, projectInstanceTotal, projectBuckets, projectVolumes, projectSnapshots,
@@ -99,6 +100,7 @@ const PublicCloudTab = ({
   setShowAllBuckets, setShowAllVolumes, setShowAllSnapshots, setShowAllSavingsPlans, sortingOf,
   language, t, fmt, locale, selectedMonth, openProject, setSelectedProject,
   byResourceType, gpuSummary, billedProjects, billedProjectsFailed, accountColumn, cloudTotal,
+  usageMonths = false,
 }) => {
   // The Account column of the CSV files of the open project's resources, for all of them
   const openProjectAccount = openProjectAccountOf(accountColumn, projectsEnriched, openProject);
@@ -117,7 +119,18 @@ const PublicCloudTab = ({
   return (
     <div className="space-y-6">
       {/* What the cards add up to, and why it is not the current consumption (#145) */}
-      {selectedMonth?.value && cloudTotal !== undefined && (
+      {selectedMonth?.value && cloudTotal !== undefined && usageMonths && (
+        <p className="text-sm text-gray-600">
+          {language === 'en'
+            ? 'Public Cloud costs of the usage of '
+              + `${formatMonthName(selectedMonth.value, language, { ofUsage: true })}`
+              + `: ${fmt(cloudTotal)}€, which the cards below break down.`
+            : 'Coûts Public Cloud de la consommation de '
+              + `${formatMonthName(selectedMonth.value, language, { ofUsage: true })}`
+              + ` : ${fmt(cloudTotal)}€, que détaillent les cartes ci-dessous.`}
+        </p>
+      )}
+      {selectedMonth?.value && cloudTotal !== undefined && !usageMonths && (
         <p className="text-sm text-gray-600">
           {language === 'en'
             ? `Public Cloud costs billed in ${formatMonthName(selectedMonth.value, language)}`
@@ -681,7 +694,7 @@ const PublicCloudTabModals = ({
   showAllSavingsPlans, setShowAllSavingsPlans,
   projectBuckets, projectInstances, instanceCount, projectInstanceTotal, projectVolumes,
   projectSnapshots, projectSavingsPlans, projectsEnriched,
-  language, t, fmt, locale, selectedMonth, openProject, accountColumn,
+  language, t, fmt, locale, selectedMonth, openProject, accountColumn, usageMonths = false,
 }) => {
   // The Account column of the CSV files of the open project's resources, for all of them
   const openProjectAccount = openProjectAccountOf(accountColumn, projectsEnriched, openProject);
@@ -702,7 +715,7 @@ const PublicCloudTabModals = ({
               <>
                 {' '}
                 <span className="ml-1 text-sm font-normal text-gray-400">
-                  {formatMonthLabel(selectedMonth.value, language)}
+                  {formatMonthLabel(selectedMonth.value, language, { ofUsage: usageMonths })}
                 </span>
               </>
             )}

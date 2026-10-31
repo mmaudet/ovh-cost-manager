@@ -15,6 +15,20 @@ Where the data imported before OCM told accounts apart goes when no account clai
 and nothing tells that the database was one account's (ADR 0002).
 _Avoid_: unassigned, orphan
 
+**Cost source**:
+Where an account's costs come from: its bills, by default, or its Public Cloud usage, for an
+account whose bills a third party issues, which neither the API nor the control panel gives. Its
+costs are then those of its Public Cloud projects alone, at public prices before tax, before any
+discount or Public Cloud credit.
+_Avoid_: billing mode, data source
+
+**Usage bill**:
+The bill that OCM makes of an account's Public Cloud usage of a month, when its cost source is
+that usage: one per account and month, dated on the first day of the next month, as OVHcloud
+bills a Public Cloud project's month, whose lines are worded as the bill lines of their charges.
+No OVHcloud bill matches it.
+_Avoid_: synthetic bill, fake bill
+
 **Bill line**:
 One line of an OVH bill: a description, the identifier of the billed service and an
 amount.

@@ -29,8 +29,9 @@ const SQLITE_TIME = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/;
  * Records accounts as an import does, and the configuration of its run, which lists them in
  * the order given.
  * @param {object} db - The data layer (data/db.js)
- * @param {...{ nic: string, name: (?string|undefined), budget: (?number|undefined) }} accounts
- *   Each account's NIC handle, and the name and budget of its entry of config.json, if given
+ * @param {...{ nic: string, name: (?string|undefined), budget: (?number|undefined),
+ *   costSource: (string|undefined) }} accounts - Each account's NIC handle, and the name, budget
+ *   and cost source of its entry of config.json, if given
  */
 function recordAccounts(db, ...accounts) {
   for (const account of accounts) db.accounts.upsert({ currency: 'EUR', ...account });

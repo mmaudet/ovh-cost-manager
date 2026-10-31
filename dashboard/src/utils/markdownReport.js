@@ -17,17 +17,20 @@ import { formatCurrency, formatMonthLabel, formatPercent, localeOf } from './for
  *   cours », when the month is the month in progress (#216): the title names it in brackets
  *   after the month, as formatMonthLabel() does for the Compare tab's months A and B, so that
  *   the report says that its figures are partial. None for any other month.
+ * @param {boolean} [options.ofUsage] - Whether the page names the months of the bills by the
+ *   month of their usage (namesUsageMonths() in accounts.js), as the title then does
  * @returns {string}
  */
 const generateMarkdownReport = (
   summary, byService, byProject, selectedMonth, language = 'fr',
-  { scope = null, inProgressLabel = null } = {},
+  { scope = null, inProgressLabel = null, ofUsage = false } = {},
 ) => {
   const locale = localeOf(language);
   const fmt = (v) => formatCurrency(v, language);
   // The month and its period, N/A without them: the page exports the report of a selected
   // month only, which always has its period
-  const month = formatMonthLabel(selectedMonth?.value, language, { inProgressLabel }) || 'N/A';
+  const month = formatMonthLabel(selectedMonth?.value, language, { inProgressLabel, ofUsage })
+    || 'N/A';
   const { from, to } = selectedMonth ?? {};
   let period = 'N/A';
   if (from && to) period = language === 'en' ? `${from} to ${to}` : `du ${from} au ${to}`;

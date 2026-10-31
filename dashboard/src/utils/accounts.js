@@ -11,10 +11,12 @@
  * @param {object[]} entries - The route's answer
  * @returns {{ id: string, name: string, budget: ?number, configured: boolean,
  *   unknown: boolean, lastImport: ?{ at: string, status: string, error: ?string },
- *   lastSuccessAt: ?string }[]} budget: null for an account without one, as for the Unknown
- *   account; lastImport: when the account's last import ended, a SQLite timestamp, 'success'
- *   or 'failed', and why it failed; lastSuccessAt: when its last import that succeeded ended.
- *   Each null until one has, as for the Unknown account, which no import reads.
+ *   lastSuccessAt: ?string, costSource: ?string }[]} budget: null for an account without one,
+ *   as for the Unknown account; lastImport: when the account's last import ended, a SQLite
+ *   timestamp, 'success' or 'failed', and why it failed; lastSuccessAt: when its last import that
+ *   succeeded ended. Each null until one has, as for the Unknown account, which no import reads.
+ *   costSource: where its costs come from (CONTEXT.md), 'bills' or 'cloudUsage', its bills until
+ *   the route says; null for the Unknown account.
  */
 export function accountsOf(entries) {
   return entries.map((entry) => ({
@@ -26,6 +28,7 @@ export function accountsOf(entries) {
     unknown: entry.unknown ?? false,
     lastImport: entry.lastImport ?? null,
     lastSuccessAt: entry.lastSuccessAt ?? null,
+    costSource: entry.unknown ? null : (entry.costSource ?? 'bills'),
   }));
 }
 
@@ -33,6 +36,43 @@ export function accountsOf(entries) {
 // Unknown account and the accounts no longer configured included. A single-account
 // installation shows the page as before.
 export const offersAccounts = (accounts) => accounts.length >= 2;
+
+// The accounts that the page shows: the account selected, or else all of them
+const shownAccounts = (accounts, selectedAccount) => (selectedAccount === null
+  ? accounts
+  : accounts.filter(({ id }) => id === selectedAccount));
+
+/**
+ * Whether the page names the months of the bills by the month of their usage: while it shows only
+ * accounts whose cost source is their Public Cloud usage (CONTEXT.md), whose usage bill of a month
+ * is dated on the first day of the next one, so that the month of today's usage is the one in
+ * progress. Not while it shows an account billed, or the Unknown account, whose months are those
+ * of their bills.
+ * @param {object[]|undefined} accounts - The accounts of the instance (accountsOf()),
+ *   undefined while their list loads
+ * @param {?string|undefined} selectedAccount - The account shown (useSelectedAccount())
+ * @returns {boolean}
+ */
+export function namesUsageMonths(accounts, selectedAccount) {
+  if (!accounts || selectedAccount === undefined) return false;
+  const shown = shownAccounts(accounts, selectedAccount);
+  return shown.length > 0 && shown.every(({ costSource }) => costSource === 'cloudUsage');
+}
+
+/**
+ * Whether the page shows an account whose cost source is its Public Cloud usage (CONTEXT.md),
+ * whose costs are those of its Public Cloud projects alone, at public prices before tax, before
+ * any discount or Public Cloud credit: the page says so.
+ * @param {object[]|undefined} accounts - The accounts of the instance (accountsOf()),
+ *   undefined while their list loads
+ * @param {?string|undefined} selectedAccount - The account shown (useSelectedAccount())
+ * @returns {boolean}
+ */
+export function showsUsageCosts(accounts, selectedAccount) {
+  if (!accounts || selectedAccount === undefined) return false;
+  return shownAccounts(accounts, selectedAccount)
+    .some(({ costSource }) => costSource === 'cloudUsage');
+}
 
 /**
  * How the account shown is imported (#153): 'unknown' for the Unknown account, whose rows no
