@@ -12,6 +12,20 @@ sections were written afterwards from the git history.
 
 <!-- scripts/release.sh inserts each new version above the first version heading. -->
 
+## 3.6.0 - 2026-10-31
+
+<!-- Upgrade notes and highlights of this release, if any. -->
+
+### New features
+* feat: read an account without bills from its Public Cloud usage by @cpanissod in https://github.com/mmaudet/ovh-cost-manager/pull/269
+### Maintenance
+* chore(deps): bump proxy-addr, follow-redirects, source-map-js, vitest by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/271
+
+### New contributors
+* @cpanissod made their first contribution in https://github.com/mmaudet/ovh-cost-manager/pull/269
+
+**Full Changelog**: https://github.com/mmaudet/ovh-cost-manager/compare/v3.5.0...v3.6.0
+
 ## 3.5.0 - 2026-10-01
 
 Logs Data Platform broken down, and the month in progress at the turn of the month:
