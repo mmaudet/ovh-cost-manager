@@ -292,7 +292,7 @@ What the dashboard shows:
 - **Costs**: those of the Public Cloud projects alone, at public prices before tax, before any discount or Public Cloud credit: above what the third party bills. The account's other services have their inventory, with `--include-inventory`, and no cost. A banner says so.
 - **Months**: while the page shows only such accounts, it names each month by the month of its usage: « Octobre 2026 (en cours) » is the usage of October so far.
 - **Month in progress**: the month of today's usage. Its projection spreads each project's month-end forecast over the project's lines, which `--include-cloud-details` (or `--all`) imports: without it, the month shows its usage so far.
-- **Bills**: `/api/bills` and its CSV export list OVH's bills alone, none for such an account.
+- **Bills**: `/api/bills`, its CSV export, and `/api/bills/:id` with its `details` and its `payment` give OVH's bills alone, none for such an account.
 
 Changing an account's cost source: run a `--full` import of it (`--full --account <NIC handle>`), which clears the costs of its former source, so that no month counts twice. [ADR 0004](docs/adr/0004-an-account-without-bills-is-read-from-usage-bills.md) gives the reasons.
 

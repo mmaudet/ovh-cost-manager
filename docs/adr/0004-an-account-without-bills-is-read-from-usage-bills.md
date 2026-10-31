@@ -32,8 +32,9 @@ its usage, as it keeps the carbon footprints (ADR 0003), and fetches the months 
 again. It clears its OVH bills, which would count the same costs twice; and the usage bills of
 an account whose cost source is its bills again, for the same reason.
 
-The routes of the bills, `/api/bills`, its CSV export and `/api/bills/:id`, give OVH's bills
-alone: a usage bill has no PDF, no payment, and no OVHcloud number.
+The routes of the bills, `/api/bills`, its CSV export, and `/api/bills/:id` with its `details`
+and its `payment`, give OVH's bills alone: a usage bill has no PDF, no payment, and no OVHcloud
+number.
 
 ## Limits
 

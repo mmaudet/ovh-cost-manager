@@ -512,9 +512,13 @@ function registerRoutes() {
     }
   });
 
+  // The lines of an OVH bill: none for a usage bill, as for a bill that does not exist, as the
+  // routes of the bills give OVH's bills alone (ADR 0004)
   app.get('/api/bills/:id/details', (req, res) => {
     try {
-      const details = db.details.getByBillId(req.params.id);
+      const details = db.bills.getById(req.params.id)
+        ? db.details.getByBillId(req.params.id)
+        : [];
       res.json(details);
     } catch (err) {
       res.status(500).json({ error: err.message });
