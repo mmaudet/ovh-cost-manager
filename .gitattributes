@@ -1,0 +1,4 @@
+# Text files are stored with LF line endings, whatever the platform that commits them: a
+# file stored with CRLF is rewritten whole by the tools that write it with LF, such as
+# Dependabot, whose pull requests then change every line of package-lock.json
+* text=auto eol=lf
