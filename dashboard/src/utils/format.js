@@ -181,6 +181,6 @@ const formatBilledAndProjected = (amount, projectedPart, fmt, t) => (
 
 export {
   localeOf, formatCurrency, formatWholeNumber, formatDecimal, formatPercent, formatYearMonth,
-  formatMonthLabel, formatMonthName, yearMonthOf, fmtBytes, fmtMemory, formatTokens,
+  formatMonthLabel, formatMonthName, namedMonth, yearMonthOf, fmtBytes, fmtMemory, formatTokens,
   takesSingular, formatBilledAndProjected,
 };
