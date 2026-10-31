@@ -305,7 +305,7 @@ export default function Dashboard() {
   });
 
   const carbonTab = useCarbonTab({
-    selectedMonth, holdsSelectedMonth, activeTab, selectedAccount,
+    selectedMonth, holdsSelectedMonth, activeTab, selectedAccount, usageMonths,
   });
 
   // Update budget when config loads
@@ -854,6 +854,7 @@ export default function Dashboard() {
         {activeTab === 'webcloud' && (
           <WebCloudTab
             {...webCloudTab} language={language} t={t} fmt={fmt} accountColumn={accountColumn}
+            usageMonths={usageMonths}
           />
         )}
 

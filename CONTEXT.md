@@ -29,6 +29,11 @@ bills a Public Cloud project's month, whose lines are worded as the bill lines o
 No OVHcloud bill matches it.
 _Avoid_: synthetic bill, fake bill
 
+**Provisional usage bill**:
+The usage bill of the month of today's usage, which each import rewrites while the month runs:
+its month is the account's month in progress, which each Public Cloud project's month-end
+forecast projects.
+
 **Bill line**:
 One line of an OVH bill: a description, the identifier of the billed service and an
 amount.
@@ -128,7 +133,9 @@ _Avoid_: usage month, billing month
 The latest month with bills, while it has not billed each of its recurring services yet: its
 cost so far lacks theirs. It is the calendar month of today or, until the month of today has a
 bill, the month before: OVHcloud bills some accounts early in the month, others late, and some
-bills of a month land once the next one has begun.
+bills of a month land once the next one has begun. For an account whose cost source is its
+Public Cloud usage, it is the month of its provisional usage bill, which takes over: with
+accounts of both cost sources shown together, it is that of the latest provisional usage bill.
 _Avoid_: current month (the Public Cloud's current consumption is another thing), open month
 
 **Recurring service**:
@@ -138,7 +145,9 @@ _Avoid_: regular service, subscription
 
 **Projected cost**:
 The cost of the month in progress with each recurring service that it has not billed yet
-counted at its cost of the month before, assuming it stays the same.
+counted at its cost of the month before, assuming it stays the same; for a provisional usage
+bill, with what each Public Cloud project's month-end forecast adds to its usage so far, spread
+over the project's lines.
 _Avoid_: forecast (the Public Cloud's end-of-month consumption), estimate (an estimated cost is
 a resource's share of a bill line)
 

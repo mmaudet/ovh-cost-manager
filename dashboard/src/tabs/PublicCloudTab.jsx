@@ -125,7 +125,7 @@ const PublicCloudTab = ({
             ? 'Public Cloud costs of the usage of '
               + `${formatMonthName(selectedMonth.value, language, { ofUsage: true })}`
               + `: ${fmt(cloudTotal)}€, which the cards below break down.`
-            : 'Coûts Public Cloud de la consommation de '
+            : 'Coûts Public Cloud de la consommation en '
               + `${formatMonthName(selectedMonth.value, language, { ofUsage: true })}`
               + ` : ${fmt(cloudTotal)}€, que détaillent les cartes ci-dessous.`}
         </p>
@@ -302,7 +302,8 @@ const PublicCloudTab = ({
                     column="billed" kind="number" sorting={projectSorting} t={t}
                     className="p-3 text-right font-medium"
                   >
-                    {`${t('billedIn')} ${formatMonthName(selectedMonth?.value, language)}`}
+                    {`${t(usageMonths ? 'usageIn' : 'billedIn')} `
+                      + formatMonthName(selectedMonth?.value, language, { ofUsage: usageMonths })}
                   </SortableHeader>
                   <th className="p-3 text-center font-medium"></th>
                 </tr>

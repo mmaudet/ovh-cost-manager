@@ -24,13 +24,16 @@ export const translations = {
     compare: 'Comparaison',
     trends: 'Tendances',
 
-    // The month in progress (#216), as the month selectors and the month's cost name it, and
-    // why no variation of it is computed
-    monthInProgress: 'en cours',
+    // What the page says of the costs of the accounts whose cost source is their Public Cloud
+    // usage (CONTEXT.md), and of its months while it shows only such accounts
     usageCostsNotice: 'Les coûts des comptes sans factures sont ceux de leur consommation Public '
       + 'Cloud : prix publics hors taxes, avant remises et crédits Public Cloud. Leurs autres '
       + 'services ne sont pas couverts.',
     usageMonthsNotice: 'Les mois affichés sont ceux de la consommation.',
+
+    // The month in progress (#216), as the month selectors and the month's cost name it, and
+    // why no variation of it is computed
+    monthInProgress: 'en cours',
     variationMonthInProgress: 'non calculable : mois en cours',
     // The setting that counts it at its projected cost (#214), next to the Trends tab's period
     // selector (#217) and the Compare tab's months A and B (#218), and what the tooltips of their
@@ -249,6 +252,9 @@ export const translations = {
     // The header of the column of the list of projects that gives what the bills of the month
     // selected charged each, with the month: « Facturé en septembre 2026 » (#180)
     billedIn: 'Facturé en',
+    // Its header while the page names the months by the month of their usage, whose usage the
+    // costs are: « Consommation en août 2026 »
+    usageIn: 'Consommation en',
     // The mark of a project billed in the month that the list lacks: the inventory of the
     // account whose bills charged it lacks it (#180)
     projectNotInInventory: 'Facturé mais absent de l\'inventaire des projets du compte',
@@ -369,13 +375,16 @@ export const translations = {
     compare: 'Compare',
     trends: 'Trends',
 
-    // The month in progress (#216), as the month selectors and the month's cost name it, and
-    // why no variation of it is computed
-    monthInProgress: 'in progress',
+    // What the page says of the costs of the accounts whose cost source is their Public Cloud
+    // usage (CONTEXT.md), and of its months while it shows only such accounts
     usageCostsNotice: 'The costs of the accounts without bills are those of their Public Cloud '
       + 'usage: public prices before tax, before any discount and Public Cloud credit. Their '
       + 'other services are not covered.',
     usageMonthsNotice: 'The months shown are those of the usage.',
+
+    // The month in progress (#216), as the month selectors and the month's cost name it, and
+    // why no variation of it is computed
+    monthInProgress: 'in progress',
     variationMonthInProgress: 'cannot be computed: month in progress',
     // The setting that counts it at its projected cost (#214), next to the Trends tab's period
     // selector (#217) and the Compare tab's months A and B (#218), and what the tooltips of their
@@ -594,6 +603,9 @@ export const translations = {
     // The header of the column of the list of projects that gives what the bills of the month
     // selected charged each, with the month: "Billed in September 2026" (#180)
     billedIn: 'Billed in',
+    // Its header while the page names the months by the month of their usage, whose usage the
+    // costs are: "Usage in August 2026"
+    usageIn: 'Usage in',
     // The mark of a project billed in the month that the list lacks: the inventory of the
     // account whose bills charged it lacks it (#180)
     projectNotInInventory: 'Billed but not in the account\'s project inventory',

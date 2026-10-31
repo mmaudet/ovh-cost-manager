@@ -5,6 +5,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useTableSorts } from '../components/SortableHeader.jsx';
 import { fetchCarbonByServer, fetchCarbonFootprint, fetchCarbonTrend } from '../services/api.js';
 import { accountQuery } from '../utils/accounts.js';
+import { namedMonth } from '../utils/format.js';
 
 /**
  * The carbon footprint that the tab shows for a month (#152): the month's own, or, when it has
@@ -25,8 +26,9 @@ async function fetchShownFootprint(month, account) {
 }
 
 /**
- * The data queries of the Carbon tab (#147): the carbon footprint of the month selected, for
- * the account shown in the header, or that of the latest month that has one (#152), that of
+ * The data queries of the Carbon tab (#147): the carbon footprint of the month selected, as the
+ * header names it, for the account shown in the header, or that of the latest month that has
+ * one (#152), that of
  * the 12 months that end on the month it shows (#154), and the lines of that month with what
  * they cost (#155), with the share of the month's cost that they cover (#157).
  * @param {object} shell - What the dashboard shell passes on, on every render
@@ -37,6 +39,8 @@ async function fetchShownFootprint(month, account) {
  * @param {?string|undefined} shell.selectedAccount - The account shown (useSelectedAccount()):
  *   null for all accounts, undefined while the page does not know it, which the query waits
  *   for
+ * @param {boolean} [shell.usageMonths] - Whether the header names the months of the bills by
+ *   the month of their usage (namesUsageMonths()): the footprint is then that month's
  * @returns {{ carbonFootprint: (object|undefined), missingMonth: ?string,
  *   carbonTrend: (object[]|undefined), carbonLines: (object[]|undefined),
  *   carbonCoveredShare: (?number|undefined), loadingCarbon: boolean, failedCarbon: boolean,
@@ -49,12 +53,18 @@ async function fetchShownFootprint(month, account) {
  *   could not load; and the sort order of the list and of the trend's figures (#146), as
  *   useTableSorts() gives it
  */
-const useCarbonTab = ({ selectedMonth, holdsSelectedMonth, activeTab, selectedAccount }) => {
+const useCarbonTab = ({
+  selectedMonth, holdsSelectedMonth, activeTab, selectedAccount, usageMonths = false,
+}) => {
   const sortingOf = useTableSorts();
+  // The month selected as the header names it, whose footprint the tab shows, as a footprint's
+  // month is its month of use (CONTEXT.md): the month whose usage its bills hold, while the
+  // header names the months so
+  const month = namedMonth(selectedMonth?.value, usageMonths);
 
   const { data, isPending, isError } = useQuery(accountQuery(selectedAccount, {
-    key: ['carbonFootprint', selectedMonth?.value],
-    fetch: (account) => fetchShownFootprint(selectedMonth.value, account),
+    key: ['carbonFootprint', month],
+    fetch: (account) => fetchShownFootprint(month, account),
     enabled: holdsSelectedMonth && activeTab === 'carbon',
   }));
 

@@ -24,17 +24,20 @@ const servicesOf = (family, { webCloudItems, accountColumn }) => withAccountName
 // The Web Cloud tab, which the shell renders while it is active: what useWebCloudTab()
 // returns, the sort order of the table of each family included (#146), with the shell's
 // language, translations (t) and amount format (fmt), and the Account column of the lists,
-// null when they show none (#122).
+// null when they show none (#122). While the shell names the months by the month of their usage
+// (usageMonths, namesUsageMonths()), the period names them so.
 const WebCloudTab = ({
   webCloudPeriod, webCloudSummary, webCloudItems, loadingWebCloud, failedWebCloud,
-  setShowAllWebCloud, sortingOf, accountColumn, language, t, fmt,
+  setShowAllWebCloud, sortingOf, accountColumn, language, t, fmt, usageMonths = false,
 }) => (
   <div className="space-y-6">
     <div className="text-sm text-gray-500">
       {language === 'en' ? 'Rolling 12 months' : '12 mois glissants'}
       {webCloudPeriod && (
         <span className="ml-1 text-gray-400">
-          ({formatYearMonth(webCloudPeriod.from.slice(0, 7), language)} → {formatYearMonth(webCloudPeriod.to.slice(0, 7), language)})
+          ({formatYearMonth(webCloudPeriod.from.slice(0, 7), language, { ofUsage: usageMonths })}
+          {' → '}
+          {formatYearMonth(webCloudPeriod.to.slice(0, 7), language, { ofUsage: usageMonths })})
         </span>
       )}
       <span className="ml-2 text-gray-400">

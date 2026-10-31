@@ -2,7 +2,9 @@ import { describe, it, expect } from 'vitest';
 import { screen } from '@testing-library/react';
 import { account } from './fixtures/account.js';
 import { lyonAccount, severalAccounts } from './fixtures/accounts.js';
-import { dropdown, optionsOf, renderDashboard, selectAccount, texts } from './support/render.jsx';
+import {
+  dropdown, openTab, optionsOf, renderDashboard, selectAccount, texts,
+} from './support/render.jsx';
 
 // An account whose cost source is its Public Cloud usage (CONTEXT.md): its bills, which a third
 // party issues, are none that the API gives. Its usage bill of a month is dated on the first day
@@ -38,6 +40,36 @@ describe('an account whose cost source is its Public Cloud usage', () => {
 
       expect(texts(notice())).toEqual([`${COSTS_NOTICE} ${MONTHS_NOTICE}`]);
     });
+
+  // What the month cost the projects is its usage, which the header names
+  it('names the month of the usage in the Public Cloud tab', async () => {
+    const { user } = await renderDashboard(usageAccount);
+
+    await openTab(user, 'Public Cloud');
+
+    expect(await screen.findByText(/^Coûts Public Cloud de la consommation en août 2026 : /))
+      .toBeInTheDocument();
+    expect(await screen.findByRole('columnheader', { name: /^Consommation en août 2026/ }))
+      .toBeInTheDocument();
+  });
+
+  it('names the months of the usage in the Web Cloud tab\'s period', async () => {
+    const { user } = await renderDashboard(usageAccount);
+
+    await openTab(user, 'Web Cloud');
+
+    expect(await screen.findByText('(sept. 2025 → août 2026)')).toBeInTheDocument();
+  });
+
+  // A carbon footprint's month is its month of use: that of the usage, which OVHcloud gave
+  it('shows the carbon footprint of the month of the usage', async () => {
+    const { user } = await renderDashboard(usageAccount);
+
+    await openTab(user, 'Bilan carbone');
+
+    expect(await screen.findByRole('heading', { name: 'Août 2026' })).toBeInTheDocument();
+    expect(screen.queryByText(/n'a pas encore d'empreinte carbone/)).not.toBeInTheDocument();
+  });
 });
 
 describe('an account billed', () => {
