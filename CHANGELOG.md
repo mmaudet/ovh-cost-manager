@@ -12,6 +12,33 @@ sections were written afterwards from the git history.
 
 <!-- scripts/release.sh inserts each new version above the first version heading. -->
 
+## 3.6.0 - 2026-10-31
+
+Accounts without bills, read from the usage of their Public Cloud projects:
+
+- **`"costSource": "cloudUsage"`** (#264). Some organisations have their OVHcloud bills issued by a third party: neither the API nor the control panel gives them. Such an account now takes its costs from the usage of its Public Cloud projects, which OVH gives for the month of today and the six months before.
+  - The import stores each month of usage on a usage bill of its own, whose lines every tab reads as a bill's: the Public Cloud cards, the products and charges, the AI Endpoints models, the projects, the service and resource types.
+  - The month of today's usage is the month in progress, which each project's month-end forecast projects.
+  - While the page shows only such accounts, it names each month by the month of its usage. A banner says what the costs are: public prices before tax, before any discount or Public Cloud credit, for the Public Cloud alone.
+  - See [Accounts Without Bills](https://github.com/mmaudet/ovh-cost-manager/blob/v3.6.0/README.md#accounts-without-bills) in the README.
+- **Public Cloud instances and quotas** (in #269). The import retries their listing, and keeps the stored ones until a listing succeeds. They used to be replaced only once the project's current usage was fetched: otherwise the quotas were stored again next to the old ones, and the instances removed since stayed.
+
+### Upgrade notes
+
+- **Nothing changes for an account billed by OVHcloud**: `costSource` is optional, and `"bills"` is its default.
+- **Changing an account's cost source** takes a `--full` import of it (`--full --account <NIC handle>`), which clears the costs of its former source, so that no month counts twice.
+- **Security**: two runtime dependencies get their fixed versions, Express's proxy-addr and axios's follow-redirects (#271).
+
+### New features
+* feat: read an account without bills from its Public Cloud usage by @cpanissod in https://github.com/mmaudet/ovh-cost-manager/pull/269
+### Security
+* chore(deps): bump proxy-addr, follow-redirects, source-map-js, vitest by @mmaudet in https://github.com/mmaudet/ovh-cost-manager/pull/271
+
+### New contributors
+* @cpanissod made their first contribution in https://github.com/mmaudet/ovh-cost-manager/pull/269
+
+**Full Changelog**: https://github.com/mmaudet/ovh-cost-manager/compare/v3.5.0...v3.6.0
+
 ## 3.5.0 - 2026-10-01
 
 Logs Data Platform broken down, and the month in progress at the turn of the month:
