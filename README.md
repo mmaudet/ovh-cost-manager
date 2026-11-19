@@ -67,7 +67,7 @@ New in version 3.1.0.
 ### Real-time Monitoring
 - **Current Consumption**: What the Public Cloud projects consumed this month, as OVH's Public Cloud page gives it (`--include-cloud-details`, which `--all` includes), or else the account's consumption from `/me/consumption` (`--include-consumption`)
 - **End-of-month Forecast**: The forecast that OVH gives each Public Cloud project, or its consumption extrapolated to the end of the month, never below what it consumed, with a progress indicator (`--include-cloud-details`); or else the forecast of `/me/consumption`
-- **Remaining Public Cloud Credit**: what remains today of the credits of the Public Cloud projects, such as vouchers, which their consumption uses before it is billed: the credits still available and still valid, how many they are, and when the first one ends, in a card next to the forecast, and each project's in the Public Cloud tab's list of projects, after its current consumption, shown while a credit counts (`--include-cloud-details`)
+- **Remaining Public Cloud Credit**: what remains today of the credits of the Public Cloud projects, such as vouchers, which their consumption uses before it is billed: the credits still available and still valid, how many they are, and when the first one ends, in a card next to the forecast, and each project's in the Public Cloud tab's list of projects, after its current consumption, shown while a credit counts (`--include-cloud-details`). A credit below the current consumption shows in red: the card is circled in red, and a project's credit below what it consumed so far is written in red
 - **Account Balance**: Debt, credits, and deposit tracking
 
 ### Infrastructure Inventory

@@ -355,11 +355,21 @@ const PublicCloudTab = ({
                       <td className="p-3 text-right font-medium">
                         {p.consumption_total > 0 ? `${fmt(p.consumption_total)}€` : '-'}
                       </td>
-                      {showsCredit && (
-                        <td className="p-3 text-right font-medium text-emerald-700">
-                          {p.remaining_credit > 0 ? `${fmt(p.remaining_credit)}€` : '-'}
-                        </td>
-                      )}
+                      {/* In red while it is below what the project consumed so far */}
+                      {showsCredit && (() => {
+                        const below = p.remaining_credit > 0
+                          && p.remaining_credit < (p.consumption_total || 0);
+                        return (
+                          <td
+                            className={`p-3 text-right font-medium ${below
+                              ? 'text-red-600'
+                              : 'text-emerald-700'}`}
+                            title={below ? t('creditBelowConsumption') : undefined}
+                          >
+                            {p.remaining_credit > 0 ? `${fmt(p.remaining_credit)}€` : '-'}
+                          </td>
+                        );
+                      })()}
                       <td className="p-3 text-right font-medium">
                         {amountsLoaded && (p.billed === null ? '-' : `${fmt(p.billed)}€`)}
                       </td>

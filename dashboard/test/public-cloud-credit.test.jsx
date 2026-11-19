@@ -36,6 +36,27 @@ describe('the Public Cloud credit card', () => {
       ]);
     });
 
+  // The current consumption is 402,35 €, which the card of the consumption circles in green
+  it('is circled in red while the credit is below the current consumption, and says why',
+    async () => {
+      await renderDashboard({
+        ...withCredit,
+        publicCloudCredit: { ...withCredit.publicCloudCredit, available_total: 300 },
+      });
+
+      expect(cardOf(CREDIT)).toHaveClass('border-red-500');
+      expect(cardOf(CREDIT)).toHaveAttribute(
+        'title', 'Le crédit restant est inférieur à la consommation en cours',
+      );
+    });
+
+  it('is not circled in red while the credit covers the current consumption', async () => {
+    await renderDashboard(withCredit);
+
+    expect(cardOf(CREDIT)).not.toHaveClass('border-red-500');
+    expect(cardOf(CREDIT)).not.toHaveAttribute('title');
+  });
+
   it('shows after the forecast, the resource count after it', async () => {
     await renderDashboard(withCredit);
 
@@ -114,6 +135,40 @@ describe('the credit of each Public Cloud project', () => {
       // The credit of the first project, none for the others
       expect(rowsOf(cloudProjectsTable()).slice(1, 4).map((row) => row[credit]))
         .toEqual(['312,40€', '-', '-']);
+    });
+
+  // The cells of the credit column of the list's projects, in the order shown
+  const creditCells = () => {
+    const credit = columnOf('Crédit restant');
+    return [...cloudProjectsTable().tBodies[0].rows].slice(0, 3).map((row) => row.cells[credit]);
+  };
+
+  it('gives in red a credit below what its project consumed so far, in green another',
+    async () => {
+      const { user } = await renderDashboard({
+        ...withCredit,
+        projectsEnriched: account.projectsEnriched.map((project, index) => ({
+          ...project,
+          consumption_total: 100,
+          // Below the project's consumption, then above it
+          remaining_credit: [40, 250, 0][index],
+        })),
+      });
+
+      await openTab(user, 'Public Cloud');
+
+      const [below, above, none] = creditCells();
+      expect(below).toHaveTextContent('40,00€');
+      expect(below).toHaveClass('text-red-600');
+      expect(below).toHaveAttribute(
+        'title', 'Le crédit restant est inférieur à la consommation en cours',
+      );
+      expect(above).toHaveTextContent('250,00€');
+      expect(above).toHaveClass('text-emerald-700');
+      expect(above).not.toHaveAttribute('title');
+      // No credit: nothing to compare
+      expect(none).toHaveTextContent('-');
+      expect(none).not.toHaveClass('text-red-600');
     });
 
   // As before the credits

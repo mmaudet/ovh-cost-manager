@@ -260,6 +260,9 @@ export default function Dashboard() {
     fetch: fetchPublicCloudCredit,
   }));
   const showsCredit = publicCloudCredit?.credit_count > 0;
+  // Whether that credit is below the current consumption, which its card then circles in red
+  const creditBelowConsumption = showsCredit && consumptionCurrent
+    && publicCloudCredit.available_total < (consumptionCurrent.current_total || 0);
 
   // The services of the account shown that expire within 30 days, or already have, whatever
   // the month: the header counts them, and the Overview lists them (#123)
@@ -780,9 +783,15 @@ export default function Dashboard() {
             )}
             {/* What remains of the credits of the Public Cloud projects today, which their
                 consumption uses before it is billed: those still available and still valid,
-                and when the first of them ends */}
+                and when the first of them ends. Circled in red, as the current consumption is
+                in green, while it is below that consumption */}
             {showsCredit && (
-              <div className={`${FIGURE_CARD} border border-gray-100`}>
+              <div
+                className={`${FIGURE_CARD} ${creditBelowConsumption
+                  ? 'border-2 border-red-500'
+                  : 'border border-gray-100'}`}
+                title={creditBelowConsumption ? t('creditBelowConsumption') : undefined}
+              >
                 <div className={KPI_TITLE_ROW}>
                   <span className="text-gray-500 text-sm font-medium">
                     {t('publicCloudCredit')}
