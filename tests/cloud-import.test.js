@@ -195,6 +195,72 @@ describe('instance and quota inventory import', () => {
   });
 });
 
+describe('credit import', () => {
+  // The credits stored of the project, as [id, available, end of validity]
+  const storedCredits = () => db.getDb().prepare(`
+    SELECT credit_id, available, valid_to FROM project_credits WHERE project_id = ?
+    ORDER BY credit_id
+  `).raw().all(PROJECT);
+
+  // A credit as OVH answers it
+  const creditOf = (available, to) => ({
+    description: 'Voucher', total_credit: { value: 500, currencyCode: 'EUR' },
+    available_credit: { value: available, currencyCode: 'EUR' },
+    validity: { from: '2026-01-01T00:00:00+01:00', to },
+  });
+
+  beforeEach(() => {
+    routes.set(`${BASE}/credit`, ok([101, 102]));
+    routes.set(`${BASE}/credit/101`, ok({ id: 101, ...creditOf(312.4, '2027-01-01T00:00:00+01:00') }));
+    // Used up, and ended: stored all the same, the server tells which count
+    routes.set(`${BASE}/credit/102`, ok({ id: 102, ...creditOf(0, '2026-03-01T00:00:00+01:00') }));
+  });
+
+  test('stores each credit of the project as OVH gives it, whatever its amount and validity',
+    async () => {
+      await importProject();
+
+      expect(storedCredits()).toEqual([
+        ['101', 312.4, '2027-01-01T00:00:00+01:00'],
+        ['102', 0, '2026-03-01T00:00:00+01:00'],
+      ]);
+    });
+
+  test('replaces the stored credits with those that OVH lists now', async () => {
+    await importProject();
+    routes.set(`${BASE}/credit`, ok([101]));
+    routes.set(`${BASE}/credit/101`, ok({ id: 101, ...creditOf(250, '2027-01-01T00:00:00+01:00') }));
+
+    await importProject();
+
+    expect(storedCredits()).toEqual([['101', 250, '2027-01-01T00:00:00+01:00']]);
+  });
+
+  test('keeps the stored credits when they cannot be fetched', async () => {
+    await importProject();
+    routes.set(`${BASE}/credit/102`, fail(500, 'Internal server error'));
+
+    await importProject();
+
+    expect(storedCredits()).toHaveLength(2);
+    expect(console.warn).toHaveBeenCalledWith(expect.stringContaining(
+      `Credit fetch of project ${PROJECT} failed, keeping the stored credits`,
+    ));
+  });
+
+  // As the projects whose consumption or forecast a full import keeps
+  test('keeps the credits and their project at a full import', () => {
+    db.cloudDetails.replaceCredits(PROJECT, [{
+      credit_id: '101', description: null, available: 10, total: null, currency: 'EUR',
+      valid_from: null, valid_to: null,
+    }]);
+
+    db.clearAccount(ACCOUNT.nic);
+
+    expect(storedCredits()).toEqual([['101', 10, null]]);
+  });
+});
+
 describe('project consumption import', () => {
   // The hourly resources that usage/current details for a project that ran one instance
   const oneInstance = (flavor, totalPrice) => ({

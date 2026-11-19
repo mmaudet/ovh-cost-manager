@@ -28,6 +28,7 @@ const {
 const { classifyService, classifyResourceTypeFromDomain } = require('./classify');
 const { footprintMonths, readFootprintFile } = require('./carbon-footprint');
 const { beyondTotal, readForecast, usageRows } = require('./cloud-usage');
+const { readCredit } = require('./cloud-credits');
 const { acceptingRequest } = require('./ovh-accepting-request');
 const { monthBounds, monthOfDate } = require('./months');
 const { usageBillOf, usageLines, usageMonth } = require('./usage-lines');
@@ -1081,9 +1082,35 @@ async function importForecast(ovh, projectId) {
 }
 
 /**
- * Imports the resources, the consumption and the month-end forecast of each Public Cloud
- * project of the account, and records the month of its current consumption for the account
- * (#114).
+ * Imports the credits of a Public Cloud project, as OVH lists them, whatever their amount and
+ * validity: the server tells those that remain when it reads them (data/cloud-credits.js). They
+ * replace those that an earlier import stored, once all are fetched: a call that fails keeps the
+ * stored credits, as it keeps the forecast, and the import goes on.
+ * @param {object} ovh - The OVH API client of the account
+ * @param {string} projectId - The project
+ */
+async function importCredits(ovh, projectId) {
+  try {
+    const creditIds = await withRetry(() => ovh.requestPromised('GET',
+      `/cloud/project/${projectId}/credit`));
+    const credits = [];
+    for (const creditId of creditIds || []) {
+      const answer = await withRetry(() => ovh.requestPromised('GET',
+        `/cloud/project/${projectId}/credit/${creditId}`));
+      credits.push(readCredit({ id: creditId, ...answer }));
+    }
+    db.cloudDetails.replaceCredits(projectId, credits);
+    console.log(`    ${credits.length} credits`);
+  } catch (err) {
+    console.warn(`    Credit fetch of project ${projectId} failed, keeping the stored credits: `
+      + describeError(err));
+  }
+}
+
+/**
+ * Imports the resources, the consumption, the month-end forecast and the credits of each Public
+ * Cloud project of the account, and records the month of its current consumption for the
+ * account (#114).
  * @param {object} ovh - The OVH API client of the account
  * @param {string[]} projectIds - Its projects, which its API lists
  * @param {string} nic - The NIC handle of the account
@@ -1133,8 +1160,9 @@ async function importCloudDetails(ovh, projectIds, nic, heartbeat = () => {}) {
       console.error(`    Error fetching usage: ${err.message}`);
     }
 
-    // Its month-end forecast
+    // Its month-end forecast, and its credits
     await importForecast(ovh, projectId);
+    await importCredits(ovh, projectId);
 
     // Instances, retried as OVH may fail a call, and replaced only once fetched: a failed call
     // keeps the stored instances, as it keeps the volumes

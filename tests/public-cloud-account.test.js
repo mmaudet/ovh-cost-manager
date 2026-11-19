@@ -110,6 +110,16 @@ function seed(db) {
     storage_class: 'Standard', status: null, objects_count: 1520, objects_size: 4200000000,
     created_at: '2025-11-03T08:00:00Z',
   });
+  // Production's credits: one that remains, one used up, one long ended
+  const credit = (credit_id, available, valid_to) => ({
+    credit_id, description: null, available, total: null, currency: 'EUR', valid_from: null,
+    valid_to,
+  });
+  db.cloudDetails.replaceCredits(PRODUCTION, [
+    credit('101', 312.4, '2099-01-01T00:00:00+01:00'),
+    credit('102', 0, null),
+    credit('103', 80, '2020-01-01T00:00:00+01:00'),
+  ]);
 }
 
 // The dates of September, as the Public Cloud tab asks for its figures
@@ -155,13 +165,16 @@ describe('GET /api/projects', () => {
 
 describe('GET /api/projects/enriched', () => {
   // A project as the route lists it: with its instances, what it consumed in the month of the
-  // last import, and its account. The seeded ones are described by their name.
-  const enriched = (id, name, account, instanceCount, consumed) => ({
+  // last import, its account, and the credit that remains of its credits. The seeded ones are
+  // described by their name.
+  const enriched = (id, name, account, instanceCount, consumed, remainingCredit = 0) => ({
     id, name, description: name, status: 'ok', account,
     instance_count: instanceCount, consumption_total: consumed,
-    period_start: '2026-09-01', period_end: '2026-09-14',
+    period_start: '2026-09-01', period_end: '2026-09-14', remaining_credit: remainingCredit,
   });
-  const production = enriched(PRODUCTION, 'Production', LYON, 2, 300);
+  // Production's credit still available and valid; its used up one, and its ended one, add
+  // nothing
+  const production = enriched(PRODUCTION, 'Production', LYON, 2, 300, 312.4);
   const staging = enriched(STAGING, 'Staging', PARIS, 1, 50);
   const legacy = enriched(LEGACY, 'Legacy', null, 1, 20);
 

@@ -154,6 +154,13 @@ export const fetchConsumptionForecast = async (account = null) => {
   return data;
 };
 
+// The credit that remains on the Public Cloud projects of the account, of all accounts' for all
+// accounts: what their credits still available and still valid today add up to
+export const fetchPublicCloudCredit = async (account = null) => {
+  const { data } = await api.get('/consumption/credit', { params: accountParams(account) });
+  return data;
+};
+
 // Phase 3: Inventory. The services of the account, each with its account (#123).
 export const fetchInventoryServers = async (account = null) => {
   const { data } = await api.get('/inventory/servers', { params: accountParams(account) });

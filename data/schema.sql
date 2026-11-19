@@ -242,6 +242,23 @@ CREATE TABLE IF NOT EXISTS project_forecasts (
   FOREIGN KEY (project_id) REFERENCES projects(id)
 );
 
+-- The credits of each cloud project, from GET /cloud/project/{id}/credit: as the last import
+-- that fetched them stored them, whatever their amount and validity, which the server reads
+-- when it adds up the credit remaining (data/cloud-credits.js). A row reaches its account
+-- through its project.
+CREATE TABLE IF NOT EXISTS project_credits (
+  project_id TEXT NOT NULL,
+  credit_id TEXT NOT NULL,          -- Its id, as OVH lists it
+  description TEXT,
+  available REAL NOT NULL,          -- What is left of it, available_credit
+  total REAL,                       -- What it was worth, total_credit
+  currency TEXT,
+  valid_from TEXT,                  -- Its validity, as OVH gives it: validity.from
+  valid_to TEXT,                    -- and validity.to, NULL for none
+  PRIMARY KEY (project_id, credit_id),
+  FOREIGN KEY (project_id) REFERENCES projects(id)
+);
+
 -- The usage periods of each Public Cloud project that an import stored on a usage bill
 -- (CONTEXT.md), for an account whose cost source is its Public Cloud usage: GET
 -- /cloud/project/{id}/usage/history lists those of the month of today and of the six months

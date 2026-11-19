@@ -2163,6 +2163,44 @@ const cloudDetailOps = {
     `).run(forecast);
   },
 
+  /**
+   * Replaces the credits of a project that an earlier import stored with those that OVH lists
+   * now, in one transaction, whatever their amount and validity, which the server reads
+   * (data/cloud-credits.js)
+   * @param {string} projectId
+   * @param {object[]} credits - As readCredit() in data/cloud-credits.js gives them
+   */
+  replaceCredits: (projectId, credits) => {
+    const db = getDb();
+    const insert = db.prepare(`
+      INSERT INTO project_credits
+        (project_id, credit_id, description, available, total, currency, valid_from, valid_to)
+      VALUES (@project_id, @credit_id, @description, @available, @total, @currency, @valid_from,
+        @valid_to)
+    `);
+    db.transaction(() => {
+      db.prepare('DELETE FROM project_credits WHERE project_id = ?').run(projectId);
+      for (const credit of credits) insert.run({ ...credit, project_id: projectId });
+    })();
+  },
+
+  /**
+   * The credits of the Public Cloud projects of the account, as the imports stored them
+   * @param {?string} [account] - The account (see accountCondition()): every account's by
+   *   default, the Unknown account's included
+   * @returns {{project_id: string, credit_id: string, available: number, currency: ?string,
+   *   valid_to: ?string}[]}
+   */
+  getCredits: (account = null) => {
+    const ofAccount = accountCondition(account, 'p.account');
+    return getDb().prepare(`
+      SELECT c.project_id, c.credit_id, c.available, c.currency, c.valid_to
+      FROM project_credits c LEFT JOIN projects p ON p.id = c.project_id
+      WHERE ${ofAccount.sql}
+      ORDER BY c.project_id, c.credit_id
+    `).all(...ofAccount.params);
+  },
+
   getConsumptionByProject: (projectId, fromDate, toDate) => {
     const db = getDb();
     let query = 'SELECT * FROM project_consumption WHERE project_id = ?';

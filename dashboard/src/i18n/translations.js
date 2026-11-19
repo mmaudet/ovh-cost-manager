@@ -175,6 +175,11 @@ export const translations = {
 
     // Consumption (Phase 1)
     currentConsumption: 'Consommation en cours',
+    publicCloudCredit: 'Crédit Public Cloud restant',
+    remainingCredit: 'Crédit restant',
+    credit: 'crédit',
+    credits: 'crédits',
+    creditUntil: "jusqu'au",
     forecastEndOfMonth: 'Prévision fin de mois',
     consumptionProgress: 'Progression',
     consumptionHistory: 'Historique de consommation',
@@ -526,6 +531,11 @@ export const translations = {
 
     // Consumption (Phase 1)
     currentConsumption: 'Current consumption',
+    publicCloudCredit: 'Remaining Public Cloud credit',
+    remainingCredit: 'Remaining credit',
+    credit: 'credit',
+    credits: 'credits',
+    creditUntil: 'until',
     forecastEndOfMonth: 'End of month forecast',
     consumptionProgress: 'Progress',
     consumptionHistory: 'Consumption history',

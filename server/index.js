@@ -11,6 +11,7 @@ const { spawn } = require('child_process');
 const db = require('../data/db');
 const { monthBounds } = require('../data/months');
 const { readAccounts } = require('../data/accounts-config');
+const { remainingCredit } = require('../data/cloud-credits');
 
 // Import auth module
 const auth = require('./auth');
@@ -434,10 +435,18 @@ function registerRoutes() {
   });
 
   // The projects of the account the request asks for, or of every account without one, with
-  // their instances, their current consumption and their account (#121)
+  // their instances, their current consumption, their account (#121), and the credit that
+  // remains of their credits today, 0 without any (see data/cloud-credits.js)
   app.get('/api/projects/enriched', accountParameter, (req, res) => {
     try {
-      res.json(db.projects.getEnriched(req.account));
+      const now = new Date();
+      const credits = db.cloudDetails.getCredits(req.account);
+      res.json(db.projects.getEnriched(req.account).map((project) => ({
+        ...project,
+        remaining_credit: remainingCredit(
+          credits.filter(({ project_id: projectId }) => projectId === project.id), now,
+        ).available_total,
+      })));
     } catch (err) {
       res.status(500).json({ error: err.message });
     }
@@ -1132,6 +1141,18 @@ function registerRoutes() {
   app.get('/api/consumption/forecast', accountParameter, (req, res) => {
     try {
       res.json(consumptionForecast(consumptionOfAccounts(req.account), new Date()));
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // The credit that remains on the Public Cloud projects of the account the request asks for,
+  // or, without one, of every account's: what their credits still available and still valid
+  // today add up to, as their last import with the cloud details stored them. See
+  // data/cloud-credits.js.
+  app.get('/api/consumption/credit', accountParameter, (req, res) => {
+    try {
+      res.json(remainingCredit(db.cloudDetails.getCredits(req.account), new Date()));
     } catch (err) {
       res.status(500).json({ error: err.message });
     }

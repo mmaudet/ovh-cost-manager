@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   fetchAccounts, fetchMonths, fetchSummary, fetchByProject, fetchByService,
   fetchImportStatus, fetchConfig, fetchUser,
-  fetchConsumptionCurrent, fetchConsumptionForecast,
+  fetchConsumptionCurrent, fetchConsumptionForecast, fetchPublicCloudCredit,
   fetchExpiringServices,
   fetchByResourceType, fetchGpuSummary,
 } from '../services/api';
@@ -252,6 +252,14 @@ export default function Dashboard() {
     key: ['consumptionForecast'],
     fetch: fetchConsumptionForecast,
   }));
+
+  // The credit that remains on the Public Cloud projects, for its KPI card, which shows while a
+  // credit counts: the account shown's, or the sum of the accounts' for all accounts
+  const { data: publicCloudCredit } = useQuery(accountQuery(selectedAccount, {
+    key: ['publicCloudCredit'],
+    fetch: fetchPublicCloudCredit,
+  }));
+  const showsCredit = publicCloudCredit?.credit_count > 0;
 
   // The services of the account shown that expire within 30 days, or already have, whatever
   // the month: the header counts them, and the Overview lists them (#123)
@@ -707,11 +715,17 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Consumption, Forecast and Resource Count KPI Cards: one a row below md, where three
-            would leave each too little room for its title, date and figure, but three on
-            paper, as before: A4 or Letter in portrait prints at about 730 px, below md (#226) */}
-        {(consumptionCurrent || byResourceType.length > 0) && (
-          <div className="grid grid-cols-1 md:grid-cols-3 print:grid-cols-3 gap-4">
+        {/* Consumption, Forecast, Public Cloud credit and Resource Count KPI Cards: one a row
+            below md, where three would leave each too little room for its title, date and
+            figure, but three on paper, as before: A4 or Letter in portrait prints at about
+            730 px, below md (#226). With the credit, four: two a row from md, and four from lg
+            and on paper */}
+        {(consumptionCurrent || showsCredit || byResourceType.length > 0) && (
+          <div
+            className={showsCredit
+              ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 print:grid-cols-4 gap-4'
+              : 'grid grid-cols-1 md:grid-cols-3 print:grid-cols-3 gap-4'}
+          >
             {consumptionCurrent && (
               <div className={`${FIGURE_CARD} border-2 border-emerald-500`}>
                 <div className={KPI_TITLE_ROW}>
@@ -761,6 +775,29 @@ export default function Dashboard() {
                       ? `${consumptionForecast.days_elapsed}/${consumptionForecast.days_in_month}`
                         + ` ${t('days')}`
                       : t('forecastEndOfMonth')}
+                </div>
+              </div>
+            )}
+            {/* What remains of the credits of the Public Cloud projects today, which their
+                consumption uses before it is billed: those still available and still valid,
+                and when the first of them ends */}
+            {showsCredit && (
+              <div className={`${FIGURE_CARD} border border-gray-100`}>
+                <div className={KPI_TITLE_ROW}>
+                  <span className="text-gray-500 text-sm font-medium">
+                    {t('publicCloudCredit')}
+                  </span>
+                  <span className="text-xs text-gray-400">
+                    {new Date().toLocaleDateString(locale, { day: 'numeric', month: 'long', year: 'numeric' })}
+                  </span>
+                </div>
+                <div className={KPI_FIGURE}>{fmt(publicCloudCredit.available_total)}€</div>
+                <div className="text-sm text-gray-500 mt-2">
+                  {`Public Cloud · ${publicCloudCredit.credit_count} `
+                    + t(publicCloudCredit.credit_count > 1 ? 'credits' : 'credit')}
+                  {publicCloudCredit.expires_at && ` · ${t('creditUntil')} `
+                    + new Date(publicCloudCredit.expires_at)
+                      .toLocaleDateString(locale, { day: 'numeric', month: 'short', year: 'numeric' })}
                 </div>
               </div>
             )}
