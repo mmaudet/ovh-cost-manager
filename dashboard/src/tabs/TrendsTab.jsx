@@ -6,6 +6,7 @@ import { ProjectedAmount } from '../components/ProjectedAmount.jsx';
 import { ProjectionCheckbox } from '../components/ProjectionCheckbox.jsx';
 import { FIGURE_CARD, SUMMARY_FIGURE } from '../utils/figureCards.js';
 import { formatMonthLabel, formatYearMonth } from '../utils/format.js';
+import { publicCloudProductLabel } from '../utils/publicCloudProducts.js';
 import { lineParts, trendAmount } from '../utils/trendLines.js';
 import { PERIOD_OPTIONS } from '../utils/trendPeriods.js';
 import { comparedVariation, comparesPartialMonth } from '../utils/variation.js';
@@ -86,12 +87,25 @@ const MonthInProgressNote = ({ t }) => (
 
 // The Trends tab, which the shell renders while it is active: what useTrendsTab() returns,
 // with the shell's language, translations (t) and amount format (fmt). The months are named by
-// the month of their usage while the shell says so (usageMonths, namesUsageMonths()).
+// the month of their usage while the shell says so (usageMonths, namesUsageMonths()). While a
+// Public Cloud project is selected (selectedProjectId), the charts and cards show its trend,
+// and the chart by category its products, which the page names; the GPU and AI Endpoints
+// trends, which are the account's, do not show.
 const TrendsTab = ({
-  trendPeriod, monthlyTrend, trendByCategory, hiddenCategories, toggleCategory, gpuTrend,
-  aiEndpointsTrend, monthInProgress, projected, periodMonths, language, t, fmt,
-  usageMonths = false,
+  trendPeriod, monthlyTrend, trendByCategory: trendByCategoryOfTab, hiddenCategories,
+  toggleCategory, gpuTrend, aiEndpointsTrend, monthInProgress, projected, periodMonths,
+  projects = [], selectedProjectId = null, language, t, fmt, usageMonths = false,
 }) => {
+  // The project selected, as the list of projects names it
+  const selectedProject = projects.find(({ id }) => id === selectedProjectId) ?? null;
+  // The categories of the chart: the products of the project selected, in the page's language
+  const trendByCategory = selectedProject
+    ? {
+      ...trendByCategoryOfTab,
+      categories: trendByCategoryOfTab.categories
+        .map((category) => ({ ...category, label: publicCloudProductLabel(category.key, t) })),
+    }
+    : trendByCategoryOfTab;
   // A month's short name on the axes and the cards
   const shortMonth = (yearMonth) => formatYearMonth(yearMonth, language, { ofUsage: usageMonths });
   const currentPeriodLabel = (PERIOD_OPTIONS.find(o => o.months === trendPeriod) || {}).key;
@@ -144,7 +158,10 @@ const TrendsTab = ({
   return (
     <div className="space-y-6">
       <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
-        <h3 className="font-semibold text-gray-900 mb-4">{t('costEvolutionOver')} {t(currentPeriodLabel)}</h3>
+        <h3 className="font-semibold text-gray-900 mb-4">
+          {t('costEvolutionOver')} {t(currentPeriodLabel)}
+          {selectedProject && ` · ${selectedProject.name || selectedProject.id}`}
+        </h3>
         {monthlyTrend.length > 0 ? (
           <div className="h-72">
             <ResponsiveContainer width="100%" height="100%">
@@ -170,7 +187,9 @@ const TrendsTab = ({
 
       {/* Cost trend by category */}
       <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
-        <h3 className="font-semibold text-gray-900 mb-4">{t('trendByCategory')}</h3>
+        <h3 className="font-semibold text-gray-900 mb-4">
+          {t(selectedProject ? 'trendByProduct' : 'trendByCategory')}
+        </h3>
         {trendByCategory.data.length > 0 && trendByCategory.categories.length > 0 ? (
           <>
             {/* Clickable legend: toggle categories to hide/show (Y axis rescales) */}
@@ -219,8 +238,8 @@ const TrendsTab = ({
         )}
       </div>
 
-      {/* GPU Cost Trend */}
-      {gpuTrend?.monthlyTrend && gpuTrend.monthlyTrend.length > 1 && (
+      {/* GPU Cost Trend, the account's: not while a project is selected */}
+      {!selectedProject && gpuTrend?.monthlyTrend && gpuTrend.monthlyTrend.length > 1 && (
         <div className="bg-white rounded-xl p-5 shadow-sm border-2 border-purple-300">
           <div className="flex items-center justify-between mb-4">
             <h3 className="font-semibold text-gray-900">
@@ -245,8 +264,9 @@ const TrendsTab = ({
       )}
 
       {/* The cost of each AI Endpoints model month by month (#196), once two months of the
-          period have some, as the GPU trend: a single bar is no trend */}
-      {aiEndpointsTrend?.monthlyTrend.length > 1 && (
+          period have some, as the GPU trend: a single bar is no trend. The account's, as the GPU
+          trend */}
+      {!selectedProject && aiEndpointsTrend?.monthlyTrend.length > 1 && (
         <AiEndpointsTrend
           aiEndpointsTrend={aiEndpointsTrend} language={language} t={t} fmt={fmt}
           usageMonths={usageMonths}
@@ -320,10 +340,12 @@ const TrendsTab = ({
 // docs/adr/0001-tab-state-lives-in-the-dashboard-shell.md. The checkbox that projects the month
 // in progress follows it on its line (#217): the shell holds that setting, and passes it with its
 // setter. The line wraps as the tab bar's does (#226): where it lacks room, as on a phone, the
-// checkbox goes whole to a line of its own under the period, rather than wrap its label.
+// checkbox goes whole to a line of its own under the period, rather than wrap its label. The
+// Public Cloud project whose trend the tab shows comes after the period, all of them by default,
+// while the account shown has projects.
 const TrendsPeriodSelector = ({
-  trendPeriod, setTrendPeriod, availablePeriods, projectsMonthInProgress,
-  setProjectsMonthInProgress, t,
+  trendPeriod, setTrendPeriod, availablePeriods, projects = [], selectedProjectId = null,
+  setSelectedProjectId, projectsMonthInProgress, setProjectsMonthInProgress, t,
 }) => (
   <div className="flex flex-wrap items-center gap-2">
     <span className="text-sm text-gray-600">{t('period')}:</span>
@@ -336,6 +358,25 @@ const TrendsPeriodSelector = ({
         <option key={opt.months} value={opt.months}>{t(opt.key)}</option>
       ))}
     </select>
+    {projects.length > 0 && (
+      <>
+        <label htmlFor="trends-project" className="text-sm text-gray-600">{t('project')}:</label>
+        <select
+          id="trends-project"
+          value={selectedProjectId ?? ''}
+          onChange={(e) => setSelectedProjectId(e.target.value || null)}
+          className={'px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm shadow-sm'
+            + ' cursor-pointer max-w-[16rem]'}
+        >
+          <option value="">{t('allProjects')}</option>
+          {[...projects]
+            .sort((a, b) => (a.name || a.id).localeCompare(b.name || b.id))
+            .map((project) => (
+              <option key={project.id} value={project.id}>{project.name || project.id}</option>
+            ))}
+        </select>
+      </>
+    )}
     <ProjectionCheckbox
       projectsMonthInProgress={projectsMonthInProgress}
       setProjectsMonthInProgress={setProjectsMonthInProgress} t={t}

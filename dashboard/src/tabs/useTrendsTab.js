@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   fetchMonthlyTrend, fetchMonthlyTrendByCategory, fetchGpuSummary, fetchAiEndpoints,
+  fetchProjectsEnriched, fetchProjectMonthlyTrend,
 } from '../services/api.js';
 import { accountQuery, projectedQuery } from '../utils/accounts.js';
 import { comparedMonthsOf } from '../utils/monthComparison.js';
@@ -51,18 +52,44 @@ const useTrendsTab = ({
     months, trendWindow && { value: trendWindow.from.slice(0, 7) }, selectedMonth, { projected },
   );
 
+  // The Public Cloud projects of the account shown, which the tab offers to select, as the
+  // Public Cloud tab lists them, under its key: only while the tab is open
+  const { data: projects = [] } = useQuery(accountQuery(selectedAccount, {
+    key: ['projectsEnriched'],
+    fetch: fetchProjectsEnriched,
+    enabled: activeTab === 'trends',
+  }));
+  // The project whose trend the tab shows, by id: the one picked, while the projects of the
+  // account shown hold it, or else none, for the trends of the whole account. The choice stays
+  // for an account that holds the project again.
+  const [chosenProjectId, setChosenProjectId] = useState(null);
+  const selectedProjectId = projects.some(({ id }) => id === chosenProjectId)
+    ? chosenProjectId
+    : null;
+
+  // The trend of that project over the period, as the trends of the account follow the month in
+  // progress, its products in place of the resource types
+  const { data: projectTrend } = useQuery(projectedQuery(selectedAccount, {
+    key: ['projectTrend', selectedProjectId, trendPeriod, endMonth],
+    fetch: (account, ...options) => fetchProjectMonthlyTrend(
+      selectedProjectId, trendPeriod, endMonth, account, ...options,
+    ),
+    projected,
+    enabled: holdsSelectedMonth && selectedProjectId !== null,
+  }));
+
   // The trends wait until the months list holds the month selected. It does not while the
   // months of the account just selected load, nor when that account lacks the month, until
   // the shell selects its latest month (#115): the period would then count no month, or end
   // on a month the account lacks, and the tab would ask for trends it never shows (#120).
-  const { data: monthlyTrend = [] } = useQuery(projectedQuery(selectedAccount, {
+  const { data: accountTrend = [] } = useQuery(projectedQuery(selectedAccount, {
     key: ['monthlyTrend', trendPeriod, endMonth],
     fetch: (account, ...options) => fetchMonthlyTrend(trendPeriod, endMonth, account, ...options),
     projected,
     enabled: holdsSelectedMonth,
   }));
 
-  const { data: trendByCategory = { categories: [], data: [] } } = useQuery(
+  const { data: accountTrendByCategory = { categories: [], data: [] } } = useQuery(
     projectedQuery(selectedAccount, {
       key: ['monthlyTrendByCategory', trendPeriod, endMonth],
       fetch: (account, ...options) => fetchMonthlyTrendByCategory(
@@ -72,6 +99,15 @@ const useTrendsTab = ({
       enabled: holdsSelectedMonth,
     }),
   );
+  // What the charts and cards show: the project's trend, nothing while it loads, and its products
+  // as categories, while a project is selected; the account's otherwise
+  const monthlyTrend = selectedProjectId === null
+    ? accountTrend
+    : projectTrend?.monthlyTrend ?? [];
+  const trendByCategory = selectedProjectId === null
+    ? accountTrendByCategory
+    : projectTrend?.byProduct ?? { categories: [], data: [] };
+
   // Categories hidden from the by-category chart (toggled via the legend).
   const [hiddenCategories, setHiddenCategories] = useState(() => new Set());
   const toggleCategory = (key) => setHiddenCategories(prev => {
@@ -99,6 +135,9 @@ const useTrendsTab = ({
     trendPeriod,
     setTrendPeriod: setChosenPeriod,
     availablePeriods,
+    projects,
+    selectedProjectId,
+    setSelectedProjectId: setChosenProjectId,
     monthlyTrend,
     trendByCategory,
     hiddenCategories,

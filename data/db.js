@@ -7,7 +7,7 @@ const { aiEndpointsLineCondition, modelFigures } = require('./ai-endpoints');
 const { tieFootprint } = require('./carbon-ties');
 const { MONTHLY_KINDS } = require('./cloud-usage');
 const { chargeFigures } = require('./logs-data-platform');
-const { productFigures } = require('./public-cloud-products');
+const { productFigures, publicCloudProductOf } = require('./public-cloud-products');
 const { storageClassLabel } = require('./storage-classes');
 const {
   monthBounds, monthOfDate, monthsOfWindow, shiftMonth,
@@ -1056,6 +1056,68 @@ const analysisOps = {
       const cost = { month, total: ofMonth.get(month)?.total ?? 0 };
       return projected ? { ...cost, projected: ofMonth.get(month)?.projected ?? 0 } : cost;
     });
+  },
+
+  /**
+   * The trend of a Public Cloud project between two dates, both included: what its bill lines
+   * cost in every month, 0 for a month that billed it nothing, and by Public Cloud product
+   * (publicCloudProductOf()), its credit included, which each month gives at 0 too, as the
+   * monthly trends do (#65). Nothing when no month billed it. On the bills of the account (see
+   * accountCondition()), every account's by default, as a project's bill lines belong to the
+   * account of their bill. With the projected option, the month in progress counts its projected
+   * lines too, and each month and product gives its projected part, 0 when it has none
+   * (linesOfPeriod()).
+   * @param {string} projectId
+   * @param {string} fromDate
+   * @param {string} toDate
+   * @param {?string} [account]
+   * @param {object} [options]
+   * @param {boolean} [options.projected]
+   * @returns {{ months: {month: string, total: number, projected: number}[],
+   *   products: {month: string, product: string, total: number, projected: number}[] }} The
+   *   months in order; the products of each month, those that cost most over the period first
+   */
+  projectMonthlyTrend: (projectId, fromDate, toDate, account = null, {
+    projected = false,
+  } = {}) => {
+    const lines = linesOfPeriod(fromDate, toDate, account, { projected });
+    const rows = getDb().prepare(`
+      SELECT strftime('%Y-%m', l.date) AS month, l.description, l.total_price, l.projected
+      FROM (${lines.sql}) l
+      WHERE l.project_id = ?
+    `).all(...lines.params, projectId);
+    if (rows.length === 0) return { months: [], products: [] };
+    // What each month and product cost, and their projected parts
+    const byMonth = new Map();
+    const byProduct = new Map();
+    for (const row of rows) {
+      const product = publicCloudProductOf(row.description);
+      const month = byMonth.get(row.month) ?? { total: 0, projected: 0, products: new Map() };
+      const ofProduct = month.products.get(product) ?? { total: 0, projected: 0 };
+      ofProduct.total += row.total_price || 0;
+      ofProduct.projected += row.projected || 0;
+      month.products.set(product, ofProduct);
+      month.total += row.total_price || 0;
+      month.projected += row.projected || 0;
+      byMonth.set(row.month, month);
+      byProduct.set(product, (byProduct.get(product) ?? 0) + (row.total_price || 0));
+    }
+    const products = [...byProduct].sort(([a, totalA], [b, totalB]) => totalB - totalA
+      || a.localeCompare(b)).map(([product]) => product);
+    const months = monthsOfWindow(fromDate, toDate);
+    return {
+      months: months.map((month) => ({
+        month,
+        total: byMonth.get(month)?.total ?? 0,
+        projected: byMonth.get(month)?.projected ?? 0,
+      })),
+      products: months.flatMap((month) => products.map((product) => {
+        const ofProduct = byMonth.get(month)?.products.get(product);
+        return {
+          month, product, total: ofProduct?.total ?? 0, projected: ofProduct?.projected ?? 0,
+        };
+      })),
+    };
   },
 
   // The cost of each resource type billed between two dates, both included, in every month

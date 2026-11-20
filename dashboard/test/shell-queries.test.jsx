@@ -82,6 +82,9 @@ describe('query keys', () => {
       ['gpuTrend', '2026-07-01', '2026-09-30'],
       ['aiEndpointsTrend', undefined, undefined],
       ['aiEndpointsTrend', '2026-07-01', '2026-09-30'],
+      // And the trend of the project that the tab shows, which waits for one to be selected
+      ['projectTrend', null, 3, undefined],
+      ['projectTrend', null, 3, '2026-09'],
       // The Public Cloud tab's, while no project is selected
       ['projectsEnriched'],
       ['projectConsumption', undefined],
@@ -199,6 +202,7 @@ describe('query keys', () => {
         ['monthlyTrendByCategory', 3, '2026-09', 'xx1111-ovh'],
         ['gpuTrend', '2026-07-01', '2026-09-30', 'xx1111-ovh'],
         ['aiEndpointsTrend', '2026-07-01', '2026-09-30', 'xx1111-ovh'],
+        ['projectTrend', null, 3, '2026-09', 'xx1111-ovh'],
         // The Public Cloud tab's projects and figures of the month (#121), and its AI Endpoints
         // models (#193), which wait for the tab. The resources of a project follow the project,
         // which belongs to one account.

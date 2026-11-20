@@ -121,6 +121,19 @@ export const fetchMonthlyTrendByCategory = async (
   return data;
 };
 
+// The trend of a Public Cloud project over the same months, of the account's bills: what it
+// cost each month, `monthlyTrend`, and by Public Cloud product, `byProduct`, shaped as the trends
+// above. With `projected`, the month in progress at its projected cost, and each month's
+// projected part (#217).
+export const fetchProjectMonthlyTrend = async (
+  projectId, months, end, account = null, { projected = false } = {},
+) => {
+  const { data } = await api.get(`/projects/${projectId}/monthly-trend`, {
+    params: { months, end, ...accountParams(account), ...projectionParams(projected) },
+  });
+  return data;
+};
+
 export const fetchImportStatus = async () => {
   const { data } = await api.get('/import/status');
   return data;

@@ -172,6 +172,26 @@ const RESOURCE_TYPE_LABELS = {
   'other': 'Other'
 };
 
+// The colour of each Public Cloud product (CONTEXT.md, data/public-cloud-products.js), for the
+// trend of a project by product: the dashboard names them in its language
+const PUBLIC_CLOUD_PRODUCT_COLORS = {
+  instances: '#3b82f6',
+  objectStorage: '#10b981',
+  volumes: '#f59e0b',
+  snapshots: '#a855f7',
+  savingsPlans: '#0891b2',
+  volumeBackups: '#059669',
+  databases: '#ef4444',
+  loadBalancers: '#06b6d4',
+  floatingIps: '#ec4899',
+  gateways: '#f97316',
+  ai: '#7c3aed',
+  registry: '#65a30d',
+  kubernetes: '#2563eb',
+  credits: '#64748b',
+  other: '#6b7280',
+};
+
 // Trust proxy headers (for reverse proxy/load balancer): the X-Forwarded-For
 // of as many proxies as TRUST_PROXY says, so that req.ip is the address the
 // outermost of them got the request from
@@ -733,6 +753,52 @@ function registerRoutes() {
           }));
 
         res.json({ categories, data });
+      } catch (err) {
+        res.status(500).json({ error: err.message });
+      }
+    });
+
+  // The trend of a Public Cloud project, over the same months as /api/analysis/monthly-trend,
+  // from the same parameters, the account and the projection of the month in progress included,
+  // which the Trends tab shows for the project selected: what the project cost each month, as
+  // monthlyTrend gives it as `monthlyTrend`, and by Public Cloud product, its credit included,
+  // shaped as /api/analysis/monthly-trend-by-category, as `byProduct`, each product keyed and
+  // coloured, the dashboard naming it. The account, as a project's bill lines belong to the
+  // account of their bill, which may not be the project's own (see /api/projects/:id/products).
+  app.get('/api/projects/:id/monthly-trend', accountParameter, projectedParameter,
+    (req, res) => {
+      try {
+        const { valid, error, from, to } = trendWindowFromQuery(req.query, latestBilledMonth());
+        if (!valid) {
+          return res.status(400).json({ error });
+        }
+        const { months, products } = from
+          ? db.analysis.projectMonthlyTrend(req.params.id, from, to, req.account,
+            { projected: req.projected })
+          : { months: [], products: [] };
+        const toCents = (amount) => Math.round(amount * 100) / 100;
+
+        const monthlyTrend = months.map((row) => ({
+          yearMonth: row.month,
+          cost: toCents(row.total),
+          ...projectedPartOf(req, () => toCents(row.projected)),
+        }));
+        // The products in the order the query gives them, those that cost most first
+        const categories = [...new Set(products.map(({ product }) => product))].map((key) => ({
+          key,
+          label: key,
+          color: PUBLIC_CLOUD_PRODUCT_COLORS[key] || PUBLIC_CLOUD_PRODUCT_COLORS.other,
+        }));
+        const ofMonth = (month, valueOf) => Object.fromEntries(products
+          .filter((row) => row.month === month)
+          .map((row) => [row.product, toCents(valueOf(row))]));
+        const data = months.map(({ month }) => ({
+          yearMonth: month,
+          ...ofMonth(month, (row) => row.total),
+          ...projectedPartOf(req, () => ofMonth(month, (row) => row.projected)),
+        }));
+
+        res.json({ monthlyTrend, byProduct: { categories, data } });
       } catch (err) {
         res.status(500).json({ error: err.message });
       }

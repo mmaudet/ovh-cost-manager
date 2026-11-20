@@ -160,6 +160,8 @@ export const translations = {
     importStatusFailed: 'échoué',
     importStatusPartial: 'partiel',
     trendByCategory: 'Évolution par catégorie',
+    trendByProduct: 'Évolution par produit',
+    allProjects: 'Tous les projets',
     costEvolutionOver: 'Évolution des coûts (total) sur',
     overPeriod: 'Sur',
     period3m: '3 mois',
@@ -282,6 +284,7 @@ export const translations = {
     productRegistry: 'Registre',
     productKubernetes: 'Kubernetes',
     productOther: 'Divers',
+    productCredits: 'Crédit Public Cloud utilisé',
     // The AI Endpoints models that the month billed, and their tokens (#193)
     aiEndpointsByModel: 'AI Endpoints par modèle',
     model: 'Modèle',
@@ -517,6 +520,8 @@ export const translations = {
     importStatusFailed: 'failed',
     importStatusPartial: 'partial',
     trendByCategory: 'Cost evolution by category',
+    trendByProduct: 'Cost evolution by product',
+    allProjects: 'All projects',
     costEvolutionOver: 'Total cost evolution over',
     overPeriod: 'Over',
     period3m: '3 months',
@@ -639,6 +644,7 @@ export const translations = {
     productRegistry: 'Container registry',
     productKubernetes: 'Kubernetes',
     productOther: 'Miscellaneous',
+    productCredits: 'Public Cloud credit used',
     // The AI Endpoints models that the month billed, and their tokens (#193)
     aiEndpointsByModel: 'AI Endpoints by model',
     model: 'Model',

@@ -192,6 +192,12 @@ const answers = {
     ofAccount(data, account)[keyAnswering(
       'monthlyTrendByCategory', 'projectedMonthlyTrendByResourceType', options,
     )]?.[end]?.[months] ?? emptyAnswers.trendByCategory(),
+  // The trend of a Public Cloud project: by project, then as the trends above. Asked with the
+  // projection of the month in progress, from its own entry, projectedProjectTrend.
+  fetchProjectMonthlyTrend: (data, projectId, months, end, account, options) =>
+    ofAccount(data, account)[keyAnswering('projectTrend', 'projectedProjectTrend', options)]
+      ?.[projectId]?.[end]?.[months]
+      ?? { monthlyTrend: [], byProduct: emptyAnswers.trendByCategory() },
   fetchImportStatus: entry('importStatus', emptyAnswers.importStatus),
   triggerImport: () => ({ started: true }),
   fetchConfig: entry('config', emptyAnswers.config),
