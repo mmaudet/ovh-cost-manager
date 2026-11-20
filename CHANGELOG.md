@@ -14,10 +14,22 @@ sections were written afterwards from the git history.
 
 ## 3.7.0 - 2026-11-20
 
-<!-- Upgrade notes and highlights of this release, if any. -->
+The credit that remains on the Public Cloud projects:
+
+- **Remaining Public Cloud credit** (#280, in #281). The import with `--include-cloud-details` (which `--all` includes) now also fetches each Public Cloud project's credits, such as vouchers, from `GET /cloud/project/{id}/credit`.
+  - A card next to the end-of-month forecast gives what remains of the credits still available and still valid, how many they are, and when the first one ends. It shows only while a credit counts, and is circled in red when the credit is below the current consumption.
+  - The Public Cloud tab's list of projects gives each project's remaining credit after its current consumption, in red when it is below what the project consumed so far.
+  - A credit that expires counts no more from that moment on, without a new import. `GET /api/consumption/credit` gives the total, and `GET /api/projects/enriched` each project's, in `remaining_credit`.
+
+### Upgrade notes
+
+- **The credits show after the next import with the cloud details** (`--include-cloud-details` or `--all`). The `GET /cloud/*` rule that every API key needs already covers them: no new right is needed. The new `project_credits` table is created when the database opens.
+- **Security**: `shell-quote`, a development dependency, gets its fixed version (#282).
 
 ### New features
 * feat: show the remaining Public Cloud credit, in all and per project (#280) by @cpanissod in https://github.com/mmaudet/ovh-cost-manager/pull/281
+### Security
+* chore(deps-dev): bump shell-quote from 1.10.0 to 1.12.0 by @dependabot[bot] in https://github.com/mmaudet/ovh-cost-manager/pull/282
 ### Maintenance
 * chore(deps-dev): bump postcss-selector-parser from 6.1.4 to 6.1.5 by @dependabot[bot] in https://github.com/mmaudet/ovh-cost-manager/pull/272
 * chore(deps): bump body-parser from 1.20.8 to 1.20.9 by @dependabot[bot] in https://github.com/mmaudet/ovh-cost-manager/pull/275
