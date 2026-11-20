@@ -94,6 +94,7 @@ const CONSUMPTION_ROUTES = [
 const enrichedProject = (account, consumed, from, to) => ({
   id: PROJECT, name: 'Project 1', description: 'Project 1', status: 'ok', account,
   instance_count: 0, consumption_total: consumed, period_start: from, period_end: to,
+  remaining_credit: 0,
 });
 
 // Whose rows carry the account, or, from before the accounts, none: the Unknown account's,

@@ -32,14 +32,15 @@ const openProjectAccountOf = (accountColumn, projectsEnriched, openProject) => {
 // The value of a project in each column that sorts the list (#146): its account, none without
 // the Account column, no consumption for a project that consumed nothing, and no amount billed
 // for a project that no bill line of the month names (#180), which the list shows as "-". A
-// project billed that the inventory of the account lacks has no state, instance count or
-// consumption there.
+// project billed that the inventory of the account lacks has no state, instance count,
+// consumption or credit there. No credit for a project without any that remains.
 const projectValues = (accountColumn) => ({
   name: (p) => p.name || p.id,
   account: (p) => accountColumn?.nameOf(p.account),
   state: (p) => p.status,
   instances: (p) => (p.inInventory ? p.instance_count || 0 : null),
   consumption: (p) => (p.consumption_total > 0 ? p.consumption_total : null),
+  credit: (p) => (p.remaining_credit > 0 ? p.remaining_credit : null),
   billed: (p) => p.billed,
 });
 
@@ -47,7 +48,8 @@ const projectValues = (accountColumn) => ({
 // whose bills charged it lacks it (#180): its name, marked as a bucket billed but gone from the
 // inventory is, and its id, as the server may not name it; that account in the Account column,
 // and what the month billed it. The list has none of its resources: it has no detail to open.
-const ProjectNotInInventoryRow = ({ project, accountColumn, t, fmt }) => (
+// No credit either, in the Credit column while the list shows it (showsCredit).
+const ProjectNotInInventoryRow = ({ project, accountColumn, showsCredit, t, fmt }) => (
   <tr className="border-b opacity-60">
     <td className="p-3 font-medium">
       <span>{project.name}</span>
@@ -60,6 +62,7 @@ const ProjectNotInInventoryRow = ({ project, accountColumn, t, fmt }) => (
     <td className="p-3">-</td>
     <td className="p-3 text-right">-</td>
     <td className="p-3 text-right font-medium">-</td>
+    {showsCredit && <td className="p-3 text-right font-medium">-</td>}
     <td className="p-3 text-right font-medium">{fmt(project.billed)}€</td>
     <td className="p-3"></td>
   </tr>
@@ -116,6 +119,13 @@ const PublicCloudTab = ({
     projectsLoaded ? projectListRows(projectsEnriched, billedProjects ?? []) : [],
     projectSorting.sort, projectValues(accountColumn), language,
   );
+  // Whether the list gives the credit that remains of each project's credits today, after its
+  // current consumption, which it uses before it is billed: while a project has one, as the
+  // header's card shows the credit of all of them
+  const showsCredit = projectsEnriched.some(({ remaining_credit: credit }) => credit > 0);
+  // The columns of the list: the name, the account, the state, the instances, the consumption,
+  // the credit, the amount billed and the chevron, the account and the credit while it shows them
+  const columnCount = 6 + (accountColumn ? 1 : 0) + (showsCredit ? 1 : 0);
   return (
     <div className="space-y-6">
       {/* What the cards add up to, and why it is not the current consumption (#145) */}
@@ -298,6 +308,14 @@ const PublicCloudTab = ({
                   >
                     {language === 'en' ? 'Current consumption' : 'Consommation en cours'}
                   </SortableHeader>
+                  {showsCredit && (
+                    <SortableHeader
+                      column="credit" kind="number" sorting={projectSorting} t={t}
+                      className="p-3 text-right font-medium"
+                    >
+                      {t('remainingCredit')}
+                    </SortableHeader>
+                  )}
                   <SortableHeader
                     column="billed" kind="number" sorting={projectSorting} t={t}
                     className="p-3 text-right font-medium"
@@ -313,7 +331,7 @@ const PublicCloudTab = ({
                 {projects.map(p => (!p.inInventory ? (
                   <ProjectNotInInventoryRow
                     key={`not in inventory ${p.id} ${p.account}`} project={p}
-                    accountColumn={accountColumn} t={t} fmt={fmt}
+                    accountColumn={accountColumn} showsCredit={showsCredit} t={t} fmt={fmt}
                   />
                 ) : (
                   <Fragment key={p.id}>
@@ -337,6 +355,21 @@ const PublicCloudTab = ({
                       <td className="p-3 text-right font-medium">
                         {p.consumption_total > 0 ? `${fmt(p.consumption_total)}€` : '-'}
                       </td>
+                      {/* In red while it is below what the project consumed so far */}
+                      {showsCredit && (() => {
+                        const below = p.remaining_credit > 0
+                          && p.remaining_credit < (p.consumption_total || 0);
+                        return (
+                          <td
+                            className={`p-3 text-right font-medium ${below
+                              ? 'text-red-600'
+                              : 'text-emerald-700'}`}
+                            title={below ? t('creditBelowConsumption') : undefined}
+                          >
+                            {p.remaining_credit > 0 ? `${fmt(p.remaining_credit)}€` : '-'}
+                          </td>
+                        );
+                      })()}
                       <td className="p-3 text-right font-medium">
                         {amountsLoaded && (p.billed === null ? '-' : `${fmt(p.billed)}€`)}
                       </td>
@@ -348,7 +381,7 @@ const PublicCloudTab = ({
                     </tr>
                     {openProject?.id === p.id && (
                       <tr>
-                        <td colSpan={accountColumn ? 7 : 6} className="p-0">
+                        <td colSpan={columnCount} className="p-0">
                           {/* Where the list scrolls sideways, as on a phone, the detail keeps
                               to the part of the list in view, as wide as its box (100cqw),
                               and held at its left edge, rather than span the whole table
@@ -665,7 +698,7 @@ const PublicCloudTab = ({
               {amountsLoaded && cloudTotal !== undefined && (
                 <tfoot>
                   <tr className="bg-gray-50 font-semibold">
-                    <td className="p-3" colSpan={accountColumn ? 5 : 4}>{t('cloudTotal')}</td>
+                    <td className="p-3" colSpan={columnCount - 2}>{t('cloudTotal')}</td>
                     <td className="p-3 text-right">{fmt(cloudTotal)}€</td>
                     <td className="p-3"></td>
                   </tr>

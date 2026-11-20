@@ -40,6 +40,10 @@ const emptyAnswers = {
   user: () => ({ id: null, name: 'Anonymous', email: null, authEnabled: false }),
   consumptionCurrent: () => ({ current_total: 0, currency: 'EUR' }),
   consumptionForecast: () => ({ forecast_total: 0, currency: 'EUR' }),
+  // No credit that counts, as the server answers without any
+  publicCloudCredit: () => ({
+    available_total: 0, currency: null, credit_count: 0, project_count: 0, expires_at: null,
+  }),
   webCloudSummary: () => ({
     domain: { count: 0, total: 0 },
     dns_zone: { count: 0, total: 0 },
@@ -197,6 +201,9 @@ const answers = {
     entry('consumptionCurrent', emptyAnswers.consumptionCurrent)(ofAccount(data, account)),
   fetchConsumptionForecast: (data, account) =>
     entry('consumptionForecast', emptyAnswers.consumptionForecast)(ofAccount(data, account)),
+  // And the credit that remains on its Public Cloud projects
+  fetchPublicCloudCredit: (data, account) =>
+    entry('publicCloudCredit', emptyAnswers.publicCloudCredit)(ofAccount(data, account)),
   // The inventory follows the account the page selects (#123)
   fetchInventoryServers: (data, account) =>
     entry('inventoryServers', emptyAnswers.list)(ofAccount(data, account)),

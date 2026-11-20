@@ -67,6 +67,7 @@ New in version 3.1.0.
 ### Real-time Monitoring
 - **Current Consumption**: What the Public Cloud projects consumed this month, as OVH's Public Cloud page gives it (`--include-cloud-details`, which `--all` includes), or else the account's consumption from `/me/consumption` (`--include-consumption`)
 - **End-of-month Forecast**: The forecast that OVH gives each Public Cloud project, or its consumption extrapolated to the end of the month, never below what it consumed, with a progress indicator (`--include-cloud-details`); or else the forecast of `/me/consumption`
+- **Remaining Public Cloud Credit**: what remains today of the credits of the Public Cloud projects, such as vouchers, which their consumption uses before it is billed: the credits still available and still valid, how many they are, and when the first one ends, in a card next to the forecast, and each project's in the Public Cloud tab's list of projects, after its current consumption, shown while a credit counts (`--include-cloud-details`). A credit below the current consumption shows in red: the card is circled in red, and a project's credit below what it consumed so far is written in red
 - **Account Balance**: Debt, credits, and deposit tracking
 
 ### Infrastructure Inventory
@@ -435,7 +436,8 @@ npm run import -- --from 2025-01-01 --include-consumption
 npm run import -- --from 2025-01-01 --include-inventory
 
 # Include cloud project details: each project's consumption and month-end forecast, which the
-# consumption and forecast cards read, its instances and its quotas
+# consumption and forecast cards read, its credits, which the Public Cloud credit card reads,
+# its instances and its quotas
 npm run import -- --from 2025-01-01 --include-cloud-details
 
 # Include the carbon footprint of the last 24 months, which OVHcloud's carbon calculator gives
@@ -813,9 +815,12 @@ whose lines add up to more than 0 €, the most expensive first.
 | ---------------------------------------------- | ------------------------------- |
 | `GET /api/consumption/current`                 | Current consumption (real-time) |
 | `GET /api/consumption/forecast`                | End-of-month forecast           |
+| `GET /api/consumption/credit`                  | Remaining Public Cloud credit   |
 | `GET /api/consumption/usage-history?from=&to=` | Consumption history             |
 | `GET /api/account/balance`                     | Debt, credits, deposits         |
 | `GET /api/account/credits`                     | Credit movements                |
+
+`GET /api/consumption/credit` adds up the credits of the Public Cloud projects that `GET /cloud/project/{id}/credit` lists, as the last import with `--include-cloud-details` stored them, whose `available_credit` is positive and whose `validity.to` has not passed when the server answers: `available_total`, `currency`, `credit_count`, `project_count`, and `expires_at`, the end of the validity that ends first, `null` when none ends. A credit that expires counts no more from that moment on, without a new import. `GET /api/projects/enriched` gives each project's the same way, in `remaining_credit`, 0 without any. A failed call keeps the credits stored, and a full import keeps them too.
 
 ### Carbon Footprint
 

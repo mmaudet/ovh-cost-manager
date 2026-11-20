@@ -74,6 +74,15 @@ OVH API ──> data/import.js ──> SQLite (ovh-bills.db) ──> server/inde
     month-end forecast, the `totalPrice` that `usage/forecast` answers, of the month that its
     own `period` gives (`readForecast()`): the import keeps each project's latest in
     `project_forecasts` (#224).
+  - `cloud-credits.js` — pure: a Public Cloud project's credit, as
+    `/cloud/project/{id}/credit/{id}` answers it (`readCredit()`), which the import stores in
+    `project_credits` whatever its amount and validity, and the credit that remains of them
+    (`remainingCredit()`): those whose `available_credit` is positive and whose `validity.to`
+    has not passed, **read when the server reads them**, so that a credit that expires counts
+    no more without a new import. `/api/consumption/credit` gives it, and the KPI card next to
+    the forecast shows it while a credit counts; `/api/projects/enriched` gives each project's,
+    `remaining_credit`, which the Public Cloud tab's list of projects shows after the current
+    consumption while a project has one.
   - `public-cloud-products.js` — pure: the Public Cloud product of a bill line (`CONTEXT.md`),
     and what lines add up to by product (`productFigures()`), for the Public Cloud cards, a
     project's other services, and the products of a project that the Compare tab compares
@@ -242,7 +251,9 @@ NIC handle:
   compares with, and the scope the report names.
 
 A single-account installation sends the same requests as before the accounts, under the
-same query keys, plus `GET /api/accounts` under `['accounts']`, while the page does not project
+same query keys, plus `GET /api/accounts` under `['accounts']` and the remaining Public Cloud
+credit under `['publicCloudCredit']`, whose card shows only while a credit counts, while the page
+does not project
 the month in progress, and shows the same page:
 `dashboard/test/shell-queries.test.jsx` pins the keys, and the real-data comparison of
 `CONTRIBUTING.md` checks the page.
@@ -314,11 +325,12 @@ datasets, off by default: `--include-consumption`, `--include-account`,
 everything.
 
 `--include-cloud-details` imports each Public Cloud project's inventory, its consumption of
-the month (`usage/current`), and its month-end forecast (`usage/forecast`, #224), dated by
-its own period: the month can turn between the two calls. A forecast call that fails keeps
-the forecast stored, as a failed call keeps a project's stored volumes, and the import goes
-on. `--full` keeps the forecasts, as it keeps the projects' consumption, which the cards
-read with them: an import without the cloud details fetches neither again.
+the month (`usage/current`), its month-end forecast (`usage/forecast`, #224), dated by
+its own period: the month can turn between the two calls, and its credits (`credit`). A
+forecast or credit call that fails keeps what is stored, as a failed call keeps a project's
+stored instances, quotas and volumes, and the import goes on. `--full` keeps the forecasts
+and the credits, as it keeps the projects' consumption, which the cards read with them: an
+import without the cloud details fetches none of them again.
 
 `--include-carbon` asks OVHcloud's carbon calculator for each account's footprint of the
 last 24 months: it calls `POST /me/carbonCalculator/csv`, which the key needs a rule for,

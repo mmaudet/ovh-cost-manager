@@ -254,8 +254,8 @@ function takeOverBilledRows(database, nic, listed) {
  * snapshots, its credit movements and its consumption history, which the import fetches
  * again. What it cannot fetch again is kept: the consumption of each of its projects, which
  * OVH gives for the current month only (#54), with the month of its last import, and their
- * month-end forecasts, which the cards read with that consumption (#224), with the projects
- * they belong to. Another account's data, and the rows without an account, stay, with the
+ * month-end forecasts, which the cards read with that consumption (#224), and their credits,
+ * which the import fetches with them, with the projects they belong to. Another account's data, and the rows without an account, stay, with the
  * projects of this account whose lines are on another account's bills.
  *
  * The usage bills of an account whose cost source is its Public Cloud usage (CONTEXT.md) stay
@@ -285,6 +285,7 @@ function clearAccount(database, nic, { keepUsageBills = false } = {}) {
     DELETE FROM projects WHERE ${ofAccount}
       AND id NOT IN (SELECT project_id FROM project_consumption)
       AND id NOT IN (SELECT project_id FROM project_forecasts)
+      AND id NOT IN (SELECT project_id FROM project_credits)
       AND id NOT IN (SELECT project_id FROM project_usage_periods)
       AND id NOT IN (SELECT project_id FROM bill_details WHERE project_id IS NOT NULL)
   `);

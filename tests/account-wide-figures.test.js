@@ -93,6 +93,19 @@ function seed(db) {
   consumption(db, 'project-legacy', AUGUST, 40);
   snapshot(db, REMOVED, ['2026-07-01', '2026-07-20'],
     { current: 33, forecast: 50, takenAt: '2026-07-20 04:00:00' });
+
+  // The credits of Paris's project and of the Unknown account's: one each that counts, one used
+  // up, one long ended; Lyon has no project, so no credit
+  const credit = (credit_id, available, valid_to) => ({
+    credit_id, description: null, available, total: null, currency: 'EUR', valid_from: null,
+    valid_to,
+  });
+  db.cloudDetails.replaceCredits('project-staging', [
+    credit('101', 312.4, '2099-01-01T00:00:00+01:00'),
+    credit('102', 0, '2099-01-01T00:00:00+01:00'),
+    credit('103', 80, '2020-01-01T00:00:00+01:00'),
+  ]);
+  db.cloudDetails.replaceCredits('project-legacy', [credit('201', 20.1, null)]);
 }
 
 let ocm;
@@ -261,6 +274,39 @@ describe('GET /api/consumption/current', () => {
   test('gives no consumption for an account whose import recorded none', async () => {
     expect(await current(of(NEW_ACCOUNT)))
       .toEqual({ status: 200, body: { current_total: 0, currency: 'EUR' } });
+  });
+});
+
+describe('GET /api/consumption/credit', () => {
+  // The credit remaining as the route answers it, of credits without an end
+  const remaining = (total, count, expiresAt = null) => ({
+    available_total: total, currency: total > 0 ? 'EUR' : null, credit_count: count,
+    project_count: count, expires_at: expiresAt,
+  });
+
+  // Paris's credit still available and valid, and the Unknown account's
+  test('adds up the credits that count of every account without the parameter', async () => {
+    expect(await ocm.get('/api/consumption/credit')).toEqual({
+      status: 200,
+      body: { ...remaining(332.5, 2), expires_at: '2099-01-01T00:00:00+01:00' },
+    });
+  });
+
+  test('gives those of the account whose NIC handle it gives', async () => {
+    expect(await ocm.get(`/api/consumption/credit${of(PARIS)}`)).toEqual({
+      status: 200, body: remaining(312.4, 1, '2099-01-01T00:00:00+01:00'),
+    });
+    expect(await ocm.get(`/api/consumption/credit${of(LYON)}`))
+      .toEqual({ status: 200, body: remaining(0, 0) });
+  });
+
+  test('gives those of the Unknown account for unknown', async () => {
+    expect(await ocm.get(`/api/consumption/credit${of(UNKNOWN_ACCOUNT)}`))
+      .toEqual({ status: 200, body: remaining(20.1, 1) });
+  });
+
+  test('refuses an account that the accounts table does not record', async () => {
+    expect((await ocm.get(`/api/consumption/credit${of(REFUSED)}`)).status).toBe(400);
   });
 });
 

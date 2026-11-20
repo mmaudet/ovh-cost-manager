@@ -53,6 +53,8 @@ describe('query keys', () => {
       ['importStatus'],
       ['consumptionCurrent'],
       ['consumptionForecast'],
+      // The credit that remains on the Public Cloud projects, whose card shows while one counts
+      ['publicCloudCredit'],
       ['expiringServices'],
       // The Overview tab's: its projects by account, which wait for lists that name the
       // account of each project, as a single account never has them (#118)
@@ -176,6 +178,7 @@ describe('query keys', () => {
         // Whatever the month selected
         ['consumptionCurrent', 'xx1111-ovh'],
         ['consumptionForecast', 'xx1111-ovh'],
+        ['publicCloudCredit', 'xx1111-ovh'],
         ['byService', '2026-09-01', '2026-09-30', 'xx1111-ovh'],
         ['byProject', '2026-09-01', '2026-09-30', 'xx1111-ovh'],
         ['byResourceType', '2026-09-01', '2026-09-30', 'xx1111-ovh'],
