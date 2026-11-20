@@ -12,6 +12,25 @@ sections were written afterwards from the git history.
 
 <!-- scripts/release.sh inserts each new version above the first version heading. -->
 
+## 3.7.0 - 2026-11-20
+
+<!-- Upgrade notes and highlights of this release, if any. -->
+
+### New features
+* feat: show the remaining Public Cloud credit, in all and per project (#280) by @cpanissod in https://github.com/mmaudet/ovh-cost-manager/pull/281
+### Maintenance
+* chore(deps-dev): bump postcss-selector-parser from 6.1.4 to 6.1.5 by @dependabot[bot] in https://github.com/mmaudet/ovh-cost-manager/pull/272
+* chore(deps): bump body-parser from 1.20.8 to 1.20.9 by @dependabot[bot] in https://github.com/mmaudet/ovh-cost-manager/pull/275
+* chore(deps): bump qs from 6.16.0 to 6.16.2 by @dependabot[bot] in https://github.com/mmaudet/ovh-cost-manager/pull/276
+* chore(deps): bump ip-address from 10.7.2 to 10.7.5 by @dependabot[bot] in https://github.com/mmaudet/ovh-cost-manager/pull/277
+* chore(deps-dev): bump undici from 7.30.0 to 7.30.1 by @dependabot[bot] in https://github.com/mmaudet/ovh-cost-manager/pull/279
+* chore(deps-dev): bump vite from 6.4.3 to 6.4.5 by @dependabot[bot] in https://github.com/mmaudet/ovh-cost-manager/pull/278
+
+### New contributors
+* @dependabot[bot] made their first contribution in https://github.com/mmaudet/ovh-cost-manager/pull/272
+
+**Full Changelog**: https://github.com/mmaudet/ovh-cost-manager/compare/v3.6.0...v3.7.0
+
 ## 3.6.0 - 2026-10-31
 
 Accounts without bills, read from the usage of their Public Cloud projects:
