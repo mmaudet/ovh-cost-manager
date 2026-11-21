@@ -126,6 +126,23 @@ describe('the projection of the month in progress', () => {
     expect(november()).toEqual({ month: '2026-11', total: 10, projected: 0 });
   });
 
+  // The trend of the project that the Trends tab shows for it, and its products
+  test('counts in the trend of the project, product by product', () => {
+    forecastOctober(25);
+
+    const { months, products } = db.analysis.projectMonthlyTrend(
+      PROJECT, FROM, TO, ACCOUNT.nic, { projected: true },
+    );
+    expect(months).toEqual([
+      { month: '2026-10', total: 20, projected: 0 },
+      { month: '2026-11', total: 25, projected: 15 },
+    ]);
+    expect(products.filter(({ month }) => month === '2026-11')).toEqual([
+      { month: '2026-11', product: 'databases', total: 15, projected: 9 },
+      { month: '2026-11', product: 'instances', total: 10, projected: 6 },
+    ]);
+  });
+
   test('is none without the projected option, as before', () => {
     forecastOctober(25);
 

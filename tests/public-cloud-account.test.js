@@ -353,6 +353,64 @@ describe('a bucket of a project billed on the bills of another account', () => {
 });
 
 // Rather than answer for all accounts, or for none, to a request that names an account
+describe('GET /api/projects/:id/monthly-trend', () => {
+  // What the trend of a project answers when no month billed it
+  const NONE = { monthlyTrend: [], byProduct: { categories: [], data: [] } };
+  // August and September, as the Trends tab asks for them
+  const PERIOD = 'months=2&end=2026-09';
+
+  test('gives what the project cost each month, and by Public Cloud product', async () => {
+    const product = (key, color) => ({ key, label: key, color });
+
+    expect(await ocm.get(`/api/projects/${PRODUCTION}/monthly-trend?${PERIOD}`)).toEqual({
+      status: 200,
+      body: {
+        // August billed it nothing
+        monthlyTrend: [{ yearMonth: '2026-08', cost: 0 }, { yearMonth: '2026-09', cost: 168 }],
+        byProduct: {
+          // Those that cost most first
+          categories: [
+            product('instances', '#3b82f6'), product('savingsPlans', '#0891b2'),
+            product('objectStorage', '#10b981'), product('volumes', '#f59e0b'),
+            product('snapshots', '#a855f7'),
+          ],
+          data: [
+            {
+              yearMonth: '2026-08', instances: 0, savingsPlans: 0, objectStorage: 0, volumes: 0,
+              snapshots: 0,
+            },
+            {
+              yearMonth: '2026-09', instances: 120, savingsPlans: 20, objectStorage: 14,
+              volumes: 10, snapshots: 4,
+            },
+          ],
+        },
+      },
+    });
+  });
+
+  // A project's bill lines belong to the account of their bill: Production's are on Lyon's
+  test('gives what the bills of the account whose NIC handle it gives charged the project',
+    async () => {
+      expect((await ocm.get(`/api/projects/${PRODUCTION}/monthly-trend?${PERIOD}&account=${LYON}`))
+        .body.monthlyTrend).toEqual([
+        { yearMonth: '2026-08', cost: 0 }, { yearMonth: '2026-09', cost: 168 },
+      ]);
+      expect(await ocm.get(`/api/projects/${PRODUCTION}/monthly-trend?${PERIOD}&account=${PARIS}`))
+        .toEqual({ status: 200, body: NONE });
+    });
+
+  test('gives nothing for a project that no month of the period billed', async () => {
+    expect(await ocm.get(`/api/projects/project-unknown/monthly-trend?${PERIOD}`))
+      .toEqual({ status: 200, body: NONE });
+  });
+
+  test('refuses a period that is none, as the monthly trend does', async () => {
+    expect((await ocm.get(`/api/projects/${PRODUCTION}/monthly-trend?months=0`)).status)
+      .toBe(400);
+  });
+});
+
 describe('an account the server does not know', () => {
   test.each([
     ['a NIC handle that no import recorded', 'account=ww4444-ovh'],

@@ -18,6 +18,8 @@ const KEYS = {
   registry: 'productRegistry',
   kubernetes: 'productKubernetes',
   other: 'productOther',
+  // The Public Cloud credit that a bill used, which the trend of a project gives as a product
+  credits: 'productCredits',
 };
 
 const publicCloudProductLabel = (product, t) => (KEYS[product] ? t(KEYS[product]) : product);

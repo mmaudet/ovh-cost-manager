@@ -59,7 +59,7 @@ New in version 3.1.0.
 - **AI Endpoints Models** (new in version 3.3.0): each AI Endpoints model that the month's bills name, with its input tokens, its output tokens and its cost, in the Public Cloud tab, and its monthly cost in the Trends tab (see [AI Endpoints Models](#ai-endpoints-models))
 - **Logs Data Platform Charges** (new in version 3.5.0): each charge that the month's bills give the Logs Data Platform services, such as their account's rental or their streams' hot storage, with its cost, in the Infrastructure tab, and month A against month B under the Compare tab's Logs Data Platform row (see [Logs Data Platform](#logs-data-platform))
 - **Month Comparison**: Side-by-side comparison between two months with variation tracking, including infrastructure, backup, Private Cloud, and per-project product breakdowns, whose rows unfold into their services and charges since version 3.3.0 (see [Month Comparison](#month-comparison))
-- **Trend Analysis**: Historical trends with configurable period (3-36 months), and GPU and AI Endpoints evolution charts
+- **Trend Analysis**: Historical trends with configurable period (3-36 months), and GPU and AI Endpoints evolution charts. A selector next to the period shows the trend of one Public Cloud project instead: what it cost each month, and by Public Cloud product (instances, object storage, databases…), the credit it used included, with the growth, the most expensive month and the annual projection of that project, and the GPU costs and AI Endpoints models of that project
 - **Month in Progress** (marked since version 3.3.3, projected since 3.4.0): the month whose bills still lack a service billed every month is marked in progress rather than compared as a complete month, and a checkbox projects its cost in the Trends and Compare tabs. Since version 3.5.0, that can be the month before, until the month of today has a bill (see [Month in Progress](#month-in-progress))
 - **Budget Tracking**: Visual budget consumption with configurable targets
 - **Accounts Without Bills**: an account whose bills a third party issues, which neither the API nor the control panel gives, is read from its Public Cloud projects' usage, month by month, with the same tabs (see [Accounts Without Bills](#accounts-without-bills))
@@ -761,7 +761,8 @@ or none when none of them has a bill.
 [Month in Progress](#month-in-progress)). These routes take it:
 
 - the monthly trends: `/api/analysis/monthly-trend` and
-  `/api/analysis/monthly-trend-by-category`;
+  `/api/analysis/monthly-trend-by-category`, and a project's,
+  `/api/projects/:id/monthly-trend`;
 - the totals and costs: `/api/summary`, `/api/analysis/by-service`,
   `/api/analysis/by-resource-type` and `/api/analysis/by-project`;
 - the services: `/api/analysis/resource-type-details`,
@@ -846,12 +847,23 @@ The carbon footprint is what OVHcloud's carbon calculator attributes to the acco
 | `GET /api/projects/:id/buckets?from=&to=`        | Project S3 buckets with cost                 |
 | `GET /api/projects/:id/other-services?from=&to=` | Project's other services, registry included |
 | `GET /api/projects/:id/products?from=&to=`       | Project's products and their charges         |
+| `GET /api/projects/:id/monthly-trend?months=&end=` | Project's trend, in all and by product     |
 | `GET /api/projects/:id/instance-total?from=&to=` | Project instance total cost                  |
 | `GET /api/inventory/servers`                     | Dedicated servers list                       |
 | `GET /api/inventory/vps`                         | VPS instances list                           |
 | `GET /api/inventory/storage`                     | Storage services list                        |
 | `GET /api/inventory/summary`                     | Resource count summary                       |
 | `GET /api/inventory/expiring?days=30`            | Expired and expiring services, soonest first |
+
+`/api/projects/:id/monthly-trend` gives the trend of a project over the months
+of `/api/analysis/monthly-trend`, from the same `months` and `end`, which the
+Trends tab shows for the project selected: `monthlyTrend`, what the project
+cost each month, 0 for a month that billed it nothing, and `byProduct`, by
+Public Cloud product, its credit included as `credits`, shaped as
+`/api/analysis/monthly-trend-by-category`, each product keyed and coloured.
+Both are empty when no month of the period billed the project. It takes the
+`account` parameter, as a project's bill lines belong to the account of their
+bill.
 
 `/api/projects/:id/products` gives what the bills of the period charged a
 project, which the Compare tab compares month by month (see
