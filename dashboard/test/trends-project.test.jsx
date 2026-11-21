@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { screen } from '@testing-library/react';
 import { account } from './fixtures/account.js';
+import { aiEndpoints, aiEndpointsFigures } from './fixtures/public-cloud.js';
 import { api } from './support/api.js';
 import {
   cardOf, dropdown, openTab, optionsOf, renderDashboard, texts,
@@ -82,8 +83,59 @@ describe('the trend of a Public Cloud project', () => {
       .toEqual(['Mois le plus coûteux', 'sept. 2026', '480,00€']);
     expect(texts(cardOf('Croissance sur la période')))
       .toEqual(['Croissance sur la période', '+60,0 %', 'Sur 3 mois']);
-    // The GPU trend is the account's
-    expect(screen.queryByText('Évolution des coûts GPU')).not.toBeInTheDocument();
+    // Its last month, September, over a year
+    expect(texts(cardOf('Projection annuelle')))
+      .toEqual(['Projection annuelle', '~5 760,00€', 'Basé sur le dernier mois']);
+  });
+
+  // The GPU costs of the project's instances, month by month, in place of those of every project
+  describe('GPU trend', () => {
+    const GPU_TREND = 'Évolution des coûts GPU';
+    // Production's GPU instances, billed in August and September
+    const withProjectGpu = {
+      ...withProjectTrend,
+      projectGpuSummary: {
+        [production.id]: {
+          '2026-07/2026-09': {
+            total: 600,
+            project_count: 1,
+            byModel: [{ gpu_model: 'NVIDIA L4', total: 600, count: 2, color: '#22c55e' }],
+            byProject: [{
+              project_name: projectName, project_id: production.id, total: 600,
+              gpu_flavors: 'l4-90',
+            }],
+            monthlyTrend: [{ month: '2026-08', total: 250 }, { month: '2026-09', total: 350 }],
+            instances: [],
+          },
+        },
+      },
+    };
+
+    it('shows the GPU costs of the project selected, named after its title', async () => {
+      const { user } = await renderDashboard(withProjectGpu);
+      await openTab(user, 'Tendances');
+
+      await user.selectOptions(projectSelector(), projectName);
+
+      // Over the months of the period, of every account's bills
+      expect(api.fetchProjectGpuSummary)
+        .toHaveBeenCalledWith(production.id, '2026-07-01', '2026-09-30', null);
+      const heading = await screen.findByRole('heading', { name: `${GPU_TREND} · ${projectName}` });
+      expect(texts(cardOf(heading))).toEqual([`${GPU_TREND} · ${projectName}`, 'Total: 600,00€']);
+    });
+
+    it('hides it for a project without GPU over the period', async () => {
+      const { user } = await renderDashboard(withProjectGpu);
+      await openTab(user, 'Tendances');
+      const [, other] = account.projectsEnriched;
+
+      await user.selectOptions(projectSelector(), other.name || other.id);
+
+      expect(await screen.findByRole('heading', {
+        name: `Évolution des coûts (total) sur 3 mois · ${other.name || other.id}`,
+      })).toBeInTheDocument();
+      expect(screen.queryByRole('heading', { name: new RegExp(GPU_TREND) })).not.toBeInTheDocument();
+    });
   });
 
   it('shows the trends of the whole account again with all projects', async () => {
@@ -109,5 +161,63 @@ describe('the trend of a Public Cloud project', () => {
       name: `Évolution des coûts (total) sur 3 mois · ${other.name || other.id}`,
     })).toBeInTheDocument();
     expect(texts(cardOf('Mois le plus coûteux'))).toEqual(['Mois le plus coûteux', 'N/A']);
+    expect(texts(cardOf('Croissance sur la période')))
+      .toEqual(['Croissance sur la période', 'N/A', 'Sur 3 mois']);
+    expect(texts(cardOf('Projection annuelle')))
+      .toEqual(['Projection annuelle', 'N/A', 'Basé sur le dernier mois']);
+  });
+
+  // The AI Endpoints models that the project's bill lines name, month by month, in place of
+  // those of every project
+  describe('AI Endpoints trend', () => {
+    const AI_ENDPOINTS_TREND = 'Évolution des coûts AI Endpoints par modèle';
+    // Production called two of the account's models, in August and September
+    const withProjectModels = {
+      ...withProjectTrend,
+      aiEndpoints,
+      projectAiEndpoints: {
+        [production.id]: {
+          '2026-07/2026-09': aiEndpointsFigures(17.81, [
+            ['gpt-oss-120b', 48260000, 12480000, 17.46],
+            ['bge-m3', 42000000, null, 0.35],
+          ], [
+            ['2026-08', [0, 0.12]],
+            ['2026-09', [17.46, 0.23]],
+          ]),
+        },
+      },
+    };
+
+    it('shows the models of the project selected, named after its title', async () => {
+      const { user } = await renderDashboard(withProjectModels);
+      await openTab(user, 'Tendances');
+      expect(screen.getByRole('heading', { name: AI_ENDPOINTS_TREND })).toBeInTheDocument();
+
+      await user.selectOptions(projectSelector(), projectName);
+
+      // Over the months of the period, of every account's bills
+      expect(api.fetchProjectAiEndpoints)
+        .toHaveBeenCalledWith(production.id, '2026-07-01', '2026-09-30', null);
+      const heading = await screen.findByRole('heading', {
+        name: `${AI_ENDPOINTS_TREND} · ${projectName}`,
+      });
+      expect(texts(cardOf(heading))).toEqual([
+        `${AI_ENDPOINTS_TREND} · ${projectName}`, 'gpt-oss-120b', 'bge-m3',
+      ]);
+    });
+
+    it('hides it for a project that called no model over the period', async () => {
+      const { user } = await renderDashboard(withProjectModels);
+      await openTab(user, 'Tendances');
+      const [, other] = account.projectsEnriched;
+
+      await user.selectOptions(projectSelector(), other.name || other.id);
+
+      expect(await screen.findByRole('heading', {
+        name: `Évolution des coûts (total) sur 3 mois · ${other.name || other.id}`,
+      })).toBeInTheDocument();
+      expect(screen.queryByRole('heading', { name: new RegExp(AI_ENDPOINTS_TREND) }))
+        .not.toBeInTheDocument();
+    });
   });
 });

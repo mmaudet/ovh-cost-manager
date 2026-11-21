@@ -295,3 +295,52 @@ describe('the account parameter of GET /api/analysis/ai-endpoints', () => {
         .toEqual({ status: 400, body: REFUSED });
     });
 });
+
+// The models of one Public Cloud project, whose trend the Trends tab shows: the lines of that
+// project alone, of the account the request names or of every account
+describe('the project parameter of GET /api/analysis/ai-endpoints', () => {
+  const ofProject = (period, projectId, account) =>
+    aiEndpointsOf(`${period}&project=${projectId}`, account);
+
+  test('gives the models of the project\'s lines alone', async () => {
+    expect(await ofProject(JULY_TO_SEPTEMBER, 'project-staging')).toEqual({
+      status: 200,
+      body: {
+        total: 0.67,
+        models: [
+          modelRow('whisper-large-v3', null, null, 0.36),
+          modelRow('gpt-oss-20b', 2000000, 500000, 0.31),
+          modelRow('stable-diffusion-xl-base-v10', null, null, 0),
+        ],
+        monthlyTrend: [{
+          month: '2026-09',
+          costs: {
+            'whisper-large-v3': 0.36, 'gpt-oss-20b': 0.31, 'stable-diffusion-xl-base-v10': 0,
+          },
+        }],
+      },
+    });
+  });
+
+  test('keeps the lines of the account the request names', async () => {
+    expect((await ofProject(JULY_TO_SEPTEMBER, 'project-production', LYON)).body.monthlyTrend)
+      .toEqual([
+        { month: '2026-08', costs: { 'gpt-oss-20b': 0.64, 'bge-m3': 0 } },
+        { month: '2026-09', costs: { 'gpt-oss-20b': 2.2, 'bge-m3': 0.3 } },
+      ]);
+    expect(await ofProject(JULY_TO_SEPTEMBER, 'project-production', PARIS))
+      .toEqual({ status: 200, body: { total: 0, models: [], monthlyTrend: [] } });
+  });
+
+  test('gives no model for a project that called none', async () => {
+    expect(await ofProject(SEPTEMBER, 'project-unknown'))
+      .toEqual({ status: 200, body: { total: 0, models: [], monthlyTrend: [] } });
+  });
+
+  test('refuses an empty project, or several', async () => {
+    for (const parameter of ['project=', 'project=project-staging&project=project-legacy']) {
+      expect(await ocm.get(`${ROUTE}?${SEPTEMBER}&${parameter}`))
+        .toEqual({ status: 400, body: { error: 'Invalid project' } });
+    }
+  });
+});

@@ -1180,28 +1180,35 @@ const analysisOps = {
    * The AI Endpoints models that the bill lines of the Public Cloud projects name between two
    * dates (#193), each once, the projects together: the lines of the bills of the account (see
    * accountCondition()), every account's by default, as modelFigures() adds them up, and each
-   * line in the month of its bill (#196). Read when the server reads the bills: no re-import.
+   * line in the month of its bill (#196). Or those of one project only, whose trend the Trends
+   * tab shows. Read when the server reads the bills: no re-import.
    * @param {string} fromDate
    * @param {string} toDate
    * @param {?string} [account]
+   * @param {{project?: ?string}} [options] - The project whose lines to read: all by default
    * @returns {{total: number, models: object[], monthlyTrend: object[]}} What the models cost
    *   in all, each model with its tokens and its cost, and each month with the cost of each
    *   model in it (see modelFigures())
    */
-  aiEndpoints: (fromDate, toDate, account = null) => {
+  aiEndpoints: (fromDate, toDate, account = null, { project = null } = {}) => {
     const ofBills = accountCondition(account, 'b.account');
     // A prefilter only, the lines that name AI Endpoints: the reader of modelFigures() decides
     // which of them name a model
     const ofAiEndpointsLines = aiEndpointsLineCondition('d.description');
+    const ofProject = project === null ? '' : 'AND d.project_id = ?';
     return modelFigures(getDb().prepare(`
       SELECT d.description, strftime('%Y-%m', b.date) as month, d.quantity, d.total_price
       FROM bill_details d
       JOIN bills b ON d.bill_id = b.id
       WHERE b.date >= ? AND b.date <= ?
         AND d.project_id IS NOT NULL
+        ${ofProject}
         AND ${ofAiEndpointsLines.sql}
         AND ${ofBills.sql}
-    `).all(fromDate, toDate, ...ofAiEndpointsLines.params, ...ofBills.params));
+    `).all(
+      fromDate, toDate, ...(project === null ? [] : [project]),
+      ...ofAiEndpointsLines.params, ...ofBills.params,
+    ));
   },
 
   /**
@@ -2825,8 +2832,9 @@ const cloudDetailOps = {
   // GPU cost summary from bill_details (covers full history) + project_consumption (current
   // month), on the bills of the account (see accountCondition()), every account's by default
   // (#120). The projects come once each, or, with byAccount, once for each account that billed
-  // them, with that account, as those of analysis.byProject() do (#118).
-  getGpuSummary: (from, to, account = null, { byAccount = false } = {}) => {
+  // them, with that account, as those of analysis.byProject() do (#118). With project, the lines
+  // of that Public Cloud project alone, whose trend the Trends tab shows.
+  getGpuSummary: (from, to, account = null, { byAccount = false, project = null } = {}) => {
     const db = getDb();
 
     // GPU detection in bill_details.description
@@ -2867,6 +2875,8 @@ const cloudDetailOps = {
     const args = [...ofAccount.params];
     if (from) { conditions.push('b.date >= ?'); args.push(from); }
     if (to) { conditions.push('b.date <= ?'); args.push(to); }
+    // The GPU lines of a project name it as their service, as byProject groups them
+    if (project !== null) { conditions.push('bd.domain = ?'); args.push(project); }
     const where = conditions.join(' AND ');
 
     // Total GPU cost from bills
@@ -2948,10 +2958,13 @@ const cloudDetailOps = {
   },
 
   // GPU instances from cloud_instances (uses plan_code), of the projects of the account (see
-  // accountCondition()), every account's by default (#120)
-  getGpuInstances: (account = null) => {
+  // accountCondition()), every account's by default (#120), or of one project only
+  getGpuInstances: (account = null, { project = null } = {}) => {
     const db = getDb();
     const ofAccount = accountCondition(account, 'p.account');
+    const ofProject = project === null
+      ? { sql: '1 = 1', params: [] }
+      : { sql: 'ci.project_id = ?', params: [project] };
     return db.prepare(`
       SELECT ci.*, p.name as project_name
       FROM cloud_instances ci
@@ -2961,8 +2974,9 @@ const cloudDetailOps = {
         OR ci.plan_code LIKE 't2-%' OR ci.plan_code LIKE 'h100-%'
         OR ci.plan_code LIKE 'v100-%')
         AND ${ofAccount.sql}
+        AND ${ofProject.sql}
       ORDER BY p.name, ci.name
-    `).all(...ofAccount.params);
+    `).all(...ofAccount.params, ...ofProject.params);
   }
 };
 

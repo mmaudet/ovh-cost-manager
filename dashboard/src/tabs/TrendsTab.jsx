@@ -238,12 +238,14 @@ const TrendsTab = ({
         )}
       </div>
 
-      {/* GPU Cost Trend, the account's: not while a project is selected */}
-      {!selectedProject && gpuTrend?.monthlyTrend && gpuTrend.monthlyTrend.length > 1 && (
+      {/* GPU Cost Trend: that of the project selected, named after the title, or of the whole
+          account */}
+      {gpuTrend?.monthlyTrend && gpuTrend.monthlyTrend.length > 1 && (
         <div className="bg-white rounded-xl p-5 shadow-sm border-2 border-purple-300">
           <div className="flex items-center justify-between mb-4">
             <h3 className="font-semibold text-gray-900">
               {language === 'en' ? 'GPU cost evolution' : 'Évolution des coûts GPU'}
+              {selectedProject && ` · ${selectedProject.name || selectedProject.id}`}
             </h3>
             <span className="text-lg font-bold text-purple-700">
               {language === 'en' ? 'Total' : 'Total'}: {fmt(gpuTrend.total)}€
@@ -264,12 +266,13 @@ const TrendsTab = ({
       )}
 
       {/* The cost of each AI Endpoints model month by month (#196), once two months of the
-          period have some, as the GPU trend: a single bar is no trend. The account's, as the GPU
-          trend */}
-      {!selectedProject && aiEndpointsTrend?.monthlyTrend.length > 1 && (
+          period have some, as the GPU trend: a single bar is no trend. Those of the project
+          selected, named after the title, or of the whole account */}
+      {aiEndpointsTrend?.monthlyTrend.length > 1 && (
         <AiEndpointsTrend
           aiEndpointsTrend={aiEndpointsTrend} language={language} t={t} fmt={fmt}
           usageMonths={usageMonths}
+          projectName={selectedProject ? selectedProject.name || selectedProject.id : null}
         />
       )}
 

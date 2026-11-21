@@ -166,7 +166,8 @@ OVH API ──> data/import.js ──> SQLite (ovh-bills.db) ──> server/inde
   The Trends tab shows the trend of the Public Cloud project selected next to its period,
   `/api/projects/:id/monthly-trend`: what it cost each month and by Public Cloud product, its
   credit included (`db.analysis.projectMonthlyTrend()`, through `linesOfPeriod()`), in place of
-  the account's trends, its GPU and AI Endpoints trends hidden.
+  the account's trends, and its GPU costs and AI Endpoints models, which `/api/gpu/summary` and
+  `/api/analysis/ai-endpoints` give for one project with `project`.
   The routes of the Trends and Compare tabs take `projected=true` (`projectedParameter`,
   #214): the monthly trends, the summary, the costs by service type, resource type and
   project, a resource type's services, the Veeam backups and their services, a project's

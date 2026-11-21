@@ -255,9 +255,19 @@ const answers = {
   fetchProjectInstanceTotal: entryForProject('projectInstanceTotal', emptyAnswers.instanceTotal),
   // The GPU costs of a period, of the account the page selects (#120)
   fetchGpuSummary: entryForPeriodOfAccount('gpuSummary', emptyAnswers.gpuSummary),
+  // And those of a Public Cloud project, by project then period, which the Trends tab charts
+  // while it shows that project's trend
+  fetchProjectGpuSummary: (data, projectId, from, to, account) => entryForProject(
+    'projectGpuSummary', emptyAnswers.gpuSummary,
+  )(ofAccount(data, account), projectId, from, to),
   fetchPublicCloudStats: entryForPeriodOfAccount('publicCloudStats', emptyAnswers.publicCloudStats),
   // And its AI Endpoints models (#193)
   fetchAiEndpoints: entryForPeriodOfAccount('aiEndpoints', emptyAnswers.aiEndpoints),
+  // And those of a Public Cloud project, by project then period, which the Trends tab charts
+  // while it shows that project's trend
+  fetchProjectAiEndpoints: (data, projectId, from, to, account) => entryForProject(
+    'projectAiEndpoints', emptyAnswers.aiEndpoints,
+  )(ofAccount(data, account), projectId, from, to),
   // The Logs Data Platform charges of a period, of the account the page selects (#247); with the
   // projection of the month in progress, from their own entry, projectedLogsDataPlatform (#248)
   fetchLogsDataPlatform: projectableEntryForPeriodOfAccount(

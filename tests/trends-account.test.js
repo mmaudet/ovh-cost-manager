@@ -335,6 +335,35 @@ describe('GET /api/gpu/summary', () => {
       },
     });
   });
+
+  // Those of the Public Cloud project whose trend the Trends tab shows
+  test('gives the GPU costs and instances of the project it gives alone', async () => {
+    expect(await gpuCosts(`${threeMonths}&project=project-production`)).toEqual({
+      status: 200,
+      body: {
+        total: 220,
+        project_count: 1,
+        byModel: [ofModel('NVIDIA L4', 220, 2)],
+        byProject: [ofProject('Production', 'project-production', 220)],
+        monthlyTrend: [{ month: '2026-08', total: 100 }, { month: '2026-09', total: 120 }],
+        instances: [INFERENCE],
+      },
+    });
+  });
+
+  test('keeps the bills of the account it gives with the project', async () => {
+    expect((await gpuCosts(`${threeMonths}&project=project-staging&account=${PARIS}`)).body)
+      .toMatchObject({ total: 50, monthlyTrend: [{ month: '2026-07', total: 50 }] });
+    expect((await gpuCosts(`${threeMonths}&project=project-staging&account=${LYON}`)).body)
+      .toMatchObject({ total: 0, byProject: [], monthlyTrend: [] });
+  });
+
+  test('refuses an empty project, or several', async () => {
+    for (const parameter of ['project=', 'project=project-staging&project=project-legacy']) {
+      expect(await gpuCosts(`${threeMonths}&${parameter}`))
+        .toEqual({ status: 400, body: { error: 'Invalid project' } });
+    }
+  });
 });
 
 // Rather than answer for all accounts, or for none, to a request that names an account

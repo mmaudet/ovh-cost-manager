@@ -34,11 +34,18 @@ const colorOf = (model) => {
  * @param {function(number): string} props.fmt - The amount format of the page
  * @param {boolean} [props.usageMonths] - Whether the page names the months by the month of their
  *   usage (namesUsageMonths())
+ * @param {?string} [props.projectName] - The Public Cloud project whose models these are, which
+ *   the title names after it: none for those of every project
  * @returns {JSX.Element}
  */
-const AiEndpointsTrend = ({ aiEndpointsTrend, language, t, fmt, usageMonths = false }) => (
+const AiEndpointsTrend = ({
+  aiEndpointsTrend, language, t, fmt, usageMonths = false, projectName = null,
+}) => (
   <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
-    <h3 className="font-semibold text-gray-900 mb-4">{t('aiEndpointsTrend')}</h3>
+    <h3 className="font-semibold text-gray-900 mb-4">
+      {t('aiEndpointsTrend')}
+      {projectName && ` · ${projectName}`}
+    </h3>
     <ul className="flex flex-wrap gap-2 mb-4">
       {aiEndpointsTrend.models.map(({ model }) => (
         <li

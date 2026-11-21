@@ -318,6 +318,22 @@ export const fetchGpuSummary = async (from, to, account = null) => {
   return data;
 };
 
+/**
+ * The GPU costs of a Public Cloud project over a period, as fetchGpuSummary() gives those of
+ * every project: the Trends tab charts them while it shows that project's trend
+ * @param {string} projectId - The project, by its id
+ * @param {string} from - The first day of the period, 'YYYY-MM-DD'
+ * @param {string} to - Its last day
+ * @param {?string} [account] - The account whose bills to read: null for all accounts
+ * @returns {Promise<object>} As fetchGpuSummary()
+ */
+export const fetchProjectGpuSummary = async (projectId, from, to, account = null) => {
+  const { data } = await api.get('/gpu/summary', {
+    params: { from, to, project: projectId, ...accountParams(account) },
+  });
+  return data;
+};
+
 // Public Cloud stats (Kubernetes, S3, Registry, etc.) of the account (#121)
 export const fetchPublicCloudStats = async (from, to, account = null) => {
   const { data } = await api.get('/analysis/public-cloud-stats', {
@@ -343,6 +359,24 @@ export const fetchPublicCloudStats = async (from, to, account = null) => {
 export const fetchAiEndpoints = async (from, to, account = null) => {
   const { data } = await api.get('/analysis/ai-endpoints', {
     params: { from, to, ...accountParams(account) },
+  });
+  return data;
+};
+
+/**
+ * The AI Endpoints models that a Public Cloud project's bill lines of a period name, as
+ * fetchAiEndpoints() gives those of every project: the Trends tab charts them while it shows
+ * that project's trend
+ * @param {string} projectId - The project, by its id
+ * @param {string} from - The first day of the period, 'YYYY-MM-DD'
+ * @param {string} to - Its last day
+ * @param {?string} [account] - The account whose bills to read: null for all accounts
+ * @returns {Promise<{ total: number, models: object[], monthlyTrend: object[] }>} As
+ *   fetchAiEndpoints()
+ */
+export const fetchProjectAiEndpoints = async (projectId, from, to, account = null) => {
+  const { data } = await api.get('/analysis/ai-endpoints', {
+    params: { from, to, project: projectId, ...accountParams(account) },
   });
   return data;
 };

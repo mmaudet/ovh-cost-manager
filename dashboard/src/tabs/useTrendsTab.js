@@ -4,7 +4,8 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
-  fetchMonthlyTrend, fetchMonthlyTrendByCategory, fetchGpuSummary, fetchAiEndpoints,
+  fetchMonthlyTrend, fetchMonthlyTrendByCategory, fetchGpuSummary, fetchProjectGpuSummary,
+  fetchAiEndpoints, fetchProjectAiEndpoints,
   fetchProjectsEnriched, fetchProjectMonthlyTrend,
 } from '../services/api.js';
 import { accountQuery, projectedQuery } from '../utils/accounts.js';
@@ -116,20 +117,37 @@ const useTrendsTab = ({
     return next;
   });
 
-  // GPU cost trend, over the same months (for trends tab)
-  const { data: gpuTrend } = useQuery(accountQuery(selectedAccount, {
-    key: ['gpuTrend', trendWindow?.from, trendWindow?.to],
-    fetch: (account) => fetchGpuSummary(trendWindow.from, trendWindow.to, account),
-    enabled: holdsSelectedMonth && activeTab === 'trends',
-  }));
+  // GPU cost trend, over the same months (for trends tab): that of the project selected, under a
+  // key of its own, or of every project
+  const { data: gpuTrend } = useQuery(accountQuery(selectedAccount, selectedProjectId === null
+    ? {
+      key: ['gpuTrend', trendWindow?.from, trendWindow?.to],
+      fetch: (account) => fetchGpuSummary(trendWindow.from, trendWindow.to, account),
+      enabled: holdsSelectedMonth && activeTab === 'trends',
+    }
+    : {
+      key: ['projectGpuTrend', selectedProjectId, trendWindow?.from, trendWindow?.to],
+      fetch: (account) => fetchProjectGpuSummary(
+        selectedProjectId, trendWindow.from, trendWindow.to, account,
+      ),
+      enabled: holdsSelectedMonth && activeTab === 'trends',
+    }));
 
   // The cost of each AI Endpoints model month by month (#196), over the same months, which only
-  // the tab shows
-  const { data: aiEndpointsTrend } = useQuery(accountQuery(selectedAccount, {
-    key: ['aiEndpointsTrend', trendWindow?.from, trendWindow?.to],
-    fetch: (account) => fetchAiEndpoints(trendWindow.from, trendWindow.to, account),
-    enabled: holdsSelectedMonth && activeTab === 'trends',
-  }));
+  // the tab shows: those of the project selected, under a key of their own, or of every project
+  const { data: aiEndpointsTrend } = useQuery(accountQuery(selectedAccount, selectedProjectId === null
+    ? {
+      key: ['aiEndpointsTrend', trendWindow?.from, trendWindow?.to],
+      fetch: (account) => fetchAiEndpoints(trendWindow.from, trendWindow.to, account),
+      enabled: holdsSelectedMonth && activeTab === 'trends',
+    }
+    : {
+      key: ['projectAiEndpointsTrend', selectedProjectId, trendWindow?.from, trendWindow?.to],
+      fetch: (account) => fetchProjectAiEndpoints(
+        selectedProjectId, trendWindow.from, trendWindow.to, account,
+      ),
+      enabled: holdsSelectedMonth && activeTab === 'trends',
+    }));
 
   return {
     trendPeriod,

@@ -1551,17 +1551,30 @@ function registerRoutes() {
     }
   });
 
+  // The Public Cloud project that the optional `project` parameter of a request names, whose
+  // trend the Trends tab shows: null without it, for every project, or undefined for a value that
+  // names none, empty or repeated, which the route refuses
+  function projectOfQuery({ project }) {
+    if (project === undefined) return null;
+    return typeof project === 'string' && project !== '' ? project : undefined;
+  }
+
   // The AI Endpoints models that the bills of a period name (#193), which the Public Cloud tab
   // lists: each model's input tokens, output tokens and cost, the most expensive first, and
   // what they cost in all. And the cost of each model in each month of the bills that name a
   // model, which the Trends tab charts, every model in every month (#196). Those of the bills
-  // of the account the request asks for, or of every account without one.
+  // of the account the request asks for, or of every account without one. With `project`, those
+  // of that Public Cloud project only, whose trend the Trends tab shows.
   app.get('/api/analysis/ai-endpoints', accountParameter, (req, res) => {
     try {
       const { from, to } = req.query;
       const validation = validateDateRange(from, to);
       if (!validation.valid) return res.status(400).json({ error: validation.error });
-      const { total, models, monthlyTrend } = db.analysis.aiEndpoints(from, to, req.account);
+      const project = projectOfQuery(req.query);
+      if (project === undefined) return res.status(400).json({ error: 'Invalid project' });
+      const { total, models, monthlyTrend } = db.analysis.aiEndpoints(
+        from, to, req.account, { project },
+      );
       res.json({
         total,
         models: models.map(({ model, tokens, cost }) => ({
@@ -1875,14 +1888,17 @@ function registerRoutes() {
   // The GPU costs of the account the request asks for, and the GPU instances of its projects,
   // or those of every account without one (#120). Its projects come once each, or, by
   // account, once for each account that billed them, with that account: its NIC handle, or
-  // null for the Unknown account (#118).
+  // null for the Unknown account (#118). With `project`, those of that Public Cloud project only,
+  // whose trend the Trends tab shows.
   app.get('/api/gpu/summary', accountParameter, byAccountParameter, (req, res) => {
     try {
       const { from, to } = req.query;
+      const project = projectOfQuery(req.query);
+      if (project === undefined) return res.status(400).json({ error: 'Invalid project' });
       const gpuData = db.cloudDetails.getGpuSummary(
-        from || null, to || null, req.account, { byAccount: req.byAccount },
+        from || null, to || null, req.account, { byAccount: req.byAccount, project },
       );
-      const gpuInstances = db.cloudDetails.getGpuInstances(req.account);
+      const gpuInstances = db.cloudDetails.getGpuInstances(req.account, { project });
 
       const modelColors = {
         'NVIDIA L4': '#22c55e',
